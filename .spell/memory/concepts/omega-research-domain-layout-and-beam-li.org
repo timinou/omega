@@ -1,0 +1,16 @@
+#+TITLE: omega-research-domain-layout-and-beam-li
+
+** ITEM omega research domain layout and beam-lisp datom gotchas
+:PROPERTIES:
+:CUSTOM_ID: CON-omega-research-domain-layout-and-beam-li
+:KIND: concept
+:CONFIDENCE: 0.6
+:CREATED: 2026-10-01T11:09:18Z
+:END:
+:RELATIONS:
+:END:
+omega research lives in research/domain/ as .bl.md (bl run executes only ```beam-lisp fences; also works for .bl.org #+begin_src beam-lisp). Layout by concern: synthesis/ (omega-at-a-glance, day-to-day, decisions D1-D13), loop/, tools/, coordination/, interface/, lineage/. Vendored: research/vendor/pi (earendil-works/pi = 'pi-mono', org renamed), research/vendor/impeccable (Apache-2.0).
+
+Verified beam-lisp gotchas (installed bl 2026.4.0): datom transaction maps need :db/id even with unique identity attrs; lookup refs not accepted as write entity ids → resolve via (datom/lookup-ref db [:a v]); datalog has no clojure.string predicates (filter after q); no ffirst; (conj v a b) 3-arity fails.
+
+Session infra: default subagent model returned 402 Insufficient Balance; pin task model anthropic/claude-sonnet-5-5 (user preference; gpt 6.1 sol via codex alternative) and forbid nested subagents. Codex OAuth copied to omega/.local/secrets/codex-oauth.json (0600, gitignored). localhost:8080 anthropic proxy returned 503 on 2026-10-01.
