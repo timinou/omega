@@ -1,0 +1,199 @@
+; VENDORED from ora/relay src/relay/usage.bl @ b00c467 (ns relay.usage → omega.llm.usage).
+; Unchanged otherwise: it already reads the raw Anthropic and OpenAI shapes that
+; omega's direct-HTTP providers receive. Refactor freely; this header records origin.
+;
+; src/relay/usage.bl — one honest token accounting across providers.
+;
+; ══ WHAT THIS IS ════════════════════════════════════════════════════════════
+;
+; A provider reports token usage in its own shape, and the two that matter here
+; disagree on the one number a bill turns on — cache tokens. This module folds
+; every shape into ONE six-field model so the spend layer sees a single
+; vocabulary and a cache-writing turn is never mis-billed.
+;
+;   unify : usage-map | nil → {:cache-read :cache-write
+;                              :cache-write-5m :cache-write-1h :input :output}
+;
+; ══ THE SHAPE THAT ACTUALLY ARRIVES: req_llm's NORMALIZED usage ═════════════
+;
+; VERIFIED against req_llm 1.9.0 (ReqLLM.Usage.Normalize, exercised live): the
+; usage that reaches the relay is NOT the provider's raw map — the streaming
+; path (StreamServer) runs `Usage.normalize` before the metadata settles, and
+; the non-streaming path is normalized at Response build. So `unify` MUST read
+; the NORMALIZED keys, which differ from the raw ones:
+;
+;   raw Anthropic  cache_read_input_tokens         → normalized  cached_tokens / cached_input
+;   raw Anthropic  cache_creation.{5m,1h}          → normalized  cache_creation_tokens (COLLAPSED)
+;   raw OpenAI     prompt_tokens_details.cached    → normalized  cached_tokens
+;   raw both       input_tokens / prompt_tokens    → normalized  input (flat)
+;
+; `unify` reads the widest alias set (raw AND normalized) for each quantity, so
+; it is correct on both the production (normalized) path and a future
+; direct-HTTP adapter that reads the untouched response.
+;
+; ══ THE UNRECOVERABLE TTL SPLIT (an honest limitation) ══════════════════════
+;
+; Anthropic prices the two cache-write TTLs differently — a 5m write is 1.25×
+; the base input rate, a 1h write is 2× — so collapsing them mis-bills a
+; cache-writing turn by 19–29%. req_llm's normalizer DROPS the nested
+; `cache_creation.{ephemeral_5m,ephemeral_1h}` split and keeps only the
+; collapsed `cache_creation_tokens`. Through the production path the split is
+; therefore genuinely UNRECOVERABLE from the response; `unify` fills the
+; authoritative `:cache-write` TOTAL and leaves `:cache-write-5m`/`-1h` at 0.
+;
+; The relay does not need the response to attribute the TTL, though: it CHOSE
+; the TTL when it set `anthropic_prompt_cache_ttl` on the request. spend.bl
+; attributes the write total to the 5m or 1h bucket by that request-time intent
+; — the correct source, since the relay is the one that picked it. A future
+; direct-HTTP adapter that reads the nested split fills all three and the
+; invariant `cache-write >= cache-write-5m + cache-write-1h` holds with
+; equality.
+;
+; ══ THE PROVIDER SHAPES (raw, for the direct-HTTP path) ═════════════════════
+;
+; Anthropic (input_tokens EXCLUDES cached):
+;   {input_tokens, output_tokens,
+;    cache_read_input_tokens,                         ← cache HIT
+;    cache_creation: {ephemeral_5m_input_tokens,      ← cache WRITE, 5m TTL
+;                     ephemeral_1h_input_tokens}}      ← cache WRITE, 1h TTL
+;
+; OpenAI (prompt_tokens INCLUDES cached; no write cost or count):
+;   {prompt_tokens, completion_tokens,
+;    prompt_tokens_details: {cached_tokens}}          ← cache HIT
+;
+; The unified model is token COUNTS, not cents: cost stays req_llm's job
+; (spend.bl reads its total_cost). These counts exist so a per-request cache
+; picture — and a cost-reconciliation check — is possible at all.
+
+(ns omega.llm.usage)
+
+; Six fields, not five: `:cache-write` is the TOTAL of cache-write tokens, and
+; `:cache-write-5m` / `:cache-write-1h` are its TTL split WHEN a provider path
+; exposes it. Through req_llm 1.9.0 the split is unrecoverable (its Anthropic
+; parser reads only the collapsed `cache_creation_input_tokens` and drops the
+; nested ephemeral_5m/1h fields), so that path fills `:cache-write` and leaves
+; the split at 0/0. A future direct-HTTP adapter reads the raw response and can
+; fill all three. Invariant: cache-write >= cache-write-5m + cache-write-1h,
+; with equality exactly when the split is known.
+(def ^:private ZERO
+  {:cache-read 0 :cache-write 0 :cache-write-5m 0 :cache-write-1h 0 :input 0 :output 0})
+
+(defn- rd
+  "An integer field from a usage map, keyword- or string-keyed, non-numeric
+   → 0. req_llm hands atom-keyed usage; a stubbed usage in a test may be
+   either — both read."
+  [m k]
+  (if (not (map? m))
+    0
+    (let [v (or (Map/get m k) (Map/get m (name k)))]
+      (if (number? v) (erlang/trunc v) 0))))
+
+(defn- sub-map
+  "A nested usage sub-map (cache_creation, prompt_tokens_details), keyword- or
+   string-keyed, or nil when absent."
+  [m k]
+  (or (Map/get m k) (Map/get m (name k))))
+
+(defn- present?
+  "Whether `usage` carries key `k` (keyword- or string-form), REGARDLESS of
+   value — so a legitimately `false`/`0` value still counts as present. Lets an
+   explicit normalizer flag be trusted over re-derivation."
+  [m k]
+  (and (map? m)
+       (or (erlang/is_map_key k m)
+           (erlang/is_map_key (name k) m))))
+
+(defn- read-first
+  "The first positive integer among `ks` read from `m` (keyword- or string-form,
+   non-numeric → skipped). 0 when none. Recovers one logical quantity whichever
+   alias a provider OR req_llm's normalizer used for it."
+  [m ks]
+  (reduce (fn [acc k] (if (> acc 0) acc (rd m k))) 0 ks))
+
+(defn- input-includes-cached?
+  "Whether the reported input count INCLUDES cached tokens (OpenAI) or EXCLUDES
+   them (Anthropic) — which decides whether `:input` must subtract cache-read.
+
+   req_llm's normalizer settles this and hands back an explicit
+   `:input_includes_cached` boolean; when present it is authoritative and used
+   verbatim (a `false` is honored, not re-derived). Absent it — a direct
+   provider response — the shape tells: an OpenAI-style `*_tokens_details
+   .cached_tokens` means inclusive; an Anthropic `cache_read_input_tokens` (or
+   its normalized `cached_input`) means exclusive; neither, no caching, means
+   inclusive (a no-op, cache-read being 0)."
+  [usage]
+  (if (present? usage :input_includes_cached)
+    (= true (or (:input_includes_cached usage)
+                (Map/get usage "input_includes_cached")))
+    (let [ptd (sub-map usage :prompt_tokens_details)
+          itd (sub-map usage :input_tokens_details)]
+      (cond
+        (or (and (map? ptd) (number? (or (:cached_tokens ptd) (Map/get ptd "cached_tokens"))))
+            (and (map? itd) (number? (or (:cached_tokens itd) (Map/get itd "cached_tokens")))))
+        true
+        (or (:cache_read_input_tokens usage) (Map/get usage "cache_read_input_tokens")
+            (:cached_input usage) (Map/get usage "cached_input"))
+        false
+        :else true))))
+
+(defn unify
+  "Raw provider usage → the unified five-field token model. nil or a non-map
+   usage → all zeros (an honest record for a provider that reported nothing,
+   never invented tokens)."
+  [usage]
+  (if (not (map? usage))
+    ZERO
+    (let [cc         (sub-map usage :cache_creation)
+          ptd        (sub-map usage :prompt_tokens_details)
+          itd        (sub-map usage :input_tokens_details)
+          ; cache HIT tokens. Read across every alias the two regimes use:
+          ; a DIRECT Anthropic response — `cache_read_input_tokens`; a DIRECT
+          ; OpenAI response — nested `prompt_tokens_details.cached_tokens` (or
+          ; the Responses API's `input_tokens_details.cached_tokens`); and
+          ; req_llm's NORMALIZED usage, which is what actually reaches the relay
+          ; in production — flat `cached_tokens` / `cached_input`. Missing all
+          ; → 0.
+          cache-read (let [a (read-first usage [:cache_read_input_tokens
+                                                :cached_tokens :cached_input])]
+                       (if (> a 0) a (read-first (or ptd itd) [:cached_tokens])))
+          ; cache WRITE tokens split by TTL. The nested `cache_creation` object
+          ; carries the split, but ONLY on a direct Anthropic response — req_llm
+          ; 1.9.0 drops it and exposes just the collapsed total, so through the
+          ; production path these are 0 and the split is genuinely unrecoverable.
+          w5m        (rd cc :ephemeral_5m_input_tokens)
+          w1h        (rd cc :ephemeral_1h_input_tokens)
+          split      (+ w5m w1h)
+          ; cache WRITE total. Prefer the split's sum when a direct path gave
+          ; it; otherwise the collapsed total req_llm exposes — under either
+          ; `cache_creation_input_tokens` (direct) or `cache_creation_tokens`
+          ; (normalized). Either way, the authoritative write-token count.
+          cwrite     (if (> split 0)
+                       split
+                       (read-first usage [:cache_creation_input_tokens
+                                          :cache_creation_tokens :cache_creation]))
+          ; raw input: Anthropic input_tokens or OpenAI prompt_tokens (req_llm's
+          ; normalized usage also carries a flat `input`).
+          raw-input  (read-first usage [:input_tokens :prompt_tokens :input])
+          ; the non-cached input remainder. Subtract cached only when the
+          ; provider folded it into the raw count (OpenAI); floor at 0.
+          input      (if (input-includes-cached? usage)
+                       (max 0 (- raw-input cache-read))
+                       raw-input)
+          output     (read-first usage [:output_tokens :completion_tokens :output])]
+      {:cache-read cache-read
+       :cache-write cwrite
+       :cache-write-5m w5m
+       :cache-write-1h w1h
+       :input input
+       :output output})))
+
+(defn hit-rate
+  "The cache hit-rate for one unified usage: read ÷ (read + non-cached input).
+   nil when there was no input at all (no basis for a rate). This is the
+   number that, run low over a long prefix, means a timestamp/UUID leaked into
+   what should have been a stable, cacheable head."
+  [u]
+  (let [read  (get u :cache-read 0)
+        input (get u :input 0)
+        denom (+ read input)]
+    (if (= 0 denom) nil (/ read denom))))

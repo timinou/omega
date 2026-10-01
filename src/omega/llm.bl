@@ -1,0 +1,218 @@
+; omega/llm.bl — models as `step` fns: request in, response out.
+;
+; ══ THE INTERFACE ═══════════════════════════════════════════════════════════
+;
+;   (llm/provider {:kind :anthropic :model "claude-sonnet-5-5" …})  → provider map
+;   (llm/step provider)                       → (fn [request] → response)  ; the seam omega.loop takes
+;   (llm/cassette step path mode)             → a step that records or replays
+;   (llm/from-env root)                       → the project's default provider
+;
+; Request and response are omega.loop's provider-neutral shapes. A provider
+; translates them to and from its wire format; nothing above this file knows
+; about any vendor.
+;
+; ══ PROVIDERS ═══════════════════════════════════════════════════════════════
+;
+; :anthropic — the Messages API. Default base URL is the local better-ccflare
+; proxy (http://localhost:8080), which fronts a Claude subscription. That proxy
+; routes ONLY requests whose first system block is exactly the Claude Code
+; identity line (observed 2026-10-01: without it → 503 service_unavailable).
+; `:identity` holds that line; it is prepended, never replacing omega's own
+; system prompt. Point :base-url at api.anthropic.com with an :api-key and set
+; :identity nil for direct API use.
+;
+; Pure beam-lisp over OTP httpc; the vendored usage normaliser is relay's
+; (omega.llm.usage). Streaming is a later refinement; the seam does not change.
+
+(ns omega.llm
+  (:require [omega.llm.usage :as usage]
+            [credential.env :as cenv]))
+
+(def CLAUDE-CODE-IDENTITY "You are Claude Code, Anthropic's official CLI for Claude.")
+
+(def defaults
+  {:anthropic {:kind :anthropic
+               :base-url "http://localhost:8080"
+               :model "claude-sonnet-5-5"
+               :max-tokens 8000
+               :timeout-ms 300000
+               :identity CLAUDE-CODE-IDENTITY}})
+
+(defn provider [m] (merge (get defaults (:kind m)) m))
+
+;; ── JSON plumbing ───────────────────────────────────────────────────────
+;
+; OTP's json encoder refuses tuples, and beam-lisp vectors are tuples. Encode
+; through `jsonable`: vectors → lists, keywords → strings.
+
+(defn jsonable [x]
+  (cond
+    (map? x) (into {} (map (fn [[k v]] [(if (keyword? k) (name k) k) (jsonable v)]) x))
+    (vector? x) (to-list (map jsonable x))
+    (seq? x) (to-list (map jsonable x))
+    (keyword? x) (name x)
+    (nil? x) :null
+    :else x))
+
+(defn- encode [x] (erlang/iolist_to_binary (json/encode (jsonable x))))
+
+(defn- decoded->data
+  "json/decode output → plain bl data: string keys stay strings, lists → vectors,
+   :null → nil."
+  [x]
+  (cond
+    (map? x) (into {} (map (fn [[k v]] [k (decoded->data v)]) x))
+    (seq? x) (vec (map decoded->data x))
+    (= :null x) nil
+    :else x))
+
+;; ── Anthropic wire format ───────────────────────────────────────────────
+
+(defn- block->wire [b]
+  (case (:type b)
+    :text {:type "text" :text (:text b)}
+    :tool-use {:type "tool_use" :id (:id b) :name (:name b) :input (or (:input b) {})}
+    :tool-result {:type "tool_result" :tool_use_id (:id b) :content (str (:content b))
+                  :is_error (boolean (:error? b))}
+    {:type "text" :text (pr-str b)}))
+
+(defn anthropic-body
+  "omega request → Anthropic Messages body (a bl map, before jsonable)."
+  [p req]
+  (let [sys (vec (keep identity [(when (:identity p) {:type "text" :text (:identity p)})
+                                 (when (:system req) {:type "text" :text (:system req)})]))]
+    (cond-> {:model (:model p)
+             :max_tokens (:max-tokens p)
+             :messages (vec (map (fn [m] {:role (name (:role m))
+                                          :content (vec (map block->wire (:content m)))})
+                                 (:messages req)))}
+      (seq sys) (assoc :system sys)
+      (seq (:tools req)) (assoc :tools (vec (map (fn [t] {:name (:name t) :description (:description t)
+                                                          :input_schema (:input-schema t)})
+                                                 (:tools req)))))))
+
+(defn- keywordize [m]
+  (cond
+    (map? m) (into {} (map (fn [[k v]] [(if (string? k) (keyword k) k) (keywordize v)]) m))
+    (vector? m) (vec (map keywordize m))
+    :else m))
+
+(defn- wire->block [b]
+  (case (get b "type")
+    "text" {:type :text :text (get b "text")}
+    "tool_use" {:type :tool-use :id (get b "id") :name (get b "name")
+                :input (keywordize (or (get b "input") {}))}
+    nil))
+
+(def ^:private STOPS {"end_turn" :end "tool_use" :tool-use "max_tokens" :max-tokens "stop_sequence" :end})
+
+(defn anthropic-response
+  "Anthropic Messages response body (decoded) → omega response."
+  [d]
+  {:content (vec (keep wire->block (get d "content")))
+   :stop (get STOPS (get d "stop_reason") :end)
+   :usage (usage/unify (get d "usage"))
+   :model (get d "model")})
+
+;; ── HTTP ────────────────────────────────────────────────────────────────
+
+(defn- ensure-apps []
+  (Application/ensure_all_started :ssl)
+  (Application/ensure_all_started :inets))
+
+(defn- header [k v] (tuple (String/to_charlist k) (String/to_charlist v)))
+
+(defn- post [url headers body timeout-ms]
+  (ensure-apps)
+  (let [r (httpc/request :post (tuple (String/to_charlist url) headers (String/to_charlist "application/json") body)
+                         (list (tuple :timeout timeout-ms))
+                         (list (tuple :body_format :binary)))]
+    (if (= :ok (elem r 0))
+      (let [resp (elem r 1)]
+        {:status (elem (elem resp 0) 1) :body (elem resp 2)})
+      {:transport (elem r 1)})))
+
+(defn- error-kind [status]
+  (cond (= 429 status) :rate-limited
+        (contains? #{500 502 503 504 529} status) :server
+        (contains? #{401 403} status) :auth
+        :else :client))
+
+(defn- anthropic-call [p req]
+  (let [headers (cond-> [(header "anthropic-version" "2023-06-01")]
+                  (:api-key p) (conj (header "x-api-key" (:api-key p))))
+        r (post (str (:base-url p) "/v1/messages") (to-list headers)
+                (encode (anthropic-body p req)) (:timeout-ms p))]
+    (cond
+      (contains? r :transport) {:error {:kind :transport :reason (pr-str (:transport r))}}
+      (= 200 (:status r)) (anthropic-response (decoded->data (json/decode (:body r))))
+      :else {:error {:kind (error-kind (:status r)) :status (:status r) :body (:body r)}})))
+
+(def RETRYABLE #{:rate-limited :server :transport})
+
+(defn step
+  "A `step` fn over provider `p`. Retries retryable errors with backoff
+   (p :retries, default 3)."
+  [p]
+  (fn [req]
+    (loop [attempt 0]
+      (let [r (case (:kind p)
+                :anthropic (anthropic-call p req)
+                {:error {:kind :client :reason (str "unknown provider kind " (:kind p))}})]
+        (if (and (contains? r :error)
+                 (contains? RETRYABLE (get-in r [:error :kind]))
+                 (< attempt (get p :retries 3)))
+          (do (Process/sleep (* 1000 (erlang/bsl 1 attempt))) (recur (inc attempt)))
+          r)))))
+
+(defn from-env
+  "The default provider for project `root`: Anthropic via the local proxy.
+   root/.env (or the process env) may set OMEGA_MODEL, and OMEGA_BASE_URL.
+   Only when OMEGA_BASE_URL is the real API (api.anthropic.com) is
+   ANTHROPIC_API_KEY sent and the Claude Code identity dropped — a stray key in
+   the shell must never redirect a proxy setup."
+  [root]
+  (let [env (cenv/read-file (str root "/.env"))
+        pick (fn [k] (or (cenv/lookup env k) (System/get_env k)))
+        base (pick "OMEGA_BASE_URL")
+        direct? (and (some? base) (includes? base "api.anthropic.com"))]
+    (provider (cond-> {:kind :anthropic}
+                (some? base) (assoc :base-url base)
+                (pick "OMEGA_MODEL") (assoc :model (pick "OMEGA_MODEL"))
+                direct? (assoc :api-key (pick "ANTHROPIC_API_KEY") :identity nil)))))
+
+;; ── cassettes ───────────────────────────────────────────────────────────
+;
+; A cassette is a file of {request-digest → response}. :record calls the real
+; step and stores the answer; :replay answers from the file and FAILS LOUD on a
+; request it has never seen (a changed prompt must be re-recorded, never
+; silently served a stale answer); :auto replays when it can and records when
+; it cannot. The digest is over the canonical request, so key order and
+; vector/list spelling cannot cause a miss.
+
+(defn digest [req]
+  (lower-case (Base/encode16 (crypto/hash :sha256 (encode req)))))
+
+;; A tape is an external term file: exact BEAM data, no reader round trip.
+(defn- load-tape [path]
+  (if (File/regular? path) (erlang/binary_to_term (File/read! path)) {}))
+
+(defn- save-tape! [path tape]
+  (File/mkdir_p! (Path/dirname path))
+  (File/write! path (erlang/term_to_binary tape)))
+
+(defn cassette
+  "Wrap `inner` (a step fn) with a cassette at `path`. mode :record|:replay|:auto."
+  [inner path mode]
+  (let [tape (atom (load-tape path))]
+    (fn [req]
+      (let [k (digest req)
+            hit (get @tape k)]
+        (cond
+          (and (some? hit) (not= mode :record)) hit
+          (= mode :replay) {:error {:kind :cassette-miss :digest k :path path}}
+          :else (let [r (inner req)]
+                  (when-not (contains? r :error)
+                    (swap! tape assoc k r)
+                    (save-tape! path @tape))
+                  r))))))

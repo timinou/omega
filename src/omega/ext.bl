@@ -1,0 +1,80 @@
+; omega/ext.bl — the extension surface.
+;
+; ══ THE SHAPE (decision D8) ═════════════════════════════════════════════════
+;
+; An extension is a VALUE: a map naming what it contributes. No registration
+; side effects, no global state; a system is started with a list of them.
+;
+;   {:name    :notify
+;    :doc     "…"
+;    :on      {:task/status (fn [data ctx] …)}            ; EVENTS — observe
+;    :hooks   {:tool/before (fn [x ctx] → x')              ; HOOKS — transform
+;              :context     (fn [request ctx] → request')}
+;    :tools   [tool …]                                     ; TOOLS — contribute
+;    :start   (fn [sys] → state)  :stop (fn [state] …)}    ; optional lifecycle:
+;                                    install keeps state; uninstall passes it to :stop
+;
+; The three core primitives are hooks:
+;   :tool/before   call-predicate    {:allow bool :reason s :block b} → same shape
+;   :tool/after    result transform  {:ok|:error …} → same shape
+;   :context       context transform request → request (system prompt, messages, tools)
+;
+; Events (omega emits; an extension observes; return values are ignored):
+;   :task/open {:task :owner}       :task/status {:task :status}
+;   :turn/start {:task}             :turn/end {:task :status :result}
+;   :tool/result {:task :tool :error?}   :inbox/drained {:task :count}
+;
+; An event handler runs in its OWN process: a slow or crashing extension can
+; never stall or kill a task. Hooks run inline (they must, to transform), and
+; a hook that throws is skipped with a :finding trace rather than failing the
+; turn.
+;
+;   (ext/install sys [ext …])  → sys with :hooks {:emit :run} and extra :tools
+
+(ns omega.ext
+  (:require [omega.trace :as tr]))
+
+(defn- emitter [exts sys-ref]
+  (fn [event data]
+    (doseq [x exts]
+      (when-let [h (get-in x [:on event])]
+        (spawn (fn [] (try (h data {:sys @sys-ref :ext (:name x)})
+                           (catch _ nil))))))
+    nil))
+
+(defn- runner [exts]
+  (fn [kind value ctx]
+    (reduce (fn [v x]
+              (if-let [h (get-in x [:hooks kind])]
+                (try (h v ctx)
+                     (catch err
+                       (do (when-let [t (:task ctx)]
+                             (tr/leave! (get-in ctx [:sys :env]) t
+                                        {:kind :finding :subject (str "ext/" (name (:name x)))
+                                         :text (str "hook " kind " failed: " (ex-message err))}))
+                           v)))
+                v))
+            value
+            exts)))
+
+(defn install
+  "Return `sys` with extensions `exts` wired in: their tools appended to the
+   tool table, their hooks and event handlers reachable from the loop. Call
+   BEFORE opening tasks (executors copy the system they start with)."
+  [sys exts]
+  (let [ref (atom nil)
+        sys (-> sys
+                (assoc :hooks {:emit (emitter exts ref) :run (runner exts)})
+                (assoc :extensions (vec (map :name exts)))
+                (update :tools (fn [ts] (vec (concat (or ts []) (mapcat :tools exts))))))]
+    (reset! ref sys)
+    ;; each :start result is kept, so uninstall can hand it to that ext's :stop
+    (assoc sys :ext-state
+           (into {} (keep (fn [x] (when-let [s (:start x)] [(:name x) {:ext x :state (s sys)}])) exts)))))
+
+(defn uninstall
+  "Stop every installed extension (its :stop receives its :start result)."
+  [sys]
+  (doseq [[_ {:keys [ext state]}] (:ext-state sys)]
+    (when-let [stop (:stop ext)] (try (stop state) (catch _ nil))))
+  (dissoc sys :ext-state))

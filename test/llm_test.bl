@@ -1,0 +1,45 @@
+(ns llm-test
+  (:require [omega.llm :as llm]))
+
+(def p (llm/provider {:kind :anthropic}))
+
+(deftest the-body-carries-identity-then-omega-system-and-tools
+  (let [b (llm/anthropic-body p {:system "be omega"
+                                 :messages [{:role :user :content [{:type :text :text "hi"}]}]
+                                 :tools [{:name "read" :description "d" :input-schema {:type "object"}}]})]
+    (is (= ["You are Claude Code, Anthropic's official CLI for Claude." "be omega"] (map :text (:system b))))
+    (is (= "claude-sonnet-5-5" (:model b)))
+    (is (= [{:role "user" :content [{:type "text" :text "hi"}]}] (:messages b)))
+    (is (= "read" (:name (first (:tools b)))))))
+
+(deftest tool-use-and-results-round-trip-the-wire
+  (let [b (llm/anthropic-body p {:messages [{:role :assistant :content [{:type :tool-use :id "x" :name "read" :input {:path "a"}}]}
+                                            {:role :user :content [{:type :tool-result :id "x" :content "ok" :error? false}]}]})]
+    (is (= {:type "tool_use" :id "x" :name "read" :input {:path "a"}} (get-in b [:messages 0 :content 0])))
+    (is (= {:type "tool_result" :tool_use_id "x" :content "ok" :is_error false} (get-in b [:messages 1 :content 0])))))
+
+(deftest a-response-becomes-neutral-blocks
+  (let [r (llm/anthropic-response
+           {"content" [{"type" "thinking" "thinking" ""}
+                       {"type" "text" "text" "reading"}
+                       {"type" "tool_use" "id" "toolu_1" "name" "read" "input" {"path" "a.txt"}}]
+            "stop_reason" "tool_use"
+            "usage" {"input_tokens" 10 "output_tokens" 5 "cache_read_input_tokens" 2}})]
+    (is (= [{:type :text :text "reading"} {:type :tool-use :id "toolu_1" :name "read" :input {:path "a.txt"}}] (:content r)))
+    (is (= :tool-use (:stop r)))
+    (is (= {:input 10 :output 5 :cache-read 2} (select-keys (:usage r) [:input :output :cache-read])))))
+
+(deftest jsonable-turns-vectors-and-keywords-into-json-shapes
+  (is (= {"a" (list 1 "b") "c" :null} (llm/jsonable {:a [1 :b] :c nil}))))
+
+(deftest cassettes-record-then-replay-and-fail-loud-on-a-miss
+  (let [path (str "/tmp/omega-cassette-" (erlang/unique_integer (to-list [:positive])) ".tape")
+        calls (atom 0)
+        inner (fn [req] (swap! calls inc) {:content [{:type :text :text (str "n" @calls)}] :stop :end})
+        req {:messages [{:role :user :content [{:type :text :text "hi"}]}]}
+        rec (llm/cassette inner path :record)]
+    (is (= "n1" (get-in (rec req) [:content 0 :text])))
+    (let [play (llm/cassette inner path :replay)]
+      (is (= "n1" (get-in (play req) [:content 0 :text])))
+      (is (= 1 @calls) "replay never calls the model")
+      (is (= :cassette-miss (get-in (play (assoc req :system "changed")) [:error :kind]))))))

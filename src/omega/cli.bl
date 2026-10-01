@@ -1,0 +1,113 @@
+; omega/cli.bl — the smallest way to use omega from a shell.
+;
+;   bin/omega "goal"                 one task, live model, prints the conversation
+;   bin/omega --offline "goal"       the same against a scripted model (no network)
+;   bin/omega --cassette PATH "goal" record/replay the model to PATH (:auto)
+;   bin/omega --db DIR "goal"        keep the fact log on disk (fjall) in DIR
+;   bin/omega --notify "goal"        desktop notifications (omega.ext.notify)
+;
+; The run prints every turn as it lands (sensed from the env, like any other
+; observer), then the task's final status, and a summary of what the
+; environment now holds. Exit code 0 when the task ended :idle or :done.
+
+(ns omega.cli
+  (:require [omega.env :as env]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.tools :as tools]
+            [omega.trace :as tr]
+            [omega.llm :as llm]
+            [omega.ext :as ext]
+            [omega.ext.notify :as notify]))
+
+(def SYSTEM-PROMPT
+  (str "You are omega, a coding agent working in the project at the current root. "
+       "You act through tools. Read before you edit; edit with exact old/new strings. "
+       "Prefer small verified steps: after changing code, run it or its tests with bash. "
+       "You are one task among possibly many. Leave a `trace` finding when you learn something "
+       "other tasks may need. For independent sub-work, `spawn` a subtask and `wait` for it. "
+       "When the goal is fully achieved, call `done` with a short summary of what changed. "
+       "If you only answered a question, reply with prose and no tool call."))
+
+(defn- parse [args]
+  (loop [as args opts {}]
+    (if (empty? as)
+      opts
+      (let [[a & more] as]
+        (case a
+          "--offline" (recur more (assoc opts :offline true))
+          "--notify" (recur more (assoc opts :notify true))
+          "--cassette" (recur (rest more) (assoc opts :cassette (first more)))
+          "--db" (recur (rest more) (assoc opts :db (first more)))
+          "--root" (recur (rest more) (assoc opts :root (first more)))
+          (recur more (update opts :goal (fn [g] (if g (str g " " a) a)))))))))
+
+(defn offline-model
+  "A scripted model that exercises the whole loop without a network: it lists
+   the root, leaves a finding, and closes the task."
+  []
+  (loop/scripted
+   [(loop/call-tool "bash" {:command "ls | head -20"} "tu-1")
+    (loop/call-tool "trace" {:kind "finding" :subject "." :text "offline demo looked at the root"} "tu-2")
+    (loop/call-tool "done" {:summary "Listed the project root and left a finding (offline model)."} "tu-3")]))
+
+(defn- block->line [b]
+  (case (:type b)
+    :text (:text b)
+    :tool-use (str "→ " (:name b) " " (pr-str (:input b)))
+    :tool-result (let [c (str (:content b))
+                       c (if (> (count c) 400) (str (subs c 0 400) " …") c)]
+                   (str (if (:error? b) "✗ " "← ") c))
+    (pr-str b)))
+
+(defn print-turn [t]
+  (println (str "\n── " (name (:role t)) " " (:n t) " ──"))
+  (doseq [b (:content t)] (println (block->line b))))
+
+(defn- follow!
+  "Print task `id`'s turns as they appear, until it settles."
+  [sys id]
+  (let [e (:env sys)
+        h (env/sense e '[?u :turn/task ?t] :turn)
+        printed (atom 0)
+        flush! (fn []
+                 (let [ts (loop/turns sys id)]
+                   (doseq [t (drop @printed ts)] (print-turn t))
+                   (reset! printed (count ts))))]
+    (loop []
+      (flush!)
+      (let [s (task/status sys id)]
+        (if (or (task/terminal? s) (= :idle s))
+          (do (Process/sleep 50) (flush!))
+          (do (receive [:omega/sensed :turn _] nil (after 1000 nil))
+              (recur)))))
+    (env/unsense h)))
+
+(defn run
+  "Run one task from argv-style `args`. Returns the final task view."
+  [args]
+  (let [o (parse args)
+        root (or (:root o) (File/cwd!))
+        _ (when (nil? (:goal o)) (throw (ex-info "usage: omega [--offline] [--notify] [--cassette PATH] [--db DIR] \"goal\"" {})))
+        base (if (:offline o) (offline-model) (llm/step (llm/from-env root)))
+        step (if (:cassette o) (llm/cassette base (:cassette o) :auto) base)
+        e (env/open (if (:db o) {:path (:db o)} {}))
+        sys (task/start-system e {:step step :tools tools/default :root root :system-prompt SYSTEM-PROMPT})
+        sys (ext/install sys (if (:notify o) [(notify/extension)] []))
+        id (task/open! sys {:goal (:goal o)})]
+    (println (str "omega · task " id " · " (:goal o)))
+    (follow! sys id)
+    (let [v (task/view sys id)]
+      (println (str "\n══ " id " · " (name (:status v)) " ══"))
+      (println (str "result: " (:result v)))
+      (println (str "cost:   " (pr-str (select-keys (:cost v) [:input :output :cache-read]))))
+      (println (str "traces: " (pr-str (frequencies (map :kind (tr/all e))))))
+      (when (:notify o) (Process/sleep 500))
+      (ext/uninstall sys)
+      (task/stop-system! sys)
+      v)))
+
+(defn main []
+  (let [v (run (vec (BeamLisp/argv)))]
+    (when-not (contains? #{:idle :done} (:status v))
+      (System/halt 1))))

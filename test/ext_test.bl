@@ -1,0 +1,76 @@
+(ns ext-test
+  (:require [omega.env :as env]
+            [omega.actor :as actor]
+            [omega.trace :as tr]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.tools :as tools]
+            [omega.ext :as ext]
+            [omega.ext.notify :as notify]))
+
+(defn- system [step exts]
+  (ext/install (task/start-system (env/open) {:step step :tools tools/default :root "/tmp"}) exts))
+
+(deftest events-reach-extensions-in-their-own-process
+  (let [me (erlang/self)
+        x {:name :spy :on {:task/status (fn [d _] (erlang/send me [:saw (:status d)]))}}
+        sys (system (loop/scripted [(loop/say "ok")]) [x])
+        id (task/open! sys {:goal "g"})]
+    (task/await sys id 5000)
+    (let [seen (loop [acc []] (receive [:saw s] (recur (conj acc s)) (after 300 acc)))]
+      (is (some #{:running} seen))
+      (is (some #{:idle} seen)))
+    (task/stop-system! sys)))
+
+(deftest a-tool-before-hook-can-deny-and-the-model-sees-why
+  (let [no-bash {:name :no-bash
+                 :hooks {:tool/before (fn [d _] (if (= "bash" (get-in d [:block :name]))
+                                                  {:allow false :reason "bash is off" :block (:block d)}
+                                                  d))}}
+        sys (system (loop/scripted [(loop/call-tool "bash" {:command "echo hi"})
+                                    (fn [req] (loop/say (get-in (last (:messages req)) [:content 0 :content])))])
+                    [no-bash])
+        id (task/open! sys {:goal "g"})]
+    (is (= "denied: bash is off" (:result (task/await sys id 5000))))
+    (task/stop-system! sys)))
+
+(deftest a-context-hook-transforms-the-request
+  (let [x {:name :sys :hooks {:context (fn [req _] (assoc req :system "custom system"))}}
+        sys (system (loop/scripted [(fn [req] (loop/say (:system req)))]) [x])
+        id (task/open! sys {:goal "g"})]
+    (is (= "custom system" (:result (task/await sys id 5000))))
+    (task/stop-system! sys)))
+
+(deftest a-throwing-hook-is-skipped-and-leaves-a-finding
+  (let [x {:name :broken :hooks {:context (fn [_ _] (throw (ex-info "nope" {})))}}
+        sys (system (loop/scripted [(loop/say "still fine")]) [x])
+        id (task/open! sys {:goal "g"})]
+    (is (= "still fine" (:result (task/await sys id 5000))))
+    (is (= ["ext/broken"] (map :subject (tr/all (:env sys) {:kind :finding}))))
+    (task/stop-system! sys)))
+
+(deftest extensions-contribute-tools
+  (let [x {:name :hello :tools [{:name "hello" :description "greet" :input-schema {:type "object"}
+                                  :run (fn [_ _] {:ok "hi from ext"})}]}
+        sys (system (loop/scripted [(loop/call-tool "hello" {})
+                                    (fn [req] (loop/say (get-in (last (:messages req)) [:content 0 :content])))])
+                    [x])
+        id (task/open! sys {:goal "g"})]
+    (is (= "hi from ext" (:result (task/await sys id 5000))))
+    (task/stop-system! sys)))
+
+(deftest notify-shows-outcomes-and-turns-a-click-into-a-reply
+  (let [me (erlang/self)
+        fake (fn [n] (erlang/send me [:notified n]) (when (:actions n) "yes"))
+        sys (system (loop/scripted [(loop/call-tool "send" {:to "human:me" :kind "ask" :text "ship it?"})
+                                    (loop/say "asked")])
+                    [(notify/extension {:send fake})])
+        id (task/open! sys {:goal "ask"})
+        ns (loop [acc []] (receive [:notified n] (recur (conj acc n)) (after 1500 acc)))]
+    (is (some (fn [n] (= "ship it?" (:body n))) ns) "the ask was shown with actions")
+    (is (some (fn [n] (includes? (:title n) "idle")) ns) "the outcome was shown")
+    (is (some (fn [m] (and (= :reply (:kind m)) (= "yes" (:text m)) (= "human:me" (:from m))))
+              (actor/messages (:env sys) id))
+        "the click became the human's reply to the task")
+    (ext/uninstall sys)
+    (task/stop-system! sys)))
