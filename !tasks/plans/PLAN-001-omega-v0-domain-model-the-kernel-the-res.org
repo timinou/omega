@@ -1,5 +1,5 @@
 #+TITLE: omega v0 domain model — the kernel the rest is built on
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 15950b96c19ed4f1
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-01T10-18-31-559Z_15950b96c19ed4f1.jsonl]]
 #+CUSTOM_ID: PLAN-001-omega-v0-domain-model-the-kernel-the-res
@@ -70,3 +70,30 @@ There is a clean datom schema, a task namespace interface, an executor =defserve
 - A live run against the proxy completes a real task that edits a scratch file.
 - The datom model doc =docs/domain-model.bl.md= is runnable and complete.
 - All of it is committed.
+
+* Outcome (2026-10-01)
+Built and committed. =bin/bl test= gives 7 files green (actor, trace, task, loop/tools, llm, ext, jev, jev-gate).
+=omega.bl.md=, =docs/domain-model.bl.md= and both literate extensions run under =bin/bl run=.
+
+Live, verified against Sonnet 5.5 through the ccflare proxy:
+- fizz.py written, run and closed as done;
+- parallel subtasks plus wait (a.txt/b.txt);
+- the Jev done-gate allowed a verified task through, and blocked an unverified one three times (p=0.39/0.27/0.27).
+
+** Deviations from the build order
+- No =omega.ui= yet. The loom UI (D12/D13) is the next plan. CLI turn-printing is the only surface.
+- Codemode (D6): the =eval= tool reuses =harness/eval-cell= (own process, stdout capture, deadline kill). The harness keeper/session document is not adopted; a task's turns live in datom instead (D1).
+- Streaming is not done. The =step= seam is unchanged, so streaming slots in behind it.
+
+** Findings to carry forward
+- The better-ccflare proxy routes only when system[0] is the exact Claude Code identity line. It answers 503 otherwise.
+- beam-lisp main evaluates call arguments right-to-left. =:true= reads as the boolean. Several clojure.core fns are missing (see README).
+- The Jev done-gate's fixed "implemented AND verified" criterion overrode an explicit user instruction. The question must be phrased against the goal as written, and gate rejections need a per-turn cap.
+- Extension surface gaps: an =:on= keyed by datom pattern (inbox events); extension =:start= processes should run under the task supervisor.
+
+* Next (proposed)
+1. omega.ui: a loom desktop screen set (overview, task detail, traces, decisions), projected from the env.
+2. D11: a =:task/continues= edge plus handoff; design the compactor actor (trace pressure).
+3. Jev gate v2: goal-relative done question, rejection cap, scope routing to spawn.
+4. Durable by default (=--db=) plus a warm per-project VM so tasks outlive a shell.
+5. Streaming in omega.llm (httpc ={stream, self}= was verified to work against the proxy).

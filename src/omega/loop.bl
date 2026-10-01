@@ -120,7 +120,9 @@
             :else (try ((:run tool) ctx (:input block))
                        (catch err {:error (ex-message err)})))
         r (hook sys :tool/after r (assoc ctx :block block))]
-    (tr/leave! (:env sys) id {:kind :tool :subject (str (:name block) "#" (:id block))
+    ;; one trace per CALL: the subject carries the turn number, so two calls with a
+    ;; reused tool-use id (scripted models, some providers) never merge
+    (tr/leave! (:env sys) id {:kind :tool :subject (str (:name block) "#" (count (turns sys id)) "/" (:id block))
                               :text (str (:name block) " " (if (:error r) "error" "ok"))
                               :data {:input (:input block) :error? (some? (:error r))}})
     (emit sys :tool/result {:task id :tool (:name block) :error? (some? (:error r))})
