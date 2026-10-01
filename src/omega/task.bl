@@ -120,8 +120,13 @@
   "Spawn the turn process for task `id`. It reports back to the executor."
   [sys id me]
   (spawn (fn []
-           (let [outcome (try (loop/run! sys id)
-                              (catch err {:status :failed :error (ex-message err)}))]
+           (let [outcome (try (loop/turn! sys id)
+                              (catch err {:status :failed :error (ex-message err)}))
+                 ;; the executor's contract is total: anything that is not an
+                 ;; outcome map with a known status is a failure, said plainly
+                 outcome (if (and (map? outcome) (contains? STATUSES (:status outcome)))
+                           outcome
+                           {:status :failed :error (str "turn returned no outcome: " (pr-str outcome))})]
              (erlang/send me [:turn-ended outcome])))))
 
 (defn- start-turn [sys st]
@@ -138,6 +143,11 @@
     ;; the status must find the result, the completion and released claims.
     (when (contains? outcome :result)
       (env/tx! e [[:db/add t :task/result (:result outcome)]]))
+    ;; a failure is a fact like any other: its reason is the result, and a
+    ;; :blocker trace says what stopped the task for anyone sensing the env
+    (when (= st :failed)
+      (env/tx! e [[:db/add t :task/result (str "failed: " (:error outcome))]])
+      (tr/leave! e id {:kind :blocker :subject id :text (str (:error outcome))}))
     (when (= st :done)
       (tr/leave! e id {:kind :completion :subject id :text (str (:result outcome))}))
     (when (terminal? st)
@@ -293,13 +303,13 @@
 (defn start-system
   "Start omega's task system over `env`. opts:
      :step    (fn [request] → response) — the model (omega.loop documents the shape)
-     :tools   tool table (omega.tools/default by default; see omega.loop)
+     :tools   tool table (omega.codemode/tools: the single `eval` tool; see omega.loop)
      :hooks   extension hooks (omega.ext)
    Returns the system map every other verb takes."
   [e opts]
   (let [sup (elem (DynamicSupervisor/start_link (to-list [(tuple :strategy :one_for_one)])) 1)]
-    ;; :open! and :await ride in the system so tools (spawn, wait) can reach them
-    ;; without omega.tools requiring omega.task — the dependency stays one-way.
+    ;; :open! and :await ride in the system so eval code (spawn, wait) can reach them
+    ;; without omega.prelude requiring omega.task — the dependency stays one-way.
     (merge {:env e :sup sup :executors (atom {})
             :open! (fn [s m] (open! s m)) :await (fn [s id ms] (await s id ms))}
            (select-keys opts [:step :tools :hooks :system-prompt :max-steps :root]))))

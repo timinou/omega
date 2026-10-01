@@ -2,11 +2,14 @@
 
 > Run it: `bin/bl run omega.bl.md` (offline, ~15 s). Copy any block into `bin/bl repl`
 > to poke at it. Every block uses the public interface only:
-> `omega.env · omega.actor · omega.trace · omega.task · omega.loop · omega.tools · omega.ext`.
+> `omega.env · omega.actor · omega.trace · omega.task · omega.loop · omega.codemode · omega.ext`.
 
 This is the toy loop from `research/domain/synthesis/omega-at-a-glance.bl.md`, made
 real. It shows three tasks and one human sharing one environment, coordinating
-through it.
+through it. The model has exactly one tool, `eval` (codemode): a task writes a
+small beam-lisp program and the harness runs it with `read`, `write`, `edit`, `sh`,
+`spawn`, `wait`, `send`, `trace`, `traces` and `done` in scope. So a step is one
+program composing those functions, not one tool call per action.
 
 ## 1. A world and a system
 
@@ -17,7 +20,7 @@ through it.
             [omega.trace :as tr]
             [omega.task :as task]
             [omega.loop :as loop]
-            [omega.tools :as tools]
+            [omega.codemode :as cm]
             [omega.ext :as ext]))
 
 (def root (str "/tmp/omega-playground-" (erlang/unique_integer (to-list [:positive]))))
@@ -32,37 +35,42 @@ goal. To make it live, swap in `(omega.llm/step (omega.llm/from-env "."))`; noth
 else changes.
 
 ```beam-lisp
+(def verify-py
+  "python3 -c \"from reader import read_number as r; print(r('0x1f'), r('7'))\"")
+
 (def scripts
-  {;; A: owns the reader, leaves a finding others can use, then finishes
+  {;; A: owns the reader, leaves a finding others can use, verifies, then finishes
    "make read_number accept 0x hex"
-   [(loop/call-tool "edit" {:path "reader.py"
-                            :edits [{:old "    return int(s)" :new "    return int(s, 16) if s.startswith('0x') else int(s)"}]})
-    (loop/call-tool "trace" {:kind "finding" :subject "reader.py" :text "read_number(s) now accepts 0x… strings"})
-    (loop/call-tool "bash" {:command "python3 -c 'from reader import read_number as r; print(r(\"0x1f\"), r(\"7\"))'"})
-    (loop/call-tool "done" {:summary "read_number parses 0x hex; verified 0x1f → 31"})]
+   [(loop/call-tool "eval"
+      {:code (str "(edit \"reader.py\" [{:old \"    return int(s)\" :new \"    return int(s, 16) if s.startswith('0x') else int(s)\"}])"
+                  "(trace :finding \"reader.py\" \"read_number(s) now accepts 0x… strings\")")})
+    (loop/call-tool "eval"
+      {:code (str "(let [r (sh " (pr-str verify-py) ")]"
+                  "  (done (str \"read_number parses 0x hex; verified 0x1f and 7 → \" (str/trim (:out r)))))")})]
 
    ;; B: wants to touch the same file — senses A's claim, waits on A, then reads A's finding
    "document read_number in README"
-   [(loop/call-tool "trace" {:read true :subject "reader.py"})
+   [(loop/call-tool "eval" {:code "(traces {:subject-prefix \"reader.py\"})"})
     ;; the task that left traces on reader.py is named in what B just read: wait
     ;; on it (a claim, while A works; A's finding or completion, once it is done)
     (fn [req]
       (let [seen (get-in (last (:messages req)) [:content 0 :content])
             holder (second (re-find #":task \"(t-[0-9]+)\"" seen))]
         (if holder
-          (loop/call-tool "wait" {:task holder})
-          (loop/call-tool "trace" {:read true :subject "reader.py"}))))
-    (loop/call-tool "trace" {:read true :kind "finding" :subject "reader.py"})
-    (loop/call-tool "write" {:path "README.md" :content "read_number(s): decimal, or hex with a 0x prefix.\n"})
-    (loop/call-tool "done" {:summary "README documents the hex support A added"})]
+          (loop/call-tool "eval" {:code (str "(wait \"" holder "\")")})
+          (loop/call-tool "eval" {:code "(traces {:subject-prefix \"reader.py\"})"}))))
+    (loop/call-tool "eval" {:code "(traces {:kind :finding :subject-prefix \"reader.py\"})"})
+    (loop/call-tool "eval"
+      {:code (str "(write \"README.md\" \"read_number(s): decimal, or hex with a 0x prefix.\\n\")"
+                  "(done \"README documents the hex support A added\")")})]
 
    ;; C: asks the human something, and answers with whatever the human said
    "ask whether to bump the version"
-   [(loop/call-tool "send" {:to "human:me" :kind "ask" :text "Bump version to 0.2?"})
+   [(loop/call-tool "eval" {:code "(send \"human:me\" :ask \"Bump version to 0.2?\")"})
     (fn [req] (loop/say "asked; I'll continue when you answer"))
     (fn [req] (loop/say (str "human said: " (get-in (last (:messages req)) [:content 0 :text]))))]})
 
-(def sys (task/start-system e {:step (loop/by-goal scripts) :tools tools/default :root root}))
+(def sys (task/start-system e {:step (loop/by-goal scripts) :tools cm/tools :root root}))
 ```
 
 ## 2. Three prompts, three tasks
@@ -83,7 +91,7 @@ else changes.
 
 B never addressed A and was never told A's id. It read the traces on `reader.py`,
 found who held the claim there, waited on that task's status through the
-environment, and then used A's finding. That is stigmergy: coordination by the medium,
+environment, and then used A's finding. Each of those steps was one `eval` program. That is stigmergy: coordination by the medium,
 not by messages.
 
 ## 3. The human is an actor

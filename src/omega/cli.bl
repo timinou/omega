@@ -15,7 +15,7 @@
   (:require [omega.env :as env]
             [omega.task :as task]
             [omega.loop :as loop]
-            [omega.tools :as tools]
+            [omega.codemode :as codemode]
             [omega.trace :as tr]
             [omega.llm :as llm]
             [omega.ext :as ext]
@@ -25,11 +25,14 @@
 
 (def SYSTEM-PROMPT
   (str "You are omega, a coding agent working in the project at the current root. "
-       "You act through tools. Read before you edit; edit with exact old/new strings. "
-       "Prefer small verified steps: after changing code, run it or its tests with bash. "
-       "You are one task among possibly many. Leave a `trace` finding when you learn something "
-       "other tasks may need. For independent sub-work, `spawn` a subtask and `wait` for it. "
-       "When the goal is fully achieved, call `done` with a short summary of what changed. "
+       "You act through ONE tool, `eval`: you write beam-lisp programs that call functions "
+       "(read, write, edit, ls, glob, sh, spawn, wait, send, trace, traces, done). "
+       "Compose several steps per eval and return only what you need to see. "
+       "Read before you edit; edit with exact :old/:new strings. "
+       "After changing code, verify it (run it or its tests with sh). "
+       "You are one task among possibly many: (trace :finding subject text) when you learn something "
+       "others may need; for independent sub-work, (spawn goal) and (wait id). "
+       "When the goal is fully achieved, call (done summary) inside an eval. "
        "If you only answered a question, reply with prose and no tool call."))
 
 (defn omega-home
@@ -57,9 +60,8 @@
    the root, leaves a finding, and closes the task."
   []
   (loop/scripted
-   [(loop/call-tool "bash" {:command "ls | head -20"} "tu-1")
-    (loop/call-tool "trace" {:kind "finding" :subject "." :text "offline demo looked at the root"} "tu-2")
-    (loop/call-tool "done" {:summary "Listed the project root and left a finding (offline model)."} "tu-3")]))
+   [(loop/call-tool "eval" {:code "(println (ls))\n(:out (sh \"git log --oneline -3 2>/dev/null || echo no git\"))"} "tu-1")
+    (loop/call-tool "eval" {:code "(trace :finding \".\" \"offline demo looked at the root\")\n(done \"Listed the project root and left a finding (offline model).\")"} "tu-2")]))
 
 (defn- block->line [b]
   (case (:type b)
@@ -102,7 +104,7 @@
         base (if (:offline o) (offline-model) (llm/step (llm/from-env (omega-home))))
         step (if (:cassette o) (llm/cassette base (:cassette o) :auto) base)
         e (env/open (if (:db o) {:path (:db o)} {}))
-        sys (task/start-system e {:step step :tools tools/default :root root :system-prompt SYSTEM-PROMPT})
+        sys (task/start-system e {:step step :tools codemode/tools :root root :system-prompt SYSTEM-PROMPT})
         exts (cond-> []
                (:notify o) (conj (notify/extension))
                (:jev o) (conj (jev-gate/extension {:transport (jev/http (or (jev/key-from-env root) (jev/key-from-env (omega-home))))})))

@@ -50,7 +50,7 @@ pattern, and an entity is complete on its own.
             [omega.trace :as tr]
             [omega.task :as task]
             [omega.loop :as loop]
-            [omega.tools :as tools]))
+            [omega.codemode :as cm]))
 
 (println "attributes declared:" (count schema/all))
 (println "by kind:" (frequencies (map (fn [a] (namespace (:db/ident a))) schema/all)))
@@ -109,11 +109,11 @@ The executor is a `defserver` under a `DynamicSupervisor`. The model is a `step`
 function. Here it's a scripted one, so this document runs offline.
 
 ```beam-lisp
-(def sys (task/start-system e {:tools tools/default :root "/tmp"
+(def sys (task/start-system e {:tools cm/tools :root "/tmp"
                                :step (loop/by-goal
-                                      {"list files" [(loop/call-tool "bash" {:command "echo a b"})
+                                      {"list files" [(loop/call-tool "eval" {:code "(sh \"echo a b\")"})
                                                      (loop/say "two files: a, b")]
-                                       "parent" [(loop/call-tool "spawn" {:goal "child"})
+                                       "parent" [(loop/call-tool "eval" {:code "(spawn \"child\")"})
                                                  (fn [_] (receive :never nil (after 60000 nil)))]
                                        "child" [(fn [_] (receive :never nil (after 60000 nil)))]})}))
 

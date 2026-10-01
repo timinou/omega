@@ -93,7 +93,7 @@
     :note (str "[note from " (:from m) "] " (:text m))
     (str "[" (name (:kind m)) " from " (:from m) "] " (:text m))))
 
-(defn- drain!
+(defn drain!
   "Consume task `id`'s unread messages as one :user turn. Returns how many."
   [sys id]
   (let [e (:env sys)
@@ -136,14 +136,14 @@
 (defn- add-usage [a b]
   (merge-with (fn [x y] (+ (or x 0) (or y 0))) (or a {}) (or b {})))
 
-(defn- request [sys id]
+(defn request [sys id]
   (let [ts (turns sys id)
         req {:system (or (:system-prompt sys) "You are omega, a coding agent.")
              :messages (messages ts)
              :tools (vec (map (fn [t] (select-keys t [:name :description :input-schema])) (tool-table sys)))}]
     (hook sys :context req {:sys sys :task id})))
 
-(defn run!
+(defn turn!
   "Run one turn of task `id` to completion. Returns the outcome for the
    executor: {:status :idle|:done|:failed :result …}."
   [sys id]
@@ -156,13 +156,19 @@
       (if (> n max-steps)
         {:status :idle :result (str "paused after " max-steps " steps")}
         (let [resp (step (request sys id))]
-          (if (contains? resp :error)
+          (cond
+            (not (map? resp))
+            {:status :failed :error (str "the model step returned " (pr-str resp) ", not a response map")}
+
+            (contains? resp :error)
             {:status :failed :error (pr-str (:error resp))}
+
+            :else
             (let [content (vec (:content resp))
                   usage (add-usage usage (:usage resp))
                   _ (record! sys id :assistant content (:usage resp))
                   _ (env/tx! e [[:db/add (env/eid e :task/id id) :task/cost
-                                 (add-usage (:cost (env/entity e (env/eid e :task/id id))) (:usage resp))]])
+                                 (add-usage (:task/cost (env/entity e (env/eid e :task/id id))) (:usage resp))]])
                   uses (tool-uses content)]
               (if (empty? uses)
                 (let [r {:status :idle :result (text-of content)}]

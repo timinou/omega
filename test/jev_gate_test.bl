@@ -2,7 +2,7 @@
   (:require [omega.env :as env] [omega.trace :as tr]
             [omega.task :as task]
             [omega.loop :as loop]
-            [omega.tools :as tools]
+            [omega.codemode :as cm]
             [omega.ext :as ext]
             [omega.jev :as jev]
             [omega.ext.jev-gate :as gate]))
@@ -17,8 +17,8 @@
 
 (deftest a-transport-that-says-not-done-turns-done-back-into-work
   (let [jev-no (fn [_] {:ok {"answers" {"met" {"type" "noul" "noul" 0.05}}}})
-        sys (ext/install (task/start-system (env/open) {:tools tools/default :root "/tmp"
-                                                        :step (loop/scripted [(loop/call-tool "done" {:summary "done!"})
+        sys (ext/install (task/start-system (env/open) {:tools cm/tools :root "/tmp"
+                                                        :step (loop/scripted [(loop/call-tool "eval" {:code "(done \"done!\")"})
                                                                               (fn [req] (loop/say (get-in (last (:messages req)) [:content 0 :content])))])})
                          [(gate/extension {:transport jev-no})])
         id (task/open! sys {:goal "fix it"})
@@ -28,8 +28,8 @@
     (task/stop-system! sys)))
 
 (deftest when-jev-fails-done-stands
-  (let [sys (ext/install (task/start-system (env/open) {:tools tools/default :root "/tmp"
-                                                        :step (loop/scripted [(loop/call-tool "done" {:summary "done!"})])})
+  (let [sys (ext/install (task/start-system (env/open) {:tools cm/tools :root "/tmp"
+                                                        :step (loop/scripted [(loop/call-tool "eval" {:code "(done \"done!\")"})])})
                          [(gate/extension {:transport (fn [_] {:error {:kind :overloaded}})})])
         id (task/open! sys {:goal "fix it"})]
     (is (= :done (:status (task/await sys id 5000))))

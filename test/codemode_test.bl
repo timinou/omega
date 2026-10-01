@@ -1,0 +1,74 @@
+(ns codemode-test
+  (:require [omega.env :as env]
+            [omega.trace :as tr]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.codemode :as cm]))
+
+(defn- root! []
+  (let [r (str "/tmp/omega-cm-" (erlang/unique_integer (to-list [:positive])))]
+    (File/mkdir_p! r)
+    (File/write! (str r "/a.txt") "alpha beta\n")
+    r))
+
+(defn- sys [root step]
+  (task/start-system (env/open) {:step step :tools cm/tools :root root}))
+
+(defn- ev [code] (loop/call-tool "eval" {:code code}))
+(defn- echo-last [req] (loop/say (get-in (last (:messages req)) [:content 0 :content])))
+
+(deftest the-only-tool-is-eval
+  (is (= ["eval"] (map :name cm/tools))))
+
+(deftest one-program-composes-files-shell-and-returns-only-what-matters
+  (let [r (root!)
+        s (sys r (loop/scripted [(ev "(edit \"a.txt\" [{:old \"beta\" :new \"BETA\"}])
+                                     (write \"b.txt\" (str/upper-case (read \"a.txt\")))
+                                     (println (ls))
+                                     (:out (sh \"cat b.txt\"))")
+                                 echo-last]))
+        id (task/open! s {:goal "compose"})
+        v (task/await s id 10000)]
+    (is (= "alpha BETA\n" (File/read! (str r "/a.txt"))))
+    (is (= "ALPHA BETA\n" (File/read! (str r "/b.txt"))))
+    (is (includes? (:result v) "[\"a.txt\" \"b.txt\"]"))
+    (is (includes? (:result v) "=> ALPHA BETA"))
+    (is (= #{"a.txt" "b.txt"} (set (map :subject (tr/all (:env s) {:kind :claim :task id})))))
+    (task/stop-system! s)))
+
+(deftest definitions-persist-between-evals
+  (let [s (sys (root!) (loop/scripted [(ev "(defn twice [x] (* 2 x)) (def n 21)") (ev "(twice n)") echo-last]))
+        id (task/open! s {:goal "persist"})]
+    (is (= "=> 42" (:result (task/await s id 10000))))
+    (task/stop-system! s)))
+
+(deftest an-exception-is-a-readable-error-result
+  (let [s (sys (root!) (loop/scripted [(ev "(edit \"a.txt\" [{:old \"nope\" :new \"x\"}])") echo-last]))
+        id (task/open! s {:goal "fail"})]
+    (is (includes? (:result (task/await s id 10000)) ":old not found"))
+    (task/stop-system! s)))
+
+(deftest done-inside-eval-closes-the-task
+  (let [s (sys (root!) (loop/scripted [(ev "(write \"c.txt\" \"x\") (done \"wrote c\")")]))
+        id (task/open! s {:goal "finish"})
+        v (task/await s id 10000)]
+    (is (= [:done "wrote c"] [(:status v) (:result v)]))
+    (task/stop-system! s)))
+
+(deftest spawn-and-wait-are-functions
+  (let [s (sys (root!) (loop/by-goal {"parent" [(ev "(let [a (spawn \"kid a\") b (spawn \"kid b\")] (map (fn [t] (:result (wait t))) [a b]))") echo-last]
+                                      "kid a" [(loop/say "A")]
+                                      "kid b" [(loop/say "B")]}))
+        id (task/open! s {:goal "parent"})]
+    (is (= "=> (\"A\" \"B\")" (:result (task/await s id 10000))))
+    (is (= 2 (count (task/children s id))))
+    (task/stop-system! s)))
+
+(deftest a-runaway-allocation-kills-only-the-eval
+  (let [s (assoc (sys (root!) (loop/scripted [(ev "(count (vec (range 200000000)))") echo-last]))
+                 :eval-timeout-ms 60000)
+        id (task/open! s {:goal "blow up"})
+        v (task/await s id 60000)]
+    (is (= :idle (:status v)) "the task survives")
+    (is (includes? (:result v) "killed"))
+    (task/stop-system! s)))

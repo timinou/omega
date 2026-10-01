@@ -4,12 +4,12 @@
             [omega.trace :as tr]
             [omega.task :as task]
             [omega.loop :as loop]
-            [omega.tools :as tools]
+            [omega.codemode :as cm]
             [omega.ext :as ext]
             [omega.ext.notify :as notify]))
 
 (defn- system [step exts]
-  (ext/install (task/start-system (env/open) {:step step :tools tools/default :root "/tmp"}) exts))
+  (ext/install (task/start-system (env/open) {:step step :tools cm/tools :root "/tmp"}) exts))
 
 (deftest events-reach-extensions-in-their-own-process
   (let [me (erlang/self)
@@ -24,10 +24,10 @@
 
 (deftest a-tool-before-hook-can-deny-and-the-model-sees-why
   (let [no-bash {:name :no-bash
-                 :hooks {:tool/before (fn [d _] (if (= "bash" (get-in d [:block :name]))
+                 :hooks {:tool/before (fn [d _] (if (and (= "eval" (get-in d [:block :name])) (includes? (get-in d [:block :input :code]) "sh"))
                                                   {:allow false :reason "bash is off" :block (:block d)}
                                                   d))}}
-        sys (system (loop/scripted [(loop/call-tool "bash" {:command "echo hi"})
+        sys (system (loop/scripted [(loop/call-tool "eval" {:code "(sh \"echo hi\")"})
                                     (fn [req] (loop/say (get-in (last (:messages req)) [:content 0 :content])))])
                     [no-bash])
         id (task/open! sys {:goal "g"})]
@@ -62,7 +62,7 @@
 (deftest notify-shows-outcomes-and-turns-a-click-into-a-reply
   (let [me (erlang/self)
         fake (fn [n] (erlang/send me [:notified n]) (when (:actions n) "yes"))
-        sys (system (loop/scripted [(loop/call-tool "send" {:to "human:me" :kind "ask" :text "ship it?"})
+        sys (system (loop/scripted [(loop/call-tool "eval" {:code "(send \"human:me\" :ask \"ship it?\")"})
                                     (loop/say "asked")])
                     [(notify/extension {:send fake})])
         id (task/open! sys {:goal "ask"})

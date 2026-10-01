@@ -44,8 +44,9 @@ Flags: `--offline`, `--jev`, `--notify`, `--cassette PATH` (record/replay the mo
 | `src/omega/actor.bl` | uniform actors (tasks and humans); mailboxes are facts |
 | `src/omega/trace.bl` | open trace vocabulary and glossary; decay; reinforcing reads; claim policy |
 | `src/omega/task.bl` | **the interface**: `open! say! steer! cancel! await view children tree` |
-| `src/omega/loop.bl` | one turn: model → tools → … → answer; the `step` seam; scripted models |
-| `src/omega/tools.bl` | read, write, edit (edits[]), bash, eval (harness), spawn, send, wait, trace, done |
+| `src/omega/loop.bl` | one turn (`turn!`): model → tools → … → answer; the `step` seam; scripted models |
+| `src/omega/codemode.bl` | **the only tool: `eval`** (beam-lisp, harness cell evaluator, heap cap + deadline) |
+| `src/omega/prelude.bl` | what eval code calls: read write edit ls glob sh · spawn wait send done · trace traces q |
 | `src/omega/llm.bl` | Anthropic over OTP httpc; retries; cassettes. `llm/usage.bl` vendored from relay |
 | `src/omega/jev.bl` | Jev typed decisions: questions as values, declared decisions with fail direction |
 | `src/omega/ext.bl` | extensions as values: events, hooks (call-predicate, context, tool/after), tools |
@@ -59,7 +60,8 @@ Flags: `--offline`, `--jev`, `--notify`, `--cassette PATH` (record/replay the mo
 
 - Call arguments evaluate **right-to-left**: never sequence effects by argument position.
 - `:true` / `:false` read as booleans. Use string keys.
-- Not in core: `ffirst`, `take-last`, `false?`, `read-string` (data), `requiring-resolve`.
+- Not in core: `ffirst`, `take-last`, `false?`, `read-string` (data), `requiring-resolve`, `#'ns/private-var`.
+- **Never name a public fn after a core fn** (`run!`, `count`, …): a qualified call runs CORE on the first, cold call (filed upstream as beam-lisp BUG-109). omega's `run!` became `turn!`.
 - `json/encode` refuses vectors (tuples), so use `omega.llm/jsonable`.
 - Datom: a transaction map needs `:db/id`; a lookup-ref is not accepted as a ref value
   (resolve it first); negation is `[:not …]` / `missing?`.

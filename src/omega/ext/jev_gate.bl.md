@@ -121,7 +121,7 @@ the turns already in the log, so no extra bookkeeping is needed:
    :hooks
    {:tool/after
     (fn [r ctx]
-      (if (and (:done r) (= "done" (get-in ctx [:block :name])))
+      (if (:done r)
         (let [d (record! (:sys ctx) (:task ctx)
                          (jev/decide transport done-decl
                                      {:goal (goal-of (:sys ctx) (:task ctx))

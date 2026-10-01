@@ -1,0 +1,92 @@
+; omega/codemode.bl — one tool: `eval`. Everything else is a function.
+;
+; ══ THE IDEA (decision D6: beam-lisp only) ══════════════════════════════════
+;
+; pi's CodeMode gives the model one tool that runs a program, and turns every
+; other tool into a function inside it. omega does the same, with beam-lisp as
+; the language and the BEAM as the sandbox:
+;
+;   the model calls  eval {:code "(let [src (read \"reader.py\")] (edit \"reader.py\" …))"}
+;   omega runs it    in the task's own namespace (state persists across calls),
+;                    in its own monitored process, under a heap cap and a deadline,
+;                    with stdout captured — harness/eval-cell does exactly this
+;   the result       is the value of the last form plus what was printed
+;
+; Composition is the point: one eval can read three files, grep, edit two and
+; run a check, returning ONLY what matters. A tool-per-call loop pays a model
+; round trip for each of those steps and floods the context with their output.
+;
+; ══ THE PRELUDE ═════════════════════════════════════════════════════════════
+;
+; `omega.prelude` is referred into every task namespace. Its functions read the
+; calling task from the cell's process dictionary (set by `run-eval`), so a
+; script never passes the task id around:
+;
+;   files    (read p) (write p s) (edit p [{:old :new} …]) (ls p) (glob pat)
+;   shell    (sh "cmd")  → {:out :exit}       — a function, not a tool
+;   tasks    (spawn goal) (wait id) (send to kind text) (done summary)
+;   env      (trace kind subject text) (traces opts) (q query & ins)
+;   check    (bl-check path) (bl-test path)   — the beam-lisp feedback loop
+;
+; ══ LIMITS — beam-native ════════════════════════════════════════════════════
+;
+; Deadline: eval-cell kills the cell after :timeout-ms. Heap: the cell sets its
+; own `max_heap_size` with `:kill true` first thing, so a runaway allocation
+; kills that one process and nothing else (verified: the caller survives and
+; receives :killed). No OS sandbox — full rights by default (D10).
+
+(ns omega.codemode
+  (:require [harness]
+            [omega.prelude]))
+
+(def TIMEOUT-MS 120000)
+(def HEAP-WORDS
+  "Per-eval heap cap in words (8 bytes each): 64M words ≈ 512 MB."
+  67108864)
+
+(defn task-ns [task] (str "omega.task." task))
+
+(defn- preamble
+  "Prepended to every eval: declare the namespace with the prelude referred
+   (idempotent: an existing ns keeps its definitions), bind the task context,
+   and cap the heap."
+  [task]
+  (str "(ns " (task-ns task) " (:require [omega.prelude :refer :all] [clojure.string :as str]))\n"
+       "(erlang/process_flag :max_heap_size {:size " HEAP-WORDS " :kill true :error_logger false})\n"
+       "(omega.prelude/-bind! " (pr-str task) ")\n"))
+
+(defn run-eval
+  "Evaluate `code` for `task` with system `sys`. {:ok text} | {:error text}."
+  [sys task code]
+  (let [_ (omega.prelude/-register! task sys)
+        r (harness/eval-cell {:ns (task-ns task) :root (or (:root sys) (File/cwd!)) :path "eval"}
+                             (str (preamble task) code)
+                             (or (:eval-timeout-ms sys) TIMEOUT-MS))
+        out (:stdout r)
+        out (if (> (count out) 20000) (str (subs out 0 20000) "\n…[stdout truncated]") out)]
+    (cond
+      (:error r) {:error (str (:error r) (when (seq out) (str "\nstdout:\n" out)))}
+      (omega.prelude/-done? task) {:ok (omega.prelude/-take-done! task) :done true}
+      :else {:ok (str (when (seq out) (str out "\n")) "=> " (:value r))})))
+
+(def DESCRIPTION
+  (str "Evaluate beam-lisp in your task's own namespace; definitions persist between calls. "
+       "This is your ONLY tool: compose many steps in one program and return just what matters. "
+       "Functions available (already referred):\n"
+       "  (read path) → string · (write path s) · (edit path [{:old \"…\" :new \"…\"} …]) exact, all-or-nothing\n"
+       "  (ls dir) · (glob \"src/**/*.bl\") · (sh \"cmd\") → {:out :exit}\n"
+       "  (spawn goal) → task-id · (wait id) → {:status :result} · (send to kind text) kind :note|:ask|:steer\n"
+       "  (trace kind subject text) leave a mark for other tasks · (traces {:subject-prefix p}) read marks\n"
+       "  (done summary) close this task when the goal is fully achieved\n"
+       "Also: clojure.string as str, Elixir/Erlang modules directly (String/split, File/read!). "
+       "println shows intermediate values; the last form's value is returned. Paths are relative to the project root."))
+
+(def eval-tool
+  {:name "eval"
+   :description DESCRIPTION
+   :input-schema {:type "object" :properties {:code {:type "string"}} :required ["code"]}
+   :run (fn [ctx {:keys [code]}] (run-eval (:sys ctx) (:task ctx) code))})
+
+(def tools
+  "omega's default tool table: exactly one tool."
+  [eval-tool])
