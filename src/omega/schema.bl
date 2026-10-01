@@ -1,0 +1,105 @@
+; omega/schema.bl — the shape of the world, as data.
+;
+; ══ WHAT THIS IS ════════════════════════════════════════════════════════════
+;
+; omega keeps ONE source of truth: a datom fact log (decision D1). Every task,
+; actor, message, trace and turn is an entity in it; processes are disposable
+; executors that read and write it. This namespace is the schema — the
+; attribute set — and nothing else. It is the first file to read.
+;
+; Five entity kinds, one per attribute namespace:
+;
+;   :actor/*   anyone who can receive a message: a task's executor, or a human.
+;              The human is an actor with a mailbox like any other (decision a).
+;   :task/*    a unit of committed work. One prompt opens one task; follow-ups
+;              and steers are messages to the SAME task (D3). Tasks own subtasks.
+;   :msg/*     a message from one actor to another. Delivery is a fact, so it is
+;              durable, ordered and queryable; a process wake is only a hint.
+;   :trace/*   a mark one task leaves in the shared environment for anyone to
+;              sense (stigmergy). The vocabulary is OPEN: see omega.trace.
+;   :turn/*    one model exchange inside a task: what was asked, what came back,
+;              which tool calls ran. The conversation is a projection of turns.
+;
+; ══ CONVENTIONS ═════════════════════════════════════════════════════════════
+;
+; - Identity: every entity carries a string id attribute (:task/id, :actor/id,
+;   …) declared :db.unique/identity, so a tempid map UPSERTS (datom.tx) and a
+;   transaction can name an entity without knowing its numeric id.
+; - Time: a :*/at long, milliseconds since the epoch. Explicit, because a
+;   decay function needs `now - at`, and a test needs to choose `now`.
+; - Open payloads: attributes with no :db/valueType accept any BEAM term
+;   (:msg/data, :trace/data, :turn/content). Structure that is queried gets its
+;   own attribute; structure that is only displayed rides in a payload.
+; - Refs point from the child to the parent (:task/owner, :msg/task, :trace/task),
+;   so "children of X" is one indexed pattern and an entity is complete alone.
+
+(ns omega.schema)
+
+(def actor
+  [{:db/ident :actor/id :db/valueType :db.type/string :db/unique :db.unique/identity
+    :db/doc "Stable address. Tasks use their task id; humans use \"human:<name>\"."}
+   {:db/ident :actor/kind :db/valueType :db.type/keyword
+    :db/doc ":task | :human. A task actor is backed by an executor process; a human by a UI."}
+   {:db/ident :actor/name :db/valueType :db.type/string
+    :db/doc "Display name."}])
+
+(def task
+  [{:db/ident :task/id :db/valueType :db.type/string :db/unique :db.unique/identity
+    :db/doc "Stable id, never reused. Also the task's :actor/id."}
+   {:db/ident :task/goal :db/valueType :db.type/string
+    :db/doc "The prompt that opened the task, verbatim. Steers refine it via :task/refined."}
+   {:db/ident :task/title :db/valueType :db.type/string
+    :db/doc "Short human handle."}
+   {:db/ident :task/status :db/valueType :db.type/keyword :db/index true
+    :db/doc "Lifecycle state; see omega.task/STATUSES. The latest value is current; history is the timeline."}
+   {:db/ident :task/owner :db/valueType :db.type/ref :db/index true
+    :db/doc "The task that opened this one. Ownership: cancelling the owner cancels this (top-down), and this task's failure is reported to the owner (bottom-up)."}
+   {:db/ident :task/opened-by :db/valueType :db.type/ref
+    :db/doc "The actor (human or task) who issued the prompt."}
+   {:db/ident :task/scope :db/valueType :db.type/string :db/cardinality :db.cardinality/many
+    :db/doc "Declared footprint: paths or globs the task expects to touch. A hint for claims and discovery, not a lock."}
+   {:db/ident :task/waits-on :db/valueType :db.type/ref :db/cardinality :db.cardinality/many
+    :db/doc "Tasks this one is waiting for. Retracted when the wait resolves, so the current value is the live wait-for graph."}
+   {:db/ident :task/refined :db/valueType :db.type/string :db/cardinality :db.cardinality/many
+    :db/doc "Refinements of the goal, appended by follow-ups and steers that change what 'done' means."}
+   {:db/ident :task/result :db/doc "The final answer or outcome, any term."}
+   {:db/ident :task/cost :db/doc "Accumulated usage {:input :output :cache-read :cache-write} — summed by the loop."}
+   {:db/ident :task/at :db/valueType :db.type/long :db/doc "Creation time (ms)."}])
+
+(def msg
+  [{:db/ident :msg/id :db/valueType :db.type/string :db/unique :db.unique/identity}
+   {:db/ident :msg/from :db/valueType :db.type/ref :db/index true :db/doc "Sending actor."}
+   {:db/ident :msg/to :db/valueType :db.type/ref :db/index true :db/doc "Receiving actor."}
+   {:db/ident :msg/kind :db/valueType :db.type/keyword
+    :db/doc ":prompt (follow-up) | :steer (change course now) | :ask (expects a :reply) | :reply | :note | :cancel."}
+   {:db/ident :msg/text :db/valueType :db.type/string}
+   {:db/ident :msg/data :db/doc "Structured payload, any term (e.g. the choices of an :ask)."}
+   {:db/ident :msg/re :db/valueType :db.type/ref :db/doc "The message this one answers."}
+   {:db/ident :msg/read :db/valueType :db.type/boolean :db/doc "Set once the recipient has consumed it."}
+   {:db/ident :msg/at :db/valueType :db.type/long}])
+
+(def trace
+  [{:db/ident :trace/id :db/valueType :db.type/string :db/unique :db.unique/identity}
+   {:db/ident :trace/task :db/valueType :db.type/ref :db/index true :db/doc "The task that left the mark."}
+   {:db/ident :trace/kind :db/valueType :db.type/keyword :db/index true
+    :db/doc "Open vocabulary. Known kinds are documented in omega.trace/GLOSSARY."}
+   {:db/ident :trace/subject :db/valueType :db.type/string :db/index true
+    :db/doc "What the mark is about — a path, a symbol, a topic. The key other tasks sense by."}
+   {:db/ident :trace/text :db/valueType :db.type/string}
+   {:db/ident :trace/data :db/doc "Structured payload, any term."}
+   {:db/ident :trace/at :db/valueType :db.type/long :db/doc "When left, or last reinforced."}
+   {:db/ident :trace/reads :db/valueType :db.type/long
+    :db/doc "How often other tasks have read it. Reads reinforce (D4): decay is measured from :trace/at, which a read refreshes."}])
+
+(def turn
+  [{:db/ident :turn/id :db/valueType :db.type/string :db/unique :db.unique/identity}
+   {:db/ident :turn/task :db/valueType :db.type/ref :db/index true}
+   {:db/ident :turn/n :db/valueType :db.type/long :db/doc "Ordinal within the task, from 1."}
+   {:db/ident :turn/role :db/valueType :db.type/keyword :db/doc ":user | :assistant | :tool."}
+   {:db/ident :turn/content :db/doc "Content blocks, provider-neutral: [{:type :text :text} {:type :tool-use :id :name :input} {:type :tool-result :id :content :error?}]."}
+   {:db/ident :turn/usage :db/doc "Token usage of an assistant turn."}
+   {:db/ident :turn/at :db/valueType :db.type/long}])
+
+(def all
+  "Every attribute omega declares, in install order."
+  (vec (concat actor task msg trace turn)))

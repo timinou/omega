@@ -1,0 +1,10 @@
+#!/bin/sh
+# bin/bl — run beam-lisp for omega: the LATEST main checkout (decision D12),
+# with omega's sources on the search path. Override the checkout with OMEGA_BL.
+BL=${OMEGA_BL:-$HOME/code/undefine/beam-lisp/bin/bl}
+ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
+cmd=$1; shift
+case "$cmd" in
+  run|test|eval|check) exec "$BL" "$cmd" -p "$ROOT/src" "$@" ;;
+  *) exec "$BL" "$cmd" "$@" ;;
+esac

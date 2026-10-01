@@ -1,0 +1,127 @@
+(ns task-test
+  (:require [omega.env :as env]
+            [omega.actor :as actor]
+            [omega.trace :as tr]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.tools :as tools]))
+
+(defn- system [step]
+  (task/start-system (env/open) {:step step :tools tools/default :root "/tmp"}))
+
+(deftest a-prompt-becomes-a-task-that-answers-and-goes-idle
+  (let [sys (system (loop/scripted [(loop/say "hello back")]))
+        id (task/open! sys {:goal "say hello"})
+        v (task/await sys id 5000)]
+    (is (= :idle (:status v)))
+    (is (= "hello back" (:result v)))
+    (is (= [:user :assistant] (map :role (loop/turns sys id))))
+    (is (= "say hello" (get-in (first (loop/turns sys id)) [:content 0 :text])))
+    (task/stop-system! sys)))
+
+(deftest a-follow-up-is-the-same-task-and-refines-it
+  (let [sys (system (loop/scripted [(loop/say "first") (loop/say "second")]))
+        id (task/open! sys {:goal "do a thing"})]
+    (task/await sys id 5000)
+    (task/say! sys id "also do another")
+    (Process/sleep 50)
+    (let [v (task/await sys id 5000)]
+      (is (= "second" (:result v)))
+      (is (= ["also do another"] (:refined v)))
+      (is (= [:user :assistant :user :assistant] (map :role (loop/turns sys id)))))
+    (task/stop-system! sys)))
+
+(deftest tools-run-and-done-closes-the-task
+  (let [path (str "/tmp/omega-test-" (erlang/unique_integer (to-list [:positive])) ".txt")
+        sys (system (loop/scripted [(loop/call-tool "write" {:path path :content "a b c"})
+                                    (loop/call-tool "edit" {:path path :edits [{:old "b" :new "B"}]})
+                                    (loop/call-tool "done" {:summary "edited"})]))
+        id (task/open! sys {:goal "edit a file"})
+        v (task/await sys id 5000)]
+    (is (= :done (:status v)))
+    (is (= "edited" (:result v)))
+    (is (= "a B c" (File/read! path)))
+    (is (= 1 (count (tr/all (:env sys) {:kind :completion :task id}))))
+    (is (= [] (tr/all (:env sys) {:kind :claim :task id})) "claims are released at the end")
+    (is (= 3 (count (tr/all (:env sys) {:kind :tool :task id}))))
+    (task/stop-system! sys)))
+
+(deftest a-tool-error-is-a-result-not-a-crash
+  (let [sys (system (loop/scripted [(loop/call-tool "read" {:path "/nonexistent/x"})
+                                    (fn [req]
+                                      (let [last-msg (last (:messages req))]
+                                        (loop/say (str "saw: " (get-in last-msg [:content 0 :content])))))]))
+        id (task/open! sys {:goal "read"})
+        v (task/await sys id 5000)]
+    (is (= :idle (:status v)))
+    (is (= "saw: no such file: /nonexistent/x" (:result v)))
+    (task/stop-system! sys)))
+
+(deftest a-model-error-fails-the-task
+  (let [sys (system (loop/scripted [{:error {:status 529}}]))
+        id (task/open! sys {:goal "x"})
+        v (task/await sys id 5000)]
+    (is (= :failed (:status v)))
+    (task/stop-system! sys)))
+
+(deftest steers-land-between-steps
+  (let [gate (atom nil)
+        sys (system (loop/scripted
+                     [(fn [_] (reset! gate (erlang/self)) (receive :go nil (after 2000 nil)) (loop/call-tool "bash" {:command "true"}))
+                      (fn [req] (loop/say (pr-str (map (fn [m] (get-in m [:content 0 :text])) (filter (fn [m] (= :user (:role m))) (:messages req))))))]))
+        id (task/open! sys {:goal "work"})]
+    (Process/sleep 100)
+    (task/steer! sys id "go left")
+    (Process/sleep 50)
+    (erlang/send @gate :go)
+    (let [v (task/await sys id 5000)]
+      (is (= :idle (:status v)))
+      (is (includes? (:result v) "go left")))
+    (task/stop-system! sys)))
+
+(deftest subtasks-are-owned-and-cancel-cascades-top-down
+  (let [hang (fn [_] (receive :never nil (after 10000 (loop/say "late"))))
+        sys (system (loop/by-goal {"parent" [(loop/call-tool "spawn" {:goal "child work"}) hang]
+                                   "child work" [hang]}))
+        id (task/open! sys {:goal "parent"})]
+    (Process/sleep 300)
+    (let [kids (task/children sys id)]
+      (is (= 1 (count kids)))
+      (is (= id (:owner (task/view sys (first kids)))))
+      (task/cancel! sys id)
+      (is (= :cancelled (task/status sys id)))
+      (is (= :cancelled (task/status sys (first kids))))
+      (is (= {:id id :status :cancelled :children [{:id (first kids) :status :cancelled :children []}]}
+             (task/tree sys id))))
+    (task/stop-system! sys)))
+
+(deftest a-failed-subtask-notifies-its-owner-bottom-up
+  (let [sys (system (loop/by-goal {"parent" [(loop/call-tool "spawn" {:goal "child"})
+                                             (loop/say "spawned")]
+                                   "child" [{:error :boom}]}))
+        id (task/open! sys {:goal "parent"})]
+    (Process/sleep 500)
+    (let [kid (first (task/children sys id))]
+      (is (= :failed (task/status sys kid)))
+      (is (some (fn [m] (and (= :note (:kind m)) (= kid (:from m))))
+                (actor/messages (:env sys) id))))
+    (task/stop-system! sys)))
+
+(deftest wait-blocks-on-another-task-through-the-env
+  (let [sys (system (loop/scripted [(loop/say "unused")]))
+        b (task/open! sys {:goal "b"})
+        _ (task/await sys b 5000)
+        sys2 (assoc sys :step (loop/scripted [(loop/call-tool "wait" {:task b}) (fn [req] (loop/say (get-in (last (:messages req)) [:content 0 :content])))]))
+        a (task/open! sys2 {:goal "a waits on b"})
+        v (task/await sys2 a 5000)]
+    (is (= (str b " is idle: unused") (:result v)))
+    (task/stop-system! sys)))
+
+(deftest the-human-is-an-actor-tasks-can-ask
+  (let [sys (system (loop/scripted [(loop/call-tool "send" {:to "human:me" :kind "ask" :text "delete it?"})
+                                    (loop/say "asked")]))
+        id (task/open! sys {:goal "ask the human"})]
+    (task/await sys id 5000)
+    (let [box (actor/inbox (:env sys) "human:me")]
+      (is (= [["delete it?" id :ask]] (map (fn [m] [(:text m) (:from m) (:kind m)]) box))))
+    (task/stop-system! sys)))

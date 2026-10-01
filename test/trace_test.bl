@@ -1,0 +1,62 @@
+(ns trace-test
+  (:require [omega.env :as env]
+            [omega.trace :as tr]))
+
+(defn- fresh [clock] (env/open {:clock (fn [] @clock)}))
+
+(defn- task! [e id] (env/tx! e [{:db/id -1 :task/id id :task/status :active}]))
+
+(deftest strength-halves-per-half-life-and-completions-never-decay
+  (is (= 1.0 (tr/strength :claim 0 0)))
+  (is (= 0.5 (tr/strength :claim 0 600000)))
+  (is (= 1.0 (tr/strength :completion 0 999999999)))
+  (is (= 1.0 (tr/strength :some-unknown-kind 0 999999999))))
+
+(deftest leaving-twice-reinforces-instead-of-duplicating
+  (let [clock (atom 0) e (fresh clock)]
+    (task! e "a")
+    (let [id1 (tr/leave! e "a" {:kind :finding :subject "reader" :text "v1"})]
+      (reset! clock 1000)
+      (is (= id1 (tr/leave! e "a" {:kind :finding :subject "reader" :text "v2"})))
+      (is (= [["v2" 1000]] (map (fn [v] [(:text v) (:at v)]) (tr/all e {:kind :finding})))))))
+
+(deftest reads-by-others-reinforce
+  (let [clock (atom 0) e (fresh clock)]
+    (task! e "a") (task! e "b")
+    (tr/leave! e "a" {:kind :intent :subject "src/x" :text "refactor"})
+    (reset! clock 1800000)
+    (is (= 0.5 (:strength (first (tr/all e {:kind :intent})))))
+    (tr/read! e "a" {:kind :intent})
+    (is (= 0.5 (:strength (first (tr/all e {:kind :intent})))) "an author reading its own trace does not reinforce")
+    (tr/read! e "b" {:kind :intent})
+    (let [v (first (tr/all e {:kind :intent}))]
+      (is (= 1.0 (:strength v)))
+      (is (= 1 (:reads v))))))
+
+(deftest claims-conflict-on-overlapping-writes-only
+  (let [clock (atom 0) e (fresh clock)]
+    (task! e "a") (task! e "b")
+    (is (contains? (tr/claim! e "a" "src/reader") :ok))
+    (is (= ["a"] (map :task (:conflict (tr/claim! e "b" "src/reader/hex.bl")))))
+    (is (contains? (tr/claim! e "b" "src/reader/hex.bl" :read) :ok))
+    (is (contains? (tr/claim! e "b" "docs") :ok))
+    (tr/release-claims! e "a")
+    (is (contains? (tr/claim! e "b" "src/reader/hex.bl") :ok))))
+
+(deftest the-claim-policy-is-replaceable
+  (let [clock (atom 0) e (fresh clock)
+        default @tr/CLAIM-POLICY]
+    (task! e "a") (task! e "b")
+    (tr/claim! e "a" "src/x")
+    (tr/set-claim-policy! (fn [_ _] false))
+    (is (contains? (tr/claim! e "b" "src/x") :ok))
+    (tr/set-claim-policy! default)))
+
+(deftest open-vocabulary
+  (let [clock (atom 0) e (fresh clock)]
+    (task! e "a")
+    (tr/define-kind! :bench {:doc "a benchmark number" :half-life-ms 1000})
+    (tr/leave! e "a" {:kind :bench :subject "parse" :data {:ms 12}})
+    (reset! clock 1000)
+    (is (= 0.5 (:strength (first (tr/all e {:kind :bench})))))
+    (is (= [] (tr/all e {:kind :bench :min-strength 0.6})))))

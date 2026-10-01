@@ -1,0 +1,211 @@
+; omega/loop.bl — one turn of a task: model → tools → model … → answer.
+;
+; ══ THE SHAPE ═══════════════════════════════════════════════════════════════
+;
+; pi's loop, kept minimal. A TURN starts when the task has unread messages and
+; ends when the model answers without calling a tool:
+;
+;   drain inbox → append as :user turns
+;   loop:
+;     request = {:system :messages :tools}          (context-transform hooks)
+;     response = (step request)                     (the model seam)
+;     record the :assistant turn
+;     if response calls tools → run each (call-predicate hooks), record :tool turn
+;        then drain the inbox again: steers land HERE, between steps
+;        and repeat
+;     else → the answer; the task goes :idle (or :done if the model says so)
+;
+; ══ THE MODEL SEAM ══════════════════════════════════════════════════════════
+;
+; `step` is a fn. Request and response are provider-neutral data:
+;
+;   request  {:system "…" :messages [{:role :user|:assistant :content [block …]}]
+;             :tools [{:name :description :input-schema}]}
+;   response {:content [block …] :stop :end|:tool-use|:max-tokens :usage {…}}
+;            | {:error {…}}
+;   block    {:type :text :text s}
+;            {:type :tool-use :id s :name s :input map}
+;            {:type :tool-result :id s :content s :error? bool}
+;
+; omega.llm turns an Anthropic endpoint into such a fn; omega.loop/scripted
+; turns a list of responses into one, for tests. Both are just `step`.
+;
+; ══ TOOLS ═══════════════════════════════════════════════════════════════════
+;
+; A tool is {:name :description :input-schema :run (fn [ctx input] → result)}
+; where result is {:ok string} or {:error string}. ctx = {:sys :task}. The
+; special result {:ok s :done true} closes the task as :done (the `done` tool).
+
+(ns omega.loop
+  (:require [omega.env :as env]
+            [omega.actor :as actor]
+            [omega.trace :as tr]))
+
+(def MAX-STEPS 40)
+
+(defn- hook
+  "Run hook chain `kind` from the system's hooks (omega.ext), or return x."
+  [sys kind x ctx]
+  (if-let [run (get-in sys [:hooks :run])] (run kind x ctx) x))
+
+(defn- emit [sys event data]
+  ((get-in sys [:hooks :emit] (fn [_ _] nil)) event data))
+
+;; ── turns as facts ──────────────────────────────────────────────────────
+
+(defn- turn-count [e t]
+  (count (env/q e '[:find ?u :in $ ?t :where [?u :turn/task ?t]] t)))
+
+(defn record!
+  "Append a turn to task `id`. role :user|:assistant|:tool, content = [block …]."
+  ([sys id role content] (record! sys id role content nil))
+  ([sys id role content usage]
+   (let [e (:env sys)
+         t (env/eid e :task/id id)
+         n (inc (turn-count e t))]
+     (env/tx! e [(cond-> {:db/id -1 :turn/id (str id "/" n) :turn/task t :turn/n n
+                          :turn/role role :turn/content content :turn/at (env/now e)}
+                   (some? usage) (assoc :turn/usage usage))])
+     n)))
+
+(defn turns
+  "All turns of task `id`, in order: [{:n :role :content :usage}]."
+  [sys id]
+  (let [e (:env sys)
+        t (env/eid e :task/id id)
+        rows (env/q e '[:find ?n ?r ?c :in $ ?t
+                        :where [?u :turn/task ?t] [?u :turn/n ?n] [?u :turn/role ?r] [?u :turn/content ?c]] t)]
+    (vec (map (fn [[n r c]] {:n n :role r :content c}) (sort-by first rows)))))
+
+(defn messages
+  "Turns → the model's message list. :tool turns travel as :user messages
+   (tool results are user-side content, as in the Anthropic and pi models)."
+  [ts]
+  (vec (map (fn [t] {:role (if (= :assistant (:role t)) :assistant :user) :content (:content t)}) ts)))
+
+;; ── the inbox becomes user turns ────────────────────────────────────────
+
+(defn- msg->text [m]
+  (case (:kind m)
+    :prompt (:text m)
+    :steer (str "[steer from " (:from m) "] " (:text m))
+    :reply (str "[reply from " (:from m) "] " (:text m))
+    :note (str "[note from " (:from m) "] " (:text m))
+    (str "[" (name (:kind m)) " from " (:from m) "] " (:text m))))
+
+(defn- drain!
+  "Consume task `id`'s unread messages as one :user turn. Returns how many."
+  [sys id]
+  (let [e (:env sys)
+        box (actor/inbox e id)]
+    (when (seq box)
+      (record! sys id :user (vec (map (fn [m] {:type :text :text (msg->text m)}) box)))
+      (doseq [m box] (actor/mark-read! e (:id m)))
+      (emit sys :inbox/drained {:task id :count (count box)}))
+    (count box)))
+
+;; ── one step ────────────────────────────────────────────────────────────
+
+(defn- tool-table [sys] (or (:tools sys) []))
+
+(defn- find-tool [sys nm] (first (filter (fn [t] (= nm (:name t))) (tool-table sys))))
+
+(defn- run-tool [sys id block]
+  (let [ctx {:sys sys :task id}
+        tool (find-tool sys (:name block))
+        decision (hook sys :tool/before {:allow true :block block} ctx)
+        r (cond
+            (nil? tool) {:error (str "no such tool: " (:name block))}
+            (not (:allow decision)) {:error (str "denied: " (:reason decision))}
+            :else (try ((:run tool) ctx (:input block))
+                       (catch err {:error (ex-message err)})))
+        r (hook sys :tool/after r (assoc ctx :block block))]
+    (tr/leave! (:env sys) id {:kind :tool :subject (str (:name block) "#" (:id block))
+                              :text (str (:name block) " " (if (:error r) "error" "ok"))
+                              :data {:input (:input block) :error? (some? (:error r))}})
+    (emit sys :tool/result {:task id :tool (:name block) :error? (some? (:error r))})
+    r))
+
+(defn- tool-uses [content] (filter (fn [b] (= :tool-use (:type b))) content))
+
+(defn- text-of [content]
+  (join "\n" (keep (fn [b] (when (= :text (:type b)) (:text b))) content)))
+
+(defn- add-usage [a b]
+  (merge-with (fn [x y] (+ (or x 0) (or y 0))) (or a {}) (or b {})))
+
+(defn- request [sys id]
+  (let [ts (turns sys id)
+        req {:system (or (:system-prompt sys) "You are omega, a coding agent.")
+             :messages (messages ts)
+             :tools (vec (map (fn [t] (select-keys t [:name :description :input-schema])) (tool-table sys)))}]
+    (hook sys :context req {:sys sys :task id})))
+
+(defn run!
+  "Run one turn of task `id` to completion. Returns the outcome for the
+   executor: {:status :idle|:done|:failed :result …}."
+  [sys id]
+  (let [e (:env sys)
+        step (:step sys)
+        max-steps (or (:max-steps sys) MAX-STEPS)]
+    (drain! sys id)
+    (emit sys :turn/start {:task id})
+    (loop [n 1 usage nil]
+      (if (> n max-steps)
+        {:status :idle :result (str "paused after " max-steps " steps")}
+        (let [resp (step (request sys id))]
+          (if (contains? resp :error)
+            {:status :failed :error (pr-str (:error resp))}
+            (let [content (vec (:content resp))
+                  usage (add-usage usage (:usage resp))
+                  _ (record! sys id :assistant content (:usage resp))
+                  _ (env/tx! e [[:db/add (env/eid e :task/id id) :task/cost
+                                 (add-usage (:cost (env/entity e (env/eid e :task/id id))) (:usage resp))]])
+                  uses (tool-uses content)]
+              (if (empty? uses)
+                (let [r {:status :idle :result (text-of content)}]
+                  (emit sys :turn/end (assoc r :task id))
+                  r)
+                (let [results (vec (map (fn [u] (assoc (run-tool sys id u) :id (:id u))) uses))
+                      done (first (filter :done results))]
+                  (record! sys id :tool
+                           (vec (map (fn [r] {:type :tool-result :id (:id r)
+                                              :content (or (:ok r) (:error r))
+                                              :error? (some? (:error r))})
+                                     results)))
+                  (if (some? done)
+                    (let [r {:status :done :result (:ok done)}]
+                      (emit sys :turn/end (assoc r :task id))
+                      r)
+                    (do (drain! sys id)
+                        (recur (inc n) usage))))))))))))
+
+;; ── a scripted model, for tests and offline demos ───────────────────────
+
+(defn scripted
+  "A `step` fn that replays `responses` in order (then repeats the last). Each
+   response may be a map, or a fn of the request (to assert on what was sent)."
+  [responses]
+  (let [i (atom 0)]
+    (fn [req]
+      (let [k (swap! i inc)
+            r (nth responses (min (dec k) (dec (count responses))))]
+        (if (fn? r) (r req) r)))))
+
+(defn by-goal
+  "A `step` fn that routes each request to a scripted model chosen by the task's
+   goal (the first user message's text). `routes` maps goal → [responses].
+   Concurrent tasks then never consume each other's script."
+  [routes]
+  (let [models (into {} (map (fn [[g rs]] [g (scripted rs)]) routes))]
+    (fn [req]
+      (let [goal (get-in (first (:messages req)) [:content 0 :text])]
+        (if-let [m (get models goal)]
+          (m req)
+          {:error {:no-script-for goal}})))))
+
+(defn say [text] {:content [{:type :text :text text}] :stop :end})
+
+(defn call-tool
+  ([nm input] (call-tool nm input (str "tu-" nm)))
+  ([nm input tid] {:content [{:type :tool-use :id tid :name nm :input input}] :stop :tool-use}))

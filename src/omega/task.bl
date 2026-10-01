@@ -1,0 +1,305 @@
+; omega/task.bl — tasks: the public interface, and the executor behind it.
+;
+; ══ THE MODEL (decisions D2, D3) ════════════════════════════════════════════
+;
+; A task is a DATOM ENTITY (:task/*) plus a DISPOSABLE EXECUTOR: a defserver
+; that holds the live conversation and runs turns. The entity is the truth; the
+; executor is a cache of it that can be killed and rebuilt from the facts.
+;
+;   one prompt          → one task                        (open!)
+;   a follow-up         → a :prompt message to the same task; refines the goal
+;   a steer             → a :steer message to the same task; interrupts the
+;                         current turn at the next step boundary
+;   a subtask           → open! with :owner — a first-class task with an owner edge
+;   cancel              → top-down: cancelling a task cancels every descendant
+;   failure             → bottom-up: a failed child sends its owner a :note
+;
+; Everything an executor does is reported as facts (status, turns, traces), so
+; any actor — a human UI, another task, a test — sees it by querying or sensing
+; the env. Nothing is visible only inside a process.
+;
+; ══ THE INTERFACE ═══════════════════════════════════════════════════════════
+;
+;   (task/start-system env opts)      → system      ; supervisor + registry
+;   (task/open!  sys {:goal …})       → task-id     ; opens AND starts it
+;   (task/say!   sys id text)         → msg-id      ; follow-up prompt
+;   (task/steer! sys id text)         → msg-id      ; change course now
+;   (task/cancel! sys id)             → :ok         ; cascades to subtasks
+;   (task/await  sys id ms)           → view | :timeout   ; until terminal/idle
+;   (task/view   sys id)              → plain map of the entity
+;   (task/children sys id)            → [task-id]
+;   (task/tree   sys id)              → nested {:id :status :children}
+;
+; A `system` is {:env :sup :reg :step :tools :hooks}: everything an executor needs,
+; handed over explicitly. `:step` is the model seam (see omega.loop).
+;
+; ══ STATUSES ════════════════════════════════════════════════════════════════
+
+(ns omega.task
+  (:require [omega.env :as env]
+            [omega.actor :as actor]
+            [omega.trace :as tr]
+            [omega.loop :as loop]))
+
+(def STATUSES
+  {:open      "Created; the executor is starting."
+   :running   "A turn is in progress."
+   :idle      "The last turn ended with an answer; waiting for a follow-up. Not terminal: a :prompt resumes it."
+   :waiting   "Parked on another task or an actor's reply. Spends no tokens."
+   :done      "Closed as complete. Terminal."
+   :failed    "The executor could not continue. Terminal."
+   :cancelled "Cancelled by its owner or a human. Terminal."})
+
+(def TERMINAL #{:done :failed :cancelled})
+
+(defn terminal? [status] (contains? TERMINAL status))
+
+;; ── reading ─────────────────────────────────────────────────────────────
+
+(def ^:private PULL
+  [:task/id :task/goal :task/title :task/status :task/scope :task/refined
+   :task/result :task/cost :task/at
+   {:task/owner [:task/id]} {:task/opened-by [:actor/id]} {:task/waits-on [:task/id]}])
+
+(defn view
+  "The task as a plain map, or nil."
+  [sys id]
+  (let [e (:env sys)
+        t (env/eid e :task/id id)]
+    (when (some? t)
+      (let [m (env/pull e PULL t)]
+        {:id (:task/id m) :goal (:task/goal m) :title (:task/title m)
+         :status (:task/status m) :scope (vec (or (:task/scope m) []))
+         :refined (vec (or (:task/refined m) []))
+         :result (:task/result m) :cost (:task/cost m) :at (:task/at m)
+         :owner (get-in m [:task/owner :task/id])
+         :opened-by (get-in m [:task/opened-by :actor/id])
+         :waits-on (vec (map :task/id (or (:task/waits-on m) [])))}))))
+
+(defn status [sys id] (:status (view sys id)))
+
+(defn children
+  "Direct subtasks of task `id`, in creation order."
+  [sys id]
+  (let [e (:env sys)
+        t (env/eid e :task/id id)
+        rows (env/q e '[:find ?cid ?at :in $ ?p :where [?c :task/owner ?p] [?c :task/id ?cid] [?c :task/at ?at]] t)]
+    (vec (map first (sort-by (fn [r] [(second r) (first r)]) rows)))))
+
+(defn tree
+  "Task `id` and all descendants: {:id :status :children [...]}."
+  [sys id]
+  {:id id :status (status sys id)
+   :children (vec (map (fn [c] (tree sys c)) (children sys id)))})
+
+(defn all
+  "Every task, as views, oldest first."
+  [sys]
+  (let [ids (map first (env/q (:env sys) '[:find ?id :where [_ :task/id ?id]]))]
+    (vec (sort-by (fn [v] [(:at v) (:id v)]) (map (fn [id] (view sys id)) ids)))))
+
+;; ── writing status (the executor and cancel use these) ──────────────────
+
+(defn set-status! [sys id st]
+  (let [e (:env sys)]
+    (env/tx! e [[:db/add (env/eid e :task/id id) :task/status st]])
+    ((get-in sys [:hooks :emit] (fn [_ _] nil)) :task/status {:task id :status st})
+    st))
+
+;; ── the executor ────────────────────────────────────────────────────────
+;
+; One defserver per task. Its state is a cache: {:id :msgs :turn-pid :steers}.
+; The turn itself runs in a separate monitored process (so the executor stays
+; responsive to steer/cancel while a model call is in flight) — the harness
+; keeper's pattern: check-and-spawn is one step, and a steer is a counter the
+; running turn reads at every step boundary, so it cannot be lost.
+
+(defn- now [sys] (env/now (:env sys)))
+
+(defn- run-turn!
+  "Spawn the turn process for task `id`. It reports back to the executor."
+  [sys id me]
+  (spawn (fn []
+           (let [outcome (try (loop/run! sys id)
+                              (catch err {:status :failed :error (ex-message err)}))]
+             (erlang/send me [:turn-ended outcome])))))
+
+(defn- start-turn [sys st]
+  (if (some? (:turn st))
+    st
+    (do (set-status! sys (:id st) :running)
+        (assoc st :turn (run-turn! sys (:id st) (erlang/self))))))
+
+(defn- finish! [sys id outcome]
+  (let [e (:env sys)
+        t (env/eid e :task/id id)
+        st (:status outcome)]
+    ;; Every consequence lands BEFORE the status flips: a waiter that wakes on
+    ;; the status must find the result, the completion and released claims.
+    (when (contains? outcome :result)
+      (env/tx! e [[:db/add t :task/result (:result outcome)]]))
+    (when (= st :done)
+      (tr/leave! e id {:kind :completion :subject id :text (str (:result outcome))}))
+    (when (terminal? st)
+      (tr/release-claims! e id))
+    (when (= st :failed)
+      (when-let [owner (:owner (view sys id))]
+        (actor/send! e {:from id :to owner :kind :note
+                        :text (str "subtask " id " failed: " (:error outcome))
+                        :data {:subtask id :failed true}})))
+    (set-status! sys id st)))
+
+(defserver executor
+  (init [[sys id]]
+    (let [st {:sys sys :id id :turn nil}
+          ;; senses its own inbox: a new message is a reason to (re)start a turn
+          _ (actor/sense-inbox (:env sys) id :inbox)]
+      (erlang/send (erlang/self) :kick)
+      (ok st)))
+
+  (handle-call [:state] [_from st] (reply (dissoc st :sys) st))
+
+  (handle-info :kick [st]
+    (if (seq (actor/inbox (:env (:sys st)) (:id st)))
+      (noreply (start-turn (:sys st) st))
+      (noreply st)))
+
+  (handle-info [:omega/sensed :inbox _] [st]
+    ;; while a turn runs, the turn itself drains the inbox at its next step
+    (if (nil? (:turn st))
+      (noreply (start-turn (:sys st) st))
+      (noreply st)))
+
+  (handle-info [:turn-ended outcome] [st]
+    (let [sys (:sys st) id (:id st)]
+      (finish! sys id outcome)
+      (let [st (assoc st :turn nil)]
+        (cond
+          (terminal? (:status outcome)) (stop :normal st)
+          ;; a message arrived after the turn's last check: go again
+          (seq (actor/inbox (:env sys) id)) (noreply (start-turn sys st))
+          :else (noreply st)))))
+
+  (handle-info [:omega/sensed _ _] [st] (noreply st)))
+
+(defn- executor-pid [sys id] (get @(:executors sys) id))
+
+(defn- start-executor! [sys id]
+  (let [spec (BeamLisp.Supervisor/server id executor [sys id] {:restart :temporary})
+        r (DynamicSupervisor/start_child (:sup sys) spec)
+        pid (elem r 1)]
+    (swap! (:executors sys) assoc id pid)
+    pid))
+
+(defn- slug [goal]
+  (let [s (lower-case (Regex/replace (Regex/compile! "[^A-Za-z0-9]+") goal "-"))
+        s (if (> (count s) 32) (subs s 0 32) s)]
+    (Regex/replace (Regex/compile! "^-+|-+$") s "")))
+
+(defn open!
+  "Open a task and start its executor. m:
+     :goal       the prompt (required)
+     :title      short handle (derived from the goal when absent)
+     :owner      task id of the owning task, for subtasks
+     :by         actor id who opened it (default \"human:me\")
+     :scope      [path …] declared footprint
+   Returns the task id."
+  [sys m]
+  (let [e (:env sys)
+        id (env/new-id e "t")
+        by (or (:by m) (actor/human-id "me"))
+        _ (when (nil? (env/eid e :actor/id by)) (actor/ensure! e by :human))
+        owner (when-let [o (:owner m)] (env/eid e :task/id o))
+        fact (cond-> {:db/id -1 :task/id id :task/goal (:goal m)
+                      :task/title (or (:title m) (slug (:goal m)))
+                      :task/status :open :task/at (now sys)
+                      :task/opened-by (env/eid e :actor/id by)}
+               (some? owner) (assoc :task/owner owner)
+               (seq (:scope m)) (assoc :task/scope (vec (:scope m))))]
+    (env/tx! e [fact])
+    (actor/ensure! e id :task (:task/title fact))
+    ;; the goal is the first prompt in the task's inbox — one path for all prompts
+    (actor/send! e {:from by :to id :kind :prompt :text (:goal m)})
+    ((get-in sys [:hooks :emit] (fn [_ _] nil)) :task/open {:task id :owner (:owner m)})
+    (start-executor! sys id)
+    id))
+
+(defn- deliver! [sys id kind text by]
+  (let [e (:env sys)
+        from (or by (actor/human-id "me"))]
+    (when (terminal? (status sys id))
+      (throw (ex-info (str "task " id " is " (name (status sys id)) "; open a new task instead") {:task id})))
+    (when (nil? (env/eid e :actor/id from)) (actor/ensure! e from :human))
+    (actor/send! e {:from from :to id :kind kind :text text})))
+
+(defn say!
+  "A follow-up prompt to task `id`: part of the same task (D3). It refines the
+   goal and, if the task is idle, starts a new turn."
+  ([sys id text] (say! sys id text nil))
+  ([sys id text by]
+   (let [e (:env sys)]
+     (env/tx! e [[:db/add (env/eid e :task/id id) :task/refined text]])
+     (deliver! sys id :prompt text by))))
+
+(defn steer!
+  "Change course: delivered to the running turn at its next step boundary."
+  ([sys id text] (steer! sys id text nil))
+  ([sys id text by] (deliver! sys id :steer text by)))
+
+(defn cancel!
+  "Cancel task `id` and, first, every descendant (top-down). Idempotent."
+  [sys id]
+  (doseq [c (children sys id)] (cancel! sys c))
+  (when-not (terminal? (status sys id))
+    (when-let [pid (executor-pid sys id)]
+      (when (Process/alive? pid)
+        (let [s (call pid [:state])]
+          (when-let [tp (:turn s)] (erlang/exit tp :kill)))
+        (DynamicSupervisor/terminate_child (:sup sys) pid)))
+    (tr/release-claims! (:env sys) id)
+    (set-status! sys id :cancelled))
+  :ok)
+
+(defn await
+  "Block until task `id` is terminal or idle (or `ms` pass). Senses the env —
+   no polling. Returns the task view, or :timeout."
+  ([sys id] (await sys id 60000))
+  ([sys id ms]
+   (let [e (:env sys)
+         settled? (fn [] (let [s (status sys id)] (or (terminal? s) (= :idle s))))
+         h (env/sense e [(env/eid e :task/id id) :task/status (symbol "?s")] :await)
+         deadline (+ (erlang/monotonic_time :millisecond) ms)
+         r (loop []
+             (if (settled?)
+               (view sys id)
+               (let [left (- deadline (erlang/monotonic_time :millisecond))]
+                 (if (<= left 0)
+                   :timeout
+                   (receive [:omega/sensed :await _] (recur)
+                            (after left (if (settled?) (view sys id) :timeout)))))))]
+     (env/unsense h)
+     r)))
+
+(defn stop-system! [sys]
+  (when (Process/alive? (:sup sys))
+    (doseq [pid (vals @(:executors sys))]
+      (when (Process/alive? pid) (DynamicSupervisor/terminate_child (:sup sys) pid)))
+    (erlang/unlink (:sup sys))
+    (erlang/exit (:sup sys) :shutdown))
+  :ok)
+
+;; ── the system ──────────────────────────────────────────────────────────
+
+(defn start-system
+  "Start omega's task system over `env`. opts:
+     :step    (fn [request] → response) — the model (omega.loop documents the shape)
+     :tools   tool table (omega.tools/default by default; see omega.loop)
+     :hooks   extension hooks (omega.ext)
+   Returns the system map every other verb takes."
+  [e opts]
+  (let [sup (elem (DynamicSupervisor/start_link (to-list [(tuple :strategy :one_for_one)])) 1)]
+    ;; :open! and :await ride in the system so tools (spawn, wait) can reach them
+    ;; without omega.tools requiring omega.task — the dependency stays one-way.
+    (merge {:env e :sup sup :executors (atom {})
+            :open! (fn [s m] (open! s m)) :await (fn [s id ms] (await s id ms))}
+           (select-keys opts [:step :tools :hooks :system-prompt :max-steps :root]))))

@@ -1,0 +1,51 @@
+(ns actor-test
+  (:require [omega.env :as env]
+            [omega.actor :as actor]))
+
+(defn- fresh [] (let [t (atom 0)] (env/open {:clock (fn [] (swap! t inc))})))
+
+(deftest a-message-is-a-fact-in-the-inbox
+  (let [e (fresh)]
+    (actor/ensure! e "t-1" :task)
+    (actor/ensure! e (actor/human-id "me") :human "me")
+    (let [id (actor/send! e {:from "t-1" :to "human:me" :kind :ask :text "ok?" :data {:choices [:yes :no]}})
+          box (actor/inbox e "human:me")]
+      (is (= 1 (count box)))
+      (is (= {:id id :from "t-1" :to "human:me" :kind :ask :text "ok?"}
+             (select-keys (first box) [:id :from :to :kind :text])))
+      (is (= {:choices [:yes :no]} (:data (first box)))))))
+
+(deftest a-reply-links-back-and-marks-read
+  (let [e (fresh)]
+    (actor/ensure! e "t-1" :task)
+    (actor/ensure! e "human:me" :human)
+    (let [ask (actor/send! e {:from "t-1" :to "human:me" :kind :ask :text "ok?"})]
+      (is (nil? (actor/reply-to e ask)))
+      (actor/reply! e ask "yes")
+      (is (= [] (actor/inbox e "human:me")))
+      (is (= "yes" (:text (actor/reply-to e ask))))
+      (is (= :reply (:kind (first (actor/inbox e "t-1"))))))))
+
+(deftest inbox-is-ordered-oldest-first
+  (let [e (fresh)]
+    (actor/ensure! e "a" :task)
+    (actor/ensure! e "b" :task)
+    (actor/send! e {:from "a" :to "b" :kind :note :text "one"})
+    (actor/send! e {:from "a" :to "b" :kind :note :text "two"})
+    (is (= ["one" "two"] (map :text (actor/inbox e "b"))))))
+
+(deftest unknown-kinds-and-actors-are-refused
+  (let [e (fresh)]
+    (actor/ensure! e "a" :task)
+    (is (thrown? (actor/send! e {:from "a" :to "a" :kind :shout})))
+    (is (thrown? (actor/send! e {:from "a" :to "nobody" :kind :note})))))
+
+(deftest sensing-an-inbox-wakes-the-listener
+  (let [e (fresh)]
+    (actor/ensure! e "a" :task)
+    (actor/ensure! e "b" :task)
+    (let [h (actor/sense-inbox e "b" :b-inbox)]
+      (Process/sleep 30)
+      (actor/send! e {:from "a" :to "b" :kind :note :text "hi"})
+      (is (= :b-inbox (receive [:omega/sensed tag _] tag (after 1000 :timeout))))
+      (env/unsense h))))

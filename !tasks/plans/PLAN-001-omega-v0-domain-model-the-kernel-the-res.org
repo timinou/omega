@@ -1,0 +1,72 @@
+#+TITLE: omega v0 domain model — the kernel the rest is built on
+#+STATE: ITEM
+#+SESSION_ID: 15950b96c19ed4f1
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-01T10-18-31-559Z_15950b96c19ed4f1.jsonl]]
+#+CUSTOM_ID: PLAN-001-omega-v0-domain-model-the-kernel-the-res
+
+* Initial Message
+
+please look at 
+1. ../beam-lisp (and its ../beam-lisp--repl branch too, it has a lot of useful stuff)
+2. ../spell (for a first attempt)
+3. VERY IMPORTANTLY, github.com/earendil/pi-mono (especially CodeMode, which we will want to recreate in beam-lisp).
+4. the canonical implementations of light plan modes, of structural code editing using tree sitter, of simple and light LSP modes, etc., and other plugins I may not have thought about.
+(you can also use ../../ora/relay and vendor what you want to easily talk to LLMs)
+
+
+The goal is to create a super simple coding harness that leverages the main ideas behind the architecture of pi-mono but in a way that leverages beam-lisp as much as possible. The goal is to have a very very simple (the simplest) loop that works, and it can use either the `loom` desktop wrapper or a TUI (you can make a local beam-lisp maximalist wrapper of ratatui, but if you do so, make its API as close as posible to `loom`, and read the 'grammar' documetn in beam-lisp).
+
+the one deviation i would have from the design of pi is that, instead of chats, i imagine the prompts that I send to be 'tasks'. In practice it is *still* a chat, but what I want is to be able to have self-coordinating tasks that understand their scope and that are easy for each other to find out about. Right now the main difference it is is that you should use Jev (I will put an API key here in the .env called TYPESAFE_API_KEY), look up beam-lisp native ways of using it (i.e. it's integrated to the language very naturally through a nice namespace), and helps us have a naturally stigmergic way of dealing with each other, sending each other messages, waiting on each other, etc (see the `proc` module in beam-lisp). More references are the beam lisp repl Playground, the `harness` module, and anything else you find on the internet about how people are using Jev to make harnesses, and the idea of stigmergy applied to systems.
+
+You should also read (and vendor) impeccable.style for a nice interface. The interface should be super simple and intuitive, and still let me see everything that is happening within a single project. The goal of omega is to focus on quality and make a general (not just beam-lisp) coding harness that works very well and builds itself from primitives and patterns and bundles, and has a canonical implementation that takes the best from the proven and the latest about coding harnesses. I would like us to really think about all the interactions that we'll have, how we'll be able to peek into the system, and how the day to day will look like for us, and the screens that we want to create, and the ways that we will be able to interact with the system (as an agent developing the system) so that it is easy for you to understand, test, and improve it, ahead of implementation, and that we thoroughly discuss every point and leveraging beam-lisp before we go on to implementation.
+
+Your first goal is to create a research/domain/ folder and put ALL the stuff there, as .bl.md or .bl.org files, so that we have a nice basis to think from.
+
+* Goal
+Build omega v0: the smallest *working* domain model on which every later feature is built.
+It is the toy loop from =research/domain/synthesis/omega-at-a-glance.bl.md= made real, testable and committed.
+There is a clean datom schema, a task namespace interface, an executor =defserver=, a uniform actor model
+(the human is an actor with a mailbox), and an extension surface proven by one real feature (desktop notifications).
+
+* User decisions (2026-10-01) — authoritative, supersede the leans in synthesis/decisions.bl.md
+- a. Uniform task model: the human is an actor with a mailbox. Yes.
+- b. Notifications go to the desktop first; we narrow later.
+- D1. (a) The datom fact log is authoritative. Define the datom model very cleanly after the toy.
+- D2. A task = a datom entity + a disposable executor (a =defserver=). The namespace interface design is VERY important.
+- D3. One prompt = one task. Follow-up prompts are PART OF THE SAME TASK. Steering can expand or modify the task, and follow-ups refine it. Subtasks are first-class: owner edges, plus bottom-up and top-down cancel that is BEAM-native.
+- D4. The trace vocabulary is OPEN, with a glossary of exquisite explanations and implementation details. Reads reinforce. Claims are customisable. Tasks decide on worktrees themselves; a supervisor helps them re-steer and reach consensus.
+- D5. Prototype where Jev acts properly. A nice namespace interface; modular design.
+- D6. Codemode is 100% beam-lisp. Re-use the =harness= module as much as possible. Manage heaps etc. in a beam-lisp-native way.
+- D7. Vendor the trimmed relay files behind a clean interface (refactor later). Cassettes as described.
+- D8. The leans on the extension surface are OK. A prototype exercises it to implement a feature (desktop notifications), and the file that builds it is a .bl.md.
+- D9. =edits[]= only for now.
+- D10. No plan mode, no permissions, no read-only. Full rights by default.
+- D11. (b) handoff to a successor task for now; also design (c), a compactor driven by trace pressure, using datom queries and introspection.
+- D12. Always the latest beam-lisp (the main checkout's =bin/bl=, running from source). =omega.ui= uses semantic roles; we lean towards a loom-only UI, no TUI.
+- D13. Operate, dual themes, the leans in general; surface the best verbs.
+- Provider: Anthropic via the better-ccflare proxy at =localhost:8080/v1/messages=. It needs the Claude Code request shape (see the omega.llm notes). Sonnet 5.5 is preferred; Codex OAuth is the fallback.
+
+* Runtime facts (observed)
+- Run with =~/code/undefine/beam-lisp/bin/bl= (reports =beam-lisp 0.1.0 · main · running from source=). The =bl= on PATH is the stale 2026.4.0 drop.
+- Project sources live under =src/=, so commands need =-p src=. Tests live in =test/=.
+- In =src/= namespaces an unqualified =defserver= works.
+
+* Build order (v0)
+1. =src/omega/schema.bl=: the datom schema as data, plus a glossary (attrs, trace kinds).
+2. =src/omega/env.bl=: open the environment (conn), transact helpers, queries, watch → mailbox wake.
+3. =src/omega/actor.bl=: actors (tasks and humans) with mailboxes; send/inbox as facts plus a process wake.
+4. =src/omega/task.bl=: the public interface (new, say, steer, cancel, await, status, children), with the executor as a =defserver= under a DynamicSupervisor. Owner edges; cancel cascades down, and failure/cancel bubbles up.
+5. =src/omega/loop.bl=: the model step seam (=:step= fn) → tool calls → results; a scripted model for tests.
+6. =src/omega/tools.bl=: read, write, edits[], bash, eval (harness-style beam-lisp cell), spawn-task, send, wait.
+7. =src/omega/llm.bl=: the Anthropic messages client (via the proxy) behind a provider map, plus a cassette seam.
+8. =src/omega/ext.bl=: hooks/events (call-predicate, context-transform, turn-snapshot, plus the minimal event set).
+9. =ext/notify.bl.md=: a desktop-notification extension built on the surface (literate).
+10. =omega.bl.md= / =bin/omega=: a runnable demo you can try (scripted offline, and live with the proxy).
+11. Tests in =test/= covering the domain behaviour.
+
+* Acceptance
+- =bin/bl test -p src= is green.
+- =bin/bl run omega.bl.md= shows the end-to-end scripted loop offline.
+- A live run against the proxy completes a real task that edits a scratch file.
+- The datom model doc =docs/domain-model.bl.md= is runnable and complete.
+- All of it is committed.

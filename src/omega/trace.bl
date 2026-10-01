@@ -1,0 +1,220 @@
+; omega/trace.bl — marks in the shared environment (stigmergy).
+;
+; ══ WHAT A TRACE IS ═════════════════════════════════════════════════════════
+;
+; A trace is a fact one task leaves for ANY other actor to find later, without
+; addressing anyone: "I'm editing src/reader.bl", "the lexer handles 0x now",
+; "I'm stuck on the auth token". It is the opposite of a message:
+;
+;   message  addressed to one actor · expects action or reply · read once
+;   trace    addressed to nobody     · found by content         · read by many
+;
+; Rule of thumb: if the sender wouldn't care WHO reads it, it is a trace.
+;
+; ══ OPEN VOCABULARY, DOCUMENTED KINDS ═══════════════════════════════════════
+;
+; `:trace/kind` is any keyword (decision D4). The GLOSSARY below documents the
+; kinds omega itself emits and reasons about; a project or extension adds its
+; own with `define-kind!`, giving it a half-life and a description so the UI,
+; the decay function and other tasks can treat it sensibly.
+;
+; ══ STRENGTH: DECAY AND REINFORCEMENT ═══════════════════════════════════════
+;
+; A trace weakens with age: strength = 2^-(age / half-life). A nil half-life
+; never decays. Strength is computed at READ time from :trace/at; nothing is
+; deleted, so history stays complete. Two things reinforce a trace (reset
+; :trace/at to now):
+;   - its author re-asserts it (`leave!` again with the same kind+subject), e.g.
+;     a heartbeat or a re-claim;
+;   - another task READS it through `sense`/`read!` (decision D4: reads
+;     reinforce), which also counts :trace/reads.
+; So a finding that others keep using stays strong; one nobody reads fades out
+; of default queries — Heylighen's evaporation, without losing the record.
+;
+; ══ CLAIMS ARE CUSTOMISABLE ═════════════════════════════════════════════════
+;
+; A claim is a trace of kind :claim whose subject is a path. Whether two claims
+; conflict is a FUNCTION, `*claim-conflict?*`, defaulting to path-prefix overlap
+; between two :write claims. Replace it per env with `set-claim-policy!`.
+
+(ns omega.trace
+  (:require [omega.env :as env]))
+
+(def GLOSSARY
+  "The trace kinds omega knows. Each: what it means, who emits it and when, how
+   long it matters (:half-life-ms, nil = forever), and who reacts to it."
+  (atom
+   {:claim
+    {:doc "I am working on this subject (a path or glob). Territory marker."
+     :emitted "By the harness when a task first writes to a path, and by a task that calls claim! explicitly before it starts."
+     :data "{:mode :write|:read}"
+     :half-life-ms 600000
+     :reacts "Other tasks call conflicts before writing. A dead or finished task's claims are released (retracted)."}
+    :intent
+    {:doc "What I am about to do and why: a plan step announced before acting."
+     :emitted "By a task after planning, before a multi-file change."
+     :half-life-ms 1800000
+     :reacts "Tasks planning adjacent work; the human reading the overview."}
+    :finding
+    {:doc "Something true I discovered that others may need: an API shape, a gotcha, a root cause."
+     :emitted "By a task, whenever it learns something outside its own scope or worth keeping."
+     :half-life-ms 86400000
+     :reacts "Any task whose scope or goal matches the subject. Reads reinforce it; memory may distil it later."}
+    :blocker
+    {:doc "I cannot progress until something changes. Says what it needs."
+     :emitted "By a task that waits on a human, a missing resource, or another task."
+     :data "{:needs <actor-id|pattern|text>}"
+     :half-life-ms nil
+     :reacts "The needed actor, the supervisor, the human UI. Retracted when resolved."}
+    :completion
+    {:doc "This work is done; here is what changed. Never decays."
+     :emitted "By the harness when a task reaches :done."
+     :half-life-ms nil
+     :reacts "Dependents waiting on this task; the review screen."}
+    :heartbeat
+    {:doc "I am alive and still working. Pure reinforcement; no content."
+     :emitted "By a running executor, periodically."
+     :half-life-ms 30000
+     :reacts "Stale-task detection: a running task whose heartbeat has faded is hung."}
+    :tool
+    {:doc "A tool call ran: name, input summary, outcome. The audit trail of actions."
+     :emitted "By the loop, after every tool call."
+     :half-life-ms 3600000
+     :reacts "The inspector screen; replay; compaction (it summarises these)."}}))
+
+(defn define-kind!
+  "Add or replace a trace kind in the glossary. `spec` like the GLOSSARY values."
+  [kind spec]
+  (swap! GLOSSARY assoc kind spec)
+  kind)
+
+(defn half-life [kind] (get-in @GLOSSARY [kind :half-life-ms]))
+
+(defn strength
+  "1.0 when fresh, 0.5 after one half-life. Unknown kinds and nil half-lives
+   never decay."
+  [kind at now]
+  (let [hl (half-life kind)]
+    (if (nil? hl) 1.0 (math/pow 2 (/ (- at now) hl)))))
+
+;; ── leaving and reading ─────────────────────────────────────────────────
+
+(defn- ffirst-or-nil [rows] (when (seq rows) (first (first rows))))
+
+(defn- find-own
+  "The trace entity task `t` already holds for (kind, subject), if any."
+  [e t kind subject]
+  (ffirst-or-nil
+   (env/q e '[:find ?tr :in $ ?t ?k ?s
+              :where [?tr :trace/task ?t] [?tr :trace/kind ?k] [?tr :trace/subject ?s]]
+          t kind subject)))
+
+(defn leave!
+  "Leave (or reinforce) a trace from task `task-id`. m: {:kind :subject :text :data}.
+   Leaving the same kind+subject again reinforces the existing trace instead of
+   adding a duplicate. Returns the trace id."
+  [e task-id m]
+  (let [t (env/eid e :task/id task-id)
+        subject (or (:subject m) "")
+        existing (find-own e t (:kind m) subject)
+        now (env/now e)]
+    (if (some? existing)
+      (do (env/tx! e [(cond-> {:db/id existing :trace/at now}
+                        (some? (:text m)) (assoc :trace/text (:text m))
+                        (some? (:data m)) (assoc :trace/data (:data m)))])
+          (:trace/id (env/entity e existing)))
+      (let [id (env/new-id e "tr")]
+        (env/tx! e [(cond-> {:db/id -1 :trace/id id :trace/task t :trace/kind (:kind m)
+                             :trace/subject subject :trace/at now :trace/reads 0}
+                      (some? (:text m)) (assoc :trace/text (:text m))
+                      (some? (:data m)) (assoc :trace/data (:data m)))])
+        id))))
+
+(defn retract!
+  "Remove a trace from the present (history keeps it). By trace id."
+  [e trace-id]
+  (env/tx! e [[:db/retractEntity (env/eid e :trace/id trace-id)]])
+  :ok)
+
+(def ^:private PULL [:trace/id :trace/kind :trace/subject :trace/text :trace/data
+                     :trace/at :trace/reads {:trace/task [:task/id]}])
+
+(defn- view [e now m]
+  {:id (:trace/id m) :task (get-in m [:trace/task :task/id])
+   :kind (:trace/kind m) :subject (:trace/subject m) :text (:trace/text m)
+   :data (:trace/data m) :at (:trace/at m) :reads (:trace/reads m)
+   :strength (strength (:trace/kind m) (:trace/at m) now)})
+
+(defn all
+  "Every trace in the present, strongest first. opts:
+     :kind k   :task id   :subject-prefix s   :min-strength x (default 0.0)"
+  ([e] (all e {}))
+  ([e opts]
+   (let [now (env/now e)
+         ids (map first (env/q e '[:find ?tr :where [?tr :trace/id _]]))
+         vs (map (fn [tr] (view e now (env/pull e PULL tr))) ids)
+         keep? (fn [v]
+                 (and (or (nil? (:kind opts)) (= (:kind opts) (:kind v)))
+                      (or (nil? (:task opts)) (= (:task opts) (:task v)))
+                      (or (nil? (:subject-prefix opts))
+                          (starts-with? (or (:subject v) "") (:subject-prefix opts)))
+                      (>= (:strength v) (or (:min-strength opts) 0.0))))]
+     (vec (sort-by (fn [v] [(- (:strength v)) (:id v)]) (filter keep? vs))))))
+
+(defn read!
+  "Read traces as task `reader-id` (see `all` for opts). Each trace read by a task
+   other than its author is reinforced: :trace/at ← now, :trace/reads + 1."
+  [e reader-id opts]
+  (let [vs (all e opts)
+        now (env/now e)
+        others (filter (fn [v] (not= reader-id (:task v))) vs)]
+    (when (seq others)
+      (env/tx! e (mapv (fn [v] {:db/id (env/eid e :trace/id (:id v))
+                                :trace/at now :trace/reads (inc (or (:reads v) 0))})
+                       others)))
+    vs))
+
+;; ── claims ──────────────────────────────────────────────────────────────
+
+(defn path-overlap?
+  "Equal paths, or one is a directory prefix of the other."
+  [a b]
+  (or (= a b)
+      (starts-with? a (str b "/"))
+      (starts-with? b (str a "/"))))
+
+(def CLAIM-POLICY
+  "(fn [mine theirs] → conflict?) over claim views. Default: two :write claims
+   on overlapping paths conflict; :read claims never do."
+  (atom (fn [mine theirs]
+          (and (= :write (get-in mine [:data :mode] :write))
+               (= :write (get-in theirs [:data :mode] :write))
+               (path-overlap? (:subject mine) (:subject theirs))))))
+
+(defn set-claim-policy! [f] (reset! CLAIM-POLICY f) :ok)
+
+(defn conflicts
+  "Live claims by OTHER tasks that conflict with task `task-id` claiming `path`."
+  ([e task-id path] (conflicts e task-id path :write))
+  ([e task-id path mode]
+   (let [mine {:task task-id :subject path :data {:mode mode}}
+         policy @CLAIM-POLICY]
+     (vec (filter (fn [c] (and (not= task-id (:task c)) (policy mine c)))
+                  (all e {:kind :claim}))))))
+
+(defn claim!
+  "Claim `path` for task `task-id`. Returns {:ok trace-id} or {:conflict [claims]}.
+   Claims are advisory: a conflict is information for the task to act on
+   (wait, coordinate, or proceed in a worktree), never a lock."
+  ([e task-id path] (claim! e task-id path :write))
+  ([e task-id path mode]
+   (let [cs (conflicts e task-id path mode)]
+     (if (seq cs)
+       {:conflict cs}
+       {:ok (leave! e task-id {:kind :claim :subject path :data {:mode mode}})}))))
+
+(defn release-claims!
+  "Retract every claim held by task `task-id`."
+  [e task-id]
+  (doseq [c (all e {:kind :claim :task task-id})] (retract! e (:id c)))
+  :ok)

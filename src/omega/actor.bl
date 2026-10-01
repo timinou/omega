@@ -1,0 +1,108 @@
+; omega/actor.bl — actors and their mailboxes, as facts.
+;
+; ══ THE IDEA ════════════════════════════════════════════════════════════════
+;
+; An actor is anyone who can be addressed: a task, or a human (decision a — the
+; human is an actor with a mailbox, nothing special). Sending a message is ONE
+; transaction: the message entity, pointing at its recipient. That fact IS the
+; delivery. Whoever backs the actor — a task executor, a desktop UI, a test —
+; senses new messages addressed to it and reads its inbox from the store.
+;
+;   (actor/ensure! env "human:me" :human "me")
+;   (actor/send!  env {:from "t-1" :to "human:me" :kind :ask :text "ok to delete?"})
+;   (actor/inbox  env "human:me")            ; unread messages, oldest first
+;   (actor/mark-read! env msg-id)
+;   (actor/reply! env msg-id "yes")          ; a :reply message with :msg/re
+;
+; Durable by construction: an actor that was down when a message arrived reads
+; it on return. No mailbox to lose, no pid to go stale.
+
+(ns omega.actor
+  (:require [omega.env :as env]))
+
+(def KINDS #{:task :human})
+(def MSG-KINDS #{:prompt :steer :ask :reply :note :cancel})
+
+(defn ensure!
+  "Upsert actor `id` of `kind`; returns its entity id."
+  ([e id kind] (ensure! e id kind id))
+  ([e id kind name]
+   (let [r (env/tx! e [{:db/id -1 :actor/id id :actor/kind kind :actor/name name}])]
+     (get (:tempids r) -1))))
+
+(defn human-id [name] (str "human:" name))
+
+(defn send!
+  "Deliver a message. m: {:from id :to id :kind kw :text s :data any :re msg-id}.
+   Both actors must exist. Returns the new message id."
+  [e m]
+  (when-not (contains? MSG-KINDS (:kind m))
+    (throw (ex-info (str "unknown message kind " (pr-str (:kind m))) {:msg m})))
+  (let [from (env/eid e :actor/id (:from m))
+        to (env/eid e :actor/id (:to m))
+        _ (when (nil? to) (throw (ex-info (str "no such actor " (:to m)) {:msg m})))
+        id (env/new-id e "msg")
+        base {:db/id -1 :msg/id id :msg/to to :msg/kind (:kind m)
+              :msg/read false :msg/at (env/now e)}
+        fact (cond-> base
+               (some? from) (assoc :msg/from from)
+               (some? (:text m)) (assoc :msg/text (:text m))
+               (some? (:data m)) (assoc :msg/data (:data m))
+               (some? (:re m)) (assoc :msg/re (env/eid e :msg/id (:re m))))]
+    (env/tx! e [fact])
+    id))
+
+(defn- ffirst-or-nil [rows] (when (seq rows) (first (first rows))))
+
+(defn- msg-view [e m]
+  {:id (:msg/id m)
+   :from (env/id-of e (:db/id (:msg/from m)))
+   :to (env/id-of e (:db/id (:msg/to m)))
+   :kind (:msg/kind m) :text (:msg/text m) :data (:msg/data m)
+   :re (when-let [r (:msg/re m)] (env/id-of e (:db/id r)))
+   :read (:msg/read m) :at (:msg/at m)})
+
+(def ^:private MSG-PULL
+  [:msg/id :msg/kind :msg/text :msg/data :msg/read :msg/at
+   {:msg/from [:db/id]} {:msg/to [:db/id]} {:msg/re [:db/id]}])
+
+(defn messages
+  "All messages to actor `id`, oldest first. opts {:unread true} filters."
+  ([e id] (messages e id {}))
+  ([e id opts]
+   (let [to (env/eid e :actor/id id)
+         ms (if (nil? to)
+              []
+              (map first (env/q e '[:find ?m :in $ ?to :where [?m :msg/to ?to]] to)))
+         views (map (fn [m] (msg-view e (env/pull e MSG-PULL m))) ms)
+         views (if (:unread opts) (filter (fn [v] (not (:read v))) views) views)]
+     (vec (sort-by (fn [v] [(:at v) (:id v)]) views)))))
+
+(defn inbox [e id] (messages e id {:unread true}))
+
+(defn mark-read! [e msg-id]
+  (env/tx! e [[:db/add (env/eid e :msg/id msg-id) :msg/read true]])
+  :ok)
+
+(defn reply!
+  "Answer message `msg-id` on behalf of its recipient. Returns the reply's id."
+  ([e msg-id text] (reply! e msg-id text nil))
+  ([e msg-id text data]
+   (let [m (msg-view e (env/pull e MSG-PULL (env/eid e :msg/id msg-id)))
+         rid (send! e {:from (:to m) :to (:from m) :kind :reply :text text :data data :re msg-id})]
+     (mark-read! e msg-id)
+     rid)))
+
+(defn reply-to
+  "The reply to message `msg-id`, or nil if none has arrived."
+  [e msg-id]
+  (let [m (env/eid e :msg/id msg-id)
+        rs (env/q e '[:find ?r :in $ ?m :where [?r :msg/re ?m]] m)]
+    (when-let [r (ffirst-or-nil rs)]
+      (msg-view e (env/pull e MSG-PULL r)))))
+
+(defn sense-inbox
+  "Subscribe the calling process to new messages for actor `id`
+   ([:omega/sensed tag changes] on arrival)."
+  [e id tag]
+  (env/sense e [(symbol "?m") :msg/to (env/eid e :actor/id id)] tag))
