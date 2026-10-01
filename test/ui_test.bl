@@ -1,0 +1,94 @@
+(ns ui-test
+  (:require [omega.env :as env]
+            [omega.actor :as actor]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.codemode :as cm]
+            [omega.ui.model :as model]
+            [omega.ui.screens :as screens]
+            [omega.ui.desktop :as desk]
+            [loom.transform :as x]
+            [loom.token :as t]))
+
+(defn- sys [step] (task/start-system (env/open) {:step step :tools cm/tools :root "/tmp"}))
+
+(defn- render [state] (:tree (t/with-sheet (fn [] (screens/view state)))))
+
+(defn- texts [tree]
+  (let [acc (atom [])]
+    (clojure.walk/postwalk (fn [n] (when (string? n) (swap! acc conj n)) n) tree)
+    (clojure.string/join " " @acc)))
+
+(deftest an-empty-env-teaches
+  (let [s (sys (loop/scripted [(loop/say "x")]))
+        tree (render {:snap (model/snapshot (:env s)) :ui {}})]
+    (is (includes? (texts tree) "No tasks yet"))
+    (task/stop-system! s)))
+
+(deftest tasks-are-grouped-by-urgency-and-asks-are-answerable-in-place
+  (let [s (sys (loop/by-goal {"ask me" [(loop/call-tool "eval" {:code "(send \"human:me\" :ask \"Ship it?\")"}) (loop/say "asked")]
+                              "quiet" [(loop/call-tool "eval" {:code "(done \"ok\")"})]}))
+        a (task/open! s {:goal "ask me"})
+        b (task/open! s {:goal "quiet"})]
+    (task/await s a 10000) (task/await s b 10000)
+    (let [snap (model/snapshot (:env s))
+          tree (render {:snap snap :ui {}})]
+      (is (= [a] (map :id (get-in snap [:by-group :needs-you]))))
+      (is (= [b] (map :id (get-in snap [:by-group :finished]))))
+      (is (includes? (texts tree) "Ship it?"))
+      (is (seq (x/find-nodes (fn [n] (and (vector? n) (map? (second n))
+                                         (= :answer (first (get (second n) :on-click)))))
+                             tree))
+          "the ask renders with answer buttons"))
+    (task/stop-system! s)))
+
+(deftest the-reducer-drives-the-system-through-its-verbs
+  (let [s (sys (loop/by-goal {"hello" [(loop/call-tool "eval" {:code "(send \"human:me\" :ask \"ok?\")"})
+                                       (fn [req] (loop/say (str "got " (get-in (last (:messages req)) [:content 0 :text]))))]}))
+        r (desk/reducer s)
+        st (r {:ui {}} [:new-task "hello"])
+        id (:id (first (:tasks (:snap st))))]
+    (is (= "hello" (:goal (task/view s id))))
+    (task/await s id 10000)
+    (let [ask (first (actor/inbox (:env s) "human:me"))
+          st2 (r (r st [:open id]) [:answer (:id ask) "yes"])]
+      (is (= id (get-in st2 [:ui :task])))
+      (Process/sleep 300)
+      (is (includes? (:result (task/await s id 10000)) "yes")))
+    (task/stop-system! s)))
+
+(deftest the-task-screen-shows-turns-and-a-composer
+  (let [s (sys (loop/scripted [(loop/call-tool "eval" {:code "(+ 1 2)"}) (loop/say "three")]))
+        id (task/open! s {:goal "add"})]
+    (task/await s id 10000)
+    (let [tree (render {:snap (model/snapshot (:env s)) :ui {:task id} :detail (model/task-detail s id)})
+          txt (texts tree)]
+      (is (includes? txt "(+ 1 2)"))
+      (is (includes? txt "three"))
+      (is (includes? txt "Message this task")))
+    (task/stop-system! s)))
+
+(deftest page-events-arrive-nested-and-are-normalized
+  (is (= [:new-task "hi"] (desk/normalize [[:new-task] "hi"])))
+  (is (= [:say "t-1" "more"] (desk/normalize [[:say "t-1"] "more"])))
+  (is (= [:open "t-1"] (desk/normalize [:open "t-1"]))))
+
+(deftest the-reducer-accepts-the-real-page-shape
+  (let [s (sys (loop/scripted [(loop/say "ok")]))
+        st ((desk/reducer s) {:ui {}} [[:new-task] "from the page"])]
+    (is (= ["from the page"] (map :goal (:tasks (:snap st)))))
+    (task/stop-system! s)))
+
+(deftest a-keystroke-does-not-re-render-but-later-renders-keep-the-draft
+  (let [s (sys (loop/scripted [(loop/say "ok")]))
+        r (desk/reducer s)
+        st0 (r {:ui {}} [:tick])
+        st1 (r st0 [[:draft :goal] "half-typ"])]
+    (is (identical? st0 st1) "a draft returns the same state: loom skips the render")
+    (let [st2 (r st1 [:tick])
+          tree (render st2)]
+      (is (= "half-typ" (get-in st2 [:ui :drafts :goal])) "the next render carries the draft")
+      (is (seq (x/find-nodes (fn [n] (and (vector? n) (map? (second n)) (= "half-typ" (:value (second n))))) tree))))
+    (let [st3 (r st1 [[:new-task] "half-typed goal"])]
+      (is (nil? (get-in st3 [:ui :drafts :goal])) "submit clears the draft"))
+    (task/stop-system! s)))

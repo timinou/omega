@@ -1,0 +1,32 @@
+; omega/ui/demo.bl — open the window over a scripted, offline world (for looking
+; at the UI without spending tokens). `bin/omega-ui --demo`.
+
+(ns omega.ui.demo
+  (:require [omega.env :as env]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.codemode :as cm]
+            [omega.ui.desktop :as desk]))
+
+(def SCRIPTS
+  {"Make read_number accept 0x hex literals"
+   [(loop/call-tool "eval" {:code "(write \"reader.py\" \"def read_number(s):\\n    return int(s, 16) if s.startswith('0x') else int(s)\\n\")\n(trace :finding \"reader.py\" \"read_number accepts 0x\")\n(:out (sh \"python3 -c 'from reader import read_number as r; print(r(\\\"0x1f\\\"))'\"))"})
+    (loop/call-tool "eval" {:code "(done \"read_number parses 0x hex; verified 0x1f → 31\")"})]
+   "Bump the version for the release"
+   [(loop/call-tool "eval" {:code "(send \"human:me\" :ask \"Bump version 0.1 → 0.2?\")"})
+    (loop/say "Waiting for your answer before touching version files.")
+    (fn [req] (loop/say (str "OK: " (get-in (last (:messages req)) [:content 0 :text]))))]
+   "Audit the test suite for slow tests"
+   [(fn [_] (receive :never nil (after 600000 (loop/say "late"))))]
+   "Explain the trace decay model"
+   [(loop/say "Traces weaken by half each half-life; reads by other tasks refresh them, so useful findings stay strong.")]})
+
+(defn start!
+  "A system with the demo tasks opened, under `root`. Returns sys."
+  [root]
+  (File/mkdir_p! root)
+  (let [sys (task/start-system (env/open) {:step (loop/by-goal SCRIPTS) :tools cm/tools :root root})]
+    (doseq [g ["Make read_number accept 0x hex literals" "Bump the version for the release"
+               "Audit the test suite for slow tests" "Explain the trace decay model"]]
+      (task/open! sys {:goal g}))
+    sys))

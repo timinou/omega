@@ -22,6 +22,14 @@ cd /some/project
 Flags: `--offline`, `--jev`, `--notify`, `--cassette PATH` (record/replay the model),
 `--db DIR` (keep the fact log on disk).
 
+The desktop window (loom over wry):
+
+```sh
+cd /some/project && ~/code/undefine/omega/bin/omega-ui        # live: type a goal, Enter = a task
+~/code/undefine/omega/bin/omega-ui --demo [--light]            # offline scripted world
+~/code/undefine/omega/bin/omega-shot --demo                    # open → screenshot → close (niri); prints the png path
+```
+
 ## Requirements
 
 - **beam-lisp main** at `~/code/undefine/beam-lisp` (override with `OMEGA_BL=/path/to/bin/bl`).
@@ -53,6 +61,10 @@ Flags: `--offline`, `--jev`, `--notify`, `--cassette PATH` (record/replay the mo
 | `src/omega/ext/notify.bl.md` | desktop notifications; click a button to answer a task's question |
 | `src/omega/ext/jev_gate.bl.md` | Jev done-gate and scope check, with live evidence |
 | `src/omega/cli.bl`, `bin/omega` | one task from the shell |
+| `src/omega/ui/model.bl` | the env projected for screens: task rows grouped by urgency, asks, details |
+| `src/omega/ui/theme.bl` | design system as data: dark/light (WCAG AA tested), status = glyph + word + tone |
+| `src/omega/ui/screens.bl.md` | overview + task screens as pure `state → hiccup`, with the design reasoning |
+| `src/omega/ui/desktop.bl`, `bin/omega-ui` | the window: env commits + page events + tick → reducer → view |
 | `research/domain/` | the research basis (15 literate notes) and the decision register |
 | `!tasks/plans/PLAN-001-…` | the decisions this version implements |
 

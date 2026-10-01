@@ -1,0 +1,68 @@
+; omega/ui/theme.bl — omega's design system as data (impeccable, register: Operate).
+;
+; Two themes, one vocabulary. Roles are named by PURPOSE, not value. Status is
+; always glyph + word + tone, never colour alone. Elevation is declared once
+; (a border, never border + shadow). Motion conveys state only: 120–180 ms,
+; ease-out, no bounce. Accent is rare: primary action, selection, "needs you".
+
+(ns omega.ui.theme
+  (:require [loom.token :as t]))
+
+(def dark
+  {:bg "#0d0f12" :surface "#14171b" :surface-2 "#1b1f24" :surface-3 "#242a31"
+   :border "#262c33" :border-2 "#36404a"
+   :text "#e6e8eb" :muted "#a3abb5" :faint "#808994"
+   :accent "#7aa2f7" :accent-2 "#7aa2f7" :accent-fg "#0d0f12"
+   :danger "#f07178" :warning "#e6b450" :success "#89d185"})
+
+(def light
+  {:bg "#f7f7f5" :surface "#ffffff" :surface-2 "#f0f0ed" :surface-3 "#e6e6e2"
+   :border "#dedfdb" :border-2 "#c9cbc5"
+   :text "#1b1d21" :muted "#555b63" :faint "#646a71"
+   :accent "#2f5bd3" :accent-2 "#2f5bd3" :accent-fg "#ffffff"
+   :danger "#c4343c" :warning "#8a6100" :success "#2a7430"})
+
+(def THEMES {:dark dark :light light})
+
+(def brand
+  {:radius {:sm "4px" :md "6px" :lg "8px" :xl "10px"}
+   :motion {:fast "120ms" :base "160ms" :slow "240ms"
+            :ease "cubic-bezier(0.16,1,0.3,1)" :spring "cubic-bezier(0.16,1,0.3,1)"}
+   :text {:xs "12px" :sm "13px" :md "14px" :lg "16px" :xl "19px" :2xl "23px"}
+   :font {:sans "system-ui, -apple-system, 'Segoe UI', 'Noto Sans', sans-serif"
+          :mono "'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace"}})
+
+(defn install!
+  "Install theme `which` (:dark | :light) for the calling process."
+  [which]
+  (t/install-theme! (assoc brand :color (get THEMES which dark))))
+
+(def STATUS
+  "Status → glyph, word, tone. One table for every screen (and a future TUI)."
+  {:open      {:glyph "○" :word "starting"  :tone :muted}
+   :running   {:glyph "●" :word "running"   :tone :accent}
+   :waiting   {:glyph "◐" :word "waiting"   :tone :muted}
+   :idle      {:glyph "◆" :word "your turn" :tone :accent}
+   :done      {:glyph "✓" :word "done"      :tone :success}
+   :failed    {:glyph "✕" :word "failed"    :tone :danger}
+   :cancelled {:glyph "–" :word "cancelled" :tone :faint}})
+
+(defn status [st] (get STATUS st {:glyph "?" :word (str st) :tone :muted}))
+
+(defn tone-color [tone]
+  (case tone
+    :accent (t/color :accent) :success (t/color :success) :danger (t/color :danger)
+    :warning (t/color :warning) :faint (t/color :faint) (t/color :muted)))
+
+(defn contrast
+  "WCAG contrast ratio between two #rrggbb colours."
+  [a b]
+  (let [lum (fn [hex]
+              (let [n (erlang/binary_to_integer (subs hex 1) 16)
+                    ch (fn [v] (let [c (/ v 255.0)]
+                                 (if (<= c 0.03928) (/ c 12.92) (math/pow (/ (+ c 0.055) 1.055) 2.4))))]
+                (+ (* 0.2126 (ch (quot n 65536)))
+                   (* 0.7152 (ch (rem (quot n 256) 256)))
+                   (* 0.0722 (ch (rem n 256))))))
+        la (lum a) lb (lum b)]
+    (/ (+ (max la lb) 0.05) (+ (min la lb) 0.05))))

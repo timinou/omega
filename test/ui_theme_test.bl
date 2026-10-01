@@ -1,0 +1,15 @@
+(ns ui-theme-test (:require [omega.ui.theme :as th]))
+
+(deftest every-text-pair-meets-wcag-aa-in-both-themes
+  (doseq [[which c] th/THEMES
+          fg [:text :muted :faint :accent :danger :warning :success]
+          bg [:bg :surface :surface-2]]
+    (is (>= (th/contrast (get c fg) (get c bg)) 4.5) (str which " " fg " on " bg))))
+
+(deftest accent-on-accent-fg-is-readable
+  (doseq [[_ c] th/THEMES]
+    (is (>= (th/contrast (:accent c) (:accent-fg c)) 4.5))))
+
+(deftest status-is-never-colour-alone
+  (doseq [[_ s] th/STATUS]
+    (is (and (seq (:glyph s)) (seq (:word s))))))

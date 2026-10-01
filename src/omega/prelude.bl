@@ -93,7 +93,11 @@
   "Run `cmd` with sh in the project root: {:out combined-output :exit code}.
    Never throws on a non-zero exit — check :exit."
   [cmd]
-  (let [r (System/cmd "sh" (list "-c" cmd) (list (tuple :stderr_to_stdout true) (tuple :cd (root))))]
+  ;; TERM=dumb + NO_COLOR: tools think they're in a pipe, so output carries no
+  ;; escape codes or terminfo warnings into the model's context
+  (let [r (System/cmd "sh" (list "-c" cmd) (list (tuple :stderr_to_stdout true) (tuple :cd (root))
+                                                 (tuple :env (list (tuple "TERM" "dumb") (tuple "NO_COLOR" "1")
+                                                                   (tuple "PAGER" "cat") (tuple "GIT_PAGER" "cat")))))]
     {:out (elem r 0) :exit (elem r 1)}))
 
 ;; ── tasks ───────────────────────────────────────────────────────────────

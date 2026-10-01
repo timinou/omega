@@ -1,0 +1,147 @@
+; omega/ui/desktop.bl — the loom desktop window over a live task system.
+;
+; The window is a projection plus a reducer, nothing more:
+;
+;   env changes ──sense──▶ [:env-changed] ─┐
+;   page events (click, Enter) ────────────┼─▶ on-event ─▶ new state ─▶ view
+;   1 s tick (ages) ───────────────────────┘
+;
+; on-event is the ONLY place a UI action touches the system, and it does so
+; through the public task interface (task/open!, task/say!, actor/reply!). The
+; state the view renders is re-projected from the env on every event; the
+; window never caches truth (D1).
+
+(ns omega.ui.desktop
+  (:require [loom.desktop :as d]
+            [wry]
+            [datom]
+            [omega.env :as env]
+            [omega.actor :as actor]
+            [omega.task :as task]
+            [omega.ui.model :as model]
+            [omega.ui.screens :as screens]
+            [omega.ui.demo]
+            [omega.llm]
+            [omega.codemode]
+            [omega.cli]
+            [omega.ext]
+            [omega.ext.notify]))
+
+(defn- project [sys ui drafts]
+  {:snap (model/snapshot (:env sys))
+   :ui (assoc ui :drafts @drafts)
+   :detail (when (:task ui) (model/task-detail sys (:task ui)))})
+
+(defn normalize
+  "loom's desktop hook sends input-bearing events NESTED: Enter in a field whose
+   term is [:say id] arrives as [[:say id] \"text\"]. Flatten to [:say id \"text\"]
+   so every branch reads one shape."
+  [ev]
+  (if (and (sequential? ev) (sequential? (first ev)))
+    (vec (concat (first ev) (rest ev)))
+    ev))
+
+(defn reducer
+  "(state event) → state, with the system's verbs as effects. Every branch ends
+   by re-projecting the env, so the view always shows facts.
+
+   Drafts (half-typed text) live in `drafts`, an atom OUTSIDE the rendered
+   state: a keystroke updates it and returns the state UNCHANGED, so loom's
+   driver does not re-render. A re-render racing the next keystroke drops
+   characters (observed: \"hello world\" → \"helrld\"). Any later render (tick,
+   env change) still shows the draft, because `project` reads the atom."
+  ([sys] (reducer sys (atom {})))
+  ([sys drafts]
+   (fn [st ev]
+     (when (System/get_env "OMEGA_UI_TRACE") (println "UI-EVENT" (pr-str ev)))
+     (let [ui (dissoc (:ui st) :drafts)
+           [k a b] (normalize ev)]
+       (if (= k :draft)
+         (do (swap! drafts assoc a (str b)) st)
+         (let [ui' (case k
+                     :new-task (do (when (seq (clojure.string/trim (str a)))
+                                     (task/open! sys {:goal (clojure.string/trim a)}))
+                                   (swap! drafts dissoc :goal)
+                                   ui)
+                     :open (assoc ui :task a)
+                     :back (dissoc ui :task)
+                     :say (do (when (seq (clojure.string/trim (str b)))
+                                (task/say! sys a (clojure.string/trim b)))
+                              (swap! drafts dissoc [:say a])
+                              ui)
+                     :answer (do (actor/reply! (:env sys) a b) ui)
+                     :toggle-theme (assoc ui :theme (if (= :light (:theme ui)) :dark :light))
+                     ;; :env-changed, :tick — nothing to do but re-project
+                     ui)]
+           (project sys ui' drafts)))))))
+
+(def SWAP-KEEPS-TYPING
+  "Patch for loom.desktop's client hook (candidate upstream fix): its body swap
+   restores focus and selection but not the focused field's VALUE, so text typed
+   between a render and the swap landing is lost (observed with a 150 ms tick:
+   \"hello world\" submitted as \"\" or \"d\"). This keeps the live value of the
+   focused input across the swap."
+  (str "(function(){var orig=window.__loom_swap;"
+       "window.__loom_swap=function(html){"
+       "var a=document.activeElement,keep=null;"
+       "if(a&&a.id&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'))keep={id:a.id,v:a.value};"
+       "orig(html);"
+       "if(keep){var el=document.getElementById(keep.id);if(el&&el.value!==keep.v){"
+       "var s=el.selectionStart;el.value=keep.v;try{el.setSelectionRange(keep.v.length,keep.v.length);}catch(e){}}}};})();"))
+
+(defn- sense-loop
+  "Forward every env commit to the window as one [:env-changed] event,
+   coalescing bursts so a busy task does not flood the renderer."
+  [e app]
+  (spawn (fn []
+           (datom/listen! (:conn e))
+           (loop []
+             (receive
+               :stop :stopped
+               [:datom/tx _ _]
+               (do (loop [] (receive [:datom/tx _ _] (recur) (after 40 nil)))
+                   (d/emit app [:env-changed])
+                   (recur)))))))
+
+(defn open!
+  "Open the omega window over task system `sys`. opts :theme :width :height.
+   Returns {:app :watcher}."
+  ([sys] (open! sys {}))
+  ([sys opts]
+   (let [ui {:theme (or (:theme opts) :dark)}
+         drafts (atom {})
+         app (d/app {:title "omega"
+                     :width (or (:width opts) 1100) :height (or (:height opts) 760)
+                     :state (project sys ui drafts)
+                     :view screens/view
+                     :on-event (reducer sys drafts)
+                     :tick {:every-ms 1000 :event [:tick]}})
+         _ (wry/eval (:window app) SWAP-KEEPS-TYPING)
+         w (sense-loop (:env sys) app)]
+     {:app app :watcher w})))
+
+(defn close! [{:keys [app watcher]}]
+  (erlang/send watcher :stop)
+  (d/stop app)
+  :ok)
+
+(defn main
+  "bin/omega-ui: open the window over a live task system rooted at --root
+   (default cwd), or over the offline demo world with --demo. Blocks until
+   the window's driver exits."
+  []
+  (let [args (vec (BeamLisp/argv))
+        flag? (fn [f] (some (fn [a] (= a f)) args))
+        root (or (second (drop-while (fn [a] (not= a "--root")) args)) (File/cwd!))
+        home (or (System/get_env "OMEGA_HOME") (File/cwd!))
+        sys (if (flag? "--demo")
+              (omega.ui.demo/start! "/tmp/omega-ui-demo")
+              (task/start-system (env/open (if-let [db (second (drop-while (fn [a] (not= a "--db")) args))] {:path db} {}))
+                                 {:step (omega.llm/step (omega.llm/from-env home))
+                                  :tools omega.codemode/tools :root root
+                                  :system-prompt omega.cli/SYSTEM-PROMPT}))
+        sys (omega.ext/install sys (if (flag? "--notify") [(omega.ext.notify/extension)] []))
+        w (open! sys {:theme (if (flag? "--light") :light :dark)})
+        ref (erlang/monitor :process (:driver (:app w)))]
+    (receive [:DOWN _ :process _ _] :closed)
+    (task/stop-system! sys)))

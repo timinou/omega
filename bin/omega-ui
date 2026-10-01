@@ -1,0 +1,10 @@
+#!/bin/sh
+# bin/omega-ui — the omega desktop window (loom over wry).
+#   bin/omega-ui              live: tasks run against Sonnet 5.5 in the current directory
+#   bin/omega-ui --demo       offline: a scripted world, for looking at the UI
+#   flags: --light  --notify  --db DIR  --root DIR
+ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
+ENTRY=$(mktemp --suffix=.bl)
+trap 'rm -f "$ENTRY"' EXIT
+printf '(ns omega.ui.main (:require [omega.ui.desktop :as desk]))\n(desk/main)\n' > "$ENTRY"
+OMEGA_HOME="$ROOT" "$ROOT/bin/bl" run "$ENTRY" -- --root "$PWD" "$@" 2>&1 | grep -v -e '^bl-stage-hosts:' -e 'JSC_SIGNAL'
