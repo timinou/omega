@@ -1,0 +1,55 @@
+#+TITLE: omega v0.2 — codemode-only tools and the loom desktop window
+#+STATE: DONE
+#+SESSION_ID: 15950b96c19ed4f1
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-01T10-18-31-559Z_15950b96c19ed4f1.jsonl]]
+#+CUSTOM_ID: PLAN-002-omega-v0-2-codemode-only-tools-and-the-l
+
+* Initial Message
+
+please look at 
+1. ../beam-lisp (and its ../beam-lisp--repl branch too, it has a lot of useful stuff)
+2. ../spell (for a first attempt)
+3. VERY IMPORTANTLY, github.com/earendil/pi-mono (especially CodeMode, which we will want to recreate in beam-lisp).
+4. the canonical implementations of light plan modes, of structural code editing using tree sitter, of simple and light LSP modes, etc., and other plugins I may not have thought about.
+(you can also use ../../ora/relay and vendor what you want to easily talk to LLMs)
+
+
+The goal is to create a super simple coding harness that leverages the main ideas behind the architecture of pi-mono but in a way that leverages beam-lisp as much as possible. The goal is to have a very very simple (the simplest) loop that works, and it can use either the `loom` desktop wrapper or a TUI (you can make a local beam-lisp maximalist wrapper of ratatui, but if you do so, make its API as close as posible to `loom`, and read the 'grammar' documetn in beam-lisp).
+
+the one deviation i would have from the design of pi is that, instead of chats, i imagine the prompts that I send to be 'tasks'. In practice it is *still* a chat, but what I want is to be able to have self-coordinating tasks that understand their scope and that are easy for each other to find out about. Right now the main difference it is is that you should use Jev (I will put an API key here in the .env called TYPESAFE_API_KEY), look up beam-lisp native ways of using it (i.e. it's integrated to the language very naturally through a nice namespace), and helps us have a naturally stigmergic way of dealing with each other, sending each other messages, waiting on each other, etc (see the `proc` module in beam-lisp). More references are the beam lisp repl Playground, the `harness` module, and anything else you find on the internet about how people are using Jev to make harnesses, and the idea of stigmergy applied to systems.
+
+You should also read (and vendor) impeccable.style for a nice interface. The interface should be super simple and intuitive, and still let me see everything that is happening within a single project. The goal of omega is to focus on quality and make a general (not just beam-lisp) coding harness that works very well and builds itself from primitives and patterns and bundles, and has a canonical implementation that takes the best from the proven and the latest about coding harnesses. I would like us to really think about all the interactions that we'll have, how we'll be able to peek into the system, and how the day to day will look like for us, and the screens that we want to create, and the ways that we will be able to interact with the system (as an agent developing the system) so that it is easy for you to understand, test, and improve it, ahead of implementation, and that we thoroughly discuss every point and leveraging beam-lisp before we go on to implementation.
+
+Your first goal is to create a research/domain/ folder and put ALL the stuff there, as .bl.md or .bl.org files, so that we have a nice basis to think from.
+
+* Goal
+Second prototype slice. The user's direction (2026-10-01): "no bash tool, only eval". This makes beam-lisp =eval= the ONLY model tool (codemode, D6). It is followed by the next planned slice from PLAN-001: the loom desktop UI (D12/D13).
+
+* Built (commits d161ee7, 004d413)
+** Codemode
+- =omega.codemode= provides one tool, =eval=, over =harness/eval-cell=. Each task gets its own namespace. A beam-native heap cap (=max_heap_size= with =:kill=) and a deadline mean a runaway allocation kills only that eval.
+- =omega.prelude= holds the functions the code calls: =read write edit ls glob sh spawn wait send done trace traces q=. The task context comes from the cell process dictionary.
+- The cutover is complete: =omega.tools= is deleted, and tests, the playground and the domain doc are migrated.
+- Verified live: Sonnet 5.5 wrote two files and ran pytest in ONE eval.
+
+** UI
+- =omega.ui.model= projects the env, grouping tasks by urgency.
+- =omega.ui.theme= has dark and light themes, tested to WCAG AA, with status shown as glyph + word + tone.
+- =omega.ui.screens= (.bl.md) is an overview with a composer and in-place answers, plus a task screen.
+- =omega.ui.desktop= folds env commits, page events and a 1 s tick through one reducer that calls only public verbs.
+- Entry points: =bin/omega-ui=, plus =bin/omega-shot= for agents to see the UI.
+- Verified by driving the real window with =wtype= keystrokes and a JS click: typed goal → live task → files edited → done, all shown in the window.
+
+* Defects found and fixed along the way
+- beam-lisp BUG-109 (filed in the beam-lisp repo, untracked): a qualified call to a project fn that shadows a core name runs CORE on the first cold call. =omega.loop/run!= returned nil on every fresh VM, so it was renamed =turn!=.
+- The executor now treats outcomes as total: a non-outcome becomes =:failed= with its reason, and failures record =:task/result= plus a =:blocker= trace.
+- =:task/cost= was never accumulated (a wrong key); fixed and tested.
+- Window input: page events arrive nested (=[[:k a] v]=) and are now normalized. Drafts live outside the rendered state. loom's body swap lost text typed during a render (0/3 → 3/3 after a client-side patch). Candidate upstream fix: =SWAP-KEEPS-TYPING= in =omega.ui.desktop=.
+- =sh= runs with =TERM=dumb NO_COLOR=, so no terminfo noise reaches the model.
+
+* Next
+1. Streaming turns into the window (the model's text as it arrives). This needs streaming in =omega.llm=; httpc ={stream,self}= is verified.
+2. Upstream the loom swap patch, and keyed diffing instead of =innerHTML= swaps.
+3. Screens: inter-task graph (waits, messages, claims), eval inspector, command palette.
+4. The Jev gate v2 findings from PLAN-001.
+5. D11 handoff (=:task/continues=).
