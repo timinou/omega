@@ -1,0 +1,173 @@
+; omega/jev.bl — typed decisions (TypeSafe Jev / System One), as values.
+;
+; ══ WHY ═════════════════════════════════════════════════════════════════════
+;
+; Coordination is full of small, CLOSED questions over a bounded state: "is
+; this message in my scope?", "should I wait on that claim?", "is the goal
+; met?". A generative model answers them slowly, verbosely and without a
+; calibrated probability. Jev answers them as typed values with probabilities.
+; omega asks Jev those questions and keeps generative models for open work.
+;
+; ══ THE SHAPE (modular; each layer replaceable) ═════════════════════════════
+;
+;   questions   (jev/choice instr {opt desc …}) (jev/noul instr) (jev/score instr [lvl …])
+;               — plain maps; build, store, diff, print them
+;   request     (jev/request state {id question …})      — pure; hashable
+;   transport   (fn [request-body] → {:ok decoded} | {:error …})
+;               jev/http (live), jev/cassette (record/replay), or any fn
+;   answers     (jev/ask transport state questions) → {:ok {id verdict}} | {:error …}
+;               verdict: {:type :value :probabilities :confidence}
+;   gate        (jev/gate verdict {:act θ :confirm θ'}) → :act | :confirm | :abstain
+;   decision    (jev/decide transport decl state) → {:value … :band … :fallback? …}
+;               decl = {:id :questions :pick :gate :fallback} — a DECLARED decision,
+;               with its fail direction, so the harness can list, shadow and replay it
+;
+; Never throws on the network path: errors are values, and every declared
+; decision names the value to use when Jev cannot answer.
+;
+; Data: a state sent to Jev leaves the machine (US processing; ZDR is enterprise
+; only). Callers decide what goes in `state`; omega sends task text, never files
+; it was not asked to.
+
+(ns omega.jev
+  (:require [credential.env :as cenv]
+            [omega.llm :as llm]))
+
+(def MODEL "jev-latest")
+(def URL "https://api.typesafe.ai/v1/systemone")
+
+;; ── questions are values ────────────────────────────────────────────────
+
+(defn choice
+  "Pick one of `options` ({kw-or-string description}). Max 255 options."
+  [instructions options]
+  {:type :choice :instructions instructions :criteria options})
+
+(defn noul
+  "A calibrated yes/no as a number in [0,1]. Optional criteria
+   {\"true\" s \"false\" s} (string keys: `:true` reads as the boolean)."
+  ([instructions] {:type :noul :instructions instructions})
+  ([instructions criteria] {:type :noul :instructions instructions :criteria criteria}))
+
+(defn score
+  "An ordered scale (2..10 levels, lowest first)."
+  [instructions levels]
+  {:type :score :instructions instructions :criteria (vec levels)})
+
+;; ── the request is pure ─────────────────────────────────────────────────
+
+(defn- crit-wire [q]
+  (case (:type q)
+    :choice (into {} (map (fn [[k v]] [(name k) v]) (:criteria q)))
+    :noul (:criteria q)
+    :score (vec (:criteria q))))
+
+(defn request
+  "The Jev request body for `state` (string or data) and `questions` {id q}."
+  ([state questions] (request state questions MODEL))
+  ([state questions model]
+   {:model model
+    :state state
+    :questions (into {} (map (fn [[id q]]
+                               [(name id) (cond-> {:type (name (:type q)) :instructions (:instructions q)}
+                                            (some? (crit-wire q)) (assoc :criteria (crit-wire q)))])
+                             questions))}))
+
+;; ── answers are validated values ────────────────────────────────────────
+
+(defn- option-key [q s]
+  ;; map a returned option string back to the caller's own key (keyword or string)
+  (or (some (fn [k] (when (= s (name k)) k)) (keys (:criteria q))) s))
+
+(defn verdict
+  "One decoded answer → a verdict for question `q`, or {:invalid why}."
+  [q a]
+  (case (:type q)
+    :choice (if (contains? a "choice")
+              {:type :choice :value (option-key q (get a "choice"))
+               :probabilities (into {} (map (fn [[k p]] [(option-key q k) p]) (get a "probabilities")))
+               :confidence (get a "confidence")}
+              {:invalid "no choice"})
+    :noul (if (number? (get a "noul"))
+            {:type :noul :value (get a "noul") :confidence (get a "noul")}
+            {:invalid "no noul"})
+    :score (if (number? (get a "score"))
+             {:type :score :value (get a "score") :probabilities (get a "probabilities")
+              :confidence (get a "confidence")}
+             {:invalid "no score"})))
+
+(defn read-answers
+  "Decoded response body → {:ok {id verdict} :model :usage} | {:error …}."
+  [questions body]
+  (let [as (get body "answers")
+        vs (into {} (map (fn [[id q]] [id (verdict q (get as (name id)))]) questions))
+        bad (filter (fn [[_ v]] (contains? v :invalid)) vs)]
+    (if (seq bad)
+      {:error {:kind :invalid-answer :detail (into {} bad) :body body}}
+      {:ok vs :model (get body "model") :usage (get body "usage")})))
+
+;; ── transports ──────────────────────────────────────────────────────────
+
+(defn key-from-env
+  "TYPESAFE_API_KEY from root/.env or the process env (never logged)."
+  [root]
+  (or (cenv/lookup (cenv/read-file (str root "/.env")) "TYPESAFE_API_KEY")
+      (System/get_env "TYPESAFE_API_KEY")))
+
+(defn http
+  "The live transport. `key` is the API key."
+  [key]
+  (fn [body]
+    (Application/ensure_all_started :ssl)
+    (Application/ensure_all_started :inets)
+    (let [hdrs (list (tuple (String/to_charlist "authorization") (String/to_charlist (str "Bearer " key))))
+          payload (erlang/iolist_to_binary (json/encode (llm/jsonable body)))
+          r (httpc/request :post (tuple (String/to_charlist URL) hdrs (String/to_charlist "application/json") payload)
+                           (list (tuple :timeout 60000)) (list (tuple :body_format :binary)))]
+      (if (= :ok (elem r 0))
+        (let [resp (elem r 1) status (elem (elem resp 0) 1) b (elem resp 2)]
+          (if (= 200 status)
+            {:ok (json/decode b)}
+            {:error {:kind (cond (= 429 status) :rate-limited (= 529 status) :overloaded
+                                 (contains? #{401 403} status) :auth (= 422 status) :invalid-request :else :server)
+                     :status status :body b}}))
+        {:error {:kind :transport :reason (pr-str (elem r 1))}}))))
+
+(defn cassette
+  "Record/replay Jev the same way omega.llm does models. Replay never touches
+   the network and fails loud on an unseen request. Tapes are for TESTS only:
+   TypeSafe's terms forbid training on Jev outputs."
+  [inner path mode]
+  (llm/cassette inner path mode))
+
+;; ── asking ──────────────────────────────────────────────────────────────
+
+(defn ask
+  "Ask `questions` about `state` through `transport`."
+  [transport state questions]
+  (let [r (transport (request state questions))]
+    (if (contains? r :error) r (read-answers questions (:ok r)))))
+
+(defn gate
+  "Band a verdict by confidence: :act ≥ act, :confirm ≥ confirm, else :abstain."
+  [v {:keys [act confirm] :or {act 0.8 confirm 0.5}}]
+  (let [c (or (:confidence v) 0)]
+    (cond (>= c act) :act (>= c confirm) :confirm :else :abstain)))
+
+(defn decide
+  "Run a declared decision. decl:
+     :id         keyword naming the decision point
+     :questions  {id question}
+     :pick       (fn [verdicts] → value)        ; how answers become a value
+     :gate       {:on qid :act θ :confirm θ'}    ; which verdict's confidence bands it
+     :fallback   value                           ; used on error or :abstain — the fail direction
+   Returns {:id :value :band :verdicts :fallback? :error}."
+  [transport decl state]
+  (let [r (ask transport state (:questions decl))]
+    (if (contains? r :error)
+      {:id (:id decl) :value (:fallback decl) :band :error :fallback? true :error (:error r)}
+      (let [vs (:ok r)
+            band (gate (get vs (get-in decl [:gate :on])) (:gate decl))]
+        (if (= :abstain band)
+          {:id (:id decl) :value (:fallback decl) :band band :fallback? true :verdicts vs}
+          {:id (:id decl) :value ((:pick decl) vs) :band band :fallback? false :verdicts vs})))))

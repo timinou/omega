@@ -5,6 +5,7 @@
 ;   bin/omega --cassette PATH "goal" record/replay the model to PATH (:auto)
 ;   bin/omega --db DIR "goal"        keep the fact log on disk (fjall) in DIR
 ;   bin/omega --notify "goal"        desktop notifications (omega.ext.notify)
+;   bin/omega --jev "goal"           Jev done-gate + scope check (omega.ext.jev-gate)
 ;
 ; The run prints every turn as it lands (sensed from the env, like any other
 ; observer), then the task's final status, and a summary of what the
@@ -18,7 +19,9 @@
             [omega.trace :as tr]
             [omega.llm :as llm]
             [omega.ext :as ext]
-            [omega.ext.notify :as notify]))
+            [omega.ext.notify :as notify]
+            [omega.jev :as jev]
+            [omega.ext.jev-gate :as jev-gate]))
 
 (def SYSTEM-PROMPT
   (str "You are omega, a coding agent working in the project at the current root. "
@@ -29,6 +32,12 @@
        "When the goal is fully achieved, call `done` with a short summary of what changed. "
        "If you only answered a question, reply with prose and no tool call."))
 
+(defn omega-home
+  "Where omega itself lives (its .env holds omega's credentials). bin/omega
+   sets OMEGA_HOME; the project being worked on is --root, a different thing."
+  []
+  (or (System/get_env "OMEGA_HOME") (File/cwd!)))
+
 (defn- parse [args]
   (loop [as args opts {}]
     (if (empty? as)
@@ -37,6 +46,7 @@
         (case a
           "--offline" (recur more (assoc opts :offline true))
           "--notify" (recur more (assoc opts :notify true))
+          "--jev" (recur more (assoc opts :jev true))
           "--cassette" (recur (rest more) (assoc opts :cassette (first more)))
           "--db" (recur (rest more) (assoc opts :db (first more)))
           "--root" (recur (rest more) (assoc opts :root (first more)))
@@ -88,12 +98,15 @@
   [args]
   (let [o (parse args)
         root (or (:root o) (File/cwd!))
-        _ (when (nil? (:goal o)) (throw (ex-info "usage: omega [--offline] [--notify] [--cassette PATH] [--db DIR] \"goal\"" {})))
-        base (if (:offline o) (offline-model) (llm/step (llm/from-env root)))
+        _ (when (nil? (:goal o)) (throw (ex-info "usage: omega [--offline] [--notify] [--jev] [--cassette PATH] [--db DIR] \"goal\"" {})))
+        base (if (:offline o) (offline-model) (llm/step (llm/from-env (omega-home))))
         step (if (:cassette o) (llm/cassette base (:cassette o) :auto) base)
         e (env/open (if (:db o) {:path (:db o)} {}))
         sys (task/start-system e {:step step :tools tools/default :root root :system-prompt SYSTEM-PROMPT})
-        sys (ext/install sys (if (:notify o) [(notify/extension)] []))
+        exts (cond-> []
+               (:notify o) (conj (notify/extension))
+               (:jev o) (conj (jev-gate/extension {:transport (jev/http (or (jev/key-from-env root) (jev/key-from-env (omega-home))))})))
+        sys (ext/install sys exts)
         id (task/open! sys {:goal (:goal o)})]
     (println (str "omega · task " id " · " (:goal o)))
     (follow! sys id)
@@ -102,6 +115,8 @@
       (println (str "result: " (:result v)))
       (println (str "cost:   " (pr-str (select-keys (:cost v) [:input :output :cache-read]))))
       (println (str "traces: " (pr-str (frequencies (map :kind (tr/all e))))))
+      (doseq [d (tr/all e {:kind :decision})]
+        (println (str "decision: " (:text d) " " (pr-str (or (get-in d [:data :verdicts]) (get-in d [:data :error]))))))
       (when (:notify o) (Process/sleep 500))
       (ext/uninstall sys)
       (task/stop-system! sys)

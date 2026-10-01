@@ -1,0 +1,53 @@
+(ns jev-test
+  (:require [omega.jev :as jev]))
+
+(def qs {:route (jev/choice "Which task should handle this message?" {:t-1 "reader work" :new "none of them"})
+         :done (jev/noul "Is the goal fully met?")
+         :risk (jev/score "How risky is this change?" ["trivial" "moderate" "dangerous"])})
+
+(deftest the-request-is-plain-wire-data
+  (let [r (jev/request "state text" qs)]
+    (is (= "jev-latest" (:model r)))
+    (is (= {:type "choice" :instructions "Which task should handle this message?"
+            :criteria {"t-1" "reader work" "new" "none of them"}}
+           (get-in r [:questions "route"])))
+    (is (= {:type "noul" :instructions "Is the goal fully met?"} (get-in r [:questions "done"])))
+    (is (= ["trivial" "moderate" "dangerous"] (get-in r [:questions "risk" :criteria])))))
+
+(def body {"model" "jev-1.13.0"
+           "answers" {"route" {"type" "choice" "choice" "t-1" "probabilities" {"t-1" 0.9 "new" 0.1} "confidence" 0.8}
+                      "done" {"type" "noul" "noul" 0.93}
+                      "risk" {"type" "score" "score" 0.4 "probabilities" {"0" 0.6 "1" 0.4 "2" 0.0} "confidence" 0.5}}
+           "usage" {"input_tokens" 120 "output_tokens" 9}})
+
+(deftest answers-map-back-to-the-callers-own-keys
+  (let [r (jev/read-answers qs body)]
+    (is (= :t-1 (get-in r [:ok :route :value])))
+    (is (= {:t-1 0.9 :new 0.1} (get-in r [:ok :route :probabilities])))
+    (is (= 0.93 (get-in r [:ok :done :value])))
+    (is (= 0.4 (get-in r [:ok :risk :value])))
+    (is (= "jev-1.13.0" (:model r)))))
+
+(deftest a-missing-answer-is-an-error-value
+  (is (= :invalid-answer (get-in (jev/read-answers qs {"answers" {}}) [:error :kind]))))
+
+(deftest gates-band-by-confidence
+  (is (= :act (jev/gate {:confidence 0.9} {})))
+  (is (= :confirm (jev/gate {:confidence 0.6} {})))
+  (is (= :abstain (jev/gate {:confidence 0.2} {}))))
+
+(def route-decl
+  {:id :route
+   :questions {:route (:route qs)}
+   :pick (fn [vs] (get-in vs [:route :value]))
+   :gate {:on :route :act 0.75 :confirm 0.5}
+   :fallback :new})
+
+(deftest decide-uses-the-answer-when-confident
+  (let [d (jev/decide (fn [_] {:ok body}) route-decl "msg")]
+    (is (= [:t-1 :act false] [(:value d) (:band d) (:fallback? d)]))))
+
+(deftest decide-falls-back-on-error-and-on-abstain
+  (is (= [:new :error true] ((juxt :value :band :fallback?) (jev/decide (fn [_] {:error {:kind :overloaded}}) route-decl "msg"))))
+  (let [unsure (assoc-in body ["answers" "route" "confidence"] 0.1)]
+    (is (= [:new :abstain true] ((juxt :value :band :fallback?) (jev/decide (fn [_] {:ok unsure}) route-decl "msg"))))))
