@@ -13,7 +13,8 @@
   (:require [omega.env :as env]
             [omega.actor :as actor]
             [omega.trace :as tr]
-            [omega.reap :as reap]))
+            [omega.reap :as reap]
+            [omega.stream :as stream]))
 
 ;; ── context ─────────────────────────────────────────────────────────────
 
@@ -111,12 +112,14 @@
   [cmd]
   ;; TERM=dumb + NO_COLOR: tools think they're in a pipe, so output carries no
   ;; escape codes or terminfo warnings into the model's context
+  (stream/activity! (task) {:sh cmd :sh-since (erlang/system_time :millisecond)})
   (let [r (System/cmd "sh" (list "-c" cmd) (list (tuple :stderr_to_stdout true) (tuple :cd (root))
                                                  ;; the reap tags: whatever this starts, even in the
                                                  ;; background, dies with its cell or task (omega.reap)
                                                  (tuple :env (to-list (concat [(tuple "TERM" "dumb") (tuple "NO_COLOR" "1")
                                                                                (tuple "PAGER" "cat") (tuple "GIT_PAGER" "cat")]
                                                                               (reap/env-tags (:nonce (sys)) (task) (erlang/get :omega/cell)))))))]
+    (stream/activity! (task) {:sh nil :sh-since nil})
     {:out (elem r 0) :exit (elem r 1)}))
 
 ;; ── tasks ───────────────────────────────────────────────────────────────

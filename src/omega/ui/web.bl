@@ -47,7 +47,29 @@
 (def ui-schema
   [{:db/ident :live/task :db/valueType :db.type/string :db/unique :db.unique/identity}
    {:db/ident :live/turn :db/valueType :db.type/long}
-   {:db/ident :live/blocks}])
+   {:db/ident :live/blocks}
+   ;; what a task is doing now ({:tool :code :since :sh :sh-since}) and a clock
+   ;; that moves once a second while anything is active, so elapsed times tick
+   {:db/ident :act/task :db/valueType :db.type/string :db/unique :db.unique/identity}
+   {:db/ident :act/doing}
+   {:db/ident :clock/id :db/valueType :db.type/string :db/unique :db.unique/identity}
+   {:db/ident :clock/now :db/valueType :db.type/long}])
+
+(defn merge-activity
+  "Fold an activity patch into a task's current activity; nil (or nothing
+   left) means idle."
+  [cur patch]
+  (when (some? patch)
+    (let [m (reduce-kv (fn [m k v] (if (nil? v) (dissoc m k) (assoc m k v))) (or cur {}) patch)]
+      (when (contains? m :tool) m))))
+
+(defn activity-map
+  "task id → what it is doing now, plus :now (ms) from the ticking clock."
+  [ui-conn]
+  (let [db (datom/db ui-conn)
+        now (first (first (datom/q '[:find ?n :where [?c :clock/id "clock"] [?c :clock/now ?n]] db)))]
+    (into {} (map (fn [[t d]] [t (assoc d :now (or now (erlang/system_time :millisecond)))])
+                  (datom/q '[:find ?t ?d :where [?e :act/task ?t] [?e :act/doing ?d]] db)))))
 
 (defn apply-delta
   "Fold one streamed delta into a task's partial turn {:turn n :blocks {i {:kind :text}}}.
@@ -69,19 +91,28 @@
   [ui-conn]
   (spawn (fn []
            (stream/watch!)
-           (loop [pending {} done #{}]
+           (loop [pending {} done #{} acts {} dirty #{} tick 0]
              (receive
                :stop :stopped
-               [:omega/delta t d] (recur (update pending t (fn [cur] (apply-delta (or cur (get (live-map ui-conn) t)) d))) (disj done t))
-               [:omega/turn-done t] (recur (dissoc pending t) (conj done t))
+               [:omega/delta t d] (recur (update pending t (fn [cur] (apply-delta (or cur (get (live-map ui-conn) t)) d))) (disj done t) acts dirty tick)
+               [:omega/turn-done t] (recur (dissoc pending t) (conj done t) acts dirty tick)
+               [:omega/activity t p] (recur pending done (assoc acts t (merge-activity (get acts t) p)) (conj dirty t) tick)
                (after 80
-                 (do (when (seq pending)
-                       (datom/transact! ui-conn (vec (map (fn [[t lt]] {:db/id -1 :live/task t :live/turn (:turn lt) :live/blocks (:blocks lt)})
-                                                          pending))))
-                     (doseq [t done]
-                       (when-let [e (datom/lookup-ref (datom/db ui-conn) [:live/task t])]
-                         (datom/transact! ui-conn [[:db/retractEntity e]])))
-                     (recur {} #{}))))))))
+                 (let [now (erlang/system_time :millisecond)
+                       tick? (and (some some? (vals acts)) (>= (- now tick) 1000))]
+                   (when (seq pending)
+                     (datom/transact! ui-conn (vec (map (fn [[t lt]] {:db/id -1 :live/task t :live/turn (:turn lt) :live/blocks (:blocks lt)})
+                                                        pending))))
+                   (doseq [t done]
+                     (when-let [e (datom/lookup-ref (datom/db ui-conn) [:live/task t])]
+                       (datom/transact! ui-conn [[:db/retractEntity e]])))
+                   (doseq [t dirty]
+                     (if-let [a (get acts t)]
+                       (datom/transact! ui-conn [{:db/id -1 :act/task t :act/doing a}])
+                       (when-let [e (datom/lookup-ref (datom/db ui-conn) [:act/task t])]
+                         (datom/transact! ui-conn [[:db/retractEntity e]]))))
+                   (when tick? (datom/transact! ui-conn [{:db/id -1 :clock/id "clock" :clock/now now}]))
+                   (recur {} #{} (into {} (filter (fn [[_ a]] (some? a)) acts)) #{} (if tick? now tick)))))))))
 
 ;; ── the screen ──────────────────────────────────────────────────────────
 
@@ -100,6 +131,7 @@
       (screens/view {:snap (model/snapshot (:env sys))
                      :ui ui
                      :live (live-map ui-conn)
+                     :activity (activity-map ui-conn)
                      :detail (when (:task ui) (model/task-detail sys (:task ui)))}))))
 
 ;; ── intents: the only writes, each one public task verb ─────────────────

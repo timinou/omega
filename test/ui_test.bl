@@ -104,3 +104,28 @@
       (is (includes? txt "1 line"))
       (is (includes? txt "✕ error"))
       (is (includes? txt "no such fn")))))
+
+(deftest a-running-call-shows-what-it-runs-and-for-how-long
+  (let [a {:tool "eval" :code "(sh \"bin/bl test\")" :since 1000 :now 135000}]
+    (is (= "running eval · (sh \"bin/bl test\") · 2m 14s" (screens/doing-line a)))
+    (is (= "running sh · bin/bl test · 9s" (screens/doing-line (assoc a :sh "bin/bl test" :sh-since 126000))))
+    (is (nil? (screens/doing-line nil)))))
+
+(deftest activity-patches-fold-and-clear
+  (let [a (web/merge-activity nil {:tool "eval" :code "x" :since 1})
+        b (web/merge-activity a {:sh "ls" :sh-since 2})
+        c (web/merge-activity b {:sh nil :sh-since nil})]
+    (is (= {:tool "eval" :code "x" :since 1 :sh "ls" :sh-since 2} b))
+    (is (= a c))
+    (is (nil? (web/merge-activity c nil)))))
+
+(deftest the-overview-row-and-task-screen-show-elapsed-activity
+  (let [s (sys (loop/scripted [(loop/say "hi")]))
+        id (task/open! s {:goal "busy"})
+        _ (task/await s id 10000)
+        act {id {:tool "eval" :code "(wait kid)" :since 0 :now 65000}}
+        snap (model/snapshot (:env s))]
+    (is (includes? (texts (render {:snap snap :ui {} :live {} :activity act})) "running eval · (wait kid) · 1m 5s"))
+    (is (includes? (texts (render {:snap snap :ui {:task id} :detail (model/task-detail s id) :live {} :activity act}))
+                   "running eval · (wait kid) · 1m 5s"))
+    (task/stop-system! s)))

@@ -115,11 +115,14 @@
   (let [ctx {:sys sys :task id}
         tool (find-tool sys (:name block))
         decision (hook sys :tool/before {:allow true :block block} ctx)
+        _ (stream/activity! id {:tool (:name block) :since (erlang/system_time :millisecond)
+                                :code (first (clojure.string/split-lines (str (or (get-in block [:input :code]) (pr-str (:input block))))))})
         r (cond
             (nil? tool) {:error (str "no such tool: " (:name block))}
             (not (:allow decision)) {:error (str "denied: " (:reason decision))}
             :else (try ((:run tool) ctx (:input block))
                        (catch err {:error (ex-message err)})))
+        _ (stream/activity! id nil)
         r (hook sys :tool/after r (assoc ctx :block block))]
     ;; one trace per CALL: the subject carries the turn number, so two calls with a
     ;; reused tool-use id (scripted models, some providers) never merge

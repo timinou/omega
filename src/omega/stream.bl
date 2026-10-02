@@ -8,6 +8,7 @@
 ;   (stream/watch!)                     the calling process joins
 ;   receive [:omega/delta task-id d]    d = {:turn n :block i :kind :text|:tool-input :text s}
 ;   receive [:omega/turn-done task-id]  the turn's content is now a fact
+;   receive [:omega/activity task-id p] what it is doing now (a tool call, an sh); nil = nothing
 ;
 ; Publishing is fire-and-forget to every member; a slow or dead viewer can
 ; never stall a model call. Coalescing is the viewer's business.
@@ -45,4 +46,12 @@
   :ok)
 
 (defn delta! [task d] (publish! [:omega/delta task d]))
+
+(defn activity!
+  "What task `task` is doing right now, as a patch merged into its activity
+   (keys with nil values are cleared); `nil` clears it all. Shapes:
+   {:tool \"eval\" :code first-line :since ms} while a call runs, plus
+   {:sh cmd :sh-since ms} while an (sh …) inside it runs."
+  [task patch]
+  (publish! [:omega/activity task patch]))
 (defn turn-done! [task] (publish! [:omega/turn-done task]))

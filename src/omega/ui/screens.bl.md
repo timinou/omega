@@ -126,6 +126,20 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
                                :border-radius (t/radius :md)})}
            (:text blk)])))))
 
+(defn doing-line
+  "What a task is doing right now, with how long it has been at it:
+   \"running eval · (sh \\\"bin/bl test\\\") · 2m 14s\" — the liveness cue for a
+   call that streams nothing (a long shell, a wait). nil when idle."
+  [a]
+  (when a
+    (let [secs (fn [since] (quot (max 0 (- (:now a) since)) 1000))
+          dur (fn [s] (if (< s 60) (str s "s") (str (quot s 60) "m " (rem s 60) "s")))]
+      (if (:sh a)
+        (str "running sh · " (let [c (str (:sh a))] (if (> (count c) 70) (str (subs c 0 70) "…") c))
+             " · " (dur (secs (:sh-since a))))
+        (str "running " (:tool a) " · " (let [c (str (:code a))] (if (> (count c) 70) (str (subs c 0 70) "…") c))
+             " · " (dur (secs (:since a))))))))
+
 (defn live-line
   "A one-line preview of a task's streaming text, for its overview row."
   [lt]
@@ -147,7 +161,7 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
       (for [[k label] choices]
         (ui/button {:size :sm :variant :subtle :on-click [:intent :answer {:msg (:id a) :choice (name k)}]} label)))))
 
-(defn task-row [r lt]
+(defn task-row [r lt act]
   (b/col {:gap :0 :pad [:3 :5] :data-task (:id r) :key (:id r)
           :on-click [:assign :task (:id r)]
           :style {:cursor "pointer" :border-bottom (str "1px solid " (t/color :border))}
@@ -160,8 +174,9 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
       (when (seq (:claims r)) (mono (first (:claims r))))
       (muted (or (cost-text (:cost r)) ""))
       (muted (age (:age-ms r))))
-    (when-let [line (live-line lt)]
-      [:div {:class (t/sx {:padding-left "108px" :color (t/color :muted) :font-size (t/text :sm)
+    (when-let [line (or (doing-line act) (live-line lt))]
+      [:div {:data-doing (if act "1" "0")
+             :class (t/sx {:padding-left "108px" :color (t/color :muted) :font-size (t/text :sm)
                            :overflow "hidden" :text-overflow "ellipsis" :white-space "nowrap"})}
        line])
     (when (and (nil? lt) (contains? #{:idle :done :failed} (:status r)) (seq (str (:result r))))
@@ -175,7 +190,7 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
    the group list is always fully keyed: live.diff falls back to positional
    matching when any sibling lacks a key (BUG-110), and a task moving between
    groups would then morph one group into another and duplicate its row."
-  [k title rows live]
+  [k title rows live activity]
   (if (empty? rows)
     [:div {:key (name k)}]
     (b/col {:gap :0 :key (name k)}
@@ -183,9 +198,9 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
             :class (t/sx {:font-size (t/text :sm) :font-weight (t/weight :semibold)
                           :color (t/color :muted) :padding (str (t/space :4) " " (t/space :5) " " (t/space :2))})}
        title " " (muted (str "· " (count rows)))]
-      (for [r rows] (task-row r (get live (:id r)))))))
+      (for [r rows] (task-row r (get live (:id r)) (get activity (:id r)))))))
 
-(defn overview [snap ui live]
+(defn overview [snap ui live activity]
   (b/col {:gap :0}
     (composer ui)
     (if (empty? (:tasks snap))
@@ -194,7 +209,7 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
                         :body "Describe what you want done above. Each prompt becomes a task you can watch, steer and answer."}))
       (b/col {:gap :0}
         (for [[k title] model/GROUPS]
-          (group-section k title (sort-by :id (get-in snap [:by-group k])) live))))))
+          (group-section k title (sort-by :id (get-in snap [:by-group k])) live activity))))))
 ```
 
 ## Task detail: the conversation, what it touched, and the next message
@@ -283,7 +298,7 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
                            :text-transform "none"})} who]
       (for [b (:content t)] (block-view b results)))))
 
-(defn task-screen [snap ui detail live]
+(defn task-screen [snap ui detail live activity]
   (let [id (:task ui)
         r (first (filter (fn [x] (= id (:id x))) (:tasks snap)))]
     (if (nil? r)
@@ -297,6 +312,11 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
           (let [results (results-by-id (:turns detail))]
             (for [t (visible-turns (:turns detail))] (turn-view t results)))
           (live-turn (get live id))
+          (when-let [line (doing-line (get activity id))]
+            [:div {:key "doing" :data-doing "1"
+                   :class (t/sx {:color (t/color :muted) :font-size (t/text :sm) :padding (str (t/space :2) " 0")
+                                 :font-family (t/tok :font :mono)})}
+             line])
           (when-not (contains? #{:done :failed :cancelled} (:status r))
             (b/box {:pad [:4 0]}
               (ui/field {:name :say :label "Message this task"
@@ -328,7 +348,7 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
 ```beam-lisp
 (defn view
   "The window's one view: (state) → hiccup. state = {:snap :ui :detail}."
-  [{:keys [snap ui detail live]}]
+  [{:keys [snap ui detail live activity]}]
   (th/install! (or (:theme ui) :dark))
   ;; the DOCUMENT scrolls, not an inner box: its position survives any patch,
   ;; and the header stays put with position:sticky
@@ -340,6 +360,6 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
     ;; unkeyed header it would graft the new screen onto the old node.
     [:div {:class (t/sx {:display "contents"})}
      (if (:task ui)
-       [:div {:key (str "task:" (:task ui))} (task-screen snap ui detail live)]
-       [:div {:key "overview"} (overview snap ui live)])]))
+       [:div {:key (str "task:" (:task ui))} (task-screen snap ui detail live activity)]
+       [:div {:key "overview"} (overview snap ui live activity)])]))
 ```

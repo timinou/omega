@@ -43,3 +43,19 @@
     (is (= "three little words" (get-in (last (loop/turns s id)) [:content 0 :text])))
     (stream/unwatch!)
     (task/stop-system! s)))
+
+(deftest a-tool-call-and-its-sh-publish-activity-then-clear-it
+  (stream/watch!)
+  (let [s (task/start-system (env/open) {:step (loop/scripted [(loop/call-tool "eval" {:code "(sh \"true\")\n:ok"}) (loop/say "ok")])
+                                         :tools cm/tools :root "/tmp"})
+        id (task/open! s {:goal "act"})
+        _ (task/await s id 10000)
+        got (loop [acc []]
+              (receive [:omega/activity t p] (recur (if (= t id) (conj acc p) acc))
+                       (after 300 acc)))]
+    (is (= ["eval" "(sh \"true\")"] [(:tool (first got)) (:code (first got))]))
+    (is (= "true" (:sh (second got))))
+    (is (= {:sh nil :sh-since nil} (nth got 2)))
+    (is (nil? (last got)))
+    (stream/unwatch!)
+    (task/stop-system! s)))
