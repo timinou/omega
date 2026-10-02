@@ -200,25 +200,88 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
 ## Task detail: the conversation, what it touched, and the next message
 
 ```beam-lisp
-(defn- block-view [b]
+(defn- first-line
+  "The first non-blank line of `s`, trimmed and capped: what a one-line summary of code should show."
+  [s]
+  (let [l (or (first (remove clojure.string/blank? (clojure.string/split-lines (str s)))) "")
+        l (clojure.string/trim l)]
+    (if (> (count l) 90) (str (subs l 0 90) "…") l)))
+
+(defn- n-lines [s] (count (clojure.string/split-lines (str s))))
+
+(defn- call-code
+  "What a tool call ran, as text: the eval's code, or the input map for any other tool."
+  [b]
+  (let [c (get-in b [:input :code])]
+    (if (string? c) c (pr-str (:input b)))))
+
+(defn- outcome
+  "The one-word fate of a call, from its result block (nil result = still running)."
+  [r]
+  (cond
+    (nil? r) {:text "running" :tone :muted}
+    (:error? r) {:text "✕ error" :tone :danger}
+    :else (let [n (n-lines (:content r))]
+            {:text (str "← " (if (= n 1) "1 line" (str n " lines"))) :tone :muted})))
+
+(def ^:private pre-class
+  {:font-family (t/tok :font :mono) :font-size (t/text :sm) :white-space "pre-wrap"})
+
+(defn- result-view [r]
+  [:pre {:class (t/sx (assoc pre-class :color (if (:error? r) (t/color :danger) (t/color :muted))
+                                       :max-height "240px" :overflow "auto"))}
+   (str (:content r))])
+
+(defn- call-view
+  "One tool call as ONE fold: summary = tool, first line of its code, outcome; body = the
+   code, then what it returned. Short results and errors open by default."
+  [b r]
+  (let [o (outcome r)
+        short? (and r (<= (n-lines (:content r)) 6))]
+    (p/disclosure {:open (boolean (and r (or (:error? r) short?)))
+                   :summary (b/row {:gap :2 :grow 1 :style {:min-width "0"}}
+                              (mono (or (:name b) "tool"))
+                              [:span {:class (t/sx {:color (t/color :muted) :font-size (t/text :sm)
+                                                    :overflow "hidden" :text-overflow "ellipsis" :white-space "nowrap"
+                                                    :flex "1" :min-width "0"})}
+                               (first-line (call-code b))]
+                              [:span {:class (t/sx {:color (th/tone-color (:tone o)) :font-size (t/text :sm) :white-space "nowrap"})}
+                               (:text o)])}
+      (b/col {:gap :2 :pad [:2 0 0 0]}
+        [:pre {:class (t/sx (assoc pre-class :background (t/color :surface-2) :padding (t/space :3)
+                                             :border-radius (t/radius :md)))}
+         (call-code b)]
+        (when r (result-view r))))))
+
+(defn- block-view
+  "`results`: tool-use id → its tool-result block, so a call and its answer show together."
+  [b results]
   (case (:type b)
     :text [:p {:class (t/sx {:white-space "pre-wrap" :max-width "72ch" :line-height "1.55"})} (:text b)]
-    :tool-use (p/disclosure {:summary (b/row {:gap :2} (mono "eval") (muted (let [c (str (get-in b [:input :code]))] (if (> (count c) 80) (str (subs c 0 80) "…") c))))}
-                [:pre {:class (t/sx {:font-family (t/tok :font :mono) :font-size (t/text :sm) :white-space "pre-wrap"
-                                     :background (t/color :surface-2) :padding (t/space :3) :border-radius (t/radius :md)})}
-                 (str (get-in b [:input :code]))])
-    :tool-result [:pre {:class (t/sx {:font-family (t/tok :font :mono) :font-size (t/text :sm) :white-space "pre-wrap"
-                                      :color (if (:error? b) (t/color :danger) (t/color :muted))
-                                      :max-height "240px" :overflow "auto"})}
-                  (str (:content b))]
+    :tool-use (call-view b (get results (:id b)))
+    :tool-result (result-view b)
     [:pre (pr-str b)]))
 
-(defn turn-view [t]
+(defn results-by-id
+  "Every tool-result block in `turns`, keyed by the tool-use id it answers."
+  [turns]
+  (into {} (for [t turns b (:content t) :when (= :tool-result (:type b))] [(:id b) b])))
+
+(defn visible-turns
+  "The turns worth their own header. A turn that only carries results already shown inside
+   their calls is dropped; an orphan result (its call is not in `turns`) still shows."
+  [turns]
+  (let [call-ids (set (for [t turns b (:content t) :when (= :tool-use (:type b))] (:id b)))]
+    (remove (fn [t] (and (seq (:content t))
+                         (every? (fn [b] (and (= :tool-result (:type b)) (contains? call-ids (:id b)))) (:content t))))
+            turns)))
+
+(defn turn-view [t results]
   (let [who (case (:role t) :user "You" :assistant "omega" :tool "result")]
     (b/col {:gap :2 :pad [:3 0] :key (str "turn-" (:n t))}
       [:div {:class (t/sx {:font-size (t/text :xs) :font-weight (t/weight :semibold) :color (t/color :muted)
                            :text-transform "none"})} who]
-      (for [b (:content t)] (block-view b)))))
+      (for [b (:content t)] (block-view b results)))))
 
 (defn task-screen [snap ui detail live]
   (let [id (:task ui)
@@ -231,7 +294,8 @@ liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
             (status-chip (:status r))
             [:h1 {:class (t/sx {:font-size (t/text :xl) :font-weight (t/weight :semibold)})} (:goal r)])
           (for [a (:asks r)] (ask-inline a))
-          (for [t (:turns detail)] (turn-view t))
+          (let [results (results-by-id (:turns detail))]
+            (for [t (visible-turns (:turns detail))] (turn-view t results)))
           (live-turn (get live id))
           (when-not (contains? #{:done :failed :cancelled} (:status r))
             (b/box {:pad [:4 0]}

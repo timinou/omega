@@ -87,3 +87,20 @@
       (is (includes? txt "omega · writing"))
       (is (includes? txt "I am thinking about")))
     (task/stop-system! s)))
+
+(deftest a-tool-call-and-its-result-are-one-fold
+  (let [turns [{:n 1 :role :user :content [{:type :text :text "go"}]}
+               {:n 2 :role :assistant :content [{:type :tool-use :id "a" :name "eval" :input {:code "(def x 1)\n(+ x 2)"}}
+                                                {:type :tool-use :id "b" :name "eval" :input {:code "(boom)"}}]}
+               {:n 3 :role :tool :content [{:type :tool-result :id "a" :content "3" :error? false}
+                                           {:type :tool-result :id "b" :content "no such fn" :error? true}]}
+               {:n 4 :role :tool :content [{:type :tool-result :id "zz" :content "orphan" :error? false}]}]
+        results (screens/results-by-id turns)]
+    (is (= #{"a" "b" "zz"} (set (keys results))))
+    ;; the all-results turn 3 folds into its calls; the orphan turn 4 keeps its header
+    (is (= [1 2 4] (map :n (screens/visible-turns turns))))
+    (let [txt (texts (:tree (t/with-sheet (fn [] (screens/turn-view (nth turns 1) results)))))]
+      (is (includes? txt "(def x 1)"))
+      (is (includes? txt "1 line"))
+      (is (includes? txt "✕ error"))
+      (is (includes? txt "no such fn")))))
