@@ -1,0 +1,82 @@
+(ns reap-test
+  (:require [omega.env :as env]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.reap :as reap]
+            [omega.codemode :as cm]))
+
+(defn- root! []
+  (let [r (str "/tmp/omega-reap-" (erlang/unique_integer (to-list [:positive])))]
+    (File/mkdir_p! r)
+    r))
+
+(defn- ev [code] (loop/call-tool "eval" {:code code}))
+(defn- echo-last [req] (loop/say (get-in (last (:messages req)) [:content 0 :content])))
+
+(defn- alive? [pid] (= 0 (elem (System/cmd "kill" (list "-0" pid) (list (tuple :stderr_to_stdout true))) 1)))
+
+(defn- pid-in [file]
+  ;; the backgrounded shell writes its pid; wait for it (a loaded host is slow)
+  (loop [n 0]
+    (if (and (File/exists? file) (seq (clojure.string/trim (File/read! file))))
+      (clojure.string/trim (File/read! file))
+      (if (> n 200) nil (do (Process/sleep 50) (recur (inc n)))))))
+
+(deftest a-killed-cell-takes-its-background-processes-with-it
+  ;; the eval backgrounds a long sleep (setsid, double fork: not a child of the
+  ;; cell any more), then blocks past its deadline
+  (let [r (root!)
+        s (task/start-system (env/open) {:step (loop/scripted [(ev "(sh \"(setsid sleep 300 & echo $! > bg.pid) ; sleep 0.2\") (Process/sleep 60000)") echo-last])
+                                         :tools cm/tools :root r :eval-timeout-ms 3000})
+        id (task/open! s {:goal "hang"})
+        pid (pid-in (str r "/bg.pid"))
+        v (task/await s id 30000)]
+    (is (some? pid))
+    (is (includes? (:result v) "the cell was killed"))
+    (is (includes? (:result v) "OS process(es) this eval started were killed with it"))
+    (is (not (alive? pid)))
+    (task/stop-system! s)))
+
+(deftest a-finished-task-takes-its-background-processes-with-it
+  (let [r (root!)
+        s (task/start-system (env/open) {:step (loop/scripted [(ev "(sh \"setsid sleep 300 > /dev/null 2>&1 & echo $! > bg.pid\") (done \"left a sleeper\")")])
+                                         :tools cm/tools :root r})
+        id (task/open! s {:goal "leave"})
+        v (task/await s id 30000)
+        pid (pid-in (str r "/bg.pid"))]
+    (is (= :done (:status v)))
+    (is (some? pid))
+    (is (not (alive? pid)))
+    (task/stop-system! s)))
+
+(deftest another-systems-processes-are-left-alone
+  ;; same task id, different system: the nonce keeps their tags apart
+  (let [r (root!)
+        mk (fn [] (task/start-system (env/open) {:step (loop/scripted [(ev "(sh \"setsid sleep 300 > /dev/null 2>&1 & echo $! > bg-$OMEGA_TASK_TAG.pid\")") echo-last])
+                                                 :tools cm/tools :root r}))
+        a (mk) b (mk)
+        ida (task/open! a {:goal "a"})
+        _ (task/await a ida 30000)
+        _ (task/stop-system! b)
+        f (first (filter (fn [f] (includes? f (:nonce a))) (File/ls! r)))
+        pid (pid-in (str r "/" f))]
+    (is (= ida "t-1"))
+    (is (some? pid))
+    (is (alive? pid))
+    (task/stop-system! a)
+    (Process/sleep 100)
+    (is (not (alive? pid)))))
+
+(deftest wait-returns-before-the-cell-deadline-and-says-so
+  (let [r (root!)
+        s (task/start-system (env/open)
+                             {:step (loop/by-goal {"parent" [(ev "(let [k (spawn \"slow kid\")] (wait k))") echo-last]
+                                                   "slow kid" [(ev "(Process/sleep 20000)") (loop/say "late")]})
+                              :tools cm/tools :root r :eval-timeout-ms 6000})
+        id (task/open! s {:goal "parent"})
+        v (task/await s id 30000)]
+    (is (= :idle (:status v)))
+    (is (includes? (:result v) ":pending true"))
+    (is (includes? (:result v) "call (wait"))
+    (is (not (includes? (:result v) "the cell was killed")))
+    (task/stop-system! s)))

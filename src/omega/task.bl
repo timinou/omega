@@ -39,7 +39,8 @@
   (:require [omega.env :as env]
             [omega.actor :as actor]
             [omega.trace :as tr]
-            [omega.loop :as loop]))
+            [omega.loop :as loop]
+            [omega.reap :as reap]))
 
 (def STATUSES
   {:open      "Created; the executor is starting."
@@ -151,7 +152,9 @@
     (when (= st :done)
       (tr/leave! e id {:kind :completion :subject id :text (str (:result outcome))}))
     (when (terminal? st)
-      (tr/release-claims! e id))
+      (tr/release-claims! e id)
+      ;; what the task started in the shell ends with it (omega.reap)
+      (reap/reap-task! (:nonce sys) id))
     (when (= st :failed)
       (when-let [owner (:owner (view sys id))]
         (actor/send! e {:from id :to owner :kind :note
@@ -267,6 +270,7 @@
           (when-let [tp (:turn s)] (erlang/exit tp :kill)))
         (DynamicSupervisor/terminate_child (:sup sys) pid)))
     (tr/release-claims! (:env sys) id)
+    (reap/reap-task! (:nonce sys) id)
     (set-status! sys id :cancelled))
   :ok)
 
@@ -295,7 +299,8 @@
     (doseq [pid (vals @(:executors sys))]
       (when (Process/alive? pid) (DynamicSupervisor/terminate_child (:sup sys) pid)))
     (erlang/unlink (:sup sys))
-    (erlang/exit (:sup sys) :shutdown))
+    (erlang/exit (:sup sys) :shutdown)
+    (reap/reap-system! (:nonce sys)))
   :ok)
 
 ;; ── the system ──────────────────────────────────────────────────────────
@@ -311,5 +316,8 @@
     ;; :open! and :await ride in the system so eval code (spawn, wait) can reach them
     ;; without omega.prelude requiring omega.task — the dependency stays one-way.
     (merge {:env e :sup sup :executors (atom {})
-            :open! (fn [s m] (open! s m)) :await (fn [s id ms] (await s id ms))}
-           (select-keys opts [:step :tools :hooks :system-prompt :max-steps :root]))))
+            ;; tags every OS process this system's tasks start (omega.reap)
+            :nonce (reap/nonce)
+            :open! (fn [s m] (open! s m)) :await (fn [s id ms] (await s id ms))
+            :status (fn [s id] (status s id))}
+           (select-keys opts [:step :tools :hooks :system-prompt :max-steps :root :eval-timeout-ms]))))

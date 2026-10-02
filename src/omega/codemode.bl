@@ -37,7 +37,8 @@
 
 (ns omega.codemode
   (:require [harness]
-            [omega.prelude]))
+            [omega.prelude]
+            [omega.reap :as reap]))
 
 (def TIMEOUT-MS 120000)
 (def HEAP-WORDS
@@ -48,20 +49,34 @@
 
 (defn- preamble
   "Prepended to every eval: declare the namespace with the prelude referred
-   (idempotent: an existing ns keeps its definitions), bind the task context,
-   and cap the heap."
-  [task]
+   (idempotent: an existing ns keeps its definitions), bind the task context
+   (the cell's reap tag, its deadline), and cap the heap."
+  [task cell deadline]
   (str "(ns " (task-ns task) " (:require [omega.prelude :refer :all] [clojure.string :as str]))\n"
        "(erlang/process_flag :max_heap_size {:size " HEAP-WORDS " :kill true :error_logger false})\n"
-       "(omega.prelude/-bind! " (pr-str task) ")\n"))
+       "(omega.prelude/-bind! " (pr-str task) " " (pr-str cell) " " deadline ")\n"))
+
+(defn- killed?
+  "Whether eval-cell's error says the cell process was killed (deadline or heap)."
+  [err]
+  (and (string? err) (or (includes? err "the cell was killed") (includes? err "the evaluating process exited"))))
 
 (defn run-eval
   "Evaluate `code` for `task` with system `sys`. {:ok text} | {:error text}."
   [sys task code]
   (let [_ (omega.prelude/-register! task sys)
+        timeout (or (:eval-timeout-ms sys) TIMEOUT-MS)
+        cell (str task "." (erlang/unique_integer (to-list [:positive])))
+        deadline (+ (erlang/monotonic_time :millisecond) timeout)
         r (harness/eval-cell {:ns (task-ns task) :root (or (:root sys) (File/cwd!)) :path "eval"}
-                             (str (preamble task) code)
-                             (or (:eval-timeout-ms sys) TIMEOUT-MS))
+                             (str (preamble task cell deadline) code)
+                             timeout)
+        ;; a killed cell takes what it started with it: a backgrounded `sh`
+        ;; must not outlive the program that was waiting on it
+        reaped (if (killed? (:error r)) (reap/reap-cell! (:nonce sys) cell) 0)
+        r (if (pos? reaped)
+            (update r :error str "\n" reaped " OS process(es) this eval started were killed with it.")
+            r)
         out (:stdout r)
         out (if (> (count out) 20000) (str (subs out 0 20000) "\n…[stdout truncated]") out)]
     (cond
@@ -75,11 +90,14 @@
        "Functions available (already referred):\n"
        "  (read path) → string · (write path s) · (edit path [{:old \"…\" :new \"…\"} …]) exact, all-or-nothing\n"
        "  (ls dir) · (glob \"src/**/*.bl\") · (sh \"cmd\") → {:out :exit}\n"
-       "  (spawn goal) → task-id · (wait id) → {:status :result} · (send to kind text) kind :note|:ask|:steer\n"
+       "  (spawn goal) → task-id · (wait id) → {:status :result}, or {:pending true} if still running when this eval nears its deadline: wait again in a later eval\n"
+       "  (send to kind text) kind :note|:ask|:steer\n"
        "  (trace kind subject text) leave a mark for other tasks · (traces {:subject-prefix p}) read marks\n"
        "  (done summary) close this task when the goal is fully achieved\n"
        "Also: clojure.string as str, Elixir/Erlang modules directly (String/split, File/read!). "
-       "println shows intermediate values; the last form's value is returned. Paths are relative to the project root."))
+       "println shows intermediate values; the last form's value is returned. Paths are relative to the project root. "
+       "An eval is killed after " (quot TIMEOUT-MS 1000) "s, and every OS process it started (even backgrounded) dies with it; "
+       "processes a task starts also end when the task ends."))
 
 (def eval-tool
   {:name "eval"

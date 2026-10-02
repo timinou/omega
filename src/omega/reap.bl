@@ -1,0 +1,76 @@
+; omega/reap.bl — OS processes live no longer than the cell or task that started them.
+;
+; `(sh …)` hands its child two environment tags. Every descendant inherits
+; them — backgrounded with `&`, `setsid`, double-forked, all of it — so a reap
+; finds the whole tree by tag, without tracking pids:
+;
+;   OMEGA_TASK_TAG=<nonce>:<task>     reaped when the task ends, or its system stops
+;   OMEGA_CELL_TAG=<nonce>:<cell>     reaped when the eval cell is killed (deadline, heap)
+;
+; <nonce> is per task system, so an omega run INSIDE a task (testing omega
+; itself) tags its own children with its own nonce and can never reap its
+; parent's processes; the parent's reap does take the nested omega down.
+; A child that clears its environment (`env -i`) escapes; nothing else does.
+
+(ns omega.reap)
+
+(def TASK-VAR "OMEGA_TASK_TAG")
+(def CELL-VAR "OMEGA_CELL_TAG")
+
+(defn nonce
+  "A tag prefix unique to this VM and moment."
+  []
+  (str (System/pid) "." (erlang/unique_integer (to-list [:positive]))))
+
+(defn env-tags
+  "The `{:env …}` tuples tagging a child for `nonce`, `task` and (optional) `cell`."
+  [nonce task cell]
+  (cond-> []
+    (and nonce task) (conj (tuple TASK-VAR (str nonce ":" task)))
+    (and nonce cell) (conj (tuple CELL-VAR (str nonce ":" cell)))))
+
+(defn- scan-script
+  "sh that prints the pid of every process whose environment holds the entry
+   `entry` (whole, or as a prefix when `prefix?`), except this VM and itself.
+   One port call: no file-server round trip per process."
+  [entry prefix?]
+  ;; ONE grep over every environ (NUL-separated entries: -z): a per-process
+  ;; loop costs seconds on a busy host. Unreadable environs (other users) are
+  ;; skipped silently; they cannot hold our tags anyway.
+  (str "grep -lsz " (if prefix? "" "-x ") "-F -e " (pr-str entry) " /proc/[0-9]*/environ"
+       " | sed -n 's,^/proc/\\([0-9]*\\)/environ$,\\1,p'"
+       " | grep -vx -e " (System/pid) " -e $$"))
+
+(defn- scan [entry prefix?]
+  (let [out (elem (System/cmd "sh" (list "-c" (scan-script entry prefix?))) 0)]
+    (vec (remove empty? (clojure.string/split-lines out)))))
+
+(defn tagged
+  "Pids of live processes carrying tag `var`=`value`."
+  [var value]
+  (scan (str var "=" value) false))
+
+(defn- reap! [entry prefix?]
+  ;; twice: a process that forked while the first sweep ran is caught by the second
+  (let [kill! (fn [pids] (doseq [p pids] (System/cmd "kill" (list "-9" p) (list (tuple :stderr_to_stdout true)))) pids)
+        a (kill! (scan entry prefix?))
+        b (kill! (scan entry prefix?))]
+    (count (distinct (concat a b)))))
+
+(defn- reap-tag! [var value] (reap! (str var "=" value) false))
+
+(defn reap-task!
+  "Kill every process task `task` started (system `nonce`). Returns how many."
+  [nonce task]
+  (if (and nonce task) (reap-tag! TASK-VAR (str nonce ":" task)) 0))
+
+(defn reap-cell!
+  "Kill every process eval cell `cell` started (system `nonce`). Returns how many."
+  [nonce cell]
+  (if (and nonce cell) (reap-tag! CELL-VAR (str nonce ":" cell)) 0))
+
+(defn reap-system!
+  "Kill every process any task of system `nonce` started. Returns how many."
+  [nonce]
+  (if nonce (reap! (str TASK-VAR "=" nonce ":") true) 0))
+

@@ -12,7 +12,8 @@
 (ns omega.prelude
   (:require [omega.env :as env]
             [omega.actor :as actor]
-            [omega.trace :as tr]))
+            [omega.trace :as tr]
+            [omega.reap :as reap]))
 
 ;; ── context ─────────────────────────────────────────────────────────────
 
@@ -20,7 +21,22 @@
 (def ^:private DONE (atom {}))
 
 (defn -register! [task sys] (swap! SYSTEMS assoc task sys) task)
-(defn -bind! [task] (erlang/put :omega/task task) task)
+(defn -bind!
+  "Bind the cell process to `task`; `cell` tags the OS processes it starts,
+   `deadline` (monotonic ms) is when the cell will be killed."
+  ([task] (-bind! task nil nil))
+  ([task cell deadline]
+   (erlang/put :omega/task task)
+   (erlang/put :omega/cell cell)
+   (erlang/put :omega/deadline deadline)
+   task))
+
+(defn- now-ms [] (erlang/monotonic_time :millisecond))
+
+(defn- ms-left
+  "Milliseconds until this cell is killed, keeping `margin` to report back; nil outside a cell."
+  [margin]
+  (when-let [d (erlang/get :omega/deadline)] (max 0 (- d (now-ms) margin))))
 
 (defn- task [] (or (erlang/get :omega/task) (throw (ex-info "not inside a task eval" {}))))
 (defn- sys [] (get @SYSTEMS (task)))
@@ -96,8 +112,11 @@
   ;; TERM=dumb + NO_COLOR: tools think they're in a pipe, so output carries no
   ;; escape codes or terminfo warnings into the model's context
   (let [r (System/cmd "sh" (list "-c" cmd) (list (tuple :stderr_to_stdout true) (tuple :cd (root))
-                                                 (tuple :env (list (tuple "TERM" "dumb") (tuple "NO_COLOR" "1")
-                                                                   (tuple "PAGER" "cat") (tuple "GIT_PAGER" "cat")))))]
+                                                 ;; the reap tags: whatever this starts, even in the
+                                                 ;; background, dies with its cell or task (omega.reap)
+                                                 (tuple :env (to-list (concat [(tuple "TERM" "dumb") (tuple "NO_COLOR" "1")
+                                                                               (tuple "PAGER" "cat") (tuple "GIT_PAGER" "cat")]
+                                                                              (reap/env-tags (:nonce (sys)) (task) (erlang/get :omega/cell)))))))]
     {:out (elem r 0) :exit (elem r 1)}))
 
 ;; ── tasks ───────────────────────────────────────────────────────────────
@@ -110,12 +129,19 @@
      ((:open! s) s {:goal goal :owner (task) :by (task) :scope scope}))))
 
 (defn wait
-  "Block until task `id` is done/idle/failed; {:status :result}. Spends no tokens."
+  "Block until task `id` is done/idle/failed: {:status :result}. Spends no tokens.
+   Never outlives this eval: it waits at most `ms` AND until shortly before the
+   cell's deadline, then returns {:status :running :pending true …} — the task
+   goes on; (wait id) again in a later eval."
   ([id] (wait id 600000))
   ([id ms]
-   (let [s (sys) v ((:await s) s id ms)]
+   (let [s (sys)
+         left (ms-left 3000)
+         ms (if left (min ms left) ms)
+         v ((:await s) s id ms)]
      (if (= :timeout v)
-       (throw (ex-info (str "timed out waiting on " id) {:task id}))
+       {:status ((:status s) s id) :result nil :pending true
+        :note (str id " is still working after " (quot ms 1000) "s; call (wait " (pr-str id) ") again in your next eval")}
        (select-keys v [:status :result])))))
 
 (defn send
