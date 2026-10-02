@@ -1,0 +1,48 @@
+; omega/stream.bl — live model output, as an EPHEMERAL broadcast.
+;
+; A turn's final content is a fact (omega.loop records it). The tokens that
+; build it are not: they are worth seeing while they arrive and worthless
+; after, so they never touch the fact log. They travel over OTP `pg` process
+; groups instead — one group for everything, joined by any viewer:
+;
+;   (stream/watch!)                     the calling process joins
+;   receive [:omega/delta task-id d]    d = {:turn n :block i :kind :text|:tool-input :text s}
+;   receive [:omega/turn-done task-id]  the turn's content is now a fact
+;
+; Publishing is fire-and-forget to every member; a slow or dead viewer can
+; never stall a model call. Coalescing is the viewer's business.
+
+(ns omega.stream)
+
+(def GROUP :omega/stream)
+
+(defn- ensure-pg
+  "Start the default pg scope once, UNLINKED (start_link would tie it to
+   whichever process happened to call first, and it would die with it).
+   NB: erlang/whereis answers :undefined, not nil, for an unregistered name."
+  []
+  (when (= :undefined (erlang/whereis :pg))
+    (try (pg/start :pg) (catch _ nil)))
+  :ok)
+
+(defn watch!
+  "Join the stream group: this process now receives every task's deltas."
+  []
+  (ensure-pg)
+  (pg/join GROUP (erlang/self))
+  :ok)
+
+(defn unwatch! []
+  (ensure-pg)
+  (pg/leave GROUP (erlang/self))
+  :ok)
+
+(defn publish!
+  "Send `msg` to every watcher."
+  [msg]
+  (ensure-pg)
+  (doseq [p (pg/get_members GROUP)] (erlang/send p msg))
+  :ok)
+
+(defn delta! [task d] (publish! [:omega/delta task d]))
+(defn turn-done! [task] (publish! [:omega/turn-done task]))

@@ -22,12 +22,14 @@ cd /some/project
 Flags: `--offline`, `--jev`, `--notify`, `--cassette PATH` (record/replay the model),
 `--db DIR` (keep the fact log on disk).
 
-The desktop window (loom over wry):
+The UI is a beam-lisp `live.app` (server-rendered, keyed patches over a socket,
+streaming tokens), shown in a native wry window or any browser:
 
 ```sh
 cd /some/project && ~/code/undefine/omega/bin/omega-ui        # live: type a goal, Enter = a task
-~/code/undefine/omega/bin/omega-ui --demo [--light]            # offline scripted world
-~/code/undefine/omega/bin/omega-shot --demo                    # open → screenshot → close (niri); prints the png path
+~/code/undefine/omega/bin/omega-ui --demo                      # offline scripted world
+~/code/undefine/omega/bin/omega-ui --no-window                 # serve only → http://127.0.0.1:4747
+~/code/undefine/omega/bin/omega-headless                       # the real UI, off-screen: scenarios + screenshots
 ```
 
 ## Requirements
@@ -64,7 +66,9 @@ cd /some/project && ~/code/undefine/omega/bin/omega-ui        # live: type a goa
 | `src/omega/ui/model.bl` | the env projected for screens: task rows grouped by urgency, asks, details |
 | `src/omega/ui/theme.bl` | design system as data: dark/light (WCAG AA tested), status = glyph + word + tone |
 | `src/omega/ui/screens.bl.md` | overview + task screens as pure `state → hiccup`, with the design reasoning |
-| `src/omega/ui/desktop.bl`, `bin/omega-ui` | the window: env commits + page events + tick → reducer → view |
+| `src/omega/ui/web.bl`, `bin/omega-ui` | the UI as a `live.app`: env + ephemeral stream conn observed, intents = task verbs |
+| `src/omega/stream.bl`, `src/omega/llm/sse.bl` | streaming: SSE parsed and folded purely; deltas broadcast over `pg`, never facts |
+| `src/omega/ui/probe.bl`, `bin/omega-headless`, `test/headless/ui.bl` | the real window in a private headless sway: drive, query, wait-for, screenshot |
 | `research/domain/` | the research basis (15 literate notes) and the decision register |
 | `!tasks/plans/PLAN-001-…` | the decisions this version implements |
 
@@ -75,5 +79,10 @@ cd /some/project && ~/code/undefine/omega/bin/omega-ui        # live: type a goa
 - Not in core: `ffirst`, `take-last`, `false?`, `read-string` (data), `requiring-resolve`, `#'ns/private-var`.
 - **Never name a public fn after a core fn** (`run!`, `count`, …): a qualified call runs CORE on the first, cold call (filed upstream as beam-lisp BUG-109). omega's `run!` became `turn!`.
 - `json/encode` refuses vectors (tuples), so use `omega.llm/jsonable`.
+- `(range a b step)` and `vector` are missing; `erlang/whereis` returns `:undefined`; `re-find`/`re-seq`
+  resolve only in some load contexts (use `Regex/run`/`Regex/scan`). A top-level `swap!` into a registry
+  may not have run when another ns calls in (demand loading): keep registries as fns returning literals.
+- live.diff honours `:key` only when every sibling is keyed (BUG-110): key whole lists, empty groups included.
+- wry: one window per VM, and GTK binds `WAYLAND_DISPLAY` at the first window.
 - Datom: a transaction map needs `:db/id`; a lookup-ref is not accepted as a ref value
   (resolve it first); negation is `[:not …]` / `missing?`.

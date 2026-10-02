@@ -6,7 +6,7 @@
             [omega.codemode :as cm]
             [omega.ui.model :as model]
             [omega.ui.screens :as screens]
-            [omega.ui.desktop :as desk]
+            [omega.ui.web :as web]
             [loom.transform :as x]
             [loom.token :as t]))
 
@@ -37,24 +37,24 @@
       (is (= [b] (map :id (get-in snap [:by-group :finished]))))
       (is (includes? (texts tree) "Ship it?"))
       (is (seq (x/find-nodes (fn [n] (and (vector? n) (map? (second n))
-                                         (= :answer (first (get (second n) :on-click)))))
+                                         (= [:intent :answer] (vec (take 2 (get (second n) :on-click))))))
                              tree))
           "the ask renders with answer buttons"))
     (task/stop-system! s)))
 
-(deftest the-reducer-drives-the-system-through-its-verbs
+(deftest intents-drive-the-system-through-its-verbs
   (let [s (sys (loop/by-goal {"hello" [(loop/call-tool "eval" {:code "(send \"human:me\" :ask \"ok?\")"})
                                        (fn [req] (loop/say (str "got " (get-in (last (:messages req)) [:content 0 :text]))))]}))
-        r (desk/reducer s)
-        st (r {:ui {}} [:new-task "hello"])
-        id (:id (first (:tasks (:snap st))))]
-    (is (= "hello" (:goal (task/view s id))))
-    (task/await s id 10000)
-    (let [ask (first (actor/inbox (:env s) "human:me"))
-          st2 (r (r st [:open id]) [:answer (:id ask) "yes"])]
-      (is (= id (get-in st2 [:ui :task])))
-      (Process/sleep 300)
-      (is (includes? (:result (task/await s id 10000)) "yes")))
+        is (web/intents s)]
+    ((:new-task is) nil {:value "  hello  "} "human:me")
+    ((:new-task is) nil {:value "   "} "human:me")
+    (let [id (:id (first (task/all s)))]
+      (is (= ["hello"] (map :goal (task/all s))) "trimmed; blank goals ignored")
+      (task/await s id 10000)
+      (let [ask (first (actor/inbox (:env s) "human:me"))]
+        ((:answer is) nil {:msg (:id ask) :choice "yes"} "human:me")
+        (Process/sleep 300)
+        (is (includes? (:result (task/await s id 10000)) "yes"))))
     (task/stop-system! s)))
 
 (deftest the-task-screen-shows-turns-and-a-composer
@@ -68,27 +68,22 @@
       (is (includes? txt "Message this task")))
     (task/stop-system! s)))
 
-(deftest page-events-arrive-nested-and-are-normalized
-  (is (= [:new-task "hi"] (desk/normalize [[:new-task] "hi"])))
-  (is (= [:say "t-1" "more"] (desk/normalize [[:say "t-1"] "more"])))
-  (is (= [:open "t-1"] (desk/normalize [:open "t-1"]))))
+(deftest streamed-deltas-fold-and-a-new-turn-replaces-the-partial
+  (let [lt (-> nil
+               (web/apply-delta {:turn 2 :block 0 :kind :text :text "hel"})
+               (web/apply-delta {:turn 2 :block 0 :kind :text :text "lo"})
+               (web/apply-delta {:turn 2 :block 1 :kind :tool-input :text "{\"code\""}))]
+    (is (= "hello" (get-in lt [:blocks 0 :text])))
+    (is (= :tool-input (get-in lt [:blocks 1 :kind])))
+    (is (= {:turn 4 :blocks {0 {:kind :text :text "x"}}}
+           (web/apply-delta lt {:turn 4 :block 0 :kind :text :text "x"})))))
 
-(deftest the-reducer-accepts-the-real-page-shape
-  (let [s (sys (loop/scripted [(loop/say "ok")]))
-        st ((desk/reducer s) {:ui {}} [[:new-task] "from the page"])]
-    (is (= ["from the page"] (map :goal (:tasks (:snap st)))))
-    (task/stop-system! s)))
-
-(deftest a-keystroke-does-not-re-render-but-later-renders-keep-the-draft
-  (let [s (sys (loop/scripted [(loop/say "ok")]))
-        r (desk/reducer s)
-        st0 (r {:ui {}} [:tick])
-        st1 (r st0 [[:draft :goal] "half-typ"])]
-    (is (identical? st0 st1) "a draft returns the same state: loom skips the render")
-    (let [st2 (r st1 [:tick])
-          tree (render st2)]
-      (is (= "half-typ" (get-in st2 [:ui :drafts :goal])) "the next render carries the draft")
-      (is (seq (x/find-nodes (fn [n] (and (vector? n) (map? (second n)) (= "half-typ" (:value (second n))))) tree))))
-    (let [st3 (r st1 [[:new-task] "half-typed goal"])]
-      (is (nil? (get-in st3 [:ui :drafts :goal])) "submit clears the draft"))
+(deftest the-task-screen-shows-the-turn-being-written
+  (let [s (sys (loop/scripted [(loop/say "done")]))
+        id (task/open! s {:goal "g"})]
+    (task/await s id 10000)
+    (let [live {id {:turn 9 :blocks {0 {:kind :text :text "I am thinking about"}}}}
+          txt (texts (render {:snap (model/snapshot (:env s)) :ui {:task id} :detail (model/task-detail s id) :live live}))]
+      (is (includes? txt "omega · writing"))
+      (is (includes? txt "I am thinking about")))
     (task/stop-system! s)))

@@ -1,0 +1,156 @@
+(ns headless.ui
+  "omega's UI in a real window, headless: a private sway output, real WebKit,
+   the real live.app and live/client.js.
+
+   wry allows ONE window per VM (gtk's main context belongs to the first
+   window thread), so these are scenarios, not deftests: `bin/omega-headless`
+   runs each in its own VM and reports. Skipped when sway or grim is absent."
+  (:require [omega.ui.probe :as probe]
+            [omega.ui.web :as web]
+            [omega.env :as env]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.codemode :as cm]
+            [omega.actor]
+            [omega.llm]))
+
+(def available? true) ; bin/omega-headless checks sway + grim before starting
+
+
+(def checks (atom []))
+
+(defmacro is
+  "Record a check; the message defaults to the form itself, so a failure names
+   what was checked."
+  ([form] `(is ~form ~(pr-str form)))
+  ([form msg] `(let [v# (try ~form (catch e# (str "threw: " (ex-message e#))))]
+                 (swap! checks conj {:ok (= true (boolean (and v# (not (and (string? v#) (starts-with? v# "threw: "))))))
+                                     :msg (if (and (string? v#) (starts-with? v# "threw: ")) (str ~msg " — " v#) ~msg)})
+                 v#)))
+
+(defn- with-ui [step f]
+  (when available?
+    (let [s (probe/attach)
+          sys (task/start-system (env/open) {:step step :tools cm/tools :root "/tmp"})
+          ui (web/start! sys {:port :free})
+          win (probe/open s (:url ui))]
+      (try (f sys ui win)
+           (finally (probe/close win) (task/stop-system! sys))))))
+
+(defn typing-a-goal-and-enter-opens-a-task []
+  (with-ui (loop/scripted [(loop/say "on it")])
+    (fn [sys ui win]
+      (is (= "omega" (probe/query win "document.title")))
+      (is (= true (probe/type-in win "#f-goal" "write a haiku" true)))
+      (probe/wait-for win "document.querySelectorAll('[data-task]').length > 0")
+      (is (= ["write a haiku"] (map :goal (task/all sys))))
+      (is (= "" (probe/query win "document.getElementById('f-goal').value")) "the composer clears"))))
+
+(defn updates-patch-the-page-keeping-scroll-and-styles []
+  (with-ui (loop/scripted [(loop/say "short")])
+    (fn [sys ui win]
+      (doseq [i (range 30)] (task/open! sys {:goal (str "task " i)}))
+      (probe/wait-for win "document.querySelectorAll('[data-task]').length >= 30" 30000)
+      (is (= 300 (probe/scroll win 300)) "the overview is long enough to scroll")
+      (doseq [i (range 3)] (task/open! sys {:goal (str "late " i)}))
+      (probe/wait-for win "document.body.innerText.indexOf('late 2') >= 0" 30000)
+      (is (= 300 (probe/scroll-top win)) "keyed patches keep the scroll position")
+      (is (= 0 (probe/styled? win)) "every class on the page has its rule")
+      (is (includes? (str (probe/text win)) "late 2") "the new rows arrived"))))
+
+(defn answering-an-ask-from-the-window-reaches-the-task []
+  (with-ui (loop/scripted [(loop/call-tool "eval" {:code "(send \"human:me\" :ask \"Ship it?\")"})
+                           (loop/say "asked")
+                           (fn [req] (loop/say (str "got " (get-in (last (:messages req)) [:content 0 :text]))))])
+    (fn [sys ui win]
+      (let [id (task/open! sys {:goal "ask"})]
+        (task/await sys id 30000)
+        (probe/wait-for win "[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Yes')")
+        (is (= true (probe/click win "button" "Yes")))
+        (loop [n 0] (when (and (< n 100) (not (includes? (str (:result (task/view sys id))) "yes"))) (Process/sleep 200) (recur (inc n))))
+        (let [res (str (:result (task/await sys id 10000)))]
+          (is (includes? res "yes") (str "the reply reached the task; result was " (pr-str res)))
+          (is (some (fn [m] (= :reply (:kind m))) (omega.actor/messages (:env sys) id)) "a :reply message exists"))))))
+
+(defn streamed-tokens-appear-and-are-replaced-by-the-recorded-turn []
+  (with-ui (loop/scripted [(fn [req] (doseq [w ["slowly " "arriving " "words"]]
+                                       ((:on-delta req) {:block 0 :kind :text :text w}) (Process/sleep 1500))
+                             (loop/say "slowly arriving words"))])
+    (fn [sys ui win]
+      (let [id (task/open! sys {:goal "stream"})]
+        (probe/wait-for win (str "document.querySelector('[data-task=\"" id "\"]')"))
+        (is (= true (probe/click win (str "[data-task=\"" id "\"]"))) "opened the task")
+        (is (probe/wait-for win "document.body.innerText.indexOf('writing') >= 0")
+            "the live block shows while tokens arrive")
+        (task/await sys id 30000)
+        (probe/wait-for win "document.body.innerText.indexOf('writing') < 0")
+        (is (not (includes? (str (probe/text win)) "writing")) "and goes once the turn is a fact")
+        (is (includes? (str (probe/text win)) "slowly arriving words") "the recorded turn shows")
+        (is (= 0 (probe/styled? win)) "every class has its rule")))))
+
+(defn live-model-streams-into-the-window
+  "Real Sonnet via the proxy: tokens visible mid-turn, then the recorded turn.
+   Writes .local/shots/live-stream-{mid,end}.png for a human to look at."
+  []
+  (let [home "/home/user/code/undefine/omega"
+        step (omega.llm/step (omega.llm/from-env home))]
+    (with-ui step
+      (fn [sys ui win]
+        (let [id (task/open! sys {:goal "In about 150 words, explain what a write-ahead log is. Prose only, no tools."})]
+          (probe/wait-for win (str "document.querySelector('[data-task=\"" id "\"]')"))
+          (probe/click win (str "[data-task=\"" id "\"]"))
+          (let [seen (loop [n 0]
+                       (let [t (str (probe/text win))]
+                         (if (or (includes? t "writing") (> n 60)) (includes? t "writing") (do (Process/sleep 250) (recur (inc n))))))]
+            (is seen "tokens were visible while the model was writing"))
+          (is (= 0 (probe/query win "document.querySelectorAll('[data-task]').length"))
+              "the detail screen holds no overview rows (a clean screen switch)")
+          (probe/shot win (str home "/.local/shots/live-stream-mid.png"))
+          (let [v (task/await sys id 120000)]
+            (is (= :idle (:status v)) "the turn completed")
+            (probe/wait-for win "document.body.innerText.indexOf('writing') < 0")
+            (is (not (includes? (str (probe/text win)) "writing")) "the live block gave way to the recorded turn")
+            (is (= 0 (probe/styled? win)) "every class has its rule")
+            (probe/shot win (str home "/.local/shots/live-stream-end.png"))))))))
+
+(defn rows-stay-in-sync-as-a-task-moves-groups
+  "A task moving between urgency groups (waiting → running → needs-you) must
+   leave exactly one row: the keyed patch MOVES it, never duplicates it."
+  []
+  (with-ui (loop/scripted [(fn [req] (doseq [w ["a " "b " "c " "d"]] ((:on-delta req) {:block 0 :kind :text :text w}) (Process/sleep 500)) (loop/say "a b c d"))])
+    (fn [sys ui win]
+      (let [id (task/open! sys {:goal "moves groups"})]
+        (task/await sys id 30000)
+        (probe/wait-for win "document.body.innerText.indexOf('your turn') >= 0")
+        (let [rows (probe/query win "[...document.querySelectorAll('[data-task]')].map(e=>e.getAttribute('data-task')+':'+e.textContent.slice(0,30))")]
+          (is (= 1 (count rows)) (str "exactly one row for the task; got " (pr-str rows))))))))
+
+(defn it-can-see-itself []
+  (with-ui (loop/scripted [(loop/say "x")])
+    (fn [sys ui win]
+      (let [p (probe/shot win (str "/tmp/omega-probe-shot-" (erlang/unique_integer (to-list [:positive])) ".png"))]
+        (is (> (:size (File/stat! p)) 5000) "a real, non-empty PNG")))))
+
+;; ── the registry: a literal map, so it exists whenever a fn here runs ──
+;; (beam-lisp demand-loads: top-level SIDE EFFECTS like swap! into a registry
+;;  did not run when another ns only called a fn here — observed 2026-10-02)
+(defn scenarios []
+  {"typing-a-goal-and-enter-opens-a-task" typing-a-goal-and-enter-opens-a-task
+   "updates-patch-the-page-keeping-scroll-and-styles" updates-patch-the-page-keeping-scroll-and-styles
+   "answering-an-ask-from-the-window-reaches-the-task" answering-an-ask-from-the-window-reaches-the-task
+   "streamed-tokens-appear-and-are-replaced-by-the-recorded-turn" streamed-tokens-appear-and-are-replaced-by-the-recorded-turn
+   "it-can-see-itself" it-can-see-itself
+   "rows-stay-in-sync-as-a-task-moves-groups" rows-stay-in-sync-as-a-task-moves-groups
+   "live-model-streams-into-the-window" live-model-streams-into-the-window})
+
+(defn scenario-names [] (sort (keys (scenarios))))
+
+(defn run-scenario!
+  "Run scenario `sym` (a var name in this ns); print one EDN result line."
+  [sym]
+  (let [f (or (get (scenarios) sym) (fn [] (throw (ex-info (str "no scenario " sym) {}))))
+        r (try (f) :ran (catch e (str "error: " (ex-message e))))
+        cs @checks
+        failed (remove :ok cs)]
+    (println (pr-str {:scenario sym :result (if (and (= :ran r) (empty? failed)) :pass :fail)
+                      :checks (count cs) :failed (vec (map :msg failed)) :error (when (not= :ran r) r)}))))

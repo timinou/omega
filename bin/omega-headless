@@ -1,0 +1,33 @@
+#!/bin/bash
+# bin/omega-headless — run omega's real UI in a private headless Wayland session.
+#   bin/omega-headless                 every scenario in test/headless/ui.bl
+#   bin/omega-headless <scenario>…     just those
+#   OMEGA_PROBE_KEEP=1                 keep the session's screenshots dir
+# Nothing appears on your desktop. One VM per scenario (wry: one window per VM),
+# each STARTED with WAYLAND_DISPLAY = the headless sway (GTK binds it at startup).
+set -u
+ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
+for b in sway grim; do command -v $b >/dev/null || { echo "omega-headless: needs $b"; exit 2; }; done
+W=${OMEGA_PROBE_WIDTH:-1200}; H=${OMEGA_PROBE_HEIGHT:-700}
+DIR=$(mktemp -d /tmp/omega-headless-XXXX)
+printf 'output HEADLESS-1 resolution %sx%s position 0 0\ndefault_border none\nfocus_follows_mouse no\nseat * hide_cursor 1\nswaybg_command -\n' $W $H > "$DIR/sway.cfg"
+WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman WAYLAND_DISPLAY= \
+  setsid sway -d -c "$DIR/sway.cfg" > "$DIR/sway.log" 2>&1 < /dev/null 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &
+SWAY=$!
+trap '/bin/kill $SWAY 2>/dev/null; [ -z "${OMEGA_PROBE_KEEP:-}" ] && rm -rf "$DIR"' EXIT
+for i in $(seq 1 300); do D=$(grep -o "Running compositor on wayland display '[^']*'" "$DIR/sway.log" | cut -d"'" -f2); [ -n "$D" ] && break; sleep 0.1; done
+[ -z "${D:-}" ] && { OMEGA_PROBE_KEEP=1; echo "omega-headless: sway did not start in 30s; see $DIR/sway.log"; exit 2; }
+scenarios=${*:-$(sed -n '/(defn scenarios/,/})/p' "$ROOT/test/headless/ui.bl" | grep -o '"[a-z0-9-]*"' | tr -d '"')}
+pass=0; fail=0
+for s in $scenarios; do
+  entry=$(mktemp --suffix=.bl)
+  printf '(ns headless.run (:require [headless.ui :as h]))\n(h/scenario-names)\n(h/run-scenario! "%s")\n' "$s" > "$entry"
+  line=$(WAYLAND_DISPLAY=$D GDK_BACKEND=wayland OMEGA_PROBE_DISPLAY=$D OMEGA_PROBE_WIDTH=$W OMEGA_PROBE_HEIGHT=$H \
+         "$ROOT/bin/bl" run -p "$ROOT/test" "$entry" 2>"$DIR/$s.err" | tee "$DIR/$s.out" | grep ':scenario' | tail -1)
+  rm -f "$entry"
+  [ -z "$line" ] && line="{:scenario \"$s\" :result :fail :error \"no result (crashed)\"}"
+  echo "$line"
+  case "$line" in *":result :pass"*) pass=$((pass+1));; *) fail=$((fail+1));; esac
+done
+echo "headless: $pass passed, $fail failed"
+[ "$fail" = 0 ]

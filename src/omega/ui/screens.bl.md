@@ -1,7 +1,8 @@
 # omega.ui.screens — the desktop screens, as pure functions
 
 > Literate namespace. Each screen is `(fn [snapshot ui] → hiccup)` built from loom
-> parts. The window (`omega.ui.desktop`) only folds events and re-projects the env.
+> parts. `omega.ui.web` serves them as a beam-lisp `live.app`: rendering, keyed
+> patching and stylesheet shipping are live's job, not omega's.
 > This file is where the look is decided, so the design reasoning sits next to the code.
 
 ## Design decisions (impeccable, register: Operate)
@@ -17,6 +18,9 @@
   with no trace for 5 minutes moves to *Stale*.
 - **The human answers in place.** A task's question shows on its row with its
   choices as buttons. There is no modal.
+- **Events are live's closed vocabulary.** `[:assign k v]` changes this viewer's
+  locals (open task, theme). `[:intent op payload]` is the only kind of write,
+  and each one is a public task verb (`omega.ui.web/intents`).
 - **Mono only for ids, paths and code.** Prose stays in the system sans.
 - **Empty states teach.** "No tasks yet. Describe what you want done above."
 
@@ -35,12 +39,15 @@
 ## Small parts
 
 ```beam-lisp
+;; `& body` spliced with into, never passed as one list child: live/client.js
+;; reads a nested array whose head is a string as a TAG ("· 1" → createElement
+;; throws), so text children must stay flat.
 (defn- mono [& body]
-  [:span {:class (t/sx {:font-family (t/tok :font :mono) :font-size (t/text :sm)})} body])
+  (into [:span {:class (t/sx {:font-family (t/tok :font :mono) :font-size (t/text :sm)})}] body))
 
 (defn- muted [& body]
-  [:span {:class (t/sx {:color (t/color :muted) :font-size (t/text :sm)
-                        :font-variant-numeric "tabular-nums"})} body])
+  (into [:span {:class (t/sx {:color (t/color :muted) :font-size (t/text :sm)
+                              :font-variant-numeric "tabular-nums"})}] body))
 
 (defn age
   "12s · 4m · 2h · 3d: coarse and tabular, updated by the window's tick."
@@ -75,29 +82,57 @@ loom's desktop hook clears the field and sends `[:new-task value]`.
   (let [n (count (:tasks snap))
         need (count (get-in snap [:by-group :needs-you]))]
     (b/row {:justify :between :pad [:3 :5]
-            :style {:border-bottom (str "1px solid " (t/color :border)) :background (t/color :surface)}}
+            :style {:border-bottom (str "1px solid " (t/color :border)) :background (t/color :surface)
+                    :position "sticky" :top "0" :z-index "1"}}
       (b/row {:gap :3}
         [:strong {:class (t/sx {:font-size (t/text :lg)})} "omega"]
         (muted (str n " task" (if (= 1 n) "" "s")
                     (when (pos? need) (str " · " need " need" (if (= 1 need) "s" "") " you")))))
       (b/row {:gap :2}
-        (when (:task ui) (ui/button {:variant :ghost :size :sm :on-click [:back]} "← Overview"))
-        (ui/button {:variant :ghost :size :sm :on-click [:toggle-theme]}
+        (when (:task ui) (ui/button {:variant :ghost :size :sm :on-click [:assign :task nil]} "← Overview"))
+        (ui/button {:variant :ghost :size :sm :on-click [:assign :theme (if (= :light (:theme ui)) "dark" "light")]}
                    (if (= :light (:theme ui)) "Dark" "Light"))))))
 
 (defn composer
-  "Drafts are mirrored into the reducer (`:on-input` → [:draft :goal text]) so
-   that a re-render (the 1 s tick, an env change) puts the text back. But a
-   draft keystroke must NOT itself re-render: loom's desktop swaps the whole
-   body, and a swap racing the next keystroke drops characters (observed:
-   \"hello world\" → \"helrld\"). The reducer stores drafts OUTSIDE the
-   rendered state for that reason (see omega.ui.desktop)."
+  "Enter fires the :new-task intent with the field's value (live/client.js
+   sends it and clears the field). The DOM is patched, never replaced, so
+   half-typed text survives every re-render without any draft bookkeeping."
   [ui]
   (b/box {:pad [:4 :5] :style {:border-bottom (str "1px solid " (t/color :border))}}
-    (ui/field {:name :goal :label "New task" :value (get-in ui [:drafts :goal] "")
+    (ui/field {:name :goal :label "New task"
                :hint "Describe the outcome you want. Enter starts a task."
-               :on-input [:draft :goal]
-               :on-keydown.enter [:new-task]})))
+               :on-keydown.enter [:intent :new-task {}]})))
+```
+
+## Live output: the turn being written
+
+While a model call streams, the task's in-progress turn shows below the
+conversation as plain text that grows. It is not a fact yet: when the turn
+completes, it disappears and the recorded turn takes its place. The only
+liveness cue is a word, *writing*. There is no cursor, no shimmer and no pulse.
+
+```beam-lisp
+(defn live-turn [lt]
+  (when lt
+    (b/col {:gap :2 :pad [:3 0] :key "live"}
+      [:div {:class (t/sx {:font-size (t/text :xs) :font-weight (t/weight :semibold) :color (t/color :muted)})}
+       "omega · writing"]
+      (for [[i blk] (sort-by first (:blocks lt))]
+        (if (= :text (:kind blk))
+          [:p {:key (str "live-" i) :class (t/sx {:white-space "pre-wrap" :max-width "72ch" :line-height "1.55"})} (:text blk)]
+          [:pre {:key (str "live-" i)
+                 :class (t/sx {:font-family (t/tok :font :mono) :font-size (t/text :sm) :white-space "pre-wrap"
+                               :color (t/color :muted) :background (t/color :surface-2) :padding (t/space :3)
+                               :border-radius (t/radius :md)})}
+           (:text blk)])))))
+
+(defn live-line
+  "A one-line preview of a task's streaming text, for its overview row."
+  [lt]
+  (when lt
+    (let [txt (apply str (map :text (vals (:blocks lt))))
+          n (count txt)]
+      (if (> n 120) (str "…" (subs txt (- n 120) n)) txt))))
 ```
 
 ## Overview: every task at once, grouped by urgency
@@ -110,11 +145,11 @@ loom's desktop hook clears the field and sends `[:new-task value]`.
     (b/row {:gap :2 :wrap true :pad [:2 0 0 0]}
       [:span {:class (t/sx {:font-size (t/text :sm)})} (:text a)]
       (for [[k label] choices]
-        (ui/button {:size :sm :variant :subtle :on-click [:answer (:id a) (name k)]} label)))))
+        (ui/button {:size :sm :variant :subtle :on-click [:intent :answer {:msg (:id a) :choice (name k)}]} label)))))
 
-(defn task-row [r]
-  (b/col {:gap :0 :pad [:3 :5] :data-task (:id r)
-          :on-click [:open (:id r)]
+(defn task-row [r lt]
+  (b/col {:gap :0 :pad [:3 :5] :data-task (:id r) :key (:id r)
+          :on-click [:assign :task (:id r)]
           :style {:cursor "pointer" :border-bottom (str "1px solid " (t/color :border))}
           :on {:hover {:background (t/color :surface-2)}}}
     (b/row {:gap :4}
@@ -125,21 +160,32 @@ loom's desktop hook clears the field and sends `[:new-task value]`.
       (when (seq (:claims r)) (mono (first (:claims r))))
       (muted (or (cost-text (:cost r)) ""))
       (muted (age (:age-ms r))))
-    (when (and (contains? #{:idle :done :failed} (:status r)) (seq (str (:result r))))
+    (when-let [line (live-line lt)]
+      [:div {:class (t/sx {:padding-left "108px" :color (t/color :muted) :font-size (t/text :sm)
+                           :overflow "hidden" :text-overflow "ellipsis" :white-space "nowrap"})}
+       line])
+    (when (and (nil? lt) (contains? #{:idle :done :failed} (:status r)) (seq (str (:result r))))
       [:div {:class (t/sx {:padding-left "108px" :color (t/color :muted) :font-size (t/text :sm)
                            :overflow "hidden" :text-overflow "ellipsis" :white-space "nowrap"})}
        (str (:result r))])
     (for [a (:asks r)] [:div {:class (t/sx {:padding-left "108px"})} (ask-inline a)])))
 
-(defn group-section [title rows]
-  (when (seq rows)
-    (b/col {:gap :0}
-      [:h2 {:class (t/sx {:font-size (t/text :sm) :font-weight (t/weight :semibold)
+(defn group-section
+  "One urgency group. An EMPTY group still renders (an empty keyed node), so
+   the group list is always fully keyed: live.diff falls back to positional
+   matching when any sibling lacks a key (BUG-110), and a task moving between
+   groups would then morph one group into another and duplicate its row."
+  [k title rows live]
+  (if (empty? rows)
+    [:div {:key (name k)}]
+    (b/col {:gap :0 :key (name k)}
+      [:h2 {:key (str (name k) "-title")
+            :class (t/sx {:font-size (t/text :sm) :font-weight (t/weight :semibold)
                           :color (t/color :muted) :padding (str (t/space :4) " " (t/space :5) " " (t/space :2))})}
        title " " (muted (str "· " (count rows)))]
-      (for [r rows] (task-row r)))))
+      (for [r rows] (task-row r (get live (:id r)))))))
 
-(defn overview [snap ui]
+(defn overview [snap ui live]
   (b/col {:gap :0}
     (composer ui)
     (if (empty? (:tasks snap))
@@ -148,7 +194,7 @@ loom's desktop hook clears the field and sends `[:new-task value]`.
                         :body "Describe what you want done above. Each prompt becomes a task you can watch, steer and answer."}))
       (b/col {:gap :0}
         (for [[k title] model/GROUPS]
-          (group-section title (sort-by :id (get-in snap [:by-group k]))))))))
+          (group-section k title (sort-by :id (get-in snap [:by-group k])) live))))))
 ```
 
 ## Task detail: the conversation, what it touched, and the next message
@@ -169,12 +215,12 @@ loom's desktop hook clears the field and sends `[:new-task value]`.
 
 (defn turn-view [t]
   (let [who (case (:role t) :user "You" :assistant "omega" :tool "result")]
-    (b/col {:gap :2 :pad [:3 0]}
+    (b/col {:gap :2 :pad [:3 0] :key (str "turn-" (:n t))}
       [:div {:class (t/sx {:font-size (t/text :xs) :font-weight (t/weight :semibold) :color (t/color :muted)
                            :text-transform "none"})} who]
       (for [b (:content t)] (block-view b)))))
 
-(defn task-screen [snap ui detail]
+(defn task-screen [snap ui detail live]
   (let [id (:task ui)
         r (first (filter (fn [x] (= id (:id x))) (:tasks snap)))]
     (if (nil? r)
@@ -186,15 +232,14 @@ loom's desktop hook clears the field and sends `[:new-task value]`.
             [:h1 {:class (t/sx {:font-size (t/text :xl) :font-weight (t/weight :semibold)})} (:goal r)])
           (for [a (:asks r)] (ask-inline a))
           (for [t (:turns detail)] (turn-view t))
+          (live-turn (get live id))
           (when-not (contains? #{:done :failed :cancelled} (:status r))
             (b/box {:pad [:4 0]}
               (ui/field {:name :say :label "Message this task"
-                         :value (get-in ui [:drafts [:say id]] "")
-                         :on-input [:draft [:say id]]
                          :hint (if (= :running (:status r))
                                  "It is working; your message lands at its next step."
                                  "A follow-up continues this task.")
-                         :on-keydown.enter [:say id]}))))
+                         :on-keydown.enter [:intent :say {:task id}]}))))
         (b/col {:gap :3 :pad [:4 :5] :w "320px"
                 :style {:border-left (str "1px solid " (t/color :border)) :min-height "100%"}}
           (p/facts {:cols 1} [["Task" (mono id)]
@@ -219,9 +264,18 @@ loom's desktop hook clears the field and sends `[:new-task value]`.
 ```beam-lisp
 (defn view
   "The window's one view: (state) → hiccup. state = {:snap :ui :detail}."
-  [{:keys [snap ui detail]}]
+  [{:keys [snap ui detail live]}]
   (th/install! (or (:theme ui) :dark))
-  (b/col {:gap :0 :h :screen :style {:background (t/color :bg) :overflow "auto"}}
+  ;; the DOCUMENT scrolls, not an inner box: its position survives any patch,
+  ;; and the header stays put with position:sticky
+  (b/col {:gap :0 :style {:background (t/color :bg) :min-height "100vh"}}
     (header snap ui)
-    (if (:task ui) (task-screen snap ui detail) (overview snap ui))))
+    ;; the screen is the ONLY child of its own wrapper, and keyed: switching
+    ;; screens then removes one subtree and inserts the other. live.diff only
+    ;; honours keys when EVERY sibling is keyed (beam-lisp BUG-110): beside the
+    ;; unkeyed header it would graft the new screen onto the old node.
+    [:div {:class (t/sx {:display "contents"})}
+     (if (:task ui)
+       [:div {:key (str "task:" (:task ui))} (task-screen snap ui detail live)]
+       [:div {:key "overview"} (overview snap ui live)])]))
 ```

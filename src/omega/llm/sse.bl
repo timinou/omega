@@ -1,0 +1,97 @@
+; omega/llm/sse.bl — Anthropic's streaming wire, as pure functions.
+;
+;   (split-events buffer) → [events remaining-buffer]   bytes → SSE events
+;   (fold acc event)      → acc'                        events → a response
+;   (response acc)        → omega response              same shape as non-streaming
+;   (delta event)         → nil | {:block i :kind :text|:tool-input :text s}
+;
+; Pure so the whole streaming path is testable from recorded SSE text, with no
+; network. The event vocabulary is the one observed from the proxy (2026-10-02):
+;   message_start · content_block_start{index, content_block}
+;   content_block_delta{index, delta: text_delta | input_json_delta}
+;   content_block_stop · message_delta{delta.stop_reason, usage} · message_stop · ping
+
+(ns omega.llm.sse
+  (:require [omega.llm.usage :as usage]))
+
+(defn- data-line [chunk]
+  (some (fn [l] (when (starts-with? l "data:") (trim (subs l 5))))
+        (String/split chunk "\n")))
+
+(defn split-events
+  "Split `buf` (accumulated stream text) into complete SSE events (decoded
+   JSON maps, string keys) and the unconsumed tail."
+  [buf]
+  (let [parts (String/split buf "\n\n")
+        complete (butlast parts)
+        tail (last parts)]
+    [(vec (keep (fn [c] (when-let [d (data-line c)]
+                          (try (json/decode d) (catch _ nil))))
+                complete))
+     (or tail "")]))
+
+(def empty-acc {:blocks {} :stop nil :usage {} :model nil})
+
+(def ^:private STOPS {"end_turn" :end "tool_use" :tool-use "max_tokens" :max-tokens "stop_sequence" :end})
+
+(defn fold
+  "Fold one decoded event into the accumulator."
+  [acc ev]
+  (case (get ev "type")
+    "message_start"
+    (assoc acc :model (get-in ev ["message" "model"])
+               :usage (merge (:usage acc) (get-in ev ["message" "usage"])))
+
+    "content_block_start"
+    (let [b (get ev "content_block")]
+      (assoc-in acc [:blocks (get ev "index")]
+                (case (get b "type")
+                  "text" {:type :text :text (or (get b "text") "")}
+                  "tool_use" {:type :tool-use :id (get b "id") :name (get b "name") :json ""}
+                  {:type :other})))
+
+    "content_block_delta"
+    (let [i (get ev "index") d (get ev "delta")]
+      (case (get d "type")
+        "text_delta" (update-in acc [:blocks i :text] str (get d "text"))
+        "input_json_delta" (update-in acc [:blocks i :json] str (get d "partial_json"))
+        acc))
+
+    "message_delta"
+    (assoc acc :stop (get STOPS (get-in ev ["delta" "stop_reason"]) :end)
+               :usage (merge (:usage acc) (get ev "usage")))
+
+    acc))
+
+(defn- keywordize [m]
+  (cond
+    (map? m) (into {} (map (fn [[k v]] [(if (string? k) (keyword k) k) (keywordize v)]) m))
+    (seq? m) (vec (map keywordize m))
+    (vector? m) (vec (map keywordize m))
+    :else m))
+
+(defn- finish-block [b]
+  (case (:type b)
+    :text {:type :text :text (:text b)}
+    :tool-use {:type :tool-use :id (:id b) :name (:name b)
+               :input (keywordize (if (seq (:json b)) (json/decode (:json b)) {}))}
+    nil))
+
+(defn response
+  "The accumulated stream as an omega response (same shape as non-streaming)."
+  [acc]
+  {:content (vec (keep (fn [i] (finish-block (get-in acc [:blocks i])))
+                       (sort (keys (:blocks acc)))))
+   :stop (or (:stop acc) :end)
+   :usage (usage/unify (:usage acc))
+   :model (:model acc)})
+
+(defn delta
+  "What a viewer should see of one event, or nil."
+  [ev]
+  (when (= "content_block_delta" (get ev "type"))
+    (let [d (get ev "delta")]
+      (case (get d "type")
+        "text_delta" {:block (get ev "index") :kind :text :text (get d "text")}
+        "input_json_delta" {:block (get ev "index") :kind :tool-input :text (get d "partial_json")}
+        nil))))

@@ -1,0 +1,161 @@
+; omega/ui/probe.bl — drive and SEE the omega window headlessly.
+;
+; A private Wayland session (sway, headless backend, pixman renderer) hosts the
+; real wry/WebKit window on an invisible output; grim captures it. Nothing
+; appears on the user's desktop, and nothing depends on window focus. This is
+; how a test, or an agent developing omega, looks at the UI:
+;
+;   ; in a VM started by bin/omega-headless (WAYLAND_DISPLAY = the private sway):
+;   (def s (probe/attach))                                 ; the session this VM lives in
+;   (def w (probe/open s "http://127.0.0.1:4747/"))        ; a window onto the UI, on it
+;   (probe/query w "document.title")                       ; → "omega"  (any JS → value)
+;   (probe/click w "button" "Yes")                         ; click by selector + text
+;   (probe/type-in w "#f-goal" "add a test" true)          ; set value (+ Enter)
+;   (probe/scroll w 400)  (probe/scroll-top w)             ; the page's scroll
+;   (probe/shot w "/tmp/x.png")                            ; → path of a PNG
+;   (probe/close w)  (probe/stop s)
+;
+; Upstream candidate: FUP-001 (a headless window harness in beam-lisp tooling).
+
+(ns omega.ui.probe
+  (:require [wry]))
+
+;; ── the headless compositor ─────────────────────────────────────────────
+
+(defn session
+  "Start a headless sway with one output of `width`×`height`. Returns
+   {:display \"wayland-N\" :dir d}. The session is found by its OWN socket,
+   named in its log, so parallel sessions cannot mix up displays."
+  ([] (session {}))
+  ([{:keys [width height] :or {width 1400 height 900}}]
+   (let [dir (str "/tmp/omega-probe-" (erlang/unique_integer (to-list [:positive])))
+         cfg (str dir "/sway.cfg")
+         log (str dir "/sway.log")]
+     (File/mkdir_p! dir)
+     (File/write! cfg (str "output HEADLESS-1 resolution " width "x" height " position 0 0\n"
+                           "default_border none\nfocus_follows_mouse no\nseat * hide_cursor 1\n"
+                           "swaybg_command -\n"))
+     (let [pid (trim (elem (System/cmd "sh" (list "-c" (str "WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman "
+                                                           "WAYLAND_DISPLAY= setsid sway -d -c " cfg " > " log " 2>&1 < /dev/null "
+                                                           "3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- & echo $!"))) 0))
+           display (loop [n 0]
+                     (let [l (if (File/exists? log) (File/read! log) "")
+                           m (Regex/run (Regex/compile! "Running compositor on wayland display '([^']+)'") l)]
+                       (cond m (second m)
+                             (> n 100) (do (System/cmd "kill" (list pid))
+                                           (throw (ex-info (str "headless sway did not start; see " log) {})))
+                             :else (do (Process/sleep 100) (recur (inc n))))))]
+       {:display display :pid pid :dir dir :config cfg :width width :height height}))))
+
+(defn stop
+  "Stop the session's sway (setsid made it a session leader; its pid is ours)."
+  [s]
+  (System/cmd "kill" (list (:pid s)))
+  (File/rm_rf (:dir s))
+  :ok)
+
+;; ── a window on the headless output ─────────────────────────────────────
+;
+; The window is a plain wry webview pointed at omega's live.app (omega.ui.web):
+; the SAME app any browser can open. Page → probe answers ride a dedicated
+; IPC channel (the window's :on-message), so the app needs no probe hooks.
+
+(defn open
+  "Open a window onto `url`. GTK binds its Wayland display ONCE per OS process,
+   when the first window opens, from the process environment — so the VM must
+   be STARTED with WAYLAND_DISPLAY pointing at the headless session (see
+   bin/omega-headless). Opening here checks that, and refuses rather than
+   putting a window on the user's real desktop. Returns {:window :session :inbox}."
+  ([s url] (open s url {}))
+  ([s url opts]
+   (when (not= (:display s) (System/get_env "WAYLAND_DISPLAY"))
+     (throw (ex-info (str "probe/open: this VM's WAYLAND_DISPLAY is " (pr-str (System/get_env "WAYLAND_DISPLAY"))
+                          ", not the headless session's " (:display s)
+                          ". Start the VM inside the session (bin/omega-headless does).")
+                     {:display (:display s)})))
+   (let [me (erlang/self)
+         inbox (spawn (fn [] (loop [] (receive [:to p] (do (erlang/put :owner p) (recur))
+                                                 m (do (when-let [p (erlang/get :owner)] (erlang/send p m)) (recur))))))
+         _ (erlang/send inbox [:to me])
+         w (wry/open {:title "omega" :url url :width (:width s) :height (:height s)
+                      :on-message (fn [body] (erlang/send inbox [:omega/page (json/decode body)]))})]
+     (Process/sleep (or (:settle-ms opts) 2500))
+     {:window w :session s :inbox inbox})))
+
+(defn attach
+  "The session this VM was started inside (bin/omega-headless exports
+   OMEGA_PROBE_DISPLAY and WAYLAND_DISPLAY to the same headless display)."
+  []
+  (let [d (System/get_env "OMEGA_PROBE_DISPLAY")]
+    (when (nil? d) (throw (ex-info "probe/attach: not inside a headless session (run via bin/omega-headless)" {})))
+    {:display d :pid nil :dir nil
+     :width (erlang/binary_to_integer (or (System/get_env "OMEGA_PROBE_WIDTH") "1200"))
+     :height (erlang/binary_to_integer (or (System/get_env "OMEGA_PROBE_HEIGHT") "700"))}))
+
+(defn close [win] (wry/close (:window win)) :ok)
+
+(defn query
+  "Evaluate JS expression `js` in the page and return its value (JSON-decoded)."
+  ([win js] (query win js 5000))
+  ([win js ms]
+   (let [id (str (erlang/unique_integer (to-list [:positive])))]
+     (erlang/send (:inbox win) [:to (erlang/self)])
+     (wry/eval (:window win)
+               (str "(function(){var v;try{v=(" js ");}catch(e){v={error:String(e)};}"
+                    "window.ipc.postMessage(JSON.stringify({probe:" (pr-str id) ",value:v===undefined?null:v}));})()"))
+     (loop []
+       (receive [:omega/page m]
+                (if (= id (get m "probe")) (let [v (get m "value")] (if (= :null v) nil v)) (recur))
+                (after ms :timeout))))))
+
+(defn click
+  "Click the first element matching CSS `selector` (and with exactly `text`, if given)."
+  ([win selector] (click win selector nil))
+  ([win selector text]
+   (query win (str "(function(){var els=[...document.querySelectorAll(" (pr-str selector) ")];"
+                   (if text (str "els=els.filter(function(e){return e.textContent.trim()===" (pr-str text) "});") "")
+                   "if(!els.length)return false;els[0].click();return true;})()"))))
+
+(defn type-in
+  "Type `text` into the element at `selector` (value + input event), then
+   press Enter when `enter?`."
+  ([win selector text] (type-in win selector text false))
+  ([win selector text enter?]
+   (query win (str "(function(){var el=document.querySelector(" (pr-str selector) ");if(!el)return false;"
+                   "el.focus();el.value=" (pr-str text) ";el.dispatchEvent(new Event('input',{bubbles:true}));"
+                   (if enter? "el.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));" "")
+                   "return true;})()"))))
+
+(defn wait-for
+  "Poll JS predicate `js` until it is truthy (default 15 s). Returns the last
+   value. Timing-independent: use it instead of sleeping, a loaded machine
+   can be ten times slower than an idle one."
+  ([win js] (wait-for win js 15000))
+  ([win js ms]
+   (let [deadline (+ (erlang/monotonic_time :millisecond) ms)]
+     (loop []
+       (let [v (query win js)]
+         (if (or (and v (not= v :timeout) (not= v false) (not= v 0))
+                 (> (erlang/monotonic_time :millisecond) deadline))
+           v
+           (do (Process/sleep 150) (recur))))))))
+
+(defn scroll [win y] (query win (str "(document.scrollingElement.scrollTop=" y ",document.scrollingElement.scrollTop)")))
+(defn scroll-top [win] (query win "document.scrollingElement.scrollTop"))
+(defn text [win] (query win "document.body.innerText"))
+
+(defn styled?
+  "Whether every element with a class has a matching stylesheet rule — the
+   'styles vanished after an update' check."
+  [win]
+  (query win (str "(function(){var rules=new Set();for(const sh of document.styleSheets){try{for(const r of sh.cssRules){"
+                  "var m=(r.selectorText||'').match(/^\\.([A-Za-z0-9_-]+)/);if(m)rules.add(m[1]);}}catch(e){}}"
+                  "var missing=[];document.querySelectorAll('[class]').forEach(function(el){el.classList.forEach(function(c){"
+                  "if(/^s[A-Za-z0-9]+$/.test(c)&&!rules.has(c))missing.push(c);});});return missing.length;})()")))
+
+(defn shot
+  "Screenshot the headless output to `path` (PNG). Returns the path."
+  [win path]
+  (let [r (System/cmd "grim" (list path) (list (tuple :env (list (tuple "WAYLAND_DISPLAY" (get-in win [:session :display]))))
+                                              (tuple :stderr_to_stdout true)))]
+    (if (= 0 (elem r 1)) path (throw (ex-info (str "grim: " (elem r 0)) {})))))

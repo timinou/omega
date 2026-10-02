@@ -39,7 +39,8 @@
 (ns omega.loop
   (:require [omega.env :as env]
             [omega.actor :as actor]
-            [omega.trace :as tr]))
+            [omega.trace :as tr]
+            [omega.stream :as stream]))
 
 (def MAX-STEPS 40)
 
@@ -155,7 +156,11 @@
     (loop [n 1 usage nil]
       (if (> n max-steps)
         {:status :idle :result (str "paused after " max-steps " steps")}
-        (let [resp (step (request sys id))]
+        (let [turn-n (inc (count (turns sys id)))
+              ;; deltas are broadcast, never recorded: the final content below is the fact
+              resp (step (assoc (request sys id) :on-delta
+                                (fn [d] (stream/delta! id (assoc d :turn turn-n)))))
+              _ (stream/turn-done! id)]
           (cond
             (not (map? resp))
             {:status :failed :error (str "the model step returned " (pr-str resp) ", not a response map")}
@@ -190,15 +195,30 @@
 
 ;; ── a scripted model, for tests and offline demos ───────────────────────
 
+(defn- replay-deltas!
+  "Stream a canned response the way a provider would: each text block as a few
+   word-sized deltas, each tool call's input as its JSON. Lets offline runs
+   (tests, demos) exercise the live path exactly."
+  [req resp]
+  (when-let [f (:on-delta req)]
+    (doseq [[i b] (map-indexed (fn [i x] [i x]) (:content resp))]
+      (case (:type b)
+        :text (doseq [w (map first (Regex/scan (Regex/compile! "\\S+\\s*") (or (:text b) "")))] (f {:block i :kind :text :text w}))
+        :tool-use (f {:block i :kind :tool-input :text (pr-str (:input b))})
+        nil))))
+
 (defn scripted
   "A `step` fn that replays `responses` in order (then repeats the last). Each
-   response may be a map, or a fn of the request (to assert on what was sent)."
+   response may be a map, or a fn of the request (to assert on what was sent).
+   Replies stream through the request's :on-delta like a real provider."
   [responses]
   (let [i (atom 0)]
     (fn [req]
       (let [k (swap! i inc)
-            r (nth responses (min (dec k) (dec (count responses))))]
-        (if (fn? r) (r req) r)))))
+            r (nth responses (min (dec k) (dec (count responses))))
+            resp (if (fn? r) (r req) r)]
+        (when (map? resp) (replay-deltas! req resp))
+        resp))))
 
 (defn by-goal
   "A `step` fn that routes each request to a scripted model chosen by the task's

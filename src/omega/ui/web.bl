@@ -1,0 +1,185 @@
+; omega/ui/web.bl — omega's UI as a beam-lisp live.app, shown in a desktop window.
+;
+; ══ WHY THIS SHAPE ══════════════════════════════════════════════════════════
+;
+; beam-lisp already has the whole live UI stack: `live.app` serves a value of
+; {routes · worlds · observe · intents · theme}, renders screens server-side,
+; holds one socket per viewer, diffs hiccup trees into keyed patch ops, ships
+; NEW class rules alongside every patch, and `live/client.js` applies them to
+; the real DOM. It is what loom pages run on. This file is just that app; the
+; desktop window is a wry webview pointed at it:
+;
+;   (def ui (web/start! sys {:port 4747}))    ; the app, on loopback
+;   (web/window! ui)                          ; a native window onto it
+;   ; or open http://127.0.0.1:4747 in any browser — the same app
+;
+; Nothing here renders, diffs or patches: live.app does. omega supplies:
+;   - the worlds: the task env (facts) and a small `ui` conn (ephemeral facts:
+;     the turns being streamed right now). Both are OBSERVED, so a commit to
+;     either re-renders every viewer — a task finishing, a token arriving.
+;   - the intents: the only writes, each a call to the public task verbs.
+;   - the screens: omega.ui.screens, unchanged (pure state → hiccup).
+;
+; Locals (route, open task, theme, drafts) live in each socket — per viewer,
+; never shared, never facts.
+
+(ns omega.ui.web
+  (:require [proc.reg]          ; registers the defserver `registry` clause live.app needs
+            [live.app :as app]
+            [datom]
+            [wry]
+            [omega.env :as env]
+            [omega.actor :as actor]
+            [omega.task :as task]
+            [omega.stream :as stream]
+            [omega.ui.model :as model]
+            [omega.ui.theme :as th]
+            [omega.ui.screens :as screens]
+            [omega.ui.demo]
+            [omega.llm]
+            [omega.codemode]
+            [omega.cli]
+            [omega.ext]
+            [omega.ext.notify]))
+
+;; ── the ephemeral world: what is being written right now ────────────────
+
+(def ui-schema
+  [{:db/ident :live/task :db/valueType :db.type/string :db/unique :db.unique/identity}
+   {:db/ident :live/turn :db/valueType :db.type/long}
+   {:db/ident :live/blocks}])
+
+(defn apply-delta
+  "Fold one streamed delta into a task's partial turn {:turn n :blocks {i {:kind :text}}}.
+   A delta for a NEW turn starts over."
+  [cur d]
+  (let [cur (if (= (:turn cur) (:turn d)) cur {:turn (:turn d) :blocks {}})]
+    (update-in cur [:blocks (:block d)]
+               (fn [b] {:kind (:kind d) :text (str (:text b) (:text d))}))))
+
+(defn- live-map [ui-conn]
+  (into {} (map (fn [[t n bs]] [t {:turn n :blocks bs}])
+                (datom/q '[:find ?t ?n ?b :where [?e :live/task ?t] [?e :live/turn ?n] [?e :live/blocks ?b]]
+                         (datom/db ui-conn)))))
+
+(defn- stream-pump
+  "Join omega's delta broadcast and mirror each task's partial turn into the
+   ui conn, at most every 80 ms (≈12 renders/s however fast the model is).
+   A finished turn is retracted: the recorded turn in the env replaces it."
+  [ui-conn]
+  (spawn (fn []
+           (stream/watch!)
+           (loop [pending {} done #{}]
+             (receive
+               :stop :stopped
+               [:omega/delta t d] (recur (update pending t (fn [cur] (apply-delta (or cur (get (live-map ui-conn) t)) d))) (disj done t))
+               [:omega/turn-done t] (recur (dissoc pending t) (conj done t))
+               (after 80
+                 (do (when (seq pending)
+                       (datom/transact! ui-conn (vec (map (fn [[t lt]] {:db/id -1 :live/task t :live/turn (:turn lt) :live/blocks (:blocks lt)})
+                                                          pending))))
+                     (doseq [t done]
+                       (when-let [e (datom/lookup-ref (datom/db ui-conn) [:live/task t])]
+                         (datom/transact! ui-conn [[:db/retractEntity e]])))
+                     (recur {} #{}))))))))
+
+;; ── the screen ──────────────────────────────────────────────────────────
+
+(defn- ui-from-locals
+  "The screens' ui map, from this socket's locals."
+  [locals]
+  {:task (get locals :task)
+   :theme (if (= "light" (str (get locals :theme))) :light :dark)
+   :drafts (get locals :drafts {})})
+
+(defn home-screen
+  "omega's one route: overview or task detail, by the socket's :task local."
+  [sys ui-conn]
+  (fn [{:keys [locals]}]
+    (let [ui (ui-from-locals locals)]
+      (screens/view {:snap (model/snapshot (:env sys))
+                     :ui ui
+                     :live (live-map ui-conn)
+                     :detail (when (:task ui) (model/task-detail sys (:task ui)))}))))
+
+;; ── intents: the only writes, each one public task verb ─────────────────
+
+(defn- trimmed [x] (let [s (clojure.string/trim (str x))] (when (seq s) s)))
+
+(defn intents [sys]
+  {:new-task (fn [_conn p _who] (when-let [g (trimmed (:value p))] (task/open! sys {:goal g})) nil)
+   :say (fn [_conn p _who] (when-let [m (trimmed (:value p))] (task/say! sys (:task p) m)) nil)
+   :answer (fn [_conn p _who] (actor/reply! (:env sys) (:msg p) (:choice p)) nil)})
+
+;; ── the app value ───────────────────────────────────────────────────────
+
+(defn app-value [sys ui-conn]
+  (let [screen (home-screen sys ui-conn)]
+    {:home "/"
+     :title "omega"
+     :routes [["/" screen]]
+     :principal (fn [_conn] "human:me")
+     :worlds (fn [_me _params] {})
+     :observe (fn [_me] [(:conn (:env sys)) ui-conn])
+     :shared-conn (:conn (:env sys))
+     :intents (intents sys)
+     :theme (fn [locals] (th/install! (if (= "light" (str (get-in locals [:theme]))) :light :dark)))
+     :warm ["/"]}))
+
+(defn free-port
+  "A loopback TCP port nobody is listening on right now (the OS picks it)."
+  []
+  (let [r (gen_tcp/listen 0 (list (tuple :ip (tuple 127 0 0 1))))
+        sock (elem r 1)
+        port (elem (inet/port sock) 1)]
+    (gen_tcp/close sock)
+    port))
+
+(defn start!
+  "Serve omega's UI for task system `sys` on loopback. opts :port (default 4747;
+   :free picks an unused one).
+   Returns {:url :ui-conn :pump}."
+  ([sys] (start! sys {}))
+  ([sys opts]
+   (let [port (let [p (:port opts)] (cond (= :free p) (free-port) (nil? p) 4747 :else p))
+         ui-conn (datom/connect ui-schema)
+         pump (stream-pump ui-conn)]
+     (app/serve (app-value sys ui-conn) {:port port :ip (tuple 127 0 0 1) :log nil})
+     {:url (str "http://127.0.0.1:" port "/") :ui-conn ui-conn :pump pump :port port})))
+
+(defn window!
+  "A native window onto the running UI. Returns the wry window."
+  ([ui] (window! ui {}))
+  ([ui opts]
+   (wry/open {:title "omega" :url (:url ui)
+              :width (or (:width opts) 1100) :height (or (:height opts) 760)})))
+
+;; ── bin/omega-ui ────────────────────────────────────────────────────────
+
+(defn main
+  "bin/omega-ui: serve omega's UI over a live task system rooted at --root
+   (default cwd), or over the offline demo world with --demo, and open a
+   native window onto it. --no-window serves only (open the URL in a
+   browser). Blocks until the window closes (or forever with --no-window)."
+  []
+  (let [args (vec (BeamLisp/argv))
+        flag? (fn [f] (some (fn [a] (= a f)) args))
+        opt (fn [f] (second (drop-while (fn [a] (not= a f)) args)))
+        root (or (opt "--root") (File/cwd!))
+        home (or (System/get_env "OMEGA_HOME") (File/cwd!))
+        sys (if (flag? "--demo")
+              (omega.ui.demo/start! "/tmp/omega-ui-demo")
+              (task/start-system (env/open (if-let [db (opt "--db")] {:path db} {}))
+                                 {:step (omega.llm/step (omega.llm/from-env home))
+                                  :tools omega.codemode/tools :root root
+                                  :system-prompt omega.cli/SYSTEM-PROMPT}))
+        sys (omega.ext/install sys (if (flag? "--notify") [(omega.ext.notify/extension)] []))
+        ui (start! sys {:port (if-let [p (opt "--port")] (erlang/binary_to_integer p) 4747)})]
+    (println (str "omega UI at " (:url ui)))
+    (if (flag? "--no-window")
+      (receive :never nil)
+      (let [w (window! ui)]
+        ;; the window's IPC receiver exits when the window closes
+        (erlang/monitor :process (:receiver w))
+        (receive [:DOWN _ :process _ _] :closed)))
+    (task/stop-system! sys)))

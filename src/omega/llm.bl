@@ -26,6 +26,7 @@
 
 (ns omega.llm
   (:require [omega.llm.usage :as usage]
+            [omega.llm.sse :as sse]
             [credential.env :as cenv]))
 
 (def CLAUDE-CODE-IDENTITY "You are Claude Code, Anthropic's official CLI for Claude.")
@@ -138,26 +139,86 @@
         (contains? #{401 403} status) :auth
         :else :client))
 
+(defn- headers-for [p]
+  (to-list (cond-> [(header "anthropic-version" "2023-06-01")]
+             (:api-key p) (conj (header "x-api-key" (:api-key p))))))
+
 (defn- anthropic-call [p req]
-  (let [headers (cond-> [(header "anthropic-version" "2023-06-01")]
-                  (:api-key p) (conj (header "x-api-key" (:api-key p))))
-        r (post (str (:base-url p) "/v1/messages") (to-list headers)
+  (let [r (post (str (:base-url p) "/v1/messages") (headers-for p)
                 (encode (anthropic-body p req)) (:timeout-ms p))]
     (cond
       (contains? r :transport) {:error {:kind :transport :reason (pr-str (:transport r))}}
       (= 200 (:status r)) (anthropic-response (decoded->data (json/decode (:body r))))
       :else {:error {:kind (error-kind (:status r)) :status (:status r) :body (:body r)}})))
 
+(defn- stream-loop
+  "Receive httpc stream messages for request `rid`, folding SSE events and
+   calling `on-delta` for each visible delta. Returns the omega response."
+  [rid on-delta timeout-ms]
+  (loop [buf "" acc sse/empty-acc status nil]
+    (receive
+      [:http [rid' :stream_start hs]]
+      (if (= rid rid') (recur buf acc 200) (recur buf acc status))
+
+      [:http [rid' :stream chunk]]
+      (if (not= rid rid')
+        (recur buf acc status)
+        (let [[evs tail] (sse/split-events (str buf chunk))]
+          (doseq [ev evs] (when-let [d (sse/delta ev)] (on-delta d)))
+          (recur tail (reduce sse/fold acc evs) status)))
+
+      [:http [rid' :stream_end hs]]
+      (if (= rid rid')
+        (let [[evs _] (sse/split-events (str buf "\n\n"))]
+          (sse/response (reduce sse/fold acc evs)))
+        (recur buf acc status))
+
+      ;; a non-2xx answer arrives whole, not as a stream
+      [:http [rid' [[_ code _] _ body]]]
+      (if (= rid rid')
+        {:error {:kind (error-kind code) :status code :body body}}
+        (recur buf acc status))
+
+      [:http [rid' [:error reason]]]
+      (if (= rid rid')
+        {:error {:kind :transport :reason (pr-str reason)}}
+        (recur buf acc status))
+
+      (after timeout-ms
+        (do (httpc/cancel_request rid)
+            {:error {:kind :transport :reason "stream timed out"}})))))
+
+(defn- anthropic-stream
+  "Streaming variant: same request and response as `anthropic-call`, plus
+   `on-delta` called with {:block i :kind :text|:tool-input :text s} as tokens
+   arrive. Runs in the CALLING process (httpc streams to self)."
+  [p req on-delta]
+  (ensure-apps)
+  (let [body (encode (assoc (anthropic-body p req) :stream true))
+        r (httpc/request :post (tuple (String/to_charlist (str (:base-url p) "/v1/messages"))
+                                      (headers-for p) (String/to_charlist "application/json") body)
+                         (list (tuple :timeout (:timeout-ms p)))
+                         (list (tuple :sync false) (tuple :stream :self) (tuple :body_format :binary)))]
+    (if (= :ok (elem r 0))
+      (stream-loop (elem r 1) on-delta (:timeout-ms p))
+      {:error {:kind :transport :reason (pr-str (elem r 1))}})))
+
 (def RETRYABLE #{:rate-limited :server :transport})
 
 (defn step
   "A `step` fn over provider `p`. Retries retryable errors with backoff
-   (p :retries, default 3)."
+   (p :retries, default 3). When the request carries `:on-delta` (a fn), the
+   call STREAMS and the fn sees each delta as it arrives; the returned
+   response is the same either way. `:on-delta` never goes on the wire."
   [p]
   (fn [req]
     (loop [attempt 0]
-      (let [r (case (:kind p)
-                :anthropic (anthropic-call p req)
+      (let [on-delta (:on-delta req)
+            wire (dissoc req :on-delta)
+            r (case (:kind p)
+                :anthropic (if (and on-delta (not= false (:stream p)))
+                             (anthropic-stream p wire on-delta)
+                             (anthropic-call p wire))
                 {:error {:kind :client :reason (str "unknown provider kind " (:kind p))}})]
         (if (and (contains? r :error)
                  (contains? RETRYABLE (get-in r [:error :kind]))
@@ -190,8 +251,11 @@
 ; it cannot. The digest is over the canonical request, so key order and
 ; vector/list spelling cannot cause a miss.
 
-(defn digest [req]
-  (lower-case (Base/encode16 (crypto/hash :sha256 (encode req)))))
+(defn digest
+  "A request's identity: the canonical JSON of what goes on the wire (a local
+   `:on-delta` callback is not part of it)."
+  [req]
+  (lower-case (Base/encode16 (crypto/hash :sha256 (encode (dissoc req :on-delta))))))
 
 ;; A tape is an external term file: exact BEAM data, no reader round trip.
 (defn- load-tape [path]
@@ -209,7 +273,11 @@
       (let [k (digest req)
             hit (get @tape k)]
         (cond
-          (and (some? hit) (not= mode :record)) hit
+          (and (some? hit) (not= mode :record))
+          (do (when-let [f (:on-delta req)]
+                (doseq [[i b] (map-indexed (fn [i x] [i x]) (:content hit))]
+                  (when (= :text (:type b)) (f {:block i :kind :text :text (:text b)}))))
+              hit)
           (= mode :replay) {:error {:kind :cassette-miss :digest k :path path}}
           :else (let [r (inner req)]
                   (when-not (contains? r :error)

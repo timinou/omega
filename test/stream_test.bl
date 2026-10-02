@@ -1,0 +1,45 @@
+(ns stream-test
+  (:require [omega.llm.sse :as sse]
+            [omega.stream :as stream]
+            [omega.env :as env]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.codemode :as cm]))
+
+(def recorded (File/read! "test/fixtures/anthropic-stream-tool.sse"))
+
+(deftest a-recorded-stream-folds-into-the-same-response-shape
+  (let [[evs tail] (sse/split-events recorded)
+        r (sse/response (reduce sse/fold sse/empty-acc evs))]
+    (is (= :tool-use (:stop r)))
+    (is (= [:text :tool-use] (map :type (:content r))))
+    (is (= {:code "(+ 1 2)"} (:input (second (:content r)))))
+    (is (= "eval" (:name (second (:content r)))))
+    (is (pos? (:input (:usage r))))))
+
+(deftest chunk-boundaries-anywhere-give-the-same-result
+  ;; split the recorded bytes into 7-byte chunks: events straddle chunks
+  (let [chunks (map (fn [i] (String/slice recorded i 7)) (map (fn [k] (* 7 k)) (range (quot (+ (count recorded) 6) 7))))
+        [acc buf deltas] (reduce (fn [[acc buf ds] c]
+                                   (let [[evs tail] (sse/split-events (str buf c))]
+                                     [(reduce sse/fold acc evs) tail (into ds (keep sse/delta evs))]))
+                                 [sse/empty-acc "" []] chunks)
+        whole (sse/response (reduce sse/fold sse/empty-acc (first (sse/split-events recorded))))]
+    (is (= whole (sse/response acc)))
+    (is (= (get-in whole [:content 0 :text])
+           (apply str (map :text (filter (fn [d] (= :text (:kind d))) deltas)))))))
+
+(deftest a-turn-broadcasts-deltas-then-done-and-records-the-fact
+  (stream/watch!)
+  (let [s (task/start-system (env/open) {:step (loop/scripted [(loop/say "three little words")]) :tools cm/tools :root "/tmp"})
+        id (task/open! s {:goal "stream"})
+        got (loop [acc []]
+              (receive [:omega/delta t d] (recur (conj acc d))
+                       [:omega/turn-done t] acc
+                       (after 5000 acc)))]
+    (is (= "three little words" (apply str (map :text got))))
+    (is (= #{2} (set (map :turn got))) "deltas name the turn they build")
+    (task/await s id 5000)
+    (is (= "three little words" (get-in (last (loop/turns s id)) [:content 0 :text])))
+    (stream/unwatch!)
+    (task/stop-system! s)))
