@@ -1,0 +1,45 @@
+#+TITLE: Cut over to upstream loom.desktop once loom-desktop-live is merged; upstream the headless harness
+#+STATE: ITEM
+#+SESSION_ID: 15950b96c19ed4f1
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-01T10-18-31-559Z_15950b96c19ed4f1.jsonl]]
+#+CUSTOM_ID: FUP-001-cut-over-to-upstream-loom-desktop-once-l
+
+* Initial Message
+
+please look at 
+1. ../beam-lisp (and its ../beam-lisp--repl branch too, it has a lot of useful stuff)
+2. ../spell (for a first attempt)
+3. VERY IMPORTANTLY, github.com/earendil/pi-mono (especially CodeMode, which we will want to recreate in beam-lisp).
+4. the canonical implementations of light plan modes, of structural code editing using tree sitter, of simple and light LSP modes, etc., and other plugins I may not have thought about.
+(you can also use ../../ora/relay and vendor what you want to easily talk to LLMs)
+
+
+The goal is to create a super simple coding harness that leverages the main ideas behind the architecture of pi-mono but in a way that leverages beam-lisp as much as possible. The goal is to have a very very simple (the simplest) loop that works, and it can use either the `loom` desktop wrapper or a TUI (you can make a local beam-lisp maximalist wrapper of ratatui, but if you do so, make its API as close as posible to `loom`, and read the 'grammar' documetn in beam-lisp).
+
+the one deviation i would have from the design of pi is that, instead of chats, i imagine the prompts that I send to be 'tasks'. In practice it is *still* a chat, but what I want is to be able to have self-coordinating tasks that understand their scope and that are easy for each other to find out about. Right now the main difference it is is that you should use Jev (I will put an API key here in the .env called TYPESAFE_API_KEY), look up beam-lisp native ways of using it (i.e. it's integrated to the language very naturally through a nice namespace), and helps us have a naturally stigmergic way of dealing with each other, sending each other messages, waiting on each other, etc (see the `proc` module in beam-lisp). More references are the beam lisp repl Playground, the `harness` module, and anything else you find on the internet about how people are using Jev to make harnesses, and the idea of stigmergy applied to systems.
+
+You should also read (and vendor) impeccable.style for a nice interface. The interface should be super simple and intuitive, and still let me see everything that is happening within a single project. The goal of omega is to focus on quality and make a general (not just beam-lisp) coding harness that works very well and builds itself from primitives and patterns and bundles, and has a canonical implementation that takes the best from the proven and the latest about coding harnesses. I would like us to really think about all the interactions that we'll have, how we'll be able to peek into the system, and how the day to day will look like for us, and the screens that we want to create, and the ways that we will be able to interact with the system (as an agent developing the system) so that it is easy for you to understand, test, and improve it, ahead of implementation, and that we thoroughly discuss every point and leveraging beam-lisp before we go on to implementation.
+
+Your first goal is to create a research/domain/ folder and put ALL the stuff there, as .bl.md or .bl.org files, so that we have a nice basis to think from.
+
+* State (2026-10-02)
+- beam-lisp branch =loom-desktop-live= (commit 312d04c6, worktree =~/code/undefine/beam-lisp--loom-desktop=):
+  - =loom.desktop= renders by keyed patches (=live.diff= + =live/client.js=) instead of innerHTML swaps;
+  - adds =serve-window= (a native window onto any =live.app=) and =free-port=;
+  - pure render tests: =test/bl/loom/desktop_test.bl= (8 passed); the loom parts/ui/token suites still pass;
+  - =hello-app= renders in headless sway;
+  - also carries BUG-109, BUG-110 and FUP-133.
+- omega (=e0a336e=) detects upstream at runtime (=omega.ui.web/upstream-desktop?=):
+  - before the merge: it serves the live.app itself and opens a plain wry window;
+  - after the merge: =open-window!= calls =loom.desktop/serve-window=.
+  - Both paths are verified, so omega works in the meantime with no action.
+
+* To do after the user merges loom-desktop-live
+1. Delete the fallback branch in =omega.ui.web= (=upstream-desktop?=, local =free-port=, the =wry/open= path). =open-window!= becomes =(loom.desktop/serve-window (app-value …) …)=.
+2. Run =bin/bl test= and =bin/omega-headless= (7 scenarios).
+3. Upstream FUP-133: lift =omega.ui.probe= + =bin/omega-headless= into beam-lisp tooling (=bl probe=). omega then uses it and deletes its copies.
+4. Track BUG-110 (live.diff keyed siblings). When it is fixed, drop omega's workarounds: the =display:contents= screen wrapper and the keyed empty groups.
+
+* Notes
+- The worktree's own =bin/bl= cannot boot cold (lazy_memo native not loadable). Verification used the main checkout with =-p= overriding =loom/desktop.bl=.
+- The main checkout had the user's uncommitted rt.bl/optimize.bl/lower.bl work. It was not touched.
