@@ -134,6 +134,50 @@
 ;; ── the registry: a literal map, so it exists whenever a fn here runs ──
 ;; (beam-lisp demand-loads: top-level SIDE EFFECTS like swap! into a registry
 ;;  did not run when another ns only called a fn here — observed 2026-10-02)
+(defn a-long-call-shows-elapsed-activity []
+  ;; the eval runs a 6 s shell: nothing streams, but the row says what runs and ticks
+  (with-ui (loop/scripted [(loop/call-tool "eval" {:code "(sh \"sleep 6\")"}) (loop/say "slept")])
+    (fn [sys ui win]
+      (task/open! sys {:goal "sleep a bit"})
+      (let [first-line (probe/wait-for win "(function(){var d=document.querySelector('[data-doing=\"1\"]');return d&&d.textContent.indexOf('running sh')>=0&&d.textContent;})()" 20000)]
+        (is (string? first-line) "a running sh is shown on the row")
+        (is (includes? (str first-line) "sleep 6") "it names the command")
+        (Process/sleep 2500)
+        (is (not= first-line (probe/query win "(function(){var d=document.querySelector('[data-doing=\"1\"]');return d&&d.textContent;})()"))
+            "the elapsed time ticks"))
+      (probe/wait-for win "document.body.innerText.indexOf('slept') >= 0" 30000)
+      (is (= 0 (probe/query win "document.querySelectorAll('[data-doing=\"1\"]').length")) "it clears when the call ends"))))
+
+(defn tasks-survive-closing-omega []
+  ;; a durable store, closed and reopened under a NEW system and UI: the task,
+  ;; its conversation and result are on screen again
+  (when available?
+    (let [d (str "/tmp/omega-hl-db-" (erlang/unique_integer (to-list [:positive])))
+          e1 (env/open-durable! d)
+          s1 (task/start-system e1 {:step (loop/scripted [(loop/say "kept answer")]) :tools cm/tools :root "/tmp"})
+          id (task/open! s1 {:goal "remember this goal"})
+          _ (task/await s1 id 10000)
+          _ (task/stop-system! s1)
+          _ (env/close! e1)
+          e2 (env/open-durable! d)
+          sys (task/start-system e2 {:step (loop/scripted [(loop/say "x")]) :tools cm/tools :root "/tmp"})
+          _ (task/recover! sys)
+          ui (web/start! sys {:port :free})
+          win (probe/open (probe/attach) (:url ui))]
+      (try
+        (probe/wait-for win "document.body.innerText.indexOf('remember this goal') >= 0" 20000)
+        (is (includes? (str (probe/text win)) "remember this goal") "the task is listed after a restart")
+        (probe/click win "[data-task]")
+        ;; the task SCREEN (its composer), not the overview row's result preview
+        (probe/wait-for win "document.body.innerText.indexOf('Message this task') >= 0" 20000)
+        (let [txt (str (probe/text win))]
+          (is (includes? txt "Message this task") "the task opens")
+          (is (includes? txt "remember this goal") "its prompt turn is there")
+          (is (includes? txt "kept answer") "its answer turn is there"))
+        (Process/sleep 1500) ; the compositor commits the frame after the DOM changes
+        (probe/shot win "/tmp/hl/durable.png")
+        (finally (probe/close win) (task/stop-system! sys) (env/close! e2))))))
+
 (defn scenarios []
   {"typing-a-goal-and-enter-opens-a-task" typing-a-goal-and-enter-opens-a-task
    "updates-patch-the-page-keeping-scroll-and-styles" updates-patch-the-page-keeping-scroll-and-styles
@@ -141,7 +185,9 @@
    "streamed-tokens-appear-and-are-replaced-by-the-recorded-turn" streamed-tokens-appear-and-are-replaced-by-the-recorded-turn
    "it-can-see-itself" it-can-see-itself
    "rows-stay-in-sync-as-a-task-moves-groups" rows-stay-in-sync-as-a-task-moves-groups
-   "live-model-streams-into-the-window" live-model-streams-into-the-window})
+   "live-model-streams-into-the-window" live-model-streams-into-the-window
+   "a-long-call-shows-elapsed-activity" a-long-call-shows-elapsed-activity
+   "tasks-survive-closing-omega" tasks-survive-closing-omega})
 
 (defn scenario-names [] (sort (keys (scenarios))))
 
