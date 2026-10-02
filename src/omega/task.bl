@@ -303,6 +303,31 @@
     (reap/reap-system! (:nonce sys)))
   :ok)
 
+;; ── recovery: a durable env reopened ──
+;
+; A task that was :open, :running or :waiting when its VM stopped has no
+; executor and no turn any more. It becomes :idle, with a note in its result
+; and a :blocker trace saying so, so it shows under "Needs you" instead of
+; claiming to run. Every non-terminal task gets an executor again: a follow-up
+; then reaches it as usual, and a message that arrived but was never read
+; starts a turn, exactly as it would have.
+
+(defn recover!
+  "Re-attach system `sys` to the tasks in its env (a durable env reopened).
+   Call once, after ext/install. Returns the ids of tasks that were interrupted."
+  [sys]
+  (let [e (:env sys)
+        rows (env/q e '[:find ?id ?s :where [?t :task/id ?id] [?t :task/status ?s]])
+        live (remove (fn [[_ s]] (terminal? s)) rows)
+        interrupted (vec (sort (keep (fn [[id s]] (when (contains? #{:open :running :waiting} s) id)) live)))]
+    (doseq [id interrupted]
+      (env/tx! e [[:db/add (env/eid e :task/id id) :task/result
+                   "interrupted: omega stopped while this task was running. Send a message to continue."]])
+      (tr/leave! e id {:kind :blocker :subject id :text "interrupted: omega stopped mid-turn"})
+      (set-status! sys id :idle))
+    (doseq [[id _] live] (start-executor! sys id))
+    interrupted))
+
 ;; ── the system ──────────────────────────────────────────────────────────
 
 (defn start-system
@@ -312,12 +337,15 @@
      :hooks   extension hooks (omega.ext)
    Returns the system map every other verb takes."
   [e opts]
-  (let [sup (elem (DynamicSupervisor/start_link (to-list [(tuple :strategy :one_for_one)])) 1)]
-    ;; :open! and :await ride in the system so eval code (spawn, wait) can reach them
-    ;; without omega.prelude requiring omega.task — the dependency stays one-way.
-    (merge {:env e :sup sup :executors (atom {})
-            ;; tags every OS process this system's tasks start (omega.reap)
-            :nonce (reap/nonce)
-            :open! (fn [s m] (open! s m)) :await (fn [s id ms] (await s id ms))
-            :status (fn [s id] (status s id))}
-           (select-keys opts [:step :tools :hooks :system-prompt :max-steps :root :eval-timeout-ms]))))
+  (let [sup (elem (DynamicSupervisor/start_link (to-list [(tuple :strategy :one_for_one)])) 1)
+        ;; :open! and :await ride in the system so eval code (spawn, wait) can reach them
+        ;; without omega.prelude requiring omega.task — the dependency stays one-way.
+        sys (merge {:env e :sup sup :executors (atom {})
+                    ;; tags every OS process this system's tasks start (omega.reap)
+                    :nonce (reap/nonce)
+                    :open! (fn [s m] (open! s m)) :await (fn [s id ms] (await s id ms))
+                    :status (fn [s id] (status s id))}
+                   (select-keys opts [:step :tools :hooks :system-prompt :max-steps :root :eval-timeout-ms]))]
+    ;; NB: over a reopened durable env, call (recover! sys) AFTER ext/install —
+    ;; executors copy the system they start with
+    sys))

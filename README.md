@@ -20,7 +20,18 @@ cd /some/project
 ```
 
 Flags: `--offline`, `--jev`, `--notify`, `--cassette PATH` (record/replay the model),
-`--db DIR` (keep the fact log on disk).
+`--db DIR` (where to keep tasks), `--memory` (keep nothing).
+
+**Where tasks are kept.** Every task, its conversation (each turn), messages,
+traces and results are datoms in ONE store per project: `<project>/.omega/db`
+(fjall, on disk). Close the window or kill omega and nothing is lost: the next
+`omega-ui` in that project shows every task again. A task that was mid-turn
+comes back as *idle* ("interrupted…", under Needs you); send it a message to
+continue. A store is one process's at a time, so a second omega in the same
+project says so and exits (use `--db DIR` or `--memory`). `--offline` and
+`--demo` runs are in memory unless `--db` is given. An omega started from
+inside a task (omega testing itself) is in memory too. Add `.omega/` to the
+project's `.gitignore`.
 
 The UI is a beam-lisp `live.app` (server-rendered, keyed patches over a socket,
 streaming tokens), shown in a native wry window or any browser:

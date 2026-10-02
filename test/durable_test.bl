@@ -1,0 +1,59 @@
+(ns durable-test
+  (:require [omega.env :as env]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.codemode :as cm]))
+
+(defn- dir! [] (str "/tmp/omega-durable-" (erlang/unique_integer (to-list [:positive]))))
+
+(deftest tasks-and-turns-survive-a-restart
+  (let [d (dir!)
+        e1 (env/open-durable! d)
+        s1 (task/start-system e1 {:step (loop/scripted [(loop/say "first answer")]) :tools cm/tools :root "/tmp"})
+        id (task/open! s1 {:goal "remember me"})
+        _ (task/await s1 id 10000)
+        _ (task/stop-system! s1)
+        _ (env/close! e1)
+        e2 (env/open-durable! d)
+        s2 (task/start-system e2 {:step (loop/scripted [(loop/say "second answer")]) :tools cm/tools :root "/tmp"})
+        _ (task/recover! s2)
+        v (task/view s2 id)]
+    (is (= "remember me" (:goal v)))
+    (is (= :idle (:status v)))
+    (is (= "first answer" (:result v)))
+    (is (= [:user :assistant] (map :role (loop/turns s2 id))))
+    ;; a follow-up reaches the recovered task and runs a turn
+    (task/say! s2 id "and again")
+    (Process/sleep 300)
+    (is (= "second answer" (:result (task/await s2 id 10000))))
+    ;; ids continue: a new task never reuses a stored id
+    (let [id2 (task/open! s2 {:goal "another"})]
+      (is (not= id id2))
+      (is (not (contains? #{"t-1" "t-2" "t-3"} id2)) (str "got " id2)))
+    (task/stop-system! s2)
+    (env/close! e2)))
+
+(deftest a-task-running-when-omega-stopped-comes-back-interrupted
+  (let [d (dir!)
+        e1 (env/open-durable! d)
+        s1 (task/start-system e1 {:step (fn [_] (Process/sleep 60000) (loop/say "never")) :tools cm/tools :root "/tmp"})
+        id (task/open! s1 {:goal "long"})
+        _ (loop [n 0] (when (and (< n 100) (not= :running (task/status s1 id))) (Process/sleep 50) (recur (inc n))))
+        _ (is (= :running (task/status s1 id)))
+        _ (task/stop-system! s1)
+        _ (env/close! e1)
+        e2 (env/open-durable! d)
+        s2 (task/start-system e2 {:step (loop/scripted [(loop/say "resumed")]) :tools cm/tools :root "/tmp"})]
+    (is (= [id] (task/recover! s2)))
+    (is (= :idle (task/status s2 id)))
+    (is (clojure.string/starts-with? (:result (task/view s2 id)) "interrupted"))
+    (task/say! s2 id "continue")
+    (Process/sleep 300)
+    (is (= "resumed" (:result (task/await s2 id 10000))))
+    (task/stop-system! s2)
+    (env/close! e2)))
+
+(deftest each-project-keeps-its-tasks-under-dot-omega
+  (is (= "/x" (env/db-path "/p" "/x")))
+  (when (nil? (System/get_env "OMEGA_TASK_TAG"))
+    (is (= "/p/.omega/db" (env/db-path "/p" nil)))))

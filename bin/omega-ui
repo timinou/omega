@@ -3,7 +3,7 @@
 #   bin/omega-ui              live: tasks run against Sonnet 5.5 in the current directory
 #   bin/omega-ui --demo       offline: a scripted world, for looking at the UI
 #   bin/omega-ui --no-window  serve only; open http://127.0.0.1:4747 in any browser
-#   flags: --notify  --db DIR  --root DIR  --port N
+#   flags: --notify  --db DIR (default <project>/.omega/db)  --memory  --root DIR  --port N
 ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
 ENTRY=$(mktemp --suffix=.bl)
 trap 'rm -f "$ENTRY"' EXIT

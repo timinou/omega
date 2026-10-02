@@ -3,7 +3,8 @@
 ;   bin/omega "goal"                 one task, live model, prints the conversation
 ;   bin/omega --offline "goal"       the same against a scripted model (no network)
 ;   bin/omega --cassette PATH "goal" record/replay the model to PATH (:auto)
-;   bin/omega --db DIR "goal"        keep the fact log on disk (fjall) in DIR
+;   bin/omega --db DIR "goal"        keep tasks in DIR (default <root>/.omega/db)
+;   bin/omega --memory "goal"        keep nothing: an in-memory fact log
 ;   bin/omega --notify "goal"        desktop notifications (omega.ext.notify)
 ;   bin/omega --jev "goal"           Jev done-gate + scope check (omega.ext.jev-gate)
 ;
@@ -54,6 +55,7 @@
           "--jev" (recur more (assoc opts :jev true))
           "--cassette" (recur (rest more) (assoc opts :cassette (first more)))
           "--db" (recur (rest more) (assoc opts :db (first more)))
+          "--memory" (recur more (assoc opts :memory true))
           "--root" (recur (rest more) (assoc opts :root (first more)))
           (recur more (update opts :goal (fn [g] (if g (str g " " a) a)))))))))
 
@@ -270,14 +272,18 @@
   [args]
   (let [o (parse args)
         root (or (:root o) (File/cwd!))
-        _ (when (nil? (:goal o)) (throw (ex-info "usage: omega [--offline] [--notify] [--jev] [--cassette PATH] [--db DIR] \"goal\"" {})))
+        _ (when (nil? (:goal o)) (throw (ex-info "usage: omega [--offline] [--notify] [--jev] [--cassette PATH] [--db DIR | --memory] \"goal\"" {})))
         base (if (:offline o) (offline-model) (llm/step (llm/from-env (omega-home))))
         step (if (:cassette o) (llm/cassette base (:cassette o) :auto) base)
-        e (env/open (if (:db o) {:path (:db o)} {}))
+        ;; offline runs are demos: kept nowhere unless --db asks
+        db (when-not (or (:memory o) (and (:offline o) (nil? (:db o)))) (env/db-path root (:db o)))
+        e (if db (env/open-durable! db) (env/open))
         sys (task/start-system e {:step step :tools codemode/tools :root root :system-prompt SYSTEM-PROMPT})
         exts (cond-> []
                (:notify o) (conj (notify/extension))
                (:jev o) (conj (jev-gate/extension {:transport (jev/http (or (jev/key-from-env root) (jev/key-from-env (omega-home))))})))
+        ;; NB: no task/recover! — a CLI run works on ONE task; it records into the
+        ;; project's store without resuming the others (the UI does that)
         sys (ext/install sys exts)
         ropts (render-opts)
         id (task/open! sys {:goal (:goal o)})]
@@ -293,6 +299,8 @@
       (when (:notify o) (Process/sleep 500))
       (ext/uninstall sys)
       (task/stop-system! sys)
+      ;; the store's lock is released here, so the UI or the next run can open it
+      (when db (env/close! e))
       v)))
 
 (defn main []

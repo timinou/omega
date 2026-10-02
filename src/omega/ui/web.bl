@@ -187,13 +187,17 @@
         opt (fn [f] (second (drop-while (fn [a] (not= a f)) args)))
         root (or (opt "--root") (File/cwd!))
         home (or (System/get_env "OMEGA_HOME") (File/cwd!))
+        db (when-not (or (flag? "--demo") (flag? "--memory")) (env/db-path root (opt "--db")))
         sys (if (flag? "--demo")
               (omega.ui.demo/start! "/tmp/omega-ui-demo")
-              (task/start-system (env/open (if-let [db (opt "--db")] {:path db} {}))
+              (task/start-system (if db (env/open-durable! db) (env/open))
                                  {:step (omega.llm/step (omega.llm/from-env home))
                                   :tools omega.codemode/tools :root root
                                   :system-prompt omega.cli/SYSTEM-PROMPT}))
         sys (omega.ext/install sys (if (flag? "--notify") [(omega.ext.notify/extension)] []))
+        interrupted (task/recover! sys)
+        _ (when db (println (str "omega: tasks are kept in " db
+                                 (when (seq interrupted) (str " · interrupted: " (clojure.string/join " " interrupted))))))
         port (if-let [p (opt "--port")] (erlang/binary_to_integer p) 4747)]
     (if (flag? "--no-window")
       (let [ui (start! sys {:port port})]
@@ -204,4 +208,5 @@
         ;; the window's IPC receiver exits when the window closes
         (erlang/monitor :process (:receiver (:window ui)))
         (receive [:DOWN _ :process _ _] :closed)))
-    (task/stop-system! sys)))
+    (task/stop-system! sys)
+    (when db (env/close! (:env sys)))))
