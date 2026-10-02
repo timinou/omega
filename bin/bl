@@ -1,9 +1,25 @@
 #!/bin/sh
-# bin/bl — run beam-lisp for omega: the LATEST main checkout (decision D12),
-# with omega's sources on the search path. Override the checkout with OMEGA_BL.
-BL=${OMEGA_BL:-$HOME/code/undefine/beam-lisp/bin/bl}
+# bin/bl — run beam-lisp for omega: the build env.bl pins (`:bl "commit:…"`),
+# resolved by the `bl` launcher, with omega's sources on the search path.
+# OMEGA_BL=<path to a bl> runs that one instead (e.g. the live main checkout).
 ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
+if [ -n "${OMEGA_BL:-}" ]; then
+  BL=$OMEGA_BL
+else
+  BL=$(command -v "$HOME/.local/bin/bl" || true)
+  [ -z "$BL" ] && { echo "omega: needs the bl launcher at ~/.local/bin/bl (or set OMEGA_BL)" >&2; exit 2; }
+  # the launcher reads env.bl from the working directory upwards: pin it from
+  # wherever omega is run
+  export BL_USE=${BL_USE:-$(sed -n 's/^ *:bl "\(.*\)".*/\1/p' "$ROOT/env.bl")}
+fi
+# The launcher's build is sensitive to the directory it starts in (a stray
+# build/ dir or a beam-lisp tree there breaks the pinned image), so the VM
+# always starts in omega's root. Callers pass the project as --root, and file
+# arguments are resolved first, so relative paths keep meaning "from here".
+abs() { case "$1" in /*|-*) printf '%s' "$1" ;; *) [ -e "$1" ] && printf '%s/%s' "$PWD" "$1" || printf '%s' "$1" ;; esac; }
 cmd=$1; shift
+for a; do shift; set -- "$@" "$(abs "$a")"; done
+cd "$ROOT" || exit 2
 case "$cmd" in
   run|test|eval|check) exec "$BL" "$cmd" -p "$ROOT/src" "$@" ;;
   *) exec "$BL" "$cmd" "$@" ;;

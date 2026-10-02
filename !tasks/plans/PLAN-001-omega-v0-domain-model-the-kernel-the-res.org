@@ -42,7 +42,7 @@ There is a clean datom schema, a task namespace interface, an executor =defserve
 - D9. =edits[]= only for now.
 - D10. No plan mode, no permissions, no read-only. Full rights by default.
 - D11. (b) handoff to a successor task for now; also design (c), a compactor driven by trace pressure, using datom queries and introspection.
-- D12. Always the latest beam-lisp (the main checkout's =bin/bl=, running from source). =omega.ui= uses semantic roles; we lean towards a loom-only UI, no TUI.
+- D12. Always the latest beam-lisp (the main checkout's =bin/bl=, running from source). /Superseded 2026-10-02: omega pins a beam-lisp commit in =env.bl= (the launcher builds it once, clean). The live checkout's uncommitted boot-tier work made every run recompile for minutes and hung tasks' test runs./ =omega.ui= uses semantic roles; we lean towards a loom-only UI, no TUI.
 - D13. Operate, dual themes, the leans in general; surface the best verbs.
 - Provider: Anthropic via the better-ccflare proxy at =localhost:8080/v1/messages=. It needs the Claude Code request shape (see the omega.llm notes). Sonnet 5.5 is preferred; Codex OAuth is the fallback.
 

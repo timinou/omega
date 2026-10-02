@@ -34,8 +34,12 @@ cd /some/project && ~/code/undefine/omega/bin/omega-ui        # live: type a goa
 
 ## Requirements
 
-- **beam-lisp main** at `~/code/undefine/beam-lisp` (override with `OMEGA_BL=/path/to/bin/bl`).
-  `bin/bl` wraps it and puts `src/` on the search path. Always the latest (decision D12).
+- **beam-lisp, pinned** in `env.bl` (`:bl "commit:…"`) and run by the `bl`
+  launcher at `~/.local/bin/bl`, which builds that commit once in a clean tree
+  and keeps it. omega is unaffected by uncommitted work in the beam-lisp
+  checkout. `bin/bl` adds `src/` to the search path and always starts the VM in
+  omega's root. Run the live checkout instead with
+  `OMEGA_BL=~/code/undefine/beam-lisp/bin/bl`. To move the pin, see `env.bl`.
 - **Live model:** an Anthropic Messages endpoint. The default is the local
   better-ccflare proxy at `http://localhost:8080`. It only routes requests whose
   first system block is the Claude Code identity line, which `omega.llm` sends.
