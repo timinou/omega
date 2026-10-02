@@ -17,6 +17,8 @@
             [omega.loop :as loop]
             [omega.codemode :as codemode]
             [omega.trace :as tr]
+            [omega.ui.theme :as th]
+            [clojure.string :as str]
             [omega.llm :as llm]
             [omega.ext :as ext]
             [omega.ext.notify :as notify]
@@ -63,28 +65,196 @@
    [(loop/call-tool "eval" {:code "(println (ls))\n(:out (sh \"git log --oneline -3 2>/dev/null || echo no git\"))"} "tu-1")
     (loop/call-tool "eval" {:code "(trace :finding \".\" \"offline demo looked at the root\")\n(done \"Listed the project root and left a finding (offline model).\")"} "tu-2")]))
 
-(defn- block->line [b]
-  (case (:type b)
-    :text (:text b)
-    :tool-use (str "→ " (:name b) " " (pr-str (:input b)))
-    :tool-result (let [c (str (:content b))
-                       c (if (> (count c) 400) (str (subs c 0 400) " …") c)]
-                   (str (if (:error? b) "✗ " "← ") c))
-    (pr-str b)))
+;; ── formatting (pure: data → string) ────────────────────────────────────
+;
+; Nothing in this section prints or reads the environment. `o` is a render-opts
+; map: {:color? bool :head n :tail n :err-head n :err-tail n :width n}. The
+; impure edge (TTY / NO_COLOR sniffing, println) is `render-opts` and the
+; `print-*` fns further down.
 
-(defn print-turn [t]
-  (println (str "\n── " (name (:role t)) " " (:n t) " ──"))
-  (doseq [b (:content t)] (println (block->line b))))
+(def ESC "\u001b")
+
+(def DEFAULT-OPTS
+  {:color? false
+   :head 6 :tail 4          ; tool results: first N + last M lines
+   :err-head 12 :err-tail 8 ; errors keep more of what they say
+   :code-head 40 :code-tail 10
+   :width 160})
+
+(def ANSI
+  "Tone → SGR code. 16-colour codes, so they follow the terminal's own palette.
+   Tones are omega.ui.theme's vocabulary (accent/success/danger/muted/faint)."
+  {:bold "1" :dim "2" :accent "36" :success "32" :danger "31" :warning "33"
+   :muted "2" :faint "2"})
+
+(defn color-enabled?
+  "Colour only on a TTY and only when NO_COLOR is unset (or empty, per no-color.org).
+   FORCE_COLOR turns it on for a pipe (bin/omega runs us through a filter) but never
+   overrides NO_COLOR."
+  [tty? no-color force-color]
+  (and (not (and (some? no-color) (not= "" no-color)))
+       (or (= true tty?) (and (some? force-color) (not= "" force-color) (not= "0" force-color)))))
+
+(defn paint
+  "Wrap `s` in the SGR code for `tone` when (:color? o); else `s` unchanged.
+   Applied per line by callers, so line-oriented filters keep working."
+  [o tone s]
+  (if (:color? o)
+    (str ESC "[" (get ANSI tone "0") "m" s ESC "[0m")
+    s))
+
+(defn- opt [o k] (get o k (get DEFAULT-OPTS k)))
+
+(defn- spaces [n] (apply str (repeat n " ")))
+
+(defn clip
+  "Cut a line to `n` characters, ending in … when something was cut."
+  [s n]
+  (if (> (count s) n) (str (subs s 0 (dec n)) "…") s))
+
+(defn text-lines
+  "Text → lines: tabs widened, CRs dropped, trailing blank lines dropped."
+  [text]
+  (let [t (str/replace (str/replace (str text) "\r" "") "\t" "  ")
+        ls (str/split-lines t)]
+    (loop [ls (vec ls)]
+      (if (and (seq ls) (str/blank? (peek ls))) (recur (pop ls)) ls))))
+
+(defn collapse-lines
+  "Keep the first `head` and last `tail` lines; the middle becomes one
+   '… K more lines' marker. Never hides a single line (the marker would be
+   no shorter than what it replaces)."
+  [lines head tail]
+  (let [n (count lines) hidden (- n head tail)]
+    (if (< hidden 2)
+      (vec lines)
+      (vec (concat (take head lines)
+                   [(str "… " hidden " more lines")]
+                   (drop (- n tail) lines))))))
+
+(defn- join-with [sep xs] (str/join sep (vec xs)))
+(defn- join-lines [xs] (join-with "\n" xs))
+
+(defn group-digits [n]
+  (if (integer? n)
+    (loop [s (str n) acc nil]
+      (if (<= (count s) 3)
+        (if acc (str s "," acc) s)
+        (let [t (subs s (- (count s) 3))]
+          (recur (subs s 0 (- (count s) 3)) (if acc (str t "," acc) t)))))
+    (str n)))
+
+(defn format-cost
+  "Token usage as 'in 1,200 · out 340 · cache read 800 tokens'."
+  [cost]
+  (let [labels [[:input "in"] [:output "out"] [:cache-read "cache read"] [:cache-write "cache write"]]
+        parts (keep (fn [[k l]] (when (some? (get cost k)) (str l " " (group-digits (get cost k))))) labels)]
+    (if (empty? parts) "no usage recorded" (str (join-with " · " parts) " tokens"))))
+
+(defn- indented [o tone prefix lines]
+  (map (fn [l] (paint o tone (str prefix (clip l (opt o :width))))) lines))
+
+(defn format-tool-use
+  "→ name, then :code as real code: one line per line, behind a │ gutter.
+   Other input keys stay on the header line as a map."
+  [b o]
+  (let [input (:input b)
+        code (when (map? input) (:code input))
+        rest-in (if (string? code) (dissoc input :code) input)
+        head (str (paint o :accent (str "→ " (:name b)))
+                  (when (and (map? rest-in) (seq rest-in)) (str " " (pr-str rest-in)))
+                  (when-not (map? rest-in) (str " " (pr-str rest-in))))
+        lines (when (string? code)
+                (collapse-lines (text-lines code) (opt o :code-head) (opt o :code-tail)))]
+    (join-lines (concat [head] (indented o :faint "  │ " lines)))))
+
+(defn format-tool-result
+  "A result, dim and indented. One line stays on the arrow line; more go below it,
+   collapsed to head + tail with an explicit '… K more lines'. An error is marked
+   ✕ (theme's :failed glyph), coloured, and keeps a longer head/tail."
+  [b o]
+  (let [err? (= true (:error? b))
+        glyph (:glyph (th/status :failed))
+        lines (text-lines (:content b))
+        n (count lines)
+        tone (if err? :danger :muted)
+        mark (if err? (str glyph " error") "←")
+        shown (if err?
+                (collapse-lines lines (opt o :err-head) (opt o :err-tail))
+                (collapse-lines lines (opt o :head) (opt o :tail)))]
+    (cond
+      (zero? n) (paint o tone (str "  " mark (if err? "" " (no output)")))
+      (= 1 n) (paint o tone (str "  " mark (if err? " · " " ") (clip (first lines) (opt o :width))))
+      :else (join-lines (cons (paint o tone (str "  " mark (if err? " · " " ") n " lines"))
+                                  (indented o tone "    " shown))))))
+
+(defn block->line
+  "One content block → display string (may span several lines)."
+  ([b] (block->line b DEFAULT-OPTS))
+  ([b o]
+   (case (:type b)
+     :text (:text b)
+     :tool-use (format-tool-use b o)
+     :tool-result (format-tool-result b o)
+     (pr-str b))))
+
+(defn format-turn-header [t o]
+  (paint o (if (= :user (:role t)) :accent :faint)
+         (str "── " (name (:role t)) " " (:n t) " ──")))
+
+(defn format-turn
+  "A whole turn: blank line, header, then each block."
+  [t o]
+  (join-lines (concat [(str "\n" (format-turn-header t o))]
+                          (map (fn [b] (block->line b o)) (:content t)))))
+
+(defn format-start [id goal o]
+  (str (paint o :accent "omega") " · task " id " · " goal))
+
+(defn format-summary
+  "The closing block. `r` = {:view task-view :traces {kind n} :decisions [{:text :verdicts :error}]}.
+   Status is glyph + word from omega.ui.theme/STATUS — the desktop UI's vocabulary."
+  [r o]
+  (let [v (:view r)
+        st (th/status (:status v))
+        res-lines (str/split-lines (str (:result v)))
+        decisions (map (fn [d] (str "decision: " (:text d) " " (pr-str (or (:verdicts d) (:error d)))))
+                       (:decisions r))]
+    (join-lines
+              (concat
+               [""
+                (paint o (:tone st) (str "══ " (:glyph st) " " (:word st) " · " (:id v) " ══"))
+                (str "result: " (first res-lines))]
+               (map (fn [l] (str "        " l)) (rest res-lines))
+               [(str "cost:   " (format-cost (:cost v)))
+                (str "traces: " (join-with " · " (map (fn [[k n]] (str (name k) " " n)) (sort-by (fn [[k _]] (name k)) (:traces r)))))]
+               decisions))))
+
+;; ── printing (the impure edge) ──────────────────────────────────────────
+
+(defn render-opts
+  "Sniff the terminal once: colour iff stdout is a TTY and NO_COLOR is unset."
+  []
+  (let [tty? (try (= true (prim_tty/isatty :stdout)) (catch err false))]
+    (assoc DEFAULT-OPTS :color? (color-enabled? tty? (System/get_env "NO_COLOR") (System/get_env "FORCE_COLOR")))))
+
+(defn print-turn
+  ([t] (print-turn t (render-opts)))
+  ([t o] (println (format-turn t o))))
+
+(defn print-summary
+  ([r] (print-summary r (render-opts)))
+  ([r o] (println (format-summary r o))))
 
 (defn- follow!
   "Print task `id`'s turns as they appear, until it settles."
-  [sys id]
+  [sys id ropts]
   (let [e (:env sys)
         h (env/sense e '[?u :turn/task ?t] :turn)
         printed (atom 0)
         flush! (fn []
                  (let [ts (loop/turns sys id)]
-                   (doseq [t (drop @printed ts)] (print-turn t))
+                   (doseq [t (drop @printed ts)] (print-turn t ropts))
                    (reset! printed (count ts))))]
     (loop []
       (flush!)
@@ -109,16 +279,17 @@
                (:notify o) (conj (notify/extension))
                (:jev o) (conj (jev-gate/extension {:transport (jev/http (or (jev/key-from-env root) (jev/key-from-env (omega-home))))})))
         sys (ext/install sys exts)
+        ropts (render-opts)
         id (task/open! sys {:goal (:goal o)})]
-    (println (str "omega · task " id " · " (:goal o)))
-    (follow! sys id)
+    (println (format-start id (:goal o) ropts))
+    (follow! sys id ropts)
     (let [v (task/view sys id)]
-      (println (str "\n══ " id " · " (name (:status v)) " ══"))
-      (println (str "result: " (:result v)))
-      (println (str "cost:   " (pr-str (select-keys (:cost v) [:input :output :cache-read]))))
-      (println (str "traces: " (pr-str (frequencies (map :kind (tr/all e))))))
-      (doseq [d (tr/all e {:kind :decision})]
-        (println (str "decision: " (:text d) " " (pr-str (or (get-in d [:data :verdicts]) (get-in d [:data :error]))))))
+      (print-summary
+       {:view v
+        :traces (frequencies (map :kind (tr/all e)))
+        :decisions (vec (map (fn [d] {:text (:text d) :verdicts (get-in d [:data :verdicts]) :error (get-in d [:data :error])})
+                             (tr/all e {:kind :decision})))}
+       ropts)
       (when (:notify o) (Process/sleep 500))
       (ext/uninstall sys)
       (task/stop-system! sys)

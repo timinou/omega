@@ -6,4 +6,6 @@ ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
 ENTRY=$(mktemp --suffix=.bl)
 trap 'rm -f "$ENTRY"' EXIT
 printf '(ns omega.main (:require [omega.cli :as cli]))\n(cli/main)\n' > "$ENTRY"
+# bl's stdout is a pipe here (the filter below), so it cannot see the TTY: pass it on.
+[ -t 1 ] && [ -z "${NO_COLOR:-}" ] && export FORCE_COLOR=1
 OMEGA_HOME="$ROOT" "$ROOT/bin/bl" run "$ENTRY" -- --root "$PWD" "$@" 2>&1 | grep -v '^bl-stage-hosts:' | sed -e '/^:ok$/d' -e '/^nil$/d'

@@ -1,0 +1,42 @@
+#+TITLE: Nicer output everywhere: CLI turns, tool calls, results, and the explore helpers
+#+STATE: ITEM
+#+CUSTOM_ID: FUP-002-nicer-output-everywhere
+
+* Why
+
+Omega's output is a data dump in three places: the CLI (=cli.bl= =print-turn= / =block->line=), the task screen (=ui/screens.bl.md= =block-view=), and the helper functions an agent defines for itself in codemode. In each, tool input is shown as an escaped one-line string, results are truncated blindly, and nothing says what was cut.
+
+* Principles (shared by CLI + UI)
+
+- One vocabulary: status glyph + word + tone from =omega.ui.theme/STATUS=; a future TUI reuses it.
+- Show code as code (multi-line, indented), never as =pr-str= with =\n=.
+- Summaries use the first line of the code, not its first 80 characters.
+- Long output collapses to head + tail with an explicit '… K more lines'. Errors never collapse silently.
+- Pure formatters (data → string/hiccup) are separate from printing, so they are testable.
+- Colour only when stdout is a TTY and =NO_COLOR= is unset. Colour is never the only signal.
+
+* Items
+
+** ITEM CLI turns (spawned as t-11, prototype)
+ - tool-use code multi-line + indented; results dim + collapsed; errors marked
+ - final summary: status glyph/word, cost, task id
+ - tests in =test/cli_format_test.bl=
+
+** ITEM Task screen: pair each tool-result with the tool-use it answers (by =:id=)
+ - one disclosure per call: summary = first line of code + ← outcome (ok/✕, line count)
+ - results open by default when short or errored; collapsed with line count when long
+ - drop the separate 'result' turn header
+
+** ITEM Task screen: group a run of tool calls into one 'N steps' fold when no prose sits between them
+
+** ITEM Explore helpers as a shipped bundle (=omega.ext.explore=)
+ - =overview=, =tree=, =grep=, =defs=, =outline=, =refs=, =recent=, =tests-for=, =run-tests=
+ - consistent shape: header + aligned rows + '… N more'; stderr suppressed; vendored dirs marked
+ - printed via =println= so output is not an escaped map
+
+** ITEM Test harness: =bl test= rebuilds the shared boot tier (building 12 sources) and concurrent runs collide/hang
+ - observed: two parallel =bl test= runs sat >5 min in 'AOT: building'
+ - decide: run =bl build && bl seed= once up front, or serialise test runs
+
+* Out of scope
+ - redesigning the overview (already grouped by urgency; see screens.bl.md)

@@ -1,0 +1,118 @@
+(ns cli-format-test (:require [omega.cli :as cli] [clojure.string :as str]))
+
+(def PLAIN cli/DEFAULT-OPTS)
+(def COLOR (assoc cli/DEFAULT-OPTS :color? true))
+(def ESC (str "\u001b"))
+(defn- lines [s] (str/split-lines s))
+(defn- has? [s sub] (some? (str/index-of s sub)))
+
+;; ── colour policy ───────────────────────────────────────────────────────
+
+(deftest colour-needs-a-tty-and-no-no-color
+  (is (= true (cli/color-enabled? true nil nil)))
+  (is (= false (cli/color-enabled? false nil nil)))
+  (is (= false (cli/color-enabled? true "1" nil)) "NO_COLOR wins over a TTY")
+  (is (= false (cli/color-enabled? true "1" "1")) "…and over FORCE_COLOR")
+  (is (= true (cli/color-enabled? true "" nil)) "empty NO_COLOR counts as unset")
+  (is (= true (cli/color-enabled? false nil "1")) "FORCE_COLOR colours a pipe"))
+
+(deftest plain-output-has-no-escape-codes
+  (let [t {:n 2 :role :assistant
+           :content [{:type :text :text "hi"}
+                     {:type :tool-use :id "a" :name "eval" :input {:code "(+ 1 2)\n(+ 3 4)"}}
+                     {:type :tool-result :id "a" :content "x\ny" :error? true}]}]
+    (is (not (has? (cli/format-turn t PLAIN) ESC)))
+    (is (has? (cli/format-turn t COLOR) ESC))))
+
+;; ── tool use ────────────────────────────────────────────────────────────
+
+(deftest tool-use-code-is-real-multiline-code
+  (let [out (cli/format-tool-use {:name "eval" :input {:code "(println 1)\n(done \"ok\")"}} PLAIN)]
+    (is (= ["→ eval" "  │ (println 1)" "  │ (done \"ok\")"] (lines out)))
+    (is (not (has? out "\\n")) "no escaped newlines")
+    (is (not (has? out "\\\"")) "no escaped quotes")))
+
+(deftest tool-use-keeps-other-keys-on-the-header
+  (let [out (cli/format-tool-use {:name "x" :input {:code "1" :timeout 5}} PLAIN)]
+    (is (= "→ x {:timeout 5}" (first (lines out))))
+    (is (has? out "  │ 1")))
+  (is (= "→ x {:a 1}" (cli/format-tool-use {:name "x" :input {:a 1}} PLAIN))))
+
+(deftest very-long-code-collapses-too
+  (let [code (str/join "\n" (vec (map str (range 100))))
+        out (cli/format-tool-use {:name "eval" :input {:code code}} PLAIN)]
+    (is (has? out "more lines"))
+    (is (< (count (lines out)) 60))))
+
+;; ── tool results ────────────────────────────────────────────────────────
+
+(deftest collapse-keeps-head-and-tail-and_says-how-many
+  (is (= [0 1 2 "… 15 more lines" 18 19] (cli/collapse-lines (vec (range 20)) 3 2)))
+  (is (= (vec (range 6)) (cli/collapse-lines (vec (range 6)) 3 2)) "1 hidden line: shown in full")
+  (is (= [0 1 2 "… 2 more lines" 5 6] (cli/collapse-lines (vec (range 7)) 3 2))))
+
+(deftest short-result-stays-on-the-arrow-line
+  (is (= "  ← hello" (cli/format-tool-result {:content "hello"} PLAIN)))
+  (is (= "  ← hello" (cli/format-tool-result {:content "hello\n\n"} PLAIN)) "trailing blanks dropped")
+  (is (has? (cli/format-tool-result {:content ""} PLAIN) "no output")))
+
+(deftest long-result-is-indented-and-collapsed
+  (let [content (str/join "\n" (vec (map (fn [i] (str "line" i)) (range 50))))
+        out (lines (cli/format-tool-result {:content content} PLAIN))]
+    (is (= "  ← 50 lines" (first out)))
+    (is (some (fn [l] (= "    line0" l)) out))
+    (is (some (fn [l] (= "    line49" l)) out) "tail kept")
+    (is (some (fn [l] (= "    … 40 more lines" l)) out))
+    (is (not (some (fn [l] (= "    line20" l)) out)))
+    (is (every? (fn [l] (str/starts-with? l "  ")) out) "everything indented")))
+
+(deftest long-single-line-is-clipped-with-an-ellipsis
+  (let [out (cli/format-tool-result {:content (apply str (repeat 1000 "x"))} PLAIN)]
+    (is (str/ends-with? out "…"))
+    (is (< (count out) 200))))
+
+(deftest errors-are-marked-and-keep-more
+  (let [one (cli/format-tool-result {:content "boom" :error? true} PLAIN)
+        content (str/join "\n" (vec (map (fn [i] (str "e" i)) (range 30))))
+        many (lines (cli/format-tool-result {:content content :error? true} PLAIN))]
+    (is (= "  ✕ error · boom" one))
+    (is (= "  ✕ error · 30 lines" (first many)))
+    (is (some (fn [l] (= "    e11" l)) many) "err head is longer than the ok head")
+    (is (has? (cli/format-tool-result {:content "boom" :error? true} COLOR) (str ESC "[31m")) "danger tone")))
+
+;; ── turns ───────────────────────────────────────────────────────────────
+
+(deftest turn-has-header-and-blocks
+  (let [out (lines (cli/format-turn {:n 1 :role :user :content [{:type :text :text "goal"}]} PLAIN))]
+    (is (= ["" "── user 1 ──" "goal"] out))))
+
+(deftest unknown-blocks-fall-back-to-pr-str
+  (is (= "{:type :weird}" (cli/block->line {:type :weird}))))
+
+;; ── summary ─────────────────────────────────────────────────────────────
+
+(deftest cost-is-formatted-with-separators
+  (is (= "in 1,234,567 · out 89 · cache read 0 tokens" (cli/format-cost {:input 1234567 :output 89 :cache-read 0})))
+  (is (= "no usage recorded" (cli/format-cost {})))
+  (is (= "no usage recorded" (cli/format-cost nil))))
+
+(deftest summary-uses-the-theme-status-vocabulary
+  (doseq [[st g w] [[:done "✓" "done"] [:failed "✕" "failed"] [:idle "◆" "your turn"] [:cancelled "–" "cancelled"]]]
+    (let [out (cli/format-summary {:view {:id "t-9" :status st :result "r" :cost {:input 10 :output 2}}
+                                   :traces {:tool 2 :finding 1}} PLAIN)
+          head (nth (lines out) 1)]
+      (is (= (str "══ " g " " w " · t-9 ══") head))
+      (is (has? out "result: r"))
+      (is (has? out "cost:   in 10 · out 2 tokens"))
+      (is (has? out "traces: finding 1 · tool 2")))))
+
+(deftest summary-colours-by-tone-and-lists-decisions
+  (let [out (cli/format-summary {:view {:id "t-1" :status :failed :result "no" :cost {}}
+                                 :traces {}
+                                 :decisions [{:text "gate" :verdicts [:ok]}]} COLOR)]
+    (is (has? out (str ESC "[31m")) "failed → danger")
+    (is (has? out "decision: gate [:ok]"))))
+
+(deftest multiline-result-is-aligned-under-the-label
+  (let [out (cli/format-summary {:view {:id "t" :status :done :result "one\ntwo" :cost {}} :traces {}} PLAIN)]
+    (is (has? out "result: one\n        two"))))
