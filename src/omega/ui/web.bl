@@ -208,14 +208,9 @@
 
 ;; ── bin/omega-ui ────────────────────────────────────────────────────────
 
-(defn main
-  "bin/omega-ui: serve omega's UI over a live task system rooted at --root
-   (default cwd), or over the offline demo world with --demo, and open a
-   native window onto it. --no-window serves only (open the URL in a
-   browser). Blocks until the window closes (or forever with --no-window)."
-  []
-  (let [args (vec (BeamLisp/argv))
-        flag? (fn [f] (some (fn [a] (= a f)) args))
+(defn- main*
+  [args]
+  (let [flag? (fn [f] (some (fn [a] (= a f)) args))
         opt (fn [f] (second (drop-while (fn [a] (not= a f)) args)))
         root (or (opt "--root") (File/cwd!))
         home (or (System/get_env "OMEGA_HOME") (File/cwd!))
@@ -242,3 +237,11 @@
         (receive [:DOWN _ :process _ _] :closed)))
     (task/stop-system! sys)
     (when db (env/close! (:env sys)))))
+
+(defn main
+  "bin/omega-ui: serve omega's UI over a live task system rooted at --root
+   (default cwd), or over the offline demo world with --demo, and open a
+   native window onto it. --no-window serves only (open the URL in a
+   browser). Blocks until the window closes (or forever with --no-window)."
+  []
+  (env/exit-on-user-error (fn [] (main* (vec (BeamLisp/argv))))))

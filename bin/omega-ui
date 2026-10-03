@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # bin/omega-ui — omega's UI: a beam-lisp live.app, in a native window.
 #   bin/omega-ui              live: tasks run against Sonnet 5.5 in the current directory
 #   bin/omega-ui --demo       offline: a scripted world, for looking at the UI
@@ -8,4 +8,5 @@ ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
 ENTRY=$(mktemp --suffix=.bl)
 trap 'rm -f "$ENTRY"' EXIT
 printf '(ns omega.ui.main (:require [omega.ui.web :as web]))\n(web/main)\n' > "$ENTRY"
-OMEGA_HOME="$ROOT" "$ROOT/bin/bl" run "$ENTRY" -- --root "$PWD" "$@" 2>&1 | grep -v -e '^bl-stage-hosts:' -e 'JSC_SIGNAL'
+set -o pipefail  # the exit code is the VM's, not the output filter's
+OMEGA_HOME="$ROOT" "$ROOT/bin/bl" run "$ENTRY" -- --root "$PWD" "$@" 2>&1 | grep --line-buffered -v -e '^bl-stage-hosts:' -e 'JSC_SIGNAL'

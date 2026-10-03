@@ -304,6 +304,6 @@
       v)))
 
 (defn main []
-  (let [v (run (vec (BeamLisp/argv)))]
+  (let [v (env/exit-on-user-error (fn [] (run (vec (BeamLisp/argv)))))]
     (when-not (contains? #{:idle :done} (:status v))
       (System/halt 1))))
