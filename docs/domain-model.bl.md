@@ -190,6 +190,15 @@ single Datalog query.
    right to left (observed). Code sequences effects with `let`/`do`.
 6. **Refs point child → parent**, and every kind has a string identity attribute, so
    a transaction can upsert by id.
+7. **Nothing a task starts outlives it.** Every `(sh …)` child carries the task's
+   and the cell's reap tags in its environment; a killed cell, a terminal task and
+   a stopped system kill their tagged processes (`omega.reap`). *Test:* `reap-test`.
+8. **No call outlives its eval.** `wait` returns `{:pending true}` shortly before
+   the cell deadline instead of dying with the cell. *Test:*
+   `wait-returns-before-the-cell-deadline-and-says-so`.
+9. **A restart loses nothing and claims nothing false.** Per-project durable store;
+   ids resume; a task mid-turn when omega stopped comes back `:idle`
+   ("interrupted…"), never `:running` without an executor. *Test:* `durable-test`.
 
 ## 10. Where it goes next (not built yet)
 

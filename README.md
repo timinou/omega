@@ -65,13 +65,14 @@ cd /some/project && ~/code/undefine/omega/bin/omega-ui        # live: type a goa
 | path | what |
 |---|---|
 | `src/omega/schema.bl` | the datom schema: actor, task, msg, trace, turn |
-| `src/omega/env.bl` | one fact store per env; injectable clock and ids; `sense` = datom watch |
+| `src/omega/env.bl` | one fact store per env (in memory, or durable per project: `.omega/db`); ids resume on reopen; `sense` = datom watch |
 | `src/omega/actor.bl` | uniform actors (tasks and humans); mailboxes are facts |
 | `src/omega/trace.bl` | open trace vocabulary and glossary; decay; reinforcing reads; claim policy |
-| `src/omega/task.bl` | **the interface**: `open! say! steer! cancel! await view children tree` |
+| `src/omega/task.bl` | **the interface**: `open! say! steer! cancel! await view children tree`; `recover!` after a restart |
 | `src/omega/loop.bl` | one turn (`turn!`): model → tools → … → answer; the `step` seam; scripted models |
-| `src/omega/codemode.bl` | **the only tool: `eval`** (beam-lisp, harness cell evaluator, heap cap + deadline) |
-| `src/omega/prelude.bl` | what eval code calls: read write edit ls glob sh · spawn wait send done · trace traces q |
+| `src/omega/codemode.bl` | **the only tool: `eval`** (beam-lisp, harness cell evaluator, heap cap + deadline; a killed cell reaps its processes) |
+| `src/omega/reap.bl` | OS processes tagged per task and cell (env tags), killed when the cell is killed or the task ends |
+| `src/omega/prelude.bl` | what eval code calls: read write edit ls glob sh · spawn wait send done · trace traces q (`wait` returns `:pending` before the cell deadline) |
 | `src/omega/llm.bl` | Anthropic over OTP httpc; retries; cassettes. `llm/usage.bl` vendored from relay |
 | `src/omega/jev.bl` | Jev typed decisions: questions as values, declared decisions with fail direction |
 | `src/omega/ext.bl` | extensions as values: events, hooks (call-predicate, context, tool/after), tools |
@@ -82,7 +83,7 @@ cd /some/project && ~/code/undefine/omega/bin/omega-ui        # live: type a goa
 | `src/omega/ui/theme.bl` | design system as data: dark/light (WCAG AA tested), status = glyph + word + tone |
 | `src/omega/ui/screens.bl.md` | overview + task screens as pure `state → hiccup`, with the design reasoning |
 | `src/omega/ui/web.bl`, `bin/omega-ui` | the UI as a `live.app`: env + ephemeral stream conn observed, intents = task verbs |
-| `src/omega/stream.bl`, `src/omega/llm/sse.bl` | streaming: SSE parsed and folded purely; deltas broadcast over `pg`, never facts |
+| `src/omega/stream.bl`, `src/omega/llm/sse.bl` | streaming: SSE parsed and folded purely; deltas and activity (the call or `sh` running now) broadcast over `pg`, never facts |
 | `src/omega/ui/probe.bl`, `bin/omega-headless`, `test/headless/ui.bl` | the real window in a private headless sway: drive, query, wait-for, screenshot |
 | `research/domain/` | the research basis (15 literate notes) and the decision register |
 | `!tasks/plans/PLAN-001-…` | the decisions this version implements |
