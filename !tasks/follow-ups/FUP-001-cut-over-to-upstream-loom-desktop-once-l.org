@@ -43,3 +43,5 @@ Your first goal is to create a research/domain/ folder and put ALL the stuff the
 * Notes
 - The worktree's own =bin/bl= cannot boot cold (lazy_memo native not loadable). Verification used the main checkout with =-p= overriding =loom/desktop.bl=.
 - The main checkout had the user's uncommitted rt.bl/optimize.bl/lower.bl work. It was not touched.
+
+NOTE [2026-10-03]: 2026-10-03: omega is pinned to beam-lisp commit 2360b32e (env.bl). The loom-desktop-live branch (312d04c6) is NOT in the pin, so upstream-desktop? is false on the pinned build and omega uses its own window path. After merging the branch, also move the env.bl pin to a commit that contains it (verify with bin/bl test + bin/omega-headless under BL_USE=commit:<sha>).
