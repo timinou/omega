@@ -1508,6 +1508,10 @@ earlier section, **this section wins**, and the register (§13) and waves (§14)
   Usage becomes append-only per turn, summed on read. The store stays the truth for recovery and other
   readers. Without C8, every bl-ed feature that adds per-step work (checkpoints, marks, attention lines)
   lands on an already-quadratic loop.
+- **C8 prototyped** (`spikes/c8-turn-cache.bl.md`): a 120-step task ran 4.4× faster (138 s → 31 s).
+  But a process-dictionary cache behind `loop/turns` went stale for a reader in another process
+  (`:turns 0`). So C8 keeps `turns` as the store read, and `turn!` threads the turn list through
+  `request`, `record!` and `run-tool` as a loop-local value.
 - **Upstream (BUG-002, filed for beam-lisp):** datalog joins and `entity` are 10–70× slower than the
   raw index, and entities slow down with every update.
 

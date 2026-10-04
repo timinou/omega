@@ -12,7 +12,11 @@ feature they de-risk lands.
 | `file-port.bl.md` | is C6 small, and does an agent edit through a buffer server behave as designed? | C6 = 29 lines; eval cells see the port; the CAS refusal names the other task and cell; `trace/claim!` costs ~100 ms per call |
 | `convergence.bl.md` | where does §5.3's position rebase diverge, and what is the smallest fix? | it diverges on 63% of random concurrent pairs; atomic ops + split + actor tiebreak + list transform → 0/6000 |
 | `hot-task.bl.md` | does a long omega task slow itself down today? | yes: 1.2 s → 2.7 s per trivial step by step 160 |
+| `c8-turn-cache.bl.md` | does caching turns in the executor (C8) fix it? | yes: 4.4× faster on 120 steps; but a process-dictionary cache goes stale for non-executor readers, so C8 must thread the list through `turn!` as a value |
 | `turn-read-cost.bl.md` | where does that time go? | re-reading every turn from datom on every step (O(turns), 0.84 s at 300 turns) plus a rewritten `:task/cost` entity |
+| `task-cell.bl.md` | does the `:task` cell work as a package on `bl.doc.spans`? (needs the js-actors beam-lisp, see its header) | yes, full lifecycle; it must keep its own span kind, never `:cell` |
+| `task-refs.bl.md` | do per-task history refs fix gate blame? | no; a per-path gate does, on one shared main; refs add merge and blame, not test isolation |
+| `claims-advisory.bl.md` | do claims refuse a second writer? | no (advisory, as designed), but `edit` drops the conflict instead of telling the agent |
 
 The decisions these change are recorded in `research/domain/interface/bl-ed.bl.md` §15 (spike
 results) and in the FEAT/FUP/BUG items it names.
