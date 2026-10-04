@@ -140,12 +140,63 @@ world sees the same line, from the text alone.
 
 ```clojure
 (omega/tasks)                    ; [{:id "t-41" :status :running :title …} …]  — the cached rows
-(omega/open "tidy imports")      ; a homeless task: no cell, card in the status line only
+(omega/open "tidy imports")      ; a homeless task: it gets a home cell in the scratch pad (§2.7)
 (omega/say "t-41" "also octal")  ; steer from anywhere
 ```
 
 These are three `ed/defcmd`s over the same effects. It is the first taste of "the editor is the
 agent's REPL" without the sidebar.
+
+### 2.7 The scratch pad: a virtual document (UX-Q3, decided)
+
+A task opened without a document (`(omega/open …)`, `bin/omega "goal"`, a task spawned by a task)
+still needs a place where its card lives. In the slice that place is **`omega:scratch`**, a
+document that is not a file. `space a s` (or `(omega/scratch)`) switches to it:
+
+```org
+#+TITLE: omega scratch — tasks with no home
+
+* tidy imports
+#+begin_task :id t-44
+tidy imports
+#+end_task
+#+RESULTS: t-44
+: #omega/task {:id "t-44" :goal "9a01de"}
+
+* (your own notes and new task blocks go anywhere in here)
+```
+
+How it behaves:
+- **The bridge owns the text; bl-ed never sees a path.** `GET /scratch` returns it and `POST
+  /scratch` stores it (base-hash checked, like `/api/save`). The bridge keeps it in
+  `.omega/scratch.bl.org`, gitignored with the rest of `.omega/`, so it survives restarts and
+  needs no schema change (a `:scratch/text` fact would be a core change to `omega.schema`, which
+  the slice avoids).
+- **The bridge appends a homeless task** as a heading + task block + identity result. It is the
+  scratch pad's only other writer, and it writes only by appending, under the same base-hash rule.
+- **Everything else is a normal document.** Cards, `C-Enter`, `y`/`n`, prose and new task blocks all
+  work, because it goes through the same partition and the same commands. Nothing in bl-ed
+  special-cases it beyond where load and save go.
+- **bl-ed side:** a document path with a scheme (`omega:…`) routes `:save` and load to the bridge
+  instead of `/api/file` and `/api/save`. That one routing rule is the whole primitive.
+
+**Why build it now (the unforeseen-features test).** A *document that is not a file, whose text
+something else provides and which takes edits back* is the fact buffer of bl-ed §3.7 and §4.2.
+With the routing rule in place, each of these becomes one more provider rather than new editor
+machinery:
+
+| provider (`scheme:name`) | what it is | design ref |
+|---|---|---|
+| `omega:scratch` | homeless tasks + your notes | this slice |
+| `omega:overview` | every task, grouped by urgency, each row linking to its home cell | bl-ed §3.7 |
+| `task:t-41` | a task's transcript as a livebook; your cells there are steers | bl-ed §4.2, FEAT-009 |
+| `q:<query>` | a datalog query's result as an org table you can keep editing and re-run | new |
+| `effects:t-41` | the jail's effect facts for a task, one row per effect | how-it-fits §4.4 |
+| `bl:<ns>` | a namespace's source as a document, from the live image | new |
+
+The journal (E7) is **not** replaced: once buffer servers give a single writer (W1), homeless
+tasks move to `journal/YYYY-MM-DD.bl.org`, and `omega:scratch` stays as a pure scratch pad
+(the Lisp machine's `*scratch*`). The provider rule stays.
 
 ---
 
@@ -176,7 +227,7 @@ because it is not a `:cell`. That *is* the independence property (bl-ed §10.1).
 
 ### 3.3 omega: a bridge, not a UI (`src/omega/ed/bridge.bl`, new)
 
-Four JSON routes over verbs that already exist and are tested:
+Four JSON routes over verbs that already exist and are tested, plus the scratch pad's two:
 
 ```clojure
 ;; design sketch
@@ -187,6 +238,9 @@ Four JSON routes over verbs that already exist and are tested:
 ;; POST /say     {id text}                  → {:ok}                (task/say! sys id text)
 ;; POST /answer  {msg choice}               → {:ok}                (actor/reply! env msg choice)
 ;; GET  /tasks?ids=t-41,t-42                → {id (model/task-row …)} plus terminal :summary :touched
+;; GET  /scratch                            → {:text :hash}        .omega/scratch.bl.org (§2.7)
+;; POST /scratch  {text base}               → {:ok :hash} | 409    refused when base ≠ current hash
+;; POST /open     without a cell            → also appends a heading + task block + identity result to the scratch pad
 ```
 
 - `bin/omega serve` starts the bridge beside the world and writes its URL to `.omega/url`.
@@ -214,6 +268,7 @@ Four JSON routes over verbs that already exist and are tested:
 | **History, per-step checkpoints, revert** (FEAT-005) | none in the console; omega's traces still record everything | no "revert step 9" button yet |
 | **Jail / effects summary** (how-it-fits §4) | none; `sh` is as today (D10) | the card shows no denied effects because nothing is denied |
 | **TODO sync** (§3.6) | none: the heading keyword is yours to change | the card is the status |
+| **The journal as home of homeless tasks** (E7) | the virtual scratch pad `omega:scratch` (§2.7) | not in git until the journal lands; the world keeps it |
 | **Attention, consensus, overlays** (W6, E24) | none | — |
 | **Effect references / not re-runnable** (§7, FEAT-010) | the §2.5 table already refuses to re-open a live task; terminal = new task | the "this cell changed the world" badge waits for effect facts |
 | **Image / reload for beam-lisp projects** | none | — |
@@ -237,7 +292,8 @@ that has to be ripped out.
 | **result line** | written by the console via `write-results` | the same, through the buffer server as an op by actor `omega` (§3.6 rule), which allows writing with no console open | the writer moves; the format is the same |
 | **world discovery** | `.omega/url` | the realm member: `bl realm` attaches and the bridge becomes a route of the member | delete `.omega/url` |
 | **`:` commands** | `(omega/tasks)` etc. as `ed/defcmd`s | the package's `:keys`/`:presentations` tables (§11) absorb them | move, not rewrite |
-| **depth** | omega's web UI | the sidebar as a bl-ed window over the same `task-detail` projection | `task-detail` already exists (`ui/model.bl:85`) |
+| **depth** | omega's web UI | the sidebar as a `task:<id>` document (§2.7 provider) over the same `task-detail` projection | `task-detail` already exists (`ui/model.bl:85`) |
+| **documents that are not files** | `omega:scratch` | `omega:overview`, `task:<id>`, `q:<query>`, `effects:<id>` | one more provider each; bl-ed unchanged |
 
 **Design rule kept throughout:** the console never holds authority or queries the store. It shows
 views and sends intents (D1, bl-ed §9). The slice satisfies that rule over HTTP, so moving to the
@@ -247,24 +303,21 @@ socket changes no responsibilities.
 
 ## 6. Order, size, gate
 
-| step | repo | size (estimate) | gate |
-|---|---|---|---|
-| S1 spans: task `:id` + write-results after a block | beam-lisp | ~15 lines + tests | spans tests green on BEAM and JS |
-| S2 bridge + `bin/omega serve` + `.omega/url` | omega | ~120 lines + 1 test | scripted model: open → ask → answer → done through HTTP |
-| S3 bl-ed effects, events, card render, keys, `/api/omega` forward, save base-hash | beam-lisp `apps/bl-ed` | ~250 lines + drive test | drive test with a fake bridge; the base-hash refusal tested |
-| S4 real run + proof screenshot | both | — | a human opens, answers and finishes a task in bl-ed; `proof/10-task-card.png` |
+| step | item | repo | size (estimate) | gate |
+|---|---|---|---|---|
+| S1 spans: task `:id` + write-results after a block | FEAT-013 | beam-lisp | ~15 lines + tests | spans tests green on BEAM and JS |
+| S2 bridge + `bin/omega serve` + `.omega/url` + `/scratch` | FEAT-014 | omega | ~150 lines + 1 test | scripted model: open → ask → answer → done through HTTP; scratch append + base-hash refusal |
+| S3 bl-ed effects, events, card render, keys, `/api/omega` forward, save base-hash | FEAT-015 | beam-lisp `apps/bl-ed` | ~250 lines + drive test | drive test with a fake bridge; the base-hash refusal tested |
+| S4 the scratch pad: `scheme:` document routing + `omega:scratch` | FEAT-016 | beam-lisp `apps/bl-ed` | ~60 lines + drive test | `space a s` opens it; a task opened from `:` appears there as a card; edits survive a reload |
+| S5 real run + proof screenshots | FEAT-015 | both | — | a human opens, answers and finishes a task in bl-ed; `proof/10-task-card.png`, `proof/11-scratch.png` |
 
-S1 and S2 are independent; S3 needs both. None of them waits for FEAT-001 (re-pin) or touches
-omega's core.
+S1 and S2 are independent; S3 needs both; S4 needs S3. None of them waits for FEAT-001 (re-pin)
+or touches omega's core. Fast-follow: FUP-010 (load the console code as a live package, §7 UX-Q2).
 
-## 7. Open, for you
+## 7. Decisions (user, 2026-10-04)
 
-- **UX-Q1.** The card row's `y`/`n` vs a `space a y/n` chord. Lean: contextual `y n RET` on the card
-  row only. It is what §4.1 promised, and keymaps are data, so it is cheap to change.
-- **UX-Q2.** Where the slice's console code lives: inside `apps/bl-ed` (a temporary omega module
-  there) or as the first file of omega's package (`omega/ed/omega.bl.org`, §11) loaded through `:`.
-  Lean: `apps/bl-ed/ed/omega.bl`, small and named, moved into the package when §10.3's hot-load
-  lands. Hot-loading console code is not on main yet.
-- **UX-Q3.** Homeless tasks from `:` (`(omega/open …)`): status line only, or append to
-  `journal/YYYY-MM-DD.bl.org` now (E7)? Lean: status line only in the slice. The journal needs the
-  single-writer rule, which needs buffer servers.
+| ID | decision | recorded as |
+|---|---|---|
+| UX-Q1 | contextual `y` / `n` / `RET` on a card row only; `y` yanks everywhere else | E27 |
+| UX-Q2 | the slice's console code lives in `apps/bl-ed/ed/omega.bl`; loading it as a live package (bl-ed §10.3) is a fast-follow | E28, FUP-010 |
+| UX-Q3 | homeless tasks get a **virtual scratch pad** (`omega:scratch`, §2.7), built in the slice because the `scheme:` document rule opens fact buffers (overview, sidebar, query and effect views) | E29, FEAT-016 |

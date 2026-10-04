@@ -1384,6 +1384,9 @@ Status: **user** = decided by the user · **lean** = proposed, awaiting confirma
 | E20 | where config lives | lean | three layers with one owner each: project policy = project `env.bl :omega`; personal taste = `~/.config/omega/config.bl`; omega's build = omega's repo `env.bl`. Precedence defaults < user < project < `.env.local.bl` (§8.4.1) |
 | E21 | app-declared `env.bl` keys | lean | apps declare key + validator as data; `bl.env` dispatches, keeps refusing undeclared keys; `:apps` becomes built-in (§8.4.1) |
 | E22–E26, E6′, E17′ | spike-driven | lean | see §15.7 (checkpoint hook, per-path gate, unpublished overlay, id-less cells, convergent op model; native history replaces jj) |
+| E27 | answering an ask on a card | user | contextual `y` / `n` / `RET` on a card row only (`ux-slice.bl.md` §2.3) |
+| E28 | where the first console code lives | user | `apps/bl-ed/ed/omega.bl`; live package loading is the fast-follow FUP-010 |
+| E29 | home of homeless tasks before the journal | user | a virtual scratch pad `omega:scratch` through a `scheme:` document rule, which also opens fact buffers (`ux-slice.bl.md` §2.7, FEAT-016) |
 
 ## 14. Build order
 
@@ -1716,4 +1719,15 @@ The scope split proposed to the user (open: their choice):
 | process-state / datom-head checkpoints, `code_change` migrations | FUP-009 | no beam-lisp API; needs the project's cooperation |
 | stale-closure detection, purging old body modules | FUP-009 / upstream | runtime work in beam-lisp |
 | per-task images | not built | one registry per VM; claims + `:prev` warn instead |
+
+
+### 15.10 The UX slice is cut first (2026-10-04)
+
+`ux-slice.bl.md` is the first thing built. It is a task cell + one-line card + in-place answers,
+plus the `omega:scratch` virtual document. It runs on today's beam-lisp main (split cells, `:` in the
+page, the effects loop) and talks to omega over a loopback bridge, so it waits for neither the
+re-pin nor the buffer servers. It brings forward the console half of FEAT-006/FEAT-008 (cards,
+answers, the evaluation table of §3.3); FEAT-008 keeps the journal, TODO sync, headless runs and
+the buffer-server writer. Items: FEAT-013 (spans), FEAT-014 (bridge), FEAT-015 (console),
+FEAT-016 (scratch pad), FUP-010 (live package loading). Decisions E27–E29.
 
