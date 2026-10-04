@@ -175,7 +175,7 @@
           (is (includes? txt "remember this goal") "its prompt turn is there")
           (is (includes? txt "kept answer") "its answer turn is there"))
         (Process/sleep 1500) ; the compositor commits the frame after the DOM changes
-        (probe/shot win "/tmp/hl/durable.png")
+        (probe/shot win (str "/tmp/omega-probe-durable-" (erlang/unique_integer (to-list [:positive])) ".png"))
         (finally (probe/close win) (task/stop-system! sys) (env/close! e2))))))
 
 (defn scenarios []

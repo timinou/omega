@@ -1,0 +1,16 @@
+#!/bin/sh
+# bin/bl-ed — run the vendored bl-ed on omega's pinned beam-lisp.
+#   bin/bl-ed                     serve http://127.0.0.1:8790/ over this repo
+#   bin/bl-ed build               (re)compile the page (vendor/bl-ed/build.sh)
+#   BLED_ROOT=dir BLED_PORT=n bin/bl-ed
+# The page needs vendor/bl-ed/web/out; a missing build is made first.
+ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
+V="$ROOT/vendor/bl-ed"
+case "${1:-serve}" in
+  build) exec "$V/build.sh" ;;
+  serve)
+    [ -f "$V/web/out/ed.main.mjs" ] || "$V/build.sh" || exit 2
+    export BLED_WEB="$V/web" BLED_ROOT="${BLED_ROOT:-$ROOT}"
+    exec "$ROOT/bin/bl" run "$V/serve.bl" ;;
+  *) echo "usage: bin/bl-ed [serve|build]" >&2; exit 2 ;;
+esac
