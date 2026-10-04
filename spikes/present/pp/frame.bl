@@ -1,0 +1,93 @@
+; pp/frame.bl — a Genera-style program FRAME: several panes, each a whole
+; bl-ed editor, under one pure handle (spike: spikes/scroll-and-type.bl.md).
+;
+;   frame = {:panes {id ed} :order [id] :focus id :layout [[id cols]…] :links {from to}}
+;
+; The frame is to panes what ed.main is to text: events in, effects out,
+; a view model the host paints. Nothing omega-specific lives here.
+;
+;   keys   C-w w / C-w l / C-w h  move focus between panes (Vim's window keys;
+;          Genera's frames moved focus by mouse — here it is a key)
+;          everything else goes to the focused pane's editor, unchanged
+;   links  {:rail :pane}: when the object under the rail's cursor changes,
+;          the frame VISITS (link-path obj) in the linked pane — moving the
+;          selection IS opening (no RET, no C-o)
+;   effects a pane's effects come back tagged {:pane id}, so the host answers
+;          :visit / :intent / watches into the right pane
+
+(ns pp.frame
+  (:require [ed.core :as c]
+            [pp.main :as pm]))
+
+(defn frame
+  "A frame of panes [[id ed cols]…], focus on the first; opts {:links :link-path}."
+  [panes {:keys [links link-path]}]
+  {:panes (into {} (map (fn [[id ed _]] [id ed]) panes))
+   :order (vec (map first panes))
+   :layout (vec (map (fn [[id _ cols]] [id cols]) panes))
+   :focus (first (first panes))
+   :links (or links {})
+   :link-path link-path
+   :effects []})
+
+(defn pane [fr id] (get (:panes fr) id))
+(defn focused [fr] (pane fr (:focus fr)))
+
+(defn- object-key [ed]
+  (let [o (get (:obj-index ed) (first (c/cursor ed)))] (when (some? o) [(:type o) (:key o)])))
+
+(defn- move-focus [fr dir]
+  (let [o (:order fr) i (first (filter (fn [i] (= (nth o i) (:focus fr))) (range (count o))))
+        j (mod (+ i dir) (count o))]
+    (assoc fr :focus (nth o j))))
+
+(defn- follow-links
+  "A rail whose selected object changed visits it in the linked pane."
+  [fr before]
+  (reduce (fn [fr [from to]]
+            (let [k0 (object-key (pane before from)) k1 (object-key (pane fr from))
+                  path (when (and (some? k1) (not= k0 k1)) ((:link-path fr) k1))]
+              (if (some? path)
+                (update fr :effects conj {:pane to :kind :visit :path path})
+                fr)))
+          fr (:links fr)))
+
+(defn- pending-chord [fr] (:chord fr))
+
+(defn handle
+  "One event. {:pane id} on an event routes it to that pane (a host answer to
+   a pane's effect); otherwise keys go to the focused pane."
+  [fr ev]
+  (let [target (or (:pane ev) (:focus fr))
+        k (:key ev)]
+    (cond
+      (and (= :key (:type ev)) (nil? (:pane ev)) (= "C-w" k)) (assoc fr :chord "C-w")
+      (and (= :key (:type ev)) (= "C-w" (pending-chord fr)))
+        (let [fr (dissoc fr :chord)]
+          (cond (contains? #{"w" "l" "Tab"} k) (move-focus fr 1)
+                (= "h" k) (move-focus fr -1)
+                :else fr))
+      ; a resize may carry {:cols {pane n}}: each pane learns its width in cells
+      (= :resize (:type ev))
+        (reduce (fn [fr id] (update-in fr [:panes id]
+                                       (fn [ed] (let [ed (pm/handle ed (dissoc ev :cols))
+                                                      n (get (:cols ev) id)]
+                                                  (if (some? n) (assoc-in ed [:view :cols] n) ed)))))
+                fr (:order fr))
+      :else
+        (let [before fr
+              fr (update-in fr [:panes target] pm/handle (dissoc ev :pane))
+              [ed2 effs] (pm/take-effects (pane fr target))
+              fr (-> fr (assoc-in [:panes target] ed2)
+                     (update :effects into (map (fn [e] (assoc e :pane target)) effs)))]
+          (if (= target (first (keys (:links fr)))) (follow-links fr before) fr)))))
+
+(defn take-effects [fr] [(assoc fr :effects []) (:effects fr)])
+
+(defn render
+  "{:panes [{:id :cols :focus? :view}] :focus id} — each :view is pp.main/render."
+  [fr]
+  {:focus (:focus fr)
+   :chord (:chord fr)
+   :panes (vec (map (fn [[id cols]] {:id id :cols cols :focus? (= id (:focus fr)) :view (pm/render (pane fr id))})
+                    (:layout fr)))})

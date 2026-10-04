@@ -13,7 +13,9 @@
             [ed.text :as t]
             [pp.read :as rd]
             [pp.present :as p]
-            [pp.omega :as om]))
+            [pp.omega :as om]
+            [pp.conv :as cv]
+            [pp.rail :as rl]))
 
 ; ─── block motions from the readtable ──────────────────────────────────────
 
@@ -21,7 +23,8 @@
   (c/scroll-to-cursor (assoc ed :sels [{:anchor [r 0] :head [r 0]}] :primary 0)))
 
 (defn- objects-of [ed ty]
-  (filter (fn [o] (= ty (:type o))) (rd/walk (p/tree-of (:readtable (:presentation ed)) ed))))
+  (let [pr (:presentation ed)]
+    (filter (fn [o] (= ty (:type o))) (rd/walk (p/tree-of (:readtable pr) ed (or (:read pr) rd/read-doc))))))
 
 (defn block-motion [ty dir]
   (fn [ed]
@@ -67,12 +70,16 @@
 
 ; ─── presentations, chosen per scheme ──────────────────────────────────────
 
-(def PRESENTATIONS {"text" om/default-presentation "omega" om/presentation})
+(def PRESENTATIONS {"text" om/default-presentation "omega" om/presentation
+                    "conversation" cv/presentation "rail" rl/presentation})
+
+(def CYCLE {"text" "omega" "omega" "conversation" "conversation" "text" "rail" "text"})
 
 (defn- auto [path]
-  (if (starts-with? (str path) "task:")
-    {:presentation "omega" :modes [:follow :compose]}
-    {:presentation "text" :modes []}))
+  (cond
+    (starts-with? (str path) "task:") {:presentation "conversation" :modes [:follow :compose]}
+    (= "omega:overview" (str path)) {:presentation "rail" :modes []}
+    :else {:presentation "text" :modes []}))
 
 (defn- adopt [ed path]
   (let [a (auto path)]
@@ -82,10 +89,14 @@
   {:pp/next-turn {:doc "Next turn." :run (block-motion :omega/turn 1)}
    :pp/prev-turn {:doc "Previous turn." :run (block-motion :omega/turn -1)}
    :pp/next-cell {:doc "Next cell." :run (block-motion :omega/cell 1)}
+   :pp/next-thread {:doc "Next thing you said." :run (block-motion :conv/thread 1)}
+   :pp/prev-thread {:doc "Previous thing you said." :run (block-motion :conv/thread -1)}
+   :pp/next-task {:doc "Next task." :run (block-motion :omega/task 1)}
+   :pp/prev-task {:doc "Previous task." :run (block-motion :omega/task -1)}
    :pp/prev-cell {:doc "Previous cell." :run (block-motion :omega/cell -1)}
    :pp/say {:doc "Go to the say block." :run (fn [ed] (if-let [r (composer-row ed)] (goto-row ed r) (c/message ed "no say block here")))}
-   :pp/toggle-presentation {:doc "Switch between the text and the presented drawing."
-                            :run (fn [ed] (let [nxt (if (= "text" (:name (:presentation ed))) "omega" "text")]
+   :pp/toggle-presentation {:doc "Cycle the drawing: text → omega → conversation → text."
+                            :run (fn [ed] (let [nxt (get CYCLE (:name (:presentation ed)) "text")]
                                             (c/message (assoc ed :presentation (get PRESENTATIONS nxt)) (str "presentation: " nxt))))}
    :pp/toggle-follow {:doc "Toggle follow mode."
                       :run (fn [ed] (let [on? (some (fn [x] (= x :follow)) (:modes ed))]
@@ -93,13 +104,18 @@
                                                  (str "follow " (if on? "off" "on")))))}})
 
 (def keys-normal
-  {"] t" :pp/next-turn "[ t" :pp/prev-turn "] c" :pp/next-cell "[ c" :pp/prev-cell
+  {"] q" :pp/next-thread "[ q" :pp/prev-thread "J" :pp/next-thread "K" :pp/prev-thread
+   "] t" :pp/next-turn "[ t" :pp/prev-turn "] c" :pp/next-cell "[ c" :pp/prev-cell
    "g s" :pp/say "space t p" :pp/toggle-presentation "space t f" :pp/toggle-follow})
+
+; In the rail, j/k move TASK to task (a task is three screen rows, one text row);
+; the frame's link then opens the selection in the pane.
+(def rail-keys {"j" :pp/next-task "k" :pp/prev-task})
 
 (defn- install [ed]
   (-> ed
       (update :user-commands (fn [cm] (merge cm commands)))
-      (update-in [:user-keys :normal] (fn [km] (merge km keys-normal)))))
+      (update-in [:user-keys :normal] (fn [km] (merge km keys-normal (if (= "rail" (:name (:presentation ed))) rail-keys {}))))))
 
 ; ─── the host API ──────────────────────────────────────────────────────────
 

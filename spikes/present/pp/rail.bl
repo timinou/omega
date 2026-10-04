@@ -1,0 +1,60 @@
+; pp/rail.bl — the overview as a RAIL (spike: spikes/scroll-and-type.bl.md).
+; Same omega:overview text; a presentation that draws each task as a
+; three-line entry (id · age / goal as words / the answer's first words),
+; groups only when non-empty, and no hint line (the keys are on the rows).
+
+(ns pp.rail
+  (:require [ed.text :as t]
+            [ed.core :as c]
+            [pp.read :as rd]
+            [pp.present :as p]
+            [pp.omega :as om]))
+
+(defn- line-of [ctx r] (t/line (:text (:ed ctx)) r))
+(defn- clip [s n] (if (> (count s) n) (str (subs s 0 (dec n)) "…") s))
+(defn- unmark [s] (join "" (split s "**")))
+
+(defn parse-row
+  "`◆ t-5  slug — summary  · 1h · scratch` → {:glyph :id :goal :summary :age :home}."
+  [l]
+  (let [[head tail] (let [i (index-of l " — ")] (if (some? i) [(subs l 0 i) (subs l (+ i 3))] [l ""]))
+        ws (filter (fn [w] (not= "" w)) (split head " "))
+        parts (split tail "  · ")
+        meta (if (> (count parts) 1) (split (last parts) " · ") [])]
+    {:glyph (first ws) :id (second ws)
+     :goal (join " " (split (join " " (drop 2 ws)) "-"))
+     :summary (unmark (first parts))
+     :age (first meta) :home (second meta)}))
+
+(defn present-task [o ctx]
+  (let [r (parse-row (line-of ctx (:from o)))
+        here? ((:here? ctx) o)]
+    (p/card (:key o) (if here? "picked" "row")
+            [(p/line-mark (:from o) [{:text (str " " (:glyph r) " ") :kind :keyword} {:text (:id r) :kind :who}
+                                     {:text (str "  " (:age r)) :kind :meta}] (str (:key o) "/1") {:role :meta})
+             (p/line-mark (:from o) [{:text "   " :kind :prose} {:text (clip (:goal r) 33) :kind :rail-title}] (str (:key o) "/2") {:role :rail-title})
+             (p/line-mark (:from o) [{:text "   " :kind :prose} {:text (clip (:summary r) 33) :kind :aside}] (str (:key o) "/3") {:role :aside})])))
+
+(defn present-group
+  "`* Needs you (3)` → a small caps label; an empty group draws nothing."
+  [o ctx]
+  (let [tasks (filter (fn [k] (= :omega/task (:type k))) (:kids o))]
+    (if (empty? tasks)
+      (p/stack [])
+      (p/stack (concat [(p/line-mark (:from o) [{:text (str " " (upper-case (first (split (str (:title (:span o))) " (")))) :kind :label}
+                                                {:text (str "  " (count tasks)) :kind :meta}] (str (:key o) "/h") {:role :label})]
+                       (map (fn [k] (p/present k ctx)) tasks)
+                       [(p/line-mark (dec (:to o)) [{:text " " :kind :prose}] (str (:key o) "/gap"))])))))
+
+(defn present-doc [o ctx]
+  (let [title (line-of ctx 0)]
+    (p/stack (concat [(p/line-mark 0 [{:text (str " " (subs title (min (count title) 9))) :kind :meta}] "rail/title" {:role :meta})]
+                     (map (fn [k] (p/present k ctx)) (filter (fn [k] (= :section (:type k))) (:kids o)))))))
+
+(def table (merge p/default-table {:doc present-doc :section present-group :omega/task present-task}))
+
+(def presentation
+  {:name "rail" :fill? false :readtable [] :table table :around [] :isa p/ISA
+   :lod-of (fn [ed tree] (fn [o] 3))
+   :focus-of (fn [ed tree] (first (c/cursor ed)))
+   :ctx-of (fn [ed] {:here? (fn [o] (let [r (first (c/cursor ed))] (and (<= (:from o) r) (< r (:to o)))))})})

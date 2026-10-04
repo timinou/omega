@@ -33,9 +33,18 @@
 ; ─── marks ─────────────────────────────────────────────────────────────────
 
 (defn text-mark [r] {:m :text :row r})
-(defn line-mark [src segs key] {:m :line :src src :segs segs :key key})
+(defn line-mark
+  "An ornament row. opts: {:size rows (default 1) :role kw} — a :size 2 row is a
+   double-height line (a VT100 DECDHL / a Genera :large character style): the
+   grid stays integral, a headline just takes two of its rows."
+  ([src segs key] {:m :line :src src :segs segs :key key})
+  ([src segs key opts] (merge {:m :line :src src :segs segs :key key} opts)))
 (defn stack [kids] {:m :stack :kids (vec kids)})
 (defn card [key tone kids] {:m :card :key key :tone tone :kids (vec kids)})
+(defn head-card
+  "A card whose FIRST slot is its heading: it sticks to the top of the viewport
+   while the rest of the card is on screen (a sticky section header)."
+  [key tone kids] {:m :card :key key :tone tone :head? true :kids (vec kids)})
 (defn sticky [key kids] {:m :sticky :key key :kids (vec kids)})
 
 ; ─── presenter lookup ──────────────────────────────────────────────────────
@@ -94,12 +103,14 @@
     (cond
       (= kind :text) (-> acc (assoc-in [:index (:row mk)] (count (:slots acc)))
                          (update :slots conj {:kind :text :row (:row mk)}))
-      (= kind :line) (update acc :slots conj {:kind :line :src (:src mk) :segs (:segs mk) :key (:key mk)})
+      (= kind :line) (update acc :slots conj {:kind :line :src (:src mk) :segs (:segs mk) :key (:key mk)
+                                              :size (or (:size mk) 1) :role (:role mk)})
       (= kind :stack) (reduce (fn [a k] (flatten-mark a k depth)) acc (:kids mk))
       (contains? #{:card :sticky} kind)
         (let [y0 (count (:slots acc))
               a (reduce (fn [a k] (flatten-mark a k (inc depth))) acc (:kids mk))
-              fr {:key (:key mk) :tone (:tone mk) :y0 y0 :y1 (count (:slots a)) :depth depth :sticky? (= :sticky kind)}]
+              fr {:key (:key mk) :tone (:tone mk) :y0 y0 :y1 (count (:slots a)) :depth depth :sticky? (= :sticky kind)
+                  :head? (= true (:head? mk))}]
           (if (= :sticky kind) (update a :sticky conj fr) (update a :frames conj fr)))
       :else acc)))
 
@@ -112,22 +123,30 @@
 (def ^:private read-cache (atom nil))
 (def ^:private layout-cache (atom nil))
 
-(defn tree-of [rt ed]
-  (let [k [(:struct ed) (:obj-index ed) rt] c @read-cache]
-    (if (and (some? c) (identical? (nth (:k c) 0) (nth k 0)) (identical? (nth (:k c) 1) (nth k 1)) (identical? (nth (:k c) 2) rt))
-      (:v c)
-      (let [v (rd/read-doc rt ed)] (reset! read-cache {:k k :v v}) v))))
+(defn tree-of
+  "The object tree of `ed` under readtable `rt`, read by `read-fn` (default
+   pp.read/read-doc), memoised on the identity of the inputs."
+  ([rt ed] (tree-of rt ed rd/read-doc))
+  ([rt ed read-fn]
+   (let [c @read-cache]
+     (if (and (some? c) (identical? (:s c) (:struct ed)) (identical? (:o c) (:obj-index ed))
+              (identical? (:rt c) rt) (identical? (:f c) read-fn))
+       (:v c)
+       (let [v (read-fn rt ed)]
+         (reset! read-cache {:s (:struct ed) :o (:obj-index ed) :rt rt :f read-fn :v v})
+         v)))))
 
 (defn screen-of
   "Slots and frames for the editor under presentation `p`
    {:readtable :table :around :isa :lod-of (fn [ed tree] lod-fn) :focus-of (fn [ed tree] key)}."
   [p ed]
-  (let [tree (tree-of (:readtable p) ed)
+  (let [tree (tree-of (:readtable p) ed (or (:read p) rd/read-doc))
         focus ((:focus-of p) ed tree)
         c @layout-cache]
     (if (and (some? c) (identical? (:tree c) tree) (= (:focus c) focus) (identical? (:p c) p))
       (:v c)
-      (let [ctx {:table (:table p) :around (:around p) :isa (:isa p) :ed ed :lod ((:lod-of p) ed tree)}
+      (let [ctx (merge {:table (:table p) :around (:around p) :isa (:isa p) :ed ed :lod ((:lod-of p) ed tree)}
+                       (if (:ctx-of p) ((:ctx-of p) ed) {}))
             v (layout (present tree ctx))]
         (reset! layout-cache {:tree tree :focus focus :p p :v v})
         v))))
@@ -139,48 +158,85 @@
       (first (filter (fn [i] (let [r (slot-row (nth slots i))] (and (some? r) (>= r top)))) (range (count slots))))
       (max 0 (dec (count slots)))))
 
+(defn- size-of [s] (or (:size s) 1))
+
+(defn- reductions-of
+  "Running offsets: [3 1 2] → [0 3 4]."
+  [xs]
+  (loop [xs xs acc 0 out []] (if (empty? xs) out (recur (rest xs) (+ acc (first xs)) (conj out acc)))))
+
+(defn- take-rows
+  "Slot indices from y, in order, while their sizes fit in `budget` rows."
+  [slots y budget]
+  (loop [y y used 0 out []]
+    (if (or (>= y (count slots)) (> (+ used (size-of (nth slots y))) budget)) out
+      (recur (inc y) (+ used (size-of (nth slots y))) (conj out y)))))
+
+(defn- top-for-bottom
+  "The first slot of a window of `budget` rows that ends with slot y."
+  [slots y budget]
+  (loop [t y used (size-of (nth slots y))]
+    (if (or (zero? t) (> (+ used (size-of (nth slots (dec t)))) budget)) t
+      (recur (dec t) (+ used (size-of (nth slots (dec t))))))))
+
 (defn render
   "ed.main/render's view model, drawn through presentation `p`. :lines are
-   today's line maps for text slots; ornament slots add {:ornament? :src :key}.
-   :frames / :sticky are in VIEWPORT slot coordinates."
+   today's line maps for text slots; ornament slots add {:ornament? :src :key
+   :role :size}. Every line carries :vy (its row offset in the viewport);
+   :frames are in viewport ROWS. A presentation with :sticky-heads? pins the
+   heading of the section the viewport is inside to the top."
   [p ed]
   (let [{:keys [slots frames sticky index]} (screen-of p ed)
+        n (count slots)
         h (:height (:view ed))
         cur (first (:head (c/primary ed)))
-        y-top (first-slot-at-or-after slots index (:top (:view ed)))
+        top (:top (:view ed))
+        y-top (first-slot-at-or-after slots index top)
         ; a presenter may grow or shrink what is between :top and the cursor:
         ; if the cursor is on screen in TEXT space, keep it on screen here too
-        top (:top (:view ed))
         yc (when (and (>= cur top) (< cur (+ top h))) (get index cur))
-        y-top (cond (nil? yc) y-top
+        y-top (cond (or (nil? yc) (zero? n)) y-top
                     (< yc y-top) yc
-                    (>= yc (+ y-top h)) (max 0 (- yc (dec h)))
+                    (not (some (fn [y] (= y yc)) (take-rows slots y-top h))) (top-for-bottom slots yc h)
                     :else y-top)
         ; a presentation that shrinks the document fills the screen from the end
-        ; (today's text drawing may leave the bottom empty: :fill? off keeps it)
-        y-top (if (:fill? p) (max 0 (min y-top (- (count slots) h))) y-top)
+        y-top (if (and (:fill? p) (pos? n)) (min y-top (top-for-bottom slots (dec n) h)) y-top)
+        ; the heading of the section the top is inside (scrolled past) sticks
+        head (when (:sticky-heads? p)
+               (last (filter (fn [f] (and (:head? f) (< (:y0 f) y-top) (> (:y1 f) y-top))) frames)))
+        head-ys (if (some? head) [(:y0 head)] [])
+        head-h (reduce + 0 (map (fn [y] (size-of (nth slots y))) head-ys))
         ; sticky frames below the viewport pin to its bottom edge
-        pinned (filter (fn [f] (>= (:y0 f) (+ y-top (- h (- (:y1 f) (:y0 f)))))) sticky)
-        pin-h (reduce + 0 (map (fn [f] (- (:y1 f) (:y0 f))) pinned))
-        body-h (- h pin-h)
-        shown (vec (concat (map (fn [y] [y (nth slots y)]) (range y-top (min (count slots) (+ y-top body-h))))
-                           (mapcat (fn [f] (map (fn [y] [y (nth slots y)]) (range (:y0 f) (:y1 f)))) pinned)))
-        rows (vec (keep (fn [[_ s]] (when (= :text (:kind s)) (:row s))) shown))
+        all-pin-h (reduce + 0 (map (fn [f] (reduce + 0 (map (fn [y] (size-of (nth slots y))) (range (:y0 f) (:y1 f))))) sticky))
+        probe (take-rows slots y-top (- h head-h all-pin-h))
+        probe-end (if (empty? probe) y-top (inc (last probe)))
+        pinned (filter (fn [f] (>= (:y0 f) probe-end)) sticky)
+        pin-ys (vec (mapcat (fn [f] (range (:y0 f) (:y1 f))) pinned))
+        pin-h (reduce + 0 (map (fn [y] (size-of (nth slots y))) pin-ys))
+        body (take-rows slots y-top (- h head-h pin-h))
+        ys (vec (concat head-ys body pin-ys))
+        vys (vec (reductions-of (map (fn [y] (size-of (nth slots y))) ys)))
+        shown (vec (map (fn [i] [(nth ys i) (nth slots (nth ys i)) (nth vys i)]) (range (count ys))))
+        rows (vec (keep (fn [[_ s _]] (when (= :text (:kind s)) (:row s))) shown))
         ; ONE pass of today's line drawing, over exactly the rows on screen
         v (m/render-rows ed rows)
         by-row (reduce (fn [acc l] (assoc acc (:row l) l)) {} (:lines v))
-        line-of (fn [[y s]]
+        line-of (fn [[y s vy]]
                   (if (= :text (:kind s))
-                    (assoc (get by-row (:row s)) :y y)
-                    {:row nil :src (:src s) :key (:key s) :y y :ornament? true :segments (:segs s)
-                     :current? (= cur (:src s))}))
-        ys (vec (map first shown))
-        vy (fn [y] (first (filter (fn [i] (= y (nth ys i))) (range (count ys)))))
-        frame-view (fn [f] (let [a (vy (:y0 f)) b (vy (dec (:y1 f)))]
-                             (when (or (some? a) (some? b) (and (< (:y0 f) y-top) (> (:y1 f) (+ y-top body-h))))
-                               (assoc f :from (or a 0) :to (inc (or b (dec body-h)))))))]
+                    (assoc (get by-row (:row s)) :y y :vy vy)
+                    {:row nil :src (:src s) :key (:key s) :y y :vy vy :ornament? true :segments (:segs s)
+                     :role (:role s) :size (size-of s) :current? (= cur (:src s))}))
+        body-rows (- h head-h pin-h)
+        frame-view (fn [f]
+                     (let [in (filter (fn [[y _ _]] (and (>= y (:y0 f)) (< y (:y1 f)))) shown)]
+                       (cond
+                         (seq in) (assoc f :from (nth (first in) 2)
+                                           :to (let [[_ s vy] (last in)] (+ vy (size-of s))))
+                         (and (seq body) (< (:y0 f) (first body)) (> (:y1 f) (last body)))
+                           (assoc f :from head-h :to (+ head-h body-rows))
+                         :else nil)))]
     (assoc v
            :lines (mapv line-of shown)
            :frames (vec (keep frame-view (concat frames sticky)))
-           :slot-count (count slots)
+           :slot-count n
            :slot-top y-top)))

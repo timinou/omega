@@ -37,6 +37,14 @@
       (some? po) {:type (keyword (:type po)) :attrs {:key (:key po) :task (:task po)}}
       :else {:type (kind-type b) :attrs {}})))
 
+(defn- split-rows?
+  "A plain-text span whose rows carry provider objects reads as one object per
+   row: an overview is one prose span of task rows, and each row is a task."
+  [ed b]
+  (and (not (contains? #{:heading :cell :result :block :prose-code} (:kind b)))
+       (> (:to b) (inc (:from b)))
+       (some (fn [r] (some? (get (:obj-index ed) r))) (range (:from b) (:to b)))))
+
 (defn- object-of [rt ed b ends]
   (let [l (t/line (:text ed) (:from b))
         {:keys [type attrs]} (classify rt ed b l)
@@ -62,9 +70,13 @@
                   (let [stack (loop [st stack]
                                 (if (and (> (count st) 1) (<= (:to (peek st)) (:from b))) (recur (close-top st)) st))
                         o (object-of rt ed b ends)]
-                    (if (= :heading (:kind b))
-                      (conj stack (assoc o :level (:level (:span o))))
-                      (conj (pop stack) (update (peek stack) :kids conj o)))))
+                    (cond
+                      (= :heading (:kind b)) (conj stack (assoc o :level (:level (:span o))))
+                      (split-rows? ed b)
+                        (conj (pop stack) (update (peek stack) :kids into
+                                                  (map (fn [r] (object-of rt ed (assoc b :from r :to (inc r)) ends))
+                                                       (range (:from b) (:to b)))))
+                      :else (conj (pop stack) (update (peek stack) :kids conj o)))))
                 [root] (:blocks (:struct ed)))]
     (loop [st stack] (if (> (count st) 1) (recur (close-top st)) (peek st)))))
 

@@ -1,0 +1,264 @@
+; pp/conv.bl — the task as a CONVERSATION, drawn through presentations
+; (spike: spikes/scroll-and-type.bl.md). Same text omega prints, same pipeline:
+; only a new readtable grouping and new presenters.
+;
+;   thread    = one thing YOU said + every model turn until you speak again
+;               (the reader regroups the flat `* you · n` / `* model · n`
+;               sections into threads: a reader macro over the outline)
+;   headline  = what you said, a double-height line (:size 2, :role :question);
+;               the thread is a head-card, so the headline STICKS to the top
+;               while you read its follow-ups (:sticky-heads?)
+;   follow-up = the model's turns, indented under the headline:
+;                 tools  ⌁ one line per cell  ⇒ N lines ▸   (lod 3 at the cursor)
+;                 prose  drawn: **bold** / `code` / - lists / headings, as text rows
+;   ask       = ⚑ a rose card
+;   composer  = the sticky say card (from pp.omega)
+;
+; Every ornament keeps :src, so j/k, RET, C-Enter, c, y/n still act on the
+; text underneath: the conversation is a VIEW of the livebook, not a copy.
+
+(ns pp.conv
+  (:require [ed.text :as t]
+            [ed.core :as c]
+            [pp.read :as rd]
+            [pp.present :as p]
+            [pp.omega :as om]))
+
+(defn- line-of [ctx r] (t/line (:text (:ed ctx)) r))
+(defn- clip [s n] (if (> (count s) n) (str (subs s 0 (dec n)) "…") s))
+
+; ─── reading: turns → threads ──────────────────────────────────────────────
+
+(defn- turn? [o] (= :omega/turn (:type o)))
+
+(defn- regroup
+  "The document's kids, with runs of turns folded into :conv/thread objects:
+   each `you` turn opens a thread; model turns join the open one."
+  [kids]
+  (let [flush (fn [out th] (if (some? th) (conj out (assoc th :to (:to (last (:kids th))))) out))]
+    (loop [ks kids out [] th nil]
+      (if (empty? ks) (flush out th)
+        (let [k (first ks)]
+          (cond
+            (and (turn? k) (= "you" (:who (:attrs k))))
+              (recur (rest ks) (flush out th)
+                     {:type :conv/thread :key (str "thread@" (:from k)) :from (:from k) :to (:to k)
+                      :attrs {:n (:n (:attrs k))} :kids [k]})
+            (and (turn? k) (some? th)) (recur (rest ks) out (update th :kids conj k))
+            (= :omega/ask (:type k)) (if (some? th) (recur (rest ks) out (update th :kids conj k))
+                                       (recur (rest ks) (conj out k) th))
+            :else (recur (rest ks) (conj (flush out th) k) nil)))))))
+
+(defn read-conv
+  "The object tree for a task document, with threads."
+  [rt ed]
+  (let [tree (rd/read-doc rt ed)]
+    (assoc tree :kids (regroup (:kids tree)))))
+
+(def readtable
+  (conj om/readtable
+        {:type :omega/ask :match (fn [b l] (and (= :heading (:kind b)) (starts-with? (str (:title b)) "⚑")))}))
+
+; ─── what you said, as words ───────────────────────────────────────────────
+
+(defn said
+  "The words of a `you` turn: its prose rows, joined. A handed-over task
+   (`: #omega/task {:id \"t-1\" :goal \"…\"}`) reads as `task t-1: …`."
+  [ctx turn]
+  (let [s (trim (join " " (map (fn [r] (line-of ctx r)) (range (inc (:from turn)) (:to turn)))))
+        g (index-of s ":goal \"")]
+    (if (some? g)
+      (let [rest-s (subs s (+ g 7)) e (index-of rest-s "\"")
+            i (index-of s ":id \"") id (when (some? i) (first (split (subs s (+ i 5)) "\"")))]
+        (str "task " id ": " (if (some? e) (subs rest-s 0 e) rest-s)))
+      (if (starts-with? s ": ") (subs s 2) s))))
+
+; ─── prose rows: markdown drawn as segments (still one grid row each) ──────
+
+(defn- inline-segs
+  "**bold** → :strong · `code` → :verbatim · the rest :answer."
+  [s base]
+  (loop [s s out []]
+    (let [b (index-of s "**") c (index-of s "`")
+          at (cond (and (some? b) (or (nil? c) (< b c))) [:strong b "**"]
+                   (some? c) [:verbatim c "`"]
+                   :else nil)]
+      (if (nil? at) (if (= "" s) out (conj out {:text s :kind base}))
+        (let [[kind i delim] at
+              after (subs s (+ i (count delim)))
+              j (index-of after delim)]
+          (if (nil? j) (conj out {:text s :kind base})
+            (recur (subs after (+ j (count delim)))
+                   (cond-> out
+                     (pos? i) (conj {:text (subs s 0 i) :kind base})
+                     true (conj {:text (subs after 0 j) :kind kind})))))))))
+
+(def MEASURE
+  "The answer's measure, in cells, at most: a reading line (Butterick: 45–90
+   characters). A narrower pane wraps narrower (:cols in the view)."
+  84)
+
+(defn- measure-of [ctx] (min MEASURE (max 30 (- (or (:cols (:view (:ed ctx))) MEASURE) 4))))
+
+(defn wrap
+  "Words of `s` filled into lines of at most `n` cells (visual-line-mode, on the grid)."
+  [s n]
+  (let [ws (filter (fn [w] (not= "" w)) (split s " "))]
+    (loop [ws ws line "" out []]
+      (if (empty? ws) (if (= "" line) out (conj out line))
+        (let [w (first ws) cand (if (= "" line) w (str line " " w))]
+          (if (and (> (count cand) n) (not= "" line))
+            (recur ws "" (conj out line))
+            (recur (rest ws) cand out)))))))
+
+(defn- label? [tl]
+  (and (starts-with? tl "**") (> (count tl) 4) (= (last-index-of tl "**") (- (count tl) 2))
+       (nil? (index-of (subs tl 2 (- (count tl) 2)) "**"))))
+
+(defn wrap-segs
+  "Styled segments filled into rows of at most `n` cells: a word keeps its
+   kind across the break, so **bold** never splits into stray asterisks."
+  [segs n]
+  (let [; a word is glued to the previous one when no space separated them
+        ; in the source ("beam-lisp," → **beam-lisp** then ",")
+        words (mapcat (fn [j]
+                        (let [sg (nth segs j) t (:text sg) ws (split t " ")
+                              prev (when (pos? j) (:text (nth segs (dec j))))
+                              joined? (and (some? prev) (not (ends-with? prev " ")) (not (starts-with? t " ")))]
+                          (keep (fn [i] (let [w (nth ws i)]
+                                          (when (not= "" w)
+                                            {:text w :kind (:kind sg) :glue? (and (zero? i) joined?)})))
+                                (range (count ws)))))
+                      (range (count segs)))
+        push (fn [row w] (let [lst (last row)]
+                           (if (and (some? lst) (= (:kind lst) (:kind w)))
+                             (conj (pop row) (assoc lst :text (str (:text lst) (if (:glue? w) "" " ") (:text w))))
+                             (conj row (if (or (empty? row) (:glue? w)) (dissoc w :glue?) (assoc (dissoc w :glue?) :text (str " " (:text w))))))))
+        width (fn [row] (reduce + 0 (map (fn [sg] (count (:text sg))) row)))]
+    (loop [ws words row [] out []]
+      (if (empty? ws) (if (empty? row) out (conj out row))
+        (let [w (first ws) nxt (push row w)]
+          (if (and (> (width nxt) n) (seq row))
+            (recur ws [] (conj out row))
+            (recur (rest ws) nxt out)))))))
+
+(defn- prose-rows
+  "One text row of the model's prose → ornament rows under its turn: a bold
+   line is a label; list items get a hanging bullet; the rest fills the measure.
+   Every wrapped row keeps the same :src, so a click or RET lands on the text."
+  [ctx r key]
+  (let [l (line-of ctx r) tl (trim l)
+        rows (fn [lead hang text]
+               (let [rs (wrap-segs (inline-segs text :answer) (- (measure-of ctx) (count lead)))]
+                 (map (fn [i] (p/line-mark r (into [{:text (if (zero? i) lead hang) :kind :bullet}] (nth rs i))
+                                           (str key "/" i) {:role :answer}))
+                      (range (count rs)))))]
+    (cond
+      (label? tl) [(p/line-mark r [{:text "  " :kind :prose} {:text (upper-case (subs tl 2 (- (count tl) 2))) :kind :label}] key {:role :label})]
+      (or (starts-with? tl "- ") (starts-with? tl "* ")) (rows "    • " "      " (subs tl 2))
+      (= tl "---") [(p/line-mark r [{:text "    ─────" :kind :rule}] key {:role :rule})]
+      :else (rows "  " "  " tl))))
+
+; ─── presenters ────────────────────────────────────────────────────────────
+
+(defn- tool-line
+  "A cell, folded: `⌁ (code · code)  ⇒ N lines ▸`. Whole (as text) at lod 3."
+  [o ctx res]
+  (let [code (join " · " (map (fn [r] (trim (line-of ctx r))) (range (inc (:from o)) (dec (:to o)))))
+        nres (if (some? res) (count (filter (fn [r] (starts-with? (line-of ctx r) ":")) (range (:from res) (:to res)))) 0)]
+    (p/line-mark (:from o)
+                 [{:text "    ⌁ " :kind :tool-glyph} {:text (clip code 84) :kind :tool}
+                  {:text (if (pos? nres) (str "   ⇒ " nres " line" (if (= 1 nres) "" "s") " ▸") "") :kind :comment}]
+                 (:key o) {:role :tool})))
+
+(defn- follow-ups
+  "A model turn's kids as follow-up marks: tools folded, prose drawn."
+  [turn ctx]
+  (let [kids (:kids turn)
+        res-of (fn [cell] (first (filter (fn [k] (and (= :omega/result (:type k)) (= (:to cell) (:from k)))) kids)))]
+    (vec (mapcat (fn [k]
+                   (cond
+                     (= :omega/cell (:type k))
+                       (if (>= ((:lod ctx) k) 3)
+                         [(p/present k ctx)]
+                         [(tool-line k ctx (res-of k))])
+                     (= :omega/result (:type k))
+                       (if (>= ((:lod ctx) k) 3) [(p/present k ctx)] [])
+                     :else
+                       (mapcat (fn [r] (if (blank? (line-of ctx r)) [] (prose-rows ctx r (str (:key k) "/" r))))
+                               (range (:from k) (:to k)))))
+                 kids))))
+
+(defn- headline [ctx thread you first?]
+  (p/line-mark (:from you)
+               [{:text (if first? "" "  ") :kind :prose}
+                {:text (said ctx you) :kind (if first? :title :question)}
+                {:text (str "   you · " (:n (:attrs you))) :kind :who}]
+               (str (:key thread) "/q") {:size 2 :role (if first? :title :question)}))
+
+(defn present-thread [o ctx]
+  (let [[you & rest-kids] (:kids o)
+        first? (= 0 (:index (:attrs o) 0))
+        model (filter turn? rest-kids)
+        asks (filter (fn [k] (= :omega/ask (:type k))) rest-kids)
+        n-tools (count (filter (fn [k] (= :omega/cell (:type k))) (mapcat :kids model)))
+        work (if (pos? n-tools)
+               [(p/line-mark (:from (first model)) [{:text "    " :kind :prose}
+                                                   {:text (str n-tools " step" (if (= 1 n-tools) "" "s") " of work") :kind :label}]
+                             (str (:key o) "/work") {:role :label})]
+               [])]
+    (p/head-card (:key o) "thread"
+                 (concat [(headline ctx o you first?)]
+                         work
+                         (mapcat (fn [t] (follow-ups t ctx)) model)
+                         (map (fn [a] (p/card (:key a) "ask" (map p/text-mark (range (:from a) (:to a))))) asks)
+                         [(p/line-mark (dec (:to o)) [{:text " " :kind :prose}] (str (:key o) "/gap"))]))))
+
+(defn present-doc
+  "The page: the task header, then threads (numbered), traces, composer."
+  [o ctx]
+  (let [threads (filter (fn [k] (= :conv/thread (:type k))) (:kids o))
+        idx (reduce (fn [m [i th]] (assoc m (:key th) i)) {} (map vector (range (count threads)) threads))
+        title (line-of ctx 0)]
+    (p/stack
+      (concat
+        [(p/line-mark 0 [{:text (subs title (min (count title) 9)) :kind :meta}] "conv/title" {:role :meta})]
+        (map (fn [k]
+               (if (= :conv/thread (:type k))
+                 (p/present (assoc-in k [:attrs :index] (get idx (:key k))) ctx)
+                 (p/present k ctx)))
+             (filter (fn [k] (>= (:from k) 4)) (:kids o)))))))
+
+(def table
+  (merge om/table {:doc present-doc :conv/thread present-thread}))
+
+(def isa (merge p/ISA {:conv/thread :section :omega/ask :section}))
+
+; ─── lod: whole only where you are ─────────────────────────────────────────
+
+(defn lod-of [ed tree]
+  (let [cur (first (c/cursor ed))]
+    (fn [o]
+      (cond
+        (and (<= (:from o) cur) (< cur (:to o)) (contains? #{:omega/cell :omega/result} (:type o))) 3
+        (= :omega/traces (:type o)) 1
+        :else 2))))
+
+(defn focus-of [ed tree]
+  [(:key (rd/object-at-row tree (first (c/cursor ed)))) (:cols (:view ed))
+   (when (some? (:minibuf ed)) (:text (:minibuf ed)))])
+
+(def presentation
+  {:name "conversation" :fill? true :sticky-heads? true
+   :read read-conv :readtable readtable :table table :around [] :isa isa
+   :lod-of lod-of :focus-of focus-of})
+
+; ─── the question index: what you said, as a list (a presentation of threads) ─
+
+(defn questions
+  "[{:n i :row r :text s}] for every thread of the editor's task document."
+  [ed]
+  (let [tree (read-conv readtable ed)
+        ctx {:ed ed}]
+    (vec (map (fn [[i th]] {:n (inc i) :row (:from th) :text (said ctx (first (:kids th)))})
+              (let [ths (filter (fn [k] (= :conv/thread (:type k))) (:kids tree))] (map vector (range (count ths)) ths))))))
