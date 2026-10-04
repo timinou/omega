@@ -44,11 +44,16 @@
 ;; ── JSON plumbing ───────────────────────────────────────────────────────
 ;
 ; OTP's json encoder refuses tuples, and beam-lisp vectors are tuples. Encode
-; through `jsonable`: vectors → lists, keywords → strings.
+; through `jsonable`: vectors → lists, keywords → strings, :null stays JSON null.
+;
+; Maps are walked with reduce-kv, never `(map (fn [[k v]] …) m)`: on the pin, a
+; map entry whose key is :meta destructures as nil (OBSERVED, spikes/prompt-cache),
+; which crashed every later request of a task whose tool input held a :meta key.
 
 (defn jsonable [x]
   (cond
-    (map? x) (into {} (map (fn [[k v]] [(if (keyword? k) (name k) k) (jsonable v)]) x))
+    (map? x) (reduce-kv (fn [acc k v] (assoc acc (if (keyword? k) (name k) k) (jsonable v))) {} x)
+    (= :null x) :null
     (vector? x) (to-list (map jsonable x))
     (seq? x) (to-list (map jsonable x))
     (keyword? x) (name x)
@@ -62,7 +67,7 @@
    :null → nil."
   [x]
   (cond
-    (map? x) (into {} (map (fn [[k v]] [k (decoded->data v)]) x))
+    (map? x) (reduce-kv (fn [acc k v] (assoc acc k (decoded->data v))) {} x)
     (seq? x) (vec (map decoded->data x))
     (= :null x) nil
     :else x))
@@ -94,7 +99,7 @@
 
 (defn- keywordize [m]
   (cond
-    (map? m) (into {} (map (fn [[k v]] [(if (string? k) (keyword k) k) (keywordize v)]) m))
+    (map? m) (reduce-kv (fn [acc k v] (assoc acc (if (string? k) (keyword k) k) (keywordize v))) {} m)
     (vector? m) (vec (map keywordize m))
     :else m))
 

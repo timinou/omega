@@ -65,7 +65,7 @@
 
 (defn- keywordize [m]
   (cond
-    (map? m) (into {} (map (fn [[k v]] [(if (string? k) (keyword k) k) (keywordize v)]) m))
+    (map? m) (reduce-kv (fn [acc k v] (assoc acc (if (string? k) (keyword k) k) (keywordize v))) {} m)
     (seq? m) (vec (map keywordize m))
     (vector? m) (vec (map keywordize m))
     :else m))

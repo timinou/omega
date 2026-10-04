@@ -32,6 +32,12 @@
 (deftest jsonable-turns-vectors-and-keywords-into-json-shapes
   (is (= {"a" (list 1 "b") "c" :null} (llm/jsonable {:a [1 :b] :c nil}))))
 
+(deftest jsonable-keeps-every-key-and-json-null
+  ;; a tool input with a :meta key crashed every later request of its task;
+  ;; a JSON null came back to the model as the string "null"
+  (is (= {"meta" {"x" 1} "a" 2} (llm/jsonable {:meta {:x 1} :a 2})))
+  (is (= {"x" :null "y" (list :null)} (llm/jsonable {:x :null :y [:null]}))))
+
 (deftest cassettes-record-then-replay-and-fail-loud-on-a-miss
   (let [path (str "/tmp/omega-cassette-" (erlang/unique_integer (to-list [:positive])) ".tape")
         calls (atom 0)

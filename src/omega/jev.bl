@@ -58,7 +58,7 @@
 
 (defn- crit-wire [q]
   (case (:type q)
-    :choice (into {} (map (fn [[k v]] [(name k) v]) (:criteria q)))
+    :choice (reduce-kv (fn [acc k v] (assoc acc (name k) v)) {} (:criteria q))
     :noul (:criteria q)
     :score (vec (:criteria q))))
 
