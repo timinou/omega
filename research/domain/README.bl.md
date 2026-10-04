@@ -17,6 +17,9 @@ a ratatui TUI, styled per impeccable.style.
    observability contract, and how an agent develops omega.
 3. `synthesis/decisions.bl.md`: **the discussion agenda**. 13 decisions (D1–D13) absorb the ~110 open
    questions below, each with options, tradeoffs and a current lean.
+4. `interface/bl-ed.bl.md` (after the interface notes it builds on): the worked design for running omega
+   inside the bl-ed editor. Read it for the `:task` cell, the second-cursor edit model, the world-as-realm-member
+   shape, and the named core changes (C1–C7) that touch omega itself.
 
 ## The notes, by concern
 
@@ -31,6 +34,7 @@ a ratatui TUI, styled per impeccable.style.
 | | `jev.bl.md` | Jev (TypeSafe System One): the `/v1/systemone` contract, Choice/Score/Noul, confidence, limits, data policy; community harness use; knowledger's exact wire shapes; a proposed `jev` namespace with a **runnable offline kernel** |
 | `interface/` | `loom-and-grammar.bl.md` | the grammar-of-the-web (seven parts), loom's full API, events as data, the desktop (wry) launch; runnable tree building |
 | | `tui-ratatui.bl.md` | ratatui's model, beam-lisp NIFs, BEAM TUI survey, where state and rendering live, a loom→ratatui mapping table, an API sketch; runnable layout solver + lowering |
+| | `bl-ed.bl.md` | **omega inside bl-ed** (design, 2026-10-03): the `:task` cell (full header params, reference results, card + sidebar), agent edits as a second cursor through per-file buffer servers (**runnable spike 1**: rebase, cursors, attention-parked suggestions), consensus ladder + bitemporal op log as datom facts (**spike 2**), `omega.vcs` History protocol with jj and native backends (**spike 3**, §5.10), non-re-runnable effectful cells, one world many runners incl. the OBSERVED shared-VM cross-write probe (§8.3, BUG-001), core changes C1–C7 (§8.4) and the three config layers (§8.4.1), decision register E1–E21 and waves W0–W6 (PLAN-003) |
 | | `impeccable.bl.md` | Impeccable's principles, anti-patterns and numbers; loom token encoding (runnable contrast and lint checks); **six screen drafts** (overview, task, graph, inspector, review, palette) |
 | `lineage/` | `spell.bl.md` | the first attempt (`../spell`, `spell-app`): architecture, an evidence-ranked pain table, what to keep |
 

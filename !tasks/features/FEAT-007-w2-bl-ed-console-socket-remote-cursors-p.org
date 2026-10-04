@@ -1,0 +1,44 @@
+#+TITLE: W2 — bl-ed console socket, remote cursors, publish on pause, attention and parked suggestions
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FEAT-007-w2-bl-ed-console-socket-remote-cursors-p
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+(PLAN-003 design discussion, 2026-10-03; full user messages verbatim in PLAN-003 * Initial Message.) Round 4: "E17 (a) but remember eventually instead of jj it'll be beam-lisp native, so make a namespace that is modular and beam-lispy that teaches us when we do the redesgin of autovcs / E18 (a) of course, that will allow us to properly steer / for C3, let apps define their keys so that the omega env.bl makes :omega okay for omerga and apps. but shouldn't that be in a the omega config? / everything else is good. please comprehensively file the tasks docs and research"
+
+* Source of truth
+
+research/domain/interface/bl-ed.bl.md (runnable: `bin/bl run research/domain/interface/bl-ed.bl.md`). Decision register §13 (E1–E21), core changes §8.4 (C1–C7), waves §14. Parent: PLAN-003.
+
+* Prerequisite for every wave
+
+beam-lisp main has merged `prototype/bl-js-actors` (bl-ed, bl.doc.spans), `realm` (PLAN-158) and `autovcs` (PLAN-109), per user decision E12.
+
+* Goal
+
+The second, coloured cursor, live in bl-ed (§5.2, §6, §9). `ed.lisp` is deleted and `:` evaluates on the BEAM (§10.2).
+
+* Scope
+
+- Socket vocabulary up `[:op] [:attend] [:intent] [:eval]`, down `[:buf/op] [:buf/cursor] [:buf/marks] [:view] [:stream] [:suggest]`; views, not facts.
+- bl-ed `host.mjs` gains one WebSocket.
+- Remote cursors and selections (actor colour + label) and ghost text as decorations.
+- Attention: ephemeral conn, symmetric human/agent, decay (typing 3 s, looking 10 s, agent editing 60 s), ≤4 Hz reporting, privacy toggle `space a .`.
+- Agent edits overlapping fresh human attention park as suggestions; `y`/`n`; the agent's call returns `{:pending :suggestion}` before its deadline (E1).
+- `:` sends form + editor value; `ed.lisp` removed; a BL value reader/printer in `rt.mjs`.
+
+* Acceptance
+
+- A scripted agent edits a file open in bl-ed; its cursor and text appear live.
+- Looking at the region parks the edit; `y` lands it.
+- `:` evaluates real Beam Lisp.
+- `ed.lisp` is gone and the selftests are green.
+- Measure `:` round-trip latency.

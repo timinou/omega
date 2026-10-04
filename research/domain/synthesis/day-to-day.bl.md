@@ -157,3 +157,77 @@ The user wants it to be *easy for an agent to understand, test and improve* omeg
    is a trace-subscriber, so it's cheap, but noisy.
 4. **How visible is Jev?** Show every decision inline (transparency, noise) or only at gates and on hover
    (cleaner, less auditable)?
+
+## 6. With bl-ed (designed, PLAN-003)
+
+> Nothing in this section is built. It walks one day through
+> `../interface/bl-ed.bl.md` (cited as "ed §N"); every step is a consequence of a section there. The
+> sequences in §2 above stay valid: bl-ed is one more surface on the same verb set (ed §8.2, "every intent is
+> the same verb").
+
+**Morning, bl-ed closed.** From a terminal:
+
+```text
+$ bin/omega "make read_number accept 0x hex"
+```
+- `bin/omega` is a `run` member: it calls `(world!)`, opens the task, and follows it (ed §8.2). If a world
+  is already running it attaches. With `--cold` or no warm VM it opens the store itself as today (ed §8.2,
+  "Cold fallback", C7).
+- The task has no document, so it is *homeless*: a heading plus a `#+begin_task` cell is appended to today's
+  `journal/YYYY-MM-DD.bl.org`, written by the actor that opened it. Every task has exactly one home cell
+  (ed §3.7). `journal/` is committed (E7).
+
+**Open bl-ed.** The journal shows the card, live, though the CLI opened the task (ed §8.2, coexistence):
+
+```text
+#+end_task
+● running  t-41 · make read_number accept 0x hex        1m12s · ✎ reader.py:2 · 3 turns · $0.04
+```
+The default density is `:urgent`: a calm task is one line and grows only when it has something to say
+(ed §4.1, E11). With the cursor on it the card expands; `↵` on it opens the sidebar, the task's own buffer
+(ed §4.2).
+
+**Write down a plan; drop a task under it.** In a notes file you type a heading with a paragraph of prose and
+add a `#+begin_task` under it. `:context heading` is the default, so the prose around the cell *is* the
+task's spec (ed §3.2, E8 lean). `space e` opens it and writes the reference result; editing the body later and
+evaluating again sends a refinement to the same task (ed §3.3).
+
+**Watch the agent edit.** The agent's edits arrive as a second, coloured cursor with its label, through the
+file's buffer server (ed §5.1). Where an agent edit overlaps your fresh attention (you are typing or looking
+there), it is parked as ghost text, a *suggestion*: `y` applies, `n` drops. The agent's call returns
+`{:pending :suggestion}` before its eval deadline and the outcome reaches it as a message (ed §5.2, E1). Your
+own typing is published to disk on pause, about 1.2 s, so a half-typed line never breaks the agent's test run
+(ed §5.7, E5).
+
+**Two agents collide.** t-41 and t-43 both want `read_number`. Disjoint regions interleave and both cursors
+show (rung 0). On an overlap, the loser's exact replacement finds its `:old` text gone and is refused *with
+the story*: who moved it, from which cell, where (rung 1, content CAS). If it happens twice in a window the
+server leaves a `:contention` trace naming both tasks; it reaches both through their next `:context`, and by
+convention the task with the older claim on the path keeps the region while the other `wait`s or `send`s a
+note (rung 3). Rungs 0–1 were OBSERVED in spikes; rungs 2–4 (marks on `read`, contention traces,
+escalation to you) are design only (ed §5.4).
+
+**A gate fails.** With the jj tier on (opt-in, E6), each model step that changed files becomes one jj change
+(ed §5.9). The gate runs before the checkpoint is described, and a failure still checkpoints, described
+`[gate ✗]`, with a `:finding` trace on the task. Its card goes red with the failing line (E18, decided). You
+see which step broke the build and steer from that change: a human eval in the sidebar, or `jj abandon` on
+the step (ed §5.9; the sidebar's evals as steers are wave W4, ed §14).
+
+**Effectful cells are shown, not re-run.** In t-41's sidebar, `space e` on the cell that edited `reader.py`
+does not run it again. It shows its trace: the diff, who made it, when, and whether it is still present.
+`d` diffs, `r` reverts with compensating ops (refused as data if the region has moved on), `c` copies it as a
+new cell, which is the honest way to "run it again" (ed §7.1, decision 11). The cell's `#+RESULTS` is a
+reference to the effect, the same mechanism as a task card (ed §7.2).
+
+**Why does this line look like this?** `jj file annotate` leads from the line to its change, whose trailers
+name the task (`Omega-Task: t-41`) and its home cell (`Omega-Cell: journal/…::hex`). bl-ed shows it as a
+margin decoration that links to the conversation that wrote the line (ed §5.9; the margin decoration is a
+bl-ed growth item, ed §10). "What did t-41 change?" is one query over the facts (ed §5.5, §5.10).
+
+**Evening.** The tasks are done or idle; each finished task's result was rewritten once to a self-contained
+summary in the journal (ed §3.4, E9 lean). With no running or waiting task and no console for the configured
+idle time (`:omega {:idle 1800}`), the world stops itself so the VM can idle-expire. Tomorrow's first runner
+starts it again and `recover!` re-reads the store, so nothing is lost (ed §8.5, E19 lean).
+
+NB: the daily digest of §2.6 is unchanged: still a query. What bl-ed adds is that the work log (`journal/`)
+and the facts agree by construction, since every task has a home cell and every home cell a task (ed §3.7).

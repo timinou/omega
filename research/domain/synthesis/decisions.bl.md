@@ -1,7 +1,7 @@
 # Decision register — what we must settle before implementation
 
 > **Literate**, no runnable blocks. This is the discussion agenda. The domain notes raise ~110 open
-> questions; this register folds them into **13 decisions**, ordered so that each one unblocks the ones
+> questions; this register folds them into **13 decisions** (D14 was appended 2026-10-03 for PLAN-003), ordered so that each one unblocks the ones
 > after it. Each decision lists the options, their tradeoffs, my current lean (INFERRED, *not* decided),
 > and the source questions it absorbs. "Lean" means a starting position for discussion, not a choice.
 
@@ -29,6 +29,14 @@ Evidence: every note converges here, and spell stored `.bl.md` inside datoms.
 **Absorbs:** pi-architecture Q1–Q2 · processes-and-harness Q1, Q3 · tasks-and-stigmergy Q1 · spell Q1 ·
 impeccable Q8.
 
+**Update 2026-10-03 (PLAN-003).** `research/domain/interface/bl-ed.bl.md` keeps (a) and adds projections, not new
+sources of truth. The `:task` cell's result is a reference (`#omega/task {:id :goal}`), rewritten once at
+terminal into a self-contained value (§3.4, E9 lean), so the document never holds live state. The
+`journal/YYYY-MM-DD.bl.org` is committed text (§3.7, E7 user-decided). The package's own facts (editor ops,
+effects, jj changes, attention-derived facts) live in omega's store through core change C1 `:schema` at
+`env/open` (§8.4, E4 user-decided), so they join task facts in one query. Disk is a projection of the buffer
+servers' published text (§5.7, E5). Status of D1 unchanged.
+
 ## D2. What is a task, physically?
 
 **Options.**
@@ -50,6 +58,11 @@ And who garbage-collects traces?
 **Lean:** one prompt = one task. Terminal states are immutable, so a follow-up is a new task in the same
 context. Ownership edges apply to sub-work only, and peers coordinate through traces.
 **Absorbs:** tasks-and-stigmergy Q8 · pi-architecture Q4 · plugins Q2 (plan as task).
+
+**Update 2026-10-03 (PLAN-003).** `bl-ed.bl.md` §3.3 relies on "terminal is final": evaluating a `:task` cell
+whose result points at a live task with an edited goal is `task/say!` (a refinement of the same task);
+whose result points at a terminal task opens a NEW task and records the old id in `:prev`. §3.4 rewrites
+the result exactly once at terminal because terminal states never change again. Status of D3 unchanged.
 
 ## D4. The stigmergic medium: trace types, decay, claims
 
@@ -145,6 +158,14 @@ context. Ownership edges apply to sub-work only, and peers coordinate through tr
 
 **Absorbs:** pi-architecture Q5, Q7, Q12 · plugins Q9.
 
+**Update 2026-10-03 (PLAN-003).** `bl-ed.bl.md` §11 gives omega's bl-ed package one value shape,
+`(ed/defpackage omega {… :omega-ext {:name :ed :schema … :hooks {:context …} :on {:turn/start … :turn/end …}}})`,
+which uses the extension surface as it stands: an ext `:schema` (joined to omega's store via C1, §8.4), a
+`:context` hook (attention, §6) and `:on` handlers from the minimal event set. It adds one event, C5
+`:step/end` (`{:task :step :tools}`, emitted after each tool step beside `:turn/start`, §8.4), so the jj
+checkpoint point is named, not inferred; until C5 lands, `:turn/start`/`:turn/end` handlers stand in.
+Status of D8 unchanged.
+
 ## D9. Editing and feedback tools
 
 **Questions.**
@@ -161,6 +182,16 @@ context. Ownership edges apply to sub-work only, and peers coordinate through tr
 - A `snapshot/restore` protocol backed by `git stash create`.
 
 **Absorbs:** plugins Q3–Q6, Q12.
+
+**Update 2026-10-03 (PLAN-003).** `bl-ed.bl.md` adds an editing substrate under D9's tools. One buffer
+server (`defserver`) per file in use holds the op log as datom facts (§5.1, §5.5) and gives agent edits a
+second coloured cursor: concurrent ops are rebased by position, and an exact replacement is a
+compare-and-set on the *content* it expects to find, refused with the story when it is gone (§5.3, §5.5;
+E1, E2 user-decided). omega's `read`/`write`/`edit`
+reach those servers through core change C6, a file port `(:files sys)` defaulting to today's disk functions
+(§8.4, §5.6; E13 lean), so D9's hash-guarded `edits[]` stays the tool contract. The checkpoint substrate
+lean (`git stash create`) is refined by §5.9–5.10: jj per step, opt-in (E6 user-decided), behind an
+`omega.vcs` History protocol with jj and native backends (E17 user-decided). Status of D9 unchanged.
 
 ## D10. Permissions and plan mode
 
@@ -207,6 +238,12 @@ context. Ownership edges apply to sub-work only, and peers coordinate through tr
 worktree has. Decide which beam-lisp build omega targets.
 **Absorbs:** loom-and-grammar Q1–Q10 · tui-ratatui Q1–Q12 · processes-and-harness Q9.
 
+**Update 2026-10-03 (PLAN-003).** `bl-ed.bl.md` adds a third console to D12's two renderers: bl-ed, a Lisp
+machine console. It differs in kind: it **receives views, not facts** (§2, §9), so the world renders cards,
+transcripts and the overview and the console keeps only a text replica, selections and view state. The
+wire is one socket per console (§9). Runners (CLI, `bl doc run --tasks`) are not consoles; they call the
+same verbs inside the same world (§8). Status of D12 unchanged.
+
 ## D13. Look and feel
 
 **Questions.**
@@ -226,6 +263,84 @@ worktree has. Decide which beam-lisp build omega targets.
 
 ---
 
+## D14. omega inside bl-ed (PLAN-003)
+
+**Source:** `research/domain/interface/bl-ed.bl.md` (design for discussion; nothing built). The argument,
+spikes (OBSERVED, RAN) and sketches (INFERRED) live there; this entry is the index. Status vocabulary is
+that note's §13: **user** = decided by the user, **lean** = proposed, awaiting confirmation, **open** = needs
+the user. Rows are copied from §13.
+
+**Thesis (§2).** One world per realm, many consoles. The world is omega, a member of the project's realm,
+holding code, data and work. A console (bl-ed tab, CLI, `omega-ui`, MCP) holds only what makes typing
+instant, and **consoles receive views, not facts**. Runners are not consoles. Everything beyond the
+seven named core changes is projection plus a literate package (§11).
+
+| # | decision | status | resolution / lean |
+|---|---|---|---|
+| E1 | parked edit vs eval deadline | user | `{:pending :suggestion}` before the deadline; outcome as a message |
+| E2 | two agents, one file | user | interleave; consensus ladder §5.4 (marks, contention traces, older-claim tiebreak); OT/Eg-walker = FUP-003 |
+| E3 | where the world lives | lean | an `app` member (role `:omega`) of the project's realm, sole owner of `.omega/db`; runners are `run` members that attach; cold fallback = today's direct open (§8.2) |
+| E4 | where package facts live | user | (b) omega's store, via C1 `:schema` at open (§8.4) |
+| E5 | when human text reaches disk/agents | user | (a) publish on pause ≈1.2 s |
+| E6 | jj tier | user | (a) opt-in, one jj change per tool step, intent as omega facts (no spill, no mirror on the hot path), trailers to the home cell (§5.9) |
+| E7 | journal location | user | (a) `journal/YYYY-MM-DD.bl.org`, committed; `!*` deprecated |
+| E8 | task cell implicit context | lean | `:context heading` default |
+| E9 | finished task result | lean | rewritten once at terminal with summary/touched (self-contained docs) |
+| E10 | effect authority | lean | the record decides re-runnability; footprint only warns before a first run |
+| E11 | card | user→lean | `:urgent` density default (height = urgency), config `:omega.card` |
+| E12 | merge order | user | bl-js-actors, realm and autovcs all merged to beam-lisp main before implementation; omega re-pins once (W0) |
+| E13 | routing agent edits | lean | C6 file port (supersedes advice); L0 adoption for writes that bypass it |
+| E14 | attention privacy | lean | shared only with scope-overlapping tasks; per-console toggle |
+| E15 | core changes | lean | exactly C1–C7 (§8.4); anything else found during implementation is raised before it lands |
+| E16 | one VM, many omega projects | lean | C2 is a prerequisite for realm's shared mode; until C2 lands, an omega project declares `:vm "own"` |
+| E17 | concurrent tasks vs history changes | user | (a) one shared working copy, a change per step attributed to the stepping task, split by per-actor paths when disjoint; behind the `omega.vcs` History protocol with jj and native backends and one contract suite (§5.10) |
+| E18 | gate failure at checkpoint | user | (a) checkpoint anyway, described `[gate ✗]`, plus a `:finding` trace and a red card line, so the human steers from the failing step |
+| E19 | world idle exit | lean | stop after `:omega {:idle 1800}` with no running/waiting task and no console; restart on the next runner (§8.5) |
+| E20 | where config lives | lean | three layers with one owner each: project policy = project `env.bl :omega`; personal taste = `~/.config/omega/config.bl`; omega's build = omega's repo `env.bl`. Precedence defaults < user < project < `.env.local.bl` (§8.4.1) |
+| E21 | app-declared `env.bl` keys | lean | apps declare key + validator as data; `bl.env` dispatches, keeps refusing undeclared keys; `:apps` becomes built-in (§8.4.1) |
+
+**Core changes (§8.4), named ahead of time.** Each is additive; current tests and playground keep their
+meaning.
+
+| # | change | where |
+|---|---|---|
+| C1 | `env/open` takes `:schema` (extra attribute defs after `schema/all`) | `omega.env/open`, `open-durable!` |
+| C2 | task ids qualified by world; registries and namespaces keyed by `[world-id task-id]` | `prelude`, `codemode/task-ns`, `stream` group |
+| C3 | project policy in an `:omega` section of the project's `env.bl`, via apps declaring their own keys, validated by omega's reader | `bl.env` (beam-lisp) + `omega.config` (new) |
+| C4 | cell id carries the tool-use id: `<task>/<step>/<tool-use-id>` | `codemode/run-eval` |
+| C5 | `:step/end` emitted after each tool step (`{:task :step :tools}`) | `omega.loop` |
+| C6 | `prelude/read`, `write`, `edit` dispatch through a file port `(:files sys)` | `omega.prelude` |
+| C7 | `omega.cli` attaches to the realm's world when running (`--warm`), cold otherwise | `omega.cli`, `bin/omega` |
+
+**Cells & cards (§3, §4, §7; E8–E11).** A `:task` cell is a cell kind whose result is a reference,
+transcluded as a card whose height is its urgency; entering it opens the task in a sidebar. The result is
+rewritten once at terminal so finished documents are self-contained. Cells that changed files are not
+re-runnable; the effect record, not a static footprint, decides (E10). Org TODOs stay independent of
+omega (§3.6).
+
+**Buffers & consensus (§5, §6; E1, E2, E5, E13, E14).** One buffer server per open file; agent edits are a
+second cursor; agents settle contention stigmergically through marks and traces on bitemporal servers,
+with OT deferred (FUP-003). Human attention is a transient, decaying signal in the domain model. Disk is
+a projection, published on pause. Agent edits route through the C6 file port.
+
+**History & vcs (§5.8–5.10; E6, E17, E18).** Four granularities of history on one stack; jj per tool step,
+opt-in, behind an `omega.vcs` protocol with jj and native backends, because history will eventually be
+beam-lisp native. A failing gate still checkpoints, visibly marked, so the human can steer.
+
+**Runners & realm (§8, §9; E3, E12, E16, E19).** The world is a realm `app` member that owns `.omega/db`;
+CLI and `bl doc run --tasks` attach as runners (C7); task cells can run headless. C2 is the prerequisite
+for one VM serving many omega projects. The world exits after an idle timeout. The beam-lisp branches (bl-js-actors,
+realm, autovcs) are assumed merged before implementation.
+
+**Config (§8.4.1, §11; E20, E21).** Project policy lives in the project's `env.bl` under `:omega`; personal
+taste in `~/.config/omega/config.bl`; omega's build config in its own repo. Apps declare their own
+`env.bl` keys with a validator (C3); undeclared keys stay errors.
+
+**Build order:** waves W0–W6 plus follow-ups, §14 of the note.
+**Absorbs:** `bl-ed.bl.md` §1 decisions 1–20 and §13 E1–E21.
+
+---
+
 ## Cross-cutting: scope discipline
 
 spell's biggest lesson was scope creep: product work leaking into the harness, and Elixir orchestration
@@ -238,3 +353,7 @@ doing what the language should (`../lineage/spell.bl.md` §3). **Proposed non-go
 - an MCP *client* (MCP *server* face only).
 
 **Absorbs:** spell Q5–Q6 · processes-and-harness Q8 · tasks-and-stigmergy Q10.
+
+**The bl-ed work (PLAN-003) keeps the kernel's verbs** and adds only the seven named core changes C1–C7
+(`bl-ed.bl.md` §8.4), each listed ahead of time; anything else found during implementation is raised
+before it lands (E15, lean). Everything else is projection and a literate package.

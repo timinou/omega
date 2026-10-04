@@ -1,0 +1,43 @@
+#+TITLE: W0 — re-pin on merged beam-lisp main; core changes C1, C2, C4, C5
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FEAT-001-w0-re-pin-on-merged-beam-lisp-main-core
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+(PLAN-003 design discussion, 2026-10-03; full user messages verbatim in PLAN-003 * Initial Message.) Round 4: "E17 (a) but remember eventually instead of jj it'll be beam-lisp native, so make a namespace that is modular and beam-lispy that teaches us when we do the redesgin of autovcs / E18 (a) of course, that will allow us to properly steer / for C3, let apps define their keys so that the omega env.bl makes :omega okay for omerga and apps. but shouldn't that be in a the omega config? / everything else is good. please comprehensively file the tasks docs and research"
+
+* Source of truth
+
+research/domain/interface/bl-ed.bl.md (runnable: `bin/bl run research/domain/interface/bl-ed.bl.md`). Decision register §13 (E1–E21), core changes §8.4 (C1–C7), waves §14. Parent: PLAN-003.
+
+* Prerequisite for every wave
+
+beam-lisp main has merged `prototype/bl-js-actors` (bl-ed, bl.doc.spans), `realm` (PLAN-158) and `autovcs` (PLAN-109), per user decision E12.
+
+* Goal
+
+The kernel changes the bl-ed design needs, each additive and named ahead of time (§8.4, E15). Nothing else in the core changes.
+
+* Scope
+
+- Re-pin `env.bl :bl` to merged beam-lisp main. Run `bin/bl test` and `bin/omega-headless` on it first (the pin procedure in env.bl's header).
+- **C1** `omega.env/open` and `open-durable!` take `:schema`, extra attribute defs concatenated after `schema/all`. `omega.ext` extensions may contribute `:schema`; `ext/install` order defines concat order.
+- **C2** task ids qualified by world: a `:world` id on the env map (the realm id; a fresh token for in-memory envs). `prelude` SYSTEMS/DONE keyed by `[world task]`; `-bind!` puts `:omega/world` in the process dictionary; `codemode/task-ns` = `omega.w.<world>.<task>`; stream group `[:omega/stream world]`, `watch!` takes the world. Closes BUG-001.
+- **C4** cell id = `<task>/<step>/<tool-use-id>` in `codemode/run-eval` (today `<task>.<unique>`). The reap tag (`OMEGA_CELL_TAG`) keeps working.
+- **C5** `omega.loop` emits `:step/end {:task :step :tools}` after each tool step (beside `:turn/start`, loop.bl:158).
+
+* Acceptance
+
+- C1: the §12 'C1 is safe across sessions' probe is a test: open without/with/without/with extra attrs on one durable dir; old facts readable, writes accepted, extra facts survive, the op→task→cell join is one query.
+- C2: BUG-001's acceptance (the §8.3 probe inverted: each root holds only its own file; no def leaks; no cross-world stream deltas).
+- C4: an effectful eval's `:omega/cell` matches the tool-use id in the recorded turn.
+- C5: a scripted 3-step run emits exactly 3 `:step/end`.
+- omega's full suite and `bin/bl run omega.bl.md` stay green.

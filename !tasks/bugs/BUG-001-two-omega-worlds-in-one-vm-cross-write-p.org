@@ -1,0 +1,60 @@
+#+TITLE: Two omega worlds in one VM cross-write: prelude registry and task namespaces keyed by bare task id
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: BUG-001-two-omega-worlds-in-one-vm-cross-write-p
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Symptom (OBSERVED 2026-10-03, omega pin 2360b32e)
+
+Two task systems in ONE BEAM VM, two different roots, two in-memory envs. Each opens its first task, so both are `t-1`. A's cell sleeps then writes `a.txt`; B's task opens in between and writes `b.txt`.
+
+```
+ids      : t-1 t-1
+A root   : []
+B root   : ["a.txt" "b.txt"]
+A claims : 0
+B claims : 2
+```
+
+A's eval ran with B's system: B's root, B's env, B's claims. **Project A's agent wrote into project B.** Sequentially, a `def` in A's t-1 is also visible to B's t-1 (`"b sees secret=from-a"`).
+
+Reproduce: the `omega.ed.probe.shared-vm` block in research/domain/interface/bl-ed.bl.md §8.3 (`bin/bl run research/domain/interface/bl-ed.bl.md`).
+
+* Cause
+
+- `omega.prelude/SYSTEMS` and `DONE` are atoms keyed by task id (`src/omega/prelude.bl:21-24`). Task ids come from a per-env counter (`omega.env/counter-ids`), so they are unique per world, not per VM.
+- `omega.codemode/task-ns` = `omega.task.<id>` (`codemode.bl:48`): one namespace per id per VM.
+- `omega.stream` uses one pg group `:omega/stream` per node: every watcher receives every world's deltas.
+
+* When it matters
+
+Any VM that hosts two omega worlds:
+- beam-lisp realm's shared mode (`:vm "shared"` / `--share-vm`, PLAN-158), once omega runs on a shared warm VM;
+- tests or tools that start two systems in one VM.
+
+The default today is one VM per tree, so a normal `bin/omega` run is not affected.
+
+* Fix (core change C2 in bl-ed.bl.md §8.4)
+
+Qualify by world:
+- `world-id` = the realm id, or a fresh token for an in-memory env, stored on the env map;
+- `SYSTEMS`/`DONE` keyed by `[world-id task-id]`, and `-bind!` puts the world id in the process dictionary next to `:omega/task`;
+- `task-ns` = `omega.w.<world>.<task>`;
+- stream group = `[:omega/stream world-id]`, with `watch!` taking the world.
+
+* Acceptance
+
+- The §8.3 probe, turned into a test: A's root holds exactly `a.txt`, B's root holds exactly `b.txt`, and each env holds exactly its own claim.
+- A `def` in one world's t-1 is not visible in another world's t-1.
+- A stream watcher of world A receives no deltas from world B.
+- The existing suite and `omega.bl.md` are unchanged.
+
+* Until fixed
+
+Declare `:vm "own"` for omega projects (the realm default).

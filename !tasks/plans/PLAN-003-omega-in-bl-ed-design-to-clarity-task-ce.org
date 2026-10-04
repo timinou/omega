@@ -1,0 +1,87 @@
+#+TITLE: omega in bl-ed — design to clarity: task cells, shared buffers, one world
+#+STATE: REVIEW
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: PLAN-003-omega-in-bl-ed-design-to-clarity-task-ce
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+this will probably mean a deep thinking about the way that we program the interface of bl-ed... there's a beginning. remember it's a lisp machine, the way the original creators would have dreamt of in 2026
+
+(round 2)
+- remove ed.list, only beam-lisp
+- agents edits apply to the bugger as a second, coloured cursor. the BEAM proc primitives make this kind of system super simple and lean (write the namespace directly in .bl.md or .bl.org)
+- human attention is a transient signal yeah, put it. very useful especially for the second thing. could be nice to put that into the domain model for tasks, to tie it into the previous point
+- sure, we can do that
+- yeah let's not touch the core, the diea is to bring omega and bl-ed together and test out this kind of smart interface
+- make a new cell kind (:task) … the task results are not the raw results but references, and then the reference is taken by an omega bl-ed package that then transcludes the task … a nice card and then entering it opens a sidebar of the buffer of the running task … keep the todo tasks independent from the omega model.
+
+(round 3)
+1. ok. 2. let them interleave as is possible. maybe add OT as FUP. They should be able to reach consensus with each other (we could e.g. make the edit servers stigmergic and bitemporal) 3. where should they? what's beam-lispy and ergonomic? 4. yeah it should be able to open tasks headlessly, but then it should be as smooth to then see them from the interface (i.e. first-party coexistence of runners) 5. whatever is coolest, in any case it will be a simple config 6. function that have side effects on files should not be re-runnable and show a warning if i go spc-e on them in the livebook (instead we just see the trace of the action done, because as you saw the edit servers are stigmergic and bitemporal. if there isn't a simple impl, you can get inspired from the whole autovcs beam-lisp branch and its attempt to use jj.
+
+take your time and investigate deeply. your scope is to help us parse through all the design questions until the whole way is clear.
+
+* Goal
+
+Design only. Parse every design question for "omega as a bl-ed package" until the whole way is clear, then hand off to implementation waves. omega's core is not touched.
+
+* The design
+
+research/domain/interface/bl-ed.bl.md (runnable; both spikes pass under bin/bl run). Sections: §3 :task cell (full params, reference results, home cells/journal), §4 card + sidebar, §5 buffer servers (second cursor, consensus ladder, bitemporal op log, routing, disk publishing, history tiers), §6 attention, §7 non-re-runnable effectful cells, §8 one world many runners, §9 wire, §10 bl-ed growth, §13 decision register E1–E14, §14 waves W0–W6.
+
+* Open decisions (need the user)
+None. Round 4 settled E17 (a) and E18 (a). The remaining items in bl-ed.bl.md §13 marked "lean" (E3, E8–E10, E13–E16, E19–E21) are proposals the user has not objected to ("everything else is good", round 4); they become "user" when implementation confirms them or the user says otherwise.
+
+Round 4 decisions (bl-ed.bl.md §1, 17–20):
+- E17 (a), shared working copy, behind a modular `omega.vcs` History protocol (jj + beam-lisp native backends, one contract suite) that teaches the autovcs redesign (§5.10, spike 3 RAN);
+- E18 (a), a failing gate checkpoints as `[gate ✗]` plus a finding, so the human can steer;
+- C3: apps declare their own env.bl keys; config in three layers with one owner each (§8.4.1, E20, E21);
+- `!*` is deprecated for future design, but this iteration files in `!tasks/` as it stands.
+* Acceptance (of the design phase)
+
+Every E-row in §13 is "user" status; §14 waves each have an observable proof; FUP-003 (OT) filed.
+
+* Follow-ups
+Implementation, one feature per wave (bl-ed.bl.md §14), in dependency order:
+
+| wave | item | depends on |
+|---|---|---|
+| W0 | FEAT-001 re-pin + core C1, C2, C4, C5 (closes BUG-001) | beam-lisp merges (E12) |
+| W0 | FEAT-002 C3 app-declared env.bl keys + omega.config | beam-lisp merges |
+| W1 | FEAT-003 world as realm app member, C6 file port, C7 CLI attach | FEAT-001, FEAT-002 |
+| W1 | FEAT-004 buffer servers: op log, CAS, disk publish, adoption | FEAT-001, FEAT-003 |
+| W1b | FEAT-005 omega.vcs: History protocol, jj + native backends, contract suite, per-step checkpoints | FEAT-001 (C5), FEAT-003 |
+| W1c | FEAT-006 :task cell kind in bl.doc.spans, write-results after any cell | beam-lisp merges |
+| W2 | FEAT-007 bl-ed socket, remote cursors, publish on pause, attention, parked suggestions; ed.lisp removed | FEAT-004 |
+| W3 | FEAT-008 :task cells live: home cells, journal, cards, bl doc run --tasks, TODO sync | FEAT-006, FEAT-007 |
+| W4 | FEAT-009 task sidebar: transcript fact buffer, composer, human evals as steers, streaming | FEAT-008 |
+| W5 | FEAT-010 effectful cells not re-runnable: effect refs, trace card, revert, copy-as-new | FEAT-004, FEAT-008 |
+| W6 | FEAT-011 consensus: edit marks, contention traces, attention context lines | FEAT-004, FEAT-007 |
+
+Bugs: BUG-001 two omega worlds in one VM cross-write (fixed by FEAT-001's C2).
+
+Follow-ups:
+- FUP-003 OT / Eg-walker merge for buffer servers
+- FUP-004 native beam-lisp history (the autovcs redesign, measured by the omega.vcs contract suite)
+- FUP-005 contention escalation / attention between agents
+- FUP-006 buffer op log compaction, selections, grapheme columns
+- FUP-007 bl-ed late binding (namespace slots)
+
+Docs and research filed (2026-10-03):
+- research/domain/interface/bl-ed.bl.md (the design; 4 runnable blocks: spikes 1–3 + the shared-VM probe)
+- research/domain/synthesis/decisions.bl.md (updates to D1, D3, D8, D9, D12; new D14 with E1–E21 and C1–C7)
+- docs/domain-model.bl.md (BUG-001 known defect in §6; §10 "omega inside bl-ed", NOT BUILT)
+- research/domain/synthesis/day-to-day.bl.md (§6, a day with bl-ed)
+- research/domain/README.bl.md (index row + start-here entry)
+
+NOTE [2026-10-03]: Design phase complete: every E-row in bl-ed.bl.md §13 is user-decided or an unobjected lean; waves filed as FEAT-001–011; follow-ups FUP-003–007; BUG-001. Awaiting user review before implementation (which waits on the beam-lisp merges, E12).

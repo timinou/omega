@@ -1,0 +1,31 @@
+#+TITLE: Contention escalation and attention between agents
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FUP-005-contention-escalation-and-attention-betw
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+(PLAN-003 design discussion, 2026-10-03; the user's messages are verbatim in PLAN-003.) Round 4: "E17 (a) but remember eventually instead of jj it'll be beam-lisp native, so make a namespace that is modular and beam-lispy that teaches us when we do the redesgin of autovcs … please comprehensively file the tasks docs and research"
+
+* Source
+
+research/domain/interface/bl-ed.bl.md (cited sections). Parent: PLAN-003.
+
+* Goal
+
+Decide whether attention should also hold back edits *between agents* (a task's cursor region repelling another task's edits), beyond rungs 0–3 of the consensus ladder (§5.4, open question 2 of round 1, E2).
+
+* Context
+
+The user chose 'interleave as far as possible'. W6 builds marks and contention traces. This FUP decides, from W6's evidence, whether a rung between 3 and 4 is needed.
+
+* Acceptance
+
+A measured comparison on a scripted two-agent race: interleave + traces vs agent-attention parking. Record which converges faster with fewer human escalations.

@@ -1,0 +1,31 @@
+#+TITLE: bl-ed late binding: namespace slots so internal ed.* functions can be redefined live
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FUP-007-bl-ed-late-binding-namespace-slots-so-in
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+(PLAN-003 design discussion, 2026-10-03; the user's messages are verbatim in PLAN-003.) Round 4: "E17 (a) but remember eventually instead of jj it'll be beam-lisp native, so make a namespace that is modular and beam-lispy that teaches us when we do the redesgin of autovcs … please comprehensively file the tasks docs and research"
+
+* Source
+
+research/domain/interface/bl-ed.bl.md (cited sections). Parent: PLAN-003.
+
+* Goal
+
+The Lisp-machine property the sync profile currently lacks: redefining an internal `ed.*` function (e.g. a motion) in the running editor (§10.3; PLAN-161 D6 resolves every name at build time into module consts).
+
+* Context
+
+Packages don't need this: extension points are tables merged by name. It is for hacking the editor itself from its own command line.
+
+* Acceptance
+
+Redefining `m/word-next` from `:` changes `w` behaviour without a reload. Measure the per-call cost of slot indirection against today's consts.

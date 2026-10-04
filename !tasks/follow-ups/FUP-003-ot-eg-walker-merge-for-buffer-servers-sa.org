@@ -1,0 +1,41 @@
+#+TITLE: OT / Eg-walker merge for buffer servers: same-position inserts and long divergence
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FUP-003-ot-eg-walker-merge-for-buffer-servers-sa
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+(from the bl-ed design discussion, 2026-10-03) "let them interleave as is possible. maybe add OT as FUP. They should be able to reach consensus with each other (we could e.g. make the edit servers stigmergic and bitemporal)"
+
+* Context
+
+Design: research/domain/interface/bl-ed.bl.md §5. Buffer servers (one defserver per file in use) rebase each actor's ops by position shifting (spike 1, §5.3) and keep the op log as datom facts (spike 2, §5.5). Position shifting handles non-overlapping concurrent edits and exact-replacement compare-and-set. It does NOT handle:
+
+1. Two actors inserting at the same position concurrently: order depends on arrival, so it is nondeterministic for the actors' intent. Needs a tiebreak (by actor id) at minimum.
+2. A console replica that diverged for long (offline, slow link): rebasing N ops over M ops is O(N·M) shifts and loses intent on overlapping deletes.
+3. Overlapping delete/replace from two actors: today the second one's span collapses to the first's end.
+
+* Goal
+
+Replace `transform` in the buffer server with a proper merge that keeps the op log as the source of truth.
+
+* Candidate
+
+Eg-walker (Gentle & Kleppmann 2024, https://arxiv.org/abs/2409.14252): it replays an event graph only when branches diverge. The steady state is plain text plus an op log, which is exactly what the buffer server already stores. The steady-state memory is an order of magnitude below CRDTs, and merging long branches is much faster than OT.
+
+* Acceptance
+
+- Property test: for any two op sequences from two actors against one base, both arrival orders converge to the same text (TP1), and each actor's inserts stay contiguous.
+- Spike 1 and spike 2 in bl-ed.bl.md still produce the same observed output.
+- Same-position concurrent inserts are ordered deterministically by actor id.
+
+* Depends on
+
+Wave W1 of the bl-ed design (buffer servers as a package).

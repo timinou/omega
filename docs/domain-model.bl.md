@@ -142,6 +142,15 @@ and failure is reported **bottom-up** to the owner as a `:note`:
 (println "tree after cancel: " (task/tree sys p))
 ```
 
+**Known defect (BUG-001, OBSERVED 2026-10-03).** Task ids are unique per env, not per VM. Two omega
+systems in one VM (realm's shared mode), each with its own env and root, both open `t-1`; the
+registries keyed by bare task id (`omega.prelude/SYSTEMS`, the `omega.task.<id>` namespaces) then
+collide. The probe printed `A root: []`, `B root: ["a.txt" "b.txt"]`, `A claims: 0`, `B claims: 2`: A's
+agent wrote into B's project. A `def` in A's `t-1` was also visible to B's `t-1`. The probe is in
+`research/domain/interface/bl-ed.bl.md` §8.3; the fix (C2, qualify by world) is designed there, not
+built. Until then a project that shares a VM with another omega project is unsafe (decision E16: such a
+project declares `:vm "own"`).
+
 ## 7. History is free
 
 Every status a task has held, in order, comes from the log, not from a separate
@@ -214,3 +223,44 @@ single Datalog query.
   kind `:decision`.
 - **Durable by default.** `env/open {:path dir}` already uses fjall. The CLI exposes
   it as `--db`. A warm VM per project makes tasks outlive a shell.
+
+### omega inside bl-ed (PLAN-003, designed 2026-10-03)
+
+**None of this is built.** It is the design in `research/domain/interface/bl-ed.bl.md` (status: design
+for discussion; assumes beam-lisp's bl-js-actors, `realm` and `autovcs` merged first, §1 decision 16).
+It extends this model rather than adding a second one:
+
+- **Attention: a transient sixth kind** (§6 there). It sits beside actor, task, msg, trace and turn but
+  lives in an *ephemeral* conn the package owns, never in the durable log. Attributes are
+  `:attn/actor :attn/path :attn/region :attn/mode :attn/at`. It is symmetric: the human is just an
+  actor (viewport and selection, reported by the console), and a task's attention is its edit cursor,
+  so edit marks *are* agent attention. Strength decays as 2^-(age/half-life) (`:typing` 3 s,
+  `:looking` 10 s, agent `:editing` 60 s), the same decay idea as traces. Only consequences reach the
+  durable log: an accepted or rejected suggestion becomes a `:reply` msg or a `:decision` trace.
+  Attention is shared only with tasks whose scope overlaps the attended path (E14, lean).
+- **The buffer op log and effect records are facts in the same store** (E4, decided: (b) omega's
+  store). Each buffer edit is one datom transaction carrying actor, cell (`:tx/cell`) and valid time
+  (§5.5, spike 2, RAN), so "what did t-41 change" joins op → task → cell in one query. A cell that
+  changed the world records an effect `{:cell :ops :tasks :msgs}` and is not re-runnable (§7, decided
+  in round 2, decision 11). This needs **C1**: `env/open` and `open-durable!` take `:schema` (extra
+  attribute defs concatenated after `schema/all`). OBSERVED (§8.4): a store reopened with and without
+  the extra attributes keeps old facts readable, so the package's facts survive a package-less session.
+- **Task ids qualified by world (C2, §8.4).** Registries and namespaces move to `[world-id task-id]`
+  (`world-id` = the realm id, or a fresh token for an in-memory env); `omega.task.<id>` becomes
+  `omega.w.<world>.<task>`. Why: the OBSERVED cross-write described under §6 above (BUG-001,
+  bl-ed.bl.md §8.3). It is needed whatever happens to bl-ed.
+- **The world is a realm `app` member** (§8.2, PLAN-158 assumed merged; E3, lean). One project, one
+  realm, one world, sole owner of `.omega/db`. Every runner (`bin/omega`, `bl doc run --tasks`, a
+  bl-ed console, MCP) is a `run` member that attaches to it, with a cold fallback to today's direct
+  open. The world exits after `:omega {:idle 1800}` seconds with no running or waiting task and no
+  console (§8.5, E19 lean); nothing is lost because the store is the truth.
+- **History behind a protocol, `omega.vcs`** (§5.10, E17, decided). A five-verb `History` protocol
+  (`checkpoint!` `changes` `tree-at` `diff` `abandon!`) with a jj backend (one change per model step,
+  trailers `Omega-Task`/`Omega-Cell`, a failing gate still checkpoints as `[gate ✗]`, E18) and a
+  beam-lisp native backend (a change is a fact, blobs are `:db.type/file`, undo is a compensating
+  change). Spike 3 ran the protocol and a native backend; the native backend's open gaps are listed in
+  §5.10 (merges, renames, binary files, git export/import, blame index, large trees).
+
+The full list of core changes (C1–C7) is §8.4; the decision register (E1–E21) is §13; the build order
+(W0–W6) is §14. Everything else is a package and a projection on this model.
+

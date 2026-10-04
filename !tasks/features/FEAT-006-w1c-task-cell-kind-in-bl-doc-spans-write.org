@@ -1,0 +1,40 @@
+#+TITLE: W1c — :task cell kind in bl.doc.spans; write-results after any cell
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FEAT-006-w1c-task-cell-kind-in-bl-doc-spans-write
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+(PLAN-003 design discussion, 2026-10-03; full user messages verbatim in PLAN-003 * Initial Message.) Round 4: "E17 (a) but remember eventually instead of jj it'll be beam-lisp native, so make a namespace that is modular and beam-lispy that teaches us when we do the redesgin of autovcs / E18 (a) of course, that will allow us to properly steer / for C3, let apps define their keys so that the omega env.bl makes :omega okay for omerga and apps. but shouldn't that be in a the omega config? / everything else is good. please comprehensively file the tasks docs and research"
+
+* Source of truth
+
+research/domain/interface/bl-ed.bl.md (runnable: `bin/bl run research/domain/interface/bl-ed.bl.md`). Decision register §13 (E1–E21), core changes §8.4 (C1–C7), waves §14. Parent: PLAN-003.
+
+* Prerequisite for every wave
+
+beam-lisp main has merged `prototype/bl-js-actors` (bl-ed, bl.doc.spans), `realm` (PLAN-158) and `autovcs` (PLAN-109), per user decision E12.
+
+* Goal
+
+The document grammar learns cell kinds as data, so `#+begin_task` is a cell when the package is loaded and prose when it is not (§3.5, §10.1).
+
+* Scope
+
+- beam-lisp `bl.doc.spans`: `:cell-kinds` in opts; a registered `#+begin_<kind>` → `{:kind :cell :cell-kind k …}`; header tokens parsed by `src-attrs` rules.
+- `bl.doc` runner dispatches evaluation by kind.
+- `write-results` inserts a result after any cell (today only after `:cell`, doc.bl:396 `insert-new?`).
+- Both targets (BEAM and the JS sync profile) share the scanner.
+
+* Acceptance
+
+- Without the kind registered, today's partition (`:block` + `:result`) is unchanged.
+- With it, the block is a cell, and a first evaluation inserts `#+RESULTS: <id>`.
+- The BEAM and JS selftests agree.

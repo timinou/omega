@@ -1,0 +1,33 @@
+#+TITLE: Buffer op log compaction, selections, grapheme columns
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FUP-006-buffer-op-log-compaction-selections-grap
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+(PLAN-003 design discussion, 2026-10-03; the user's messages are verbatim in PLAN-003.) Round 4: "E17 (a) but remember eventually instead of jj it'll be beam-lisp native, so make a namespace that is modular and beam-lispy that teaches us when we do the redesgin of autovcs … please comprehensively file the tasks docs and research"
+
+* Source
+
+research/domain/interface/bl-ed.bl.md (cited sections). Parent: PLAN-003.
+
+* Goal
+
+Close the buffer server gaps listed under 'Not covered by either spike' (§5.5) that are not OT (FUP-003).
+
+* Scope
+
+- Compact the in-process op log after every actor has seen a revision. The datom op log stays the durable record.
+- Cursors carry selections, not just points.
+- Columns: bl-ed indexes graphemes, BEAM `subs` does too. Verify on combining marks and emoji and pin it with a test.
+
+* Acceptance
+
+A 10k-op session keeps a bounded in-memory log; remote selections render; a grapheme test passes on both targets.

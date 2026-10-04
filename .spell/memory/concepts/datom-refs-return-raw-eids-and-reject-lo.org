@@ -1,0 +1,19 @@
+#+TITLE: datom-refs-return-raw-eids-and-reject-lo
+
+** ITEM datom refs return raw eids and reject lookup-refs in tx data
+:PROPERTIES:
+:CUSTOM_ID: CON-datom-refs-return-raw-eids-and-reject-lo
+:KIND: concept
+:CONFIDENCE: 0.6
+:CREATED: 2026-10-03T23:07:45Z
+:END:
+:RELATIONS:
+:END:
+Observed on beam-lisp 2360b32e (omega's pin), 2026-10-03, while writing the omega.vcs native spike:
+- A :db.type/ref attribute read through `datom/entity` returns the raw entity id (an integer), not a navigable entity. Walk refs explicitly: `(datom/entity db eid)`.
+- A ref attribute in transaction data does NOT accept a lookup-ref vector (`[:change/id "c1"]` → `:wrong-type`). Resolve first with `(datom/lookup-ref db [...])` or use the eid.
+- `(:db/id (datom/entity db x))` does return the eid.
+- `datom/file` takes a string or binary directly (strings are binaries); `datom/file-bytes` returns it back.
+- A schema attribute transacted at runtime into an open conn does not take effect: the conn's schema map is fixed at connect. Pass extra attrs at connect (`connect-with store (concat base extra)`); reopening a durable store with or without them keeps all facts.
+- Multi-source datalog (`:in $a $b`) is refused ("invalid query").
+- `ffirst` and `resolve` are not available in user namespaces.

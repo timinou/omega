@@ -1,0 +1,50 @@
+#+TITLE: Native beam-lisp history: grow omega.vcs.native into the autovcs redesign
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FUP-004-native-beam-lisp-history-grow-omega-vcs
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+(PLAN-003 design discussion, 2026-10-03; the user's messages are verbatim in PLAN-003.) Round 4: "E17 (a) but remember eventually instead of jj it'll be beam-lisp native, so make a namespace that is modular and beam-lispy that teaches us when we do the redesgin of autovcs … please comprehensively file the tasks docs and research"
+
+* Source
+
+research/domain/interface/bl-ed.bl.md (cited sections). Parent: PLAN-003.
+
+* Goal
+
+Replace jj with beam-lisp native history, measured by the `omega.vcs` contract suite (§5.10). The redesign of autovcs starts from the native backend, not from jj.
+
+* What the spike showed (OBSERVED, spike 3)
+
+A five-verb `History` protocol over datom + `:db.type/file`: no-op checkpoints, queries by actor and by path, diff, and compensating abandon refused as `{:conflict paths}`.
+
+* Gaps before it can replace jj
+
+1. merges (two heads) and their conflict representation;
+2. renames;
+3. binary and large files over the blob tier;
+4. git export/import at the human-decision tier (git stays the exchange format);
+5. `annotate` as an index, not a parent walk;
+6. large-tree performance (the spike walks parents linearly; needs a per-path latest-blob index);
+7. a real change id scheme (the spike counts entities).
+
+* Lessons to carry (§5.10, 1–6)
+
+- a change is a fact with its intent written with it, so nothing needs mirroring;
+- content addressing is datom's blob store;
+- undo is compensation;
+- split is a query over per-path attribution;
+- the working copy is the buffers;
+- git stays the exchange format.
+
+* Acceptance
+
+The contract suite is green on the native backend, including merges, renames and conflicts. `:vcs {:backend :native}` runs a real omega day without jj installed (note: jj is not even installed on this workstation today).

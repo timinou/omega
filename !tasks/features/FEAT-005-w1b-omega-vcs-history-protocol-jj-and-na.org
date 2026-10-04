@@ -1,0 +1,45 @@
+#+TITLE: W1b — omega.vcs: History protocol, jj and native backends, contract suite, per-step checkpoints
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FEAT-005-w1b-omega-vcs-history-protocol-jj-and-na
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+(PLAN-003 design discussion, 2026-10-03; full user messages verbatim in PLAN-003 * Initial Message.) Round 4: "E17 (a) but remember eventually instead of jj it'll be beam-lisp native, so make a namespace that is modular and beam-lispy that teaches us when we do the redesgin of autovcs / E18 (a) of course, that will allow us to properly steer / for C3, let apps define their keys so that the omega env.bl makes :omega okay for omerga and apps. but shouldn't that be in a the omega config? / everything else is good. please comprehensively file the tasks docs and research"
+
+* Source of truth
+
+research/domain/interface/bl-ed.bl.md (runnable: `bin/bl run research/domain/interface/bl-ed.bl.md`). Decision register §13 (E1–E21), core changes §8.4 (C1–C7), waves §14. Parent: PLAN-003.
+
+* Prerequisite for every wave
+
+beam-lisp main has merged `prototype/bl-js-actors` (bl-ed, bl.doc.spans), `realm` (PLAN-158) and `autovcs` (PLAN-109), per user decision E12.
+
+* Goal
+
+History per tool step behind a backend-free protocol, so jj is replaceable by beam-lisp native history. The contract suite is what teaches the autovcs redesign (§5.9–5.10, E6, E17, E18).
+
+* Scope
+
+- `omega/vcs.bl.md`: `History` protocol (`checkpoint! changes tree-at diff abandon!`) plus the checkpoint policy as an omega extension (on `:step/end` from C5): trailers `Omega-Task`/`Omega-Cell`; the gate before describe; on gate failure checkpoint anyway as `[gate ✗]`, leave a `:finding` trace and turn the card line red (E18).
+- `omega/vcs/jj.bl.md`: `JjHistory` over beam-lisp `vcs.jj`.
+- `omega/vcs/native.bl.md`: `NativeHistory`, datom + `:db.type/file` (spike 3).
+- `omega/vcs/test.bl.md`: ONE contract suite run against both backends.
+- Facts `{:jj/change :jj/commit :jj/op}` (or backend-neutral `:history/change`) on the step.
+- Shared working copy (E17 a); split by per-actor paths when disjoint.
+- Upstream to beam-lisp `vcs`: `checkpoint!` takes `:trailers` and returns ids; `mirror!` optional/lazy/paged; daemon hook re-seated on realm `vm.session/dispatch-command`.
+
+* Acceptance
+
+- The contract suite is green on both backends (the spike's assertions: no-op checkpoint = nil; query by actor and by path; abandon keeps other tasks' work; a second abandon → `{:conflict paths}`).
+- A 3-step scripted task produces 3 jj changes with trailers.
+- 'what did t-N change' is one query.
+- A failing gate produces a `[gate ✗]` change plus a finding.
+- Measure the per-step cost on omega (the 0.2–0.6 s figure in §5.8 is INFERRED).
