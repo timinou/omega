@@ -135,7 +135,7 @@ test for the cutover.
   {:name  "inbox"
    :doc   "Tasks on the left, the selected one in the middle, its minimap on the right."
    :panes [{:id :rail :doc "omega:overview"   :width [:ch 38]}
-           {:id :main :doc :follow            :width :fill}     ; whatever :rail selects
+           {:id :main :doc :linked            :width :fill}     ; whatever :rail selects
            {:id :map  :view [:minimap :main]  :width [:ch 24]}] ; a VIEW of another pane
    :links [{:from :rail :on :select :to :main :do :visit}       ; selection opens
            {:from :map  :on :scroll :to :main :do :scroll}]     ; minimap scrolls main
@@ -148,7 +148,7 @@ The vocabulary, deliberately small:
 |---|---|---|
 | `:panes` | vector, left → right | order is layout order (v1: one row of columns) |
 | `:id` | keyword | how links, focus and effects name the pane |
-| `:doc` | path · `:follow` | the document the pane shows at start; `:follow` = filled by a link |
+| `:doc` | path · `:linked` | the document the pane shows at start; `:linked` = filled by a link (not `:follow`, which is a mode) |
 | `:view` | `[kind pane-id]` | not an editor: a VIEW computed from another pane (`:minimap`) |
 | `:width` | `[:ch n]` · `:fill` · `[:fr n]` | cells, the rest, or a share of the rest |
 | `:links` | `{:from :on :to :do}` | when `:from` emits `:on`, do `:do` in `:to` |
@@ -218,7 +218,7 @@ What changes from `spikes/present` round 2 (frame.html + frame.mjs, ~250 lines o
   {:name "inbox"
    :doc "omega's one screen: tasks | the selected task | its minimap."
    :panes [{:id :rail :doc "omega:overview" :width [:ch 38]}
-           {:id :main :doc :follow :width :fill}
+           {:id :main :doc :linked :width :fill}
            {:id :map  :view [:minimap :main] :width [:ch 24]}]
    :links [{:from :rail :on :select :to :main :do :visit}
            {:from :map :on :scroll :to :main :do :scroll}]
