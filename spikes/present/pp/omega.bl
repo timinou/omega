@@ -1,0 +1,158 @@
+; pp/omega.bl — omega's task livebook, drawn through presentations
+; (spike: spikes/present-pipeline.bl.md). The text is EXACTLY what
+; omega.ed.render/task-doc prints today; only the drawing changes.
+;
+;   readtable   turns, cells, results, traces, the composer: from syntax
+;   presenters  a turn away from the cursor folds to ONE summary line;
+;               a long result shows 6 rows + "… N more"; the traces fold to
+;               a count; the composer is a sticky card at the bottom edge
+;   lod policy  fisheye by the cursor: the turn you are in, and the newest
+;               turn, are whole; everything else is a line
+;   modes       follow: at the tail when a new rev lands → stay at the tail
+
+(ns pp.omega
+  (:require [ed.text :as t]
+            [ed.core :as c]
+            [pp.read :as rd]
+            [pp.present :as p]))
+
+; ─── readtable ─────────────────────────────────────────────────────────────
+
+(defn- heading-title [b] (if (= :heading (:kind b)) (str (:title b)) ""))
+
+(def readtable
+  [{:type :omega/turn
+    :match (fn [b l] (let [s (heading-title b)] (or (starts-with? s "you · ") (starts-with? s "model · "))))
+    :attrs (fn [b l] (let [[who n] (split (heading-title b) " · ")] {:who who :n n}))}
+   {:type :omega/traces :match (fn [b l] (= "traces" (heading-title b)))}
+   {:type :omega/composer :match (fn [b l] (starts-with? (heading-title b) "say ▸"))}
+   {:type :omega/cell
+    :match (fn [b l] (and (= :cell (:kind b)) (some? (index-of l ":ns omega.task."))))
+    :attrs (fn [b l] {:key (:id b)})}
+   {:type :omega/result :match (fn [b l] (and (= :result (:kind b)) (some? (index-of (str (:id b)) "/"))))
+    :attrs (fn [b l] {:key (str "⇒" (:id b))})}])
+
+; ─── presenters ────────────────────────────────────────────────────────────
+
+(defn- clip [s n] (if (> (count s) n) (str (subs s 0 (dec n)) "…") s))
+(defn- line-of [ctx r] (t/line (:text (:ed ctx)) r))
+
+(defn- result-rows [ctx o] (filter (fn [r] (starts-with? (line-of ctx r) ":")) (range (:from o) (:to o))))
+
+(defn- turn-summary
+  "One line for a turn: who · n, its first words or its code, its results' size."
+  [o ctx]
+  (let [kids (:kids o)
+        prose (first (keep (fn [k] (when (= :prose (:type k))
+                                     (first (filter (fn [s] (not (blank? s))) (map (fn [r] (line-of ctx r)) (range (:from k) (:to k)))))))
+                           kids))
+        code (join " · " (mapcat (fn [k] (map (fn [r] (trim (line-of ctx r))) (range (inc (:from k)) (dec (:to k)))))
+                                 (filter (fn [k] (= :omega/cell (:type k))) kids)))
+        nres (reduce + 0 (map (fn [k] (count (result-rows ctx k))) (filter (fn [k] (= :omega/result (:type k))) kids)))
+        a (:attrs o)
+        glyph (if (= "you" (:who a)) "▸ " "◆ ")]
+    (p/line-mark (:from o)
+                 (vec (filter (fn [s] (not= "" (:text s)))
+                              [{:text glyph :kind :keyword}
+                               {:text (str (:who a) " · " (:n a)) :kind :heading-1}
+                               {:text "   " :kind :prose}
+                               {:text (clip (or prose "") 64) :kind :prose}
+                               {:text (if (and (blank? (or prose "")) (seq code)) (clip code 64) "") :kind :code}
+                               {:text (if (pos? nres) (str "   ⇒ " nres " line" (if (= 1 nres) "" "s") " ▸") "") :kind :comment}]))
+                 (:key o))))
+
+(defn present-turn [o ctx]
+  (if (< ((:lod ctx) o) 3)
+    (turn-summary o ctx)
+    (p/card (:key o) (if (= "you" (:who (:attrs o))) "you" "focus") (p/rows-with-kids o ctx))))
+
+(def RESULT-HEAD 6)
+
+(defn present-result [o ctx]
+  (let [n (- (:to o) (:from o))]
+    (if (or (>= ((:lod ctx) o) 3) (<= n (+ 2 RESULT-HEAD)))
+      (p/stack (map p/text-mark (range (:from o) (:to o))))
+      (p/stack (concat (map p/text-mark (range (:from o) (+ (:from o) 1 RESULT-HEAD)))
+                       [(p/line-mark (+ (:from o) 1 RESULT-HEAD)
+                                     [{:text (str ": … " (- n 1 RESULT-HEAD) " more lines (j into them to see all)") :kind :comment}]
+                                     (str (:key o) "/more"))])))))
+
+(defn present-traces [o ctx]
+  (if (< ((:lod ctx) o) 3)
+    (let [n (count (filter (fn [r] (starts-with? (line-of ctx r) "- ")) (range (:from o) (:to o))))
+          ok (count (filter (fn [r] (some? (index-of (line-of ctx r) " ok"))) (range (:from o) (:to o))))]
+      (p/line-mark (:from o) [{:text "· " :kind :comment} {:text "traces" :kind :heading-1}
+                              {:text (str "   " n " trace" (if (= 1 n) "" "s") (if (= ok n) " · all ok" (str " · " ok " ok")) " ▸") :kind :comment}]
+                   (:key o)))
+    (p/stack (p/rows-with-kids o ctx))))
+
+(defn- drafting?
+  "Is the minibuffer a prompt that writes to this composer's task?"
+  [ed]
+  (let [mb (:minibuf ed)]
+    (and (some? mb) (= :prompt (:kind mb)) (or (starts-with? (str (:prompt mb)) "say to ") (starts-with? (str (:prompt mb)) "new task ▸")))))
+
+(defn present-composer
+  "The say block: a sticky card. In place when you scroll to it; pinned to the
+   bottom edge while its place is below the screen. While you write to the
+   task, your text is drawn HERE, not in a floating minibuffer."
+  [o ctx]
+  (let [ed (:ed ctx)
+        finished? (some? (index-of (t/line (:text ed) 0) "✓ done"))
+        body (cond
+               (and finished? (not (drafting? ed)))
+                 [{:text "▌ " :kind :keyword}
+                  {:text "this task is done — type to start a NEW task from here (it lands in scratch)" :kind :comment}]
+               (drafting? ed)
+               [{:text "▌ " :kind :keyword} {:text (:text (:minibuf ed)) :kind :prose} {:text "▏" :kind :paren-0}
+                {:text "   RET sends · Esc cancels" :kind :comment}]
+               :else
+                 [{:text "▌ " :kind :keyword}
+                  {:text "just type to write to the task — RET sends · Esc cancels" :kind :comment}])]
+    (p/sticky (:key o)
+              [(p/card (:key o) (if (drafting? ed) "drafting" "composer")
+                       [(p/text-mark (:from o))
+                        (p/line-mark (:from o) body (str (:key o) "/draft"))])])))
+
+(def table
+  (merge p/default-table
+         {:omega/turn present-turn :omega/result present-result
+          :omega/traces present-traces :omega/composer present-composer}))
+
+; ─── lod: fisheye by the cursor ────────────────────────────────────────────
+
+(defn- contains-row? [o r] (and (<= (:from o) r) (< r (:to o))))
+
+(defn lod-of [ed tree]
+  (let [cur (first (c/cursor ed))
+        turns (filter (fn [o] (= :omega/turn (:type o))) (rd/walk tree))
+        last-turn (last turns)
+        dflt (p/default-lod ed)]
+    (fn [o]
+      (cond
+        (contains-row? o cur) 3
+        (= :omega/turn (:type o)) (if (identical? o last-turn) 3 1)
+        (= :omega/traces (:type o)) 1
+        (= :omega/result (:type o)) 2
+        :else (dflt o)))))
+
+(defn focus-of
+  "What the lod depends on: the innermost object holding the cursor (and the
+   folds) — the layout is recomputed only when this changes."
+  [ed tree]
+  [(:key (rd/object-at-row tree (first (c/cursor ed)))) (:folds ed)
+   (when (drafting? ed) (:text (:minibuf ed)))])
+
+(defn inline-minibuf?
+  "The host should not float the minibuffer: the composer draws it."
+  [ed] (drafting? ed))
+
+(def presentation
+  {:name "omega" :fill? true :readtable readtable :table table :around [] :isa p/ISA :lod-of lod-of :focus-of focus-of})
+
+; ─── the default presentation: today's screen ──────────────────────────────
+
+(def default-presentation
+  {:name "text" :readtable [] :table p/default-table :around [] :isa p/ISA
+   :lod-of (fn [ed tree] (p/default-lod ed))
+   :focus-of (fn [ed tree] (:folds ed))})

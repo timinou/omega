@@ -1,0 +1,49 @@
+; pp/check.bl — the spike's assertions, run on the BEAM AND in JS (same source).
+;
+;   (equivalence text path)  the DEFAULT presentation reproduces ed.main/render's
+;                            lines exactly, at several scroll positions and folds
+;   (omega-shape text)       what the omega presentation draws for a task doc
+
+(ns pp.check
+  (:require [ed.main :as m]
+            [ed.text :as t]
+            [pp.present :as p]
+            [pp.omega :as om]
+            [pp.main :as pm]))
+
+(defn- strip [l] (dissoc l :y))
+
+(defn- scrolled [ed top] (assoc-in ed [:view :top] top))
+
+(defn equivalence
+  "Mismatching [top row] pairs between today's render and the default
+   presentation, for `text` at every 7th scroll top and with every heading folded."
+  [text path]
+  (let [ed0 (m/boot text path)
+        n (t/line-count (:text ed0))
+        heads (map :row (:outline (:struct ed0)))
+        variants (concat (map (fn [top] (scrolled ed0 top)) (filter (fn [i] (= 0 (mod i 7))) (range n)))
+                         [(assoc ed0 :folds (set heads))
+                          (assoc ed0 :folds (set (keep-indexed (fn [i h] (when (even? i) h)) heads)))])
+        bad (mapcat (fn [ed]
+                      (let [a (:lines (m/render ed))
+                            b (map strip (:lines (p/render om/default-presentation ed)))]
+                        (if (= (vec a) (vec b)) []
+                          [[(:top (:view ed)) (count a) (count b)
+                            (first (keep (fn [i] (let [x (nth a i nil) y (nth (vec b) i nil)] (when (not= x y) [i x y]))) (range (max (count a) (count b)))))]])))
+                    variants)]
+    {:variants (count variants) :bad (vec bad)}))
+
+(defn omega-shape
+  "What the omega presentation shows for task text: slot count vs text rows,
+   the frames, the ornament lines."
+  [text]
+  (let [ed (pm/boot text "task:t-5")
+        v (pm/render ed)
+        scr (p/screen-of (:presentation ed) ed)]
+    {:rows (t/line-count (:text ed))
+     :slots (count (:slots scr))
+     :frames (mapv (fn [f] [(:key f) (:tone f) (- (:y1 f) (:y0 f))]) (concat (:frames scr) (:sticky scr)))
+     :ornaments (vec (keep (fn [s] (when (= :line (:kind s)) (join "" (map :text (:segs s))))) (:slots scr)))
+     :modes (:modes v)
+     :shown (count (:lines v))}))

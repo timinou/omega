@@ -1,0 +1,167 @@
+; pp/main.bl — the spike's entry: ed.main + presentations + modes
+; (spike: spikes/present-pipeline.bl.md).
+;
+; A MODE is data: {:name :lighter :keys {seq cmd} :commands {name cmd}
+; :on-event (fn [old new ev] new)}. `handle` runs ed.main/handle, then folds
+; every active mode's :on-event over the result — so a mode reacts to what
+; an event DID (old → new), never re-implements it. Modes and presentations
+; are chosen per document scheme (auto) and toggled at runtime.
+
+(ns pp.main
+  (:require [ed.main :as m]
+            [ed.core :as c]
+            [ed.text :as t]
+            [pp.read :as rd]
+            [pp.present :as p]
+            [pp.omega :as om]))
+
+; ─── block motions from the readtable ──────────────────────────────────────
+
+(defn- goto-row [ed r]
+  (c/scroll-to-cursor (assoc ed :sels [{:anchor [r 0] :head [r 0]}] :primary 0)))
+
+(defn- objects-of [ed ty]
+  (filter (fn [o] (= ty (:type o))) (rd/walk (p/tree-of (:readtable (:presentation ed)) ed))))
+
+(defn block-motion [ty dir]
+  (fn [ed]
+    (let [r (first (c/cursor ed))
+          os (objects-of ed ty)
+          hit (if (pos? dir) (first (filter (fn [o] (> (:from o) r)) os)) (last (filter (fn [o] (< (:from o) r)) os)))]
+      (if (nil? hit) (c/message ed (str "no " (if (pos? dir) "next" "previous") " " (name ty))) (goto-row ed (:from hit))))))
+
+(defn- composer-row [ed] (:from (first (objects-of ed :omega/composer))))
+
+; ─── modes ─────────────────────────────────────────────────────────────────
+
+(defn- at-tail?
+  "Was the reader at the tail: in the newest turn, the traces or the composer?"
+  [ed]
+  (let [turns (objects-of ed :omega/turn)
+        last-from (if (empty? turns) 0 (:from (last turns)))]
+    (>= (first (c/cursor ed)) last-from)))
+
+(def follow
+  {:name :follow :lighter "⇣ follow"
+   :doc "Keep the newest turn in view while you are at the tail; scrolling up lets go."
+   ; only a NEW TURN moves the cursor: a rev that changes the title's age or a
+   ; trace is not news, and the composer is never taken from under you
+   :on-event (fn [old new ev]
+               (let [turns (objects-of new :omega/turn)]
+                 (if (and (= :doc (:type ev)) (at-tail? old)
+                          (> (count turns) (count (objects-of old :omega/turn)))
+                          (not= (composer-row old) (first (c/cursor old))))
+                   (goto-row new (:from (last turns)))
+                   new)))})
+
+(def compose
+  {:name :compose :lighter "✎ compose"
+   :doc "When the task hands you the turn, the cursor goes to the say block."
+   :on-event (fn [old new ev]
+               (let [yours? (fn [ed] (some? (index-of (t/line (:text ed) 0) "your turn")))]
+                 (if (and (= :doc (:type ev)) (yours? new) (not (yours? old)) (at-tail? old) (some? (composer-row new)))
+                   (goto-row new (composer-row new))
+                   new)))})
+
+(def MODES {:follow follow :compose compose})
+
+; ─── presentations, chosen per scheme ──────────────────────────────────────
+
+(def PRESENTATIONS {"text" om/default-presentation "omega" om/presentation})
+
+(defn- auto [path]
+  (if (starts-with? (str path) "task:")
+    {:presentation "omega" :modes [:follow :compose]}
+    {:presentation "text" :modes []}))
+
+(defn- adopt [ed path]
+  (let [a (auto path)]
+    (assoc ed :presentation (get PRESENTATIONS (:presentation a)) :modes (:modes a))))
+
+(def commands
+  {:pp/next-turn {:doc "Next turn." :run (block-motion :omega/turn 1)}
+   :pp/prev-turn {:doc "Previous turn." :run (block-motion :omega/turn -1)}
+   :pp/next-cell {:doc "Next cell." :run (block-motion :omega/cell 1)}
+   :pp/prev-cell {:doc "Previous cell." :run (block-motion :omega/cell -1)}
+   :pp/say {:doc "Go to the say block." :run (fn [ed] (if-let [r (composer-row ed)] (goto-row ed r) (c/message ed "no say block here")))}
+   :pp/toggle-presentation {:doc "Switch between the text and the presented drawing."
+                            :run (fn [ed] (let [nxt (if (= "text" (:name (:presentation ed))) "omega" "text")]
+                                            (c/message (assoc ed :presentation (get PRESENTATIONS nxt)) (str "presentation: " nxt))))}
+   :pp/toggle-follow {:doc "Toggle follow mode."
+                      :run (fn [ed] (let [on? (some (fn [x] (= x :follow)) (:modes ed))]
+                                      (c/message (update ed :modes (fn [ms] (if on? (vec (remove (fn [x] (= x :follow)) ms)) (conj (vec ms) :follow))))
+                                                 (str "follow " (if on? "off" "on")))))}})
+
+(def keys-normal
+  {"] t" :pp/next-turn "[ t" :pp/prev-turn "] c" :pp/next-cell "[ c" :pp/prev-cell
+   "g s" :pp/say "space t p" :pp/toggle-presentation "space t f" :pp/toggle-follow})
+
+(defn- install [ed]
+  (-> ed
+      (update :user-commands (fn [cm] (merge cm commands)))
+      (update-in [:user-keys :normal] (fn [km] (merge km keys-normal)))))
+
+; ─── the host API ──────────────────────────────────────────────────────────
+
+(defn boot [s path] (install (adopt (m/boot s path) path)))
+
+(declare handle*)
+
+; ─── type-to-compose: the say block is where you write ─────────────────────
+;
+; On the composer row of a read-only task view, a printable key does not run a
+; normal-mode command (where `e` visits effects and `y` answers yes): it opens
+; the say prompt with that character already in it. A finished task cannot
+; take messages, so the same keystroke drafts a NEW task instead.
+
+(defn- on-composer? [ed]
+  (and (= :normal (:mode ed)) (empty? (:pending ed))
+       (some? (composer-row ed)) (= (composer-row ed) (first (c/cursor ed)))))
+
+(defn- task-id
+  "The task id from the title line `#+TITLE: t-15 · …`, or nil."
+  [ed]
+  (let [l (t/line (:text ed) 0)
+        p "#+TITLE: "]
+    (when (starts-with? l p)
+      (let [w (first (split (subs l (count p)) " "))] (when (starts-with? w "t-") w)))))
+
+(defn- finished? [ed] (some? (index-of (t/line (:text ed) 0) "✓ done")))
+
+(defn- compose-key [ed ch]
+  (let [id (task-id ed)
+        submit (if (finished? ed)
+                 (fn [e s] (-> e (c/effect {:kind :intent :intent "task/open" :args {:goal s}})
+                               (c/message "opened a new task; it is in omega:scratch (space a s)")))
+                 (fn [e s] (-> e (c/effect {:kind :intent :intent "task/say" :args {:id id :text s}})
+                               (c/message (str "sent to " id)))))]
+    (assoc ed :mode :command
+           :minibuf {:prompt (if (finished? ed) "new task ▸ " (str "say to " id " ▸ ")) :text ch :kind :prompt :submit submit})))
+
+(defn- typed-char [ev]
+  (let [k (:key ev)] (when (and (= :key (:type ev)) (string? k) (= 1 (count k)) (not= k " ")) k)))
+
+(defn handle [ed ev]
+  (if (and (= "omega" (:name (:presentation ed))) (some? (typed-char ev)) (on-composer? ed) (some? (task-id ed)))
+    (compose-key ed (typed-char ev))
+    (handle* ed ev)))
+
+(defn- handle* [ed ev]
+  (let [new (m/handle ed ev)
+        ; a visit makes a new editor (ed.docs): it keeps nothing of ours
+        new (if (nil? (:presentation new)) (install (adopt new (:path new))) new)
+        new (if (and (= :doc (:type ev)) (:visit? ev)) (install (adopt new (:path new))) new)]
+    (reduce (fn [acc k] ((:on-event (get MODES k)) ed acc ev)) new (:modes new))))
+
+(defn take-effects [ed] (m/take-effects ed))
+
+(defn render [ed]
+  (let [v (p/render (:presentation ed) ed)
+        lighters (vec (map (fn [k] (:lighter (get MODES k))) (:modes ed)))]
+    (cond-> (assoc v :modes lighters :presentation (:name (:presentation ed)))
+      (and (some? (:minibuf v)) (= "omega" (:name (:presentation ed))) (om/inline-minibuf? ed))
+        (assoc-in [:minibuf :inline?] true))))
+
+(defn render-text
+  "Today's view model, for comparison."
+  [ed] (m/render ed))

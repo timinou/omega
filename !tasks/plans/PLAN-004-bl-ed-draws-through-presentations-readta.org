@@ -1,0 +1,65 @@
+#+TITLE: bl-ed draws through presentations: readtable → presenters → layout, modes, the say block is where you write
+#+STATE: REVIEW
+#+SESSION_ID: 159967db0c6fdff3
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T19-35-34-193Z_159967db0c6fdff3.jsonl]]
+#+CUSTOM_ID: PLAN-004-bl-ed-draws-through-presentations-readta
+
+* Initial Message
+
+http://127.0.0.1:8790/?file=task%3At-5 <- look at this. could there be some kind of 'interface reader macros' we could use to make the interface of tasks more block-like and easy to navigate? and how would you add more features (modularly, lisp machine-way) to e.g. auto-go down, or have the say > prompt be where you write the thing? do you understand my goal? please be bold and grow your imagination so we're on the same dimension
+
+* Initial Message
+
+http://127.0.0.1:8790/?file=task%3At-5 <- look at this. could there be some kind of 'interface reader macros' we could use to make the interface of tasks more block-like and easy to navigate? and how would you add more features (modularly, lisp machine-way) to e.g. auto-go down, or have the say > prompt be where you write the thing? do you understand my goal? please be bold and grow your imagination so we're on the same dimension
+
+(round 2) let's go bolder and see this as a way to influence the drawing of the screen from scratch
+
+(round 3) this next step is amazing. do at least everything you said in it
+  [the step: write research/domain/interface/presentation-pipeline.bl.md + a PLAN in !tasks/, build step 1 as a spike in spikes/ that settles performance before any core cutover]
+
+(round 4) try to write something and see how it works
+
+* Goal
+
+bl-ed's screen is drawn by a pipeline of swappable pure BL stages instead of a fixed line renderer:
+text ─read→ objects ─present→ marks ─layout→ slots+frames ─paint→ host. Packages (omega) add
+readtable entries, presenters and modes; documents select among them; org stays the single source
+of truth. The task view becomes block-like (turns as units, fisheye detail, a sticky composer), and
+the say block is where you write.
+
+* Done in this session (2026-10-04)
+
+- Design: research/domain/interface/presentation-pipeline.bl.md (§1–§6, decisions P1–P7).
+- Spike: spikes/present-pipeline.bl.md + spikes/present/ (pp.read pp.present pp.omega pp.main pp.check, host-pp.mjs, serve.mjs, build.sh, test/check.mjs, test/bench.mjs, proof/00–10).
+  - default presentation == today's render: 785/785 variants over 37 corpus files + task:t-5.
+  - frame cost within ~0.5 ms p50 of today (node, no DOM).
+  - real browser against a real world: fisheye, ] t [ t ] c [ c g s, sticky composer, follow, compose.
+  - writing: type-to-compose on the composer row, draft drawn in the composer, survives revs, finished task → drafts a new task.
+- vendor/bl-ed: render split into line-context/line-view/render-rows (no behaviour change); BUG FIX ed.docs/load-doc dropped an open prompt on every read-only refresh — regression test in test/omega.test.mjs (fails on the old build, passes now). Drive 30/30, BEAM selftest 46/46. VENDOR.md updated.
+
+* Waves (remaining, in order)
+
+** W1 — cut over in bl-ed (one renderer)
+- pp.read → ed.readtable, pp.present → ed.present; ed.main/render IS the default presentation.
+- host.mjs takes the ornament/frame/inline-minibuffer contract from spikes/present/web/host-pp.mjs (four marked "pp:" changes) and the fitHeight fix.
+- presentation-keys / object-at become readtable :keys on object types (no parallel path).
+- Gate: node spikes/present/test/check.mjs over the corpus (0 mismatches), drive tests, bench.mjs within noise.
+
+** W2 — omega's presentation in omega's package (with FUP-010)
+- pp.omega moves to omega (src/omega/ed/present.bl). Its readtable keys on the syntax render.bl prints.
+- Property test: read(task-doc(x)) recovers turns/cells/results/asks/composer of x.
+- follow + compose as omega modes; type-to-compose on the composer.
+
+** W3 — selections and insert mode across ornaments (not verified by the spike)
+** W4 — :flow marks (proportional prose, host-measured heights as events)
+** W5 — chrome as presenters (status/gutter/minibuffer from a screen: document)
+** W6 — presentation-based input: C-r while composing inserts the object under the pointer as a reference
+** W7 — time as input: scrub revs with the same presenters; diff as :around
+** W8 — nested panes / semantic zoom (a task in the overview at lod 1)
+
+* Acceptance (whole plan)
+
+- The default presentation reproduces today's screen on the corpus (equivalence check, 0 mismatches).
+- task:<id> opens presented: turns fold to one line away from the cursor, the say block is a sticky card.
+- g s then typing writes into the say block; a rev mid-draft keeps it; RET sends; follow shows the reply.
+- Frame cost within noise of today (bench.mjs) on a 1,000+ row document.

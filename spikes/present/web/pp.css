@@ -1,0 +1,18 @@
+/* spikes/present/web/pp.css — what presentations add to bl-ed's theme.
+ * Frames are boxes UNDER the lines (z-index 1), in slot coordinates; the row
+ * grid is untouched, so caret, selections and the gutter stay exact. */
+#frames { position: absolute; left: .4rem; right: 1.2rem; top: 1rem; z-index: 1; pointer-events: none; }
+.frame { position: absolute; left: -.35rem; right: 0; border-radius: 8px; }
+.frame.tone-focus { background: var(--snow-2); box-shadow: inset 3px 0 0 var(--latte); }
+.frame.tone-you { background: var(--lav-bg); box-shadow: inset 3px 0 0 var(--lavender); opacity: .55; }
+.frame.tone-composer { background: var(--peach-bg); box-shadow: inset 0 0 0 1px var(--apricot); }
+.frame.sticky { z-index: 1; }
+/* inside a frame, a cell's band is drawn by the frame's tone, one step up */
+.frame.d1 { left: 0; }
+.line.ornament { color: var(--crema); cursor: pointer; }
+.line.ornament .k-heading-1 { color: var(--roast); }
+.line.ornament:hover { background: var(--snow-2); border-radius: 4px; }
+.gnum.orn { color: var(--oat); }
+#status .pres { color: var(--apricot); }
+#status .mode { color: var(--sage); }
+.frame.tone-drafting { background: var(--snow); box-shadow: inset 0 0 0 2px var(--rose); }

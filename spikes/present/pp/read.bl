@@ -1,0 +1,81 @@
+; pp/read.bl — the document readtable (spike: spikes/present-pipeline.bl.md).
+;
+; READ turns the span partition bl-ed already keeps (`(:struct ed)`) into a
+; TREE of typed objects. Headings open sections (by level); every other span
+; is a leaf of the innermost open section. Nothing is parsed twice: spans come
+; from bl.doc.spans, the outline from ed.org.
+;
+;   object = {:type kw :key s :from row :to row :kids [object] :span span :attrs {}}
+;
+; Classification, first hit wins:
+;   1. readtable entries (syntax):  {:type :match (fn [span line] bool) :attrs (fn [span line] map)}
+;   2. a provider object on the span's first row (rows WITHOUT syntax: traces, the composer)
+;   3. the span kind: :heading → :section · :cell → :src · :result → :result · else the kind
+;
+; A readtable is DATA; a document only selects among installed entries (it
+; can never install one: no *read-eval*).
+
+(ns pp.read
+  (:require [ed.text :as t]))
+
+(defn- kind-type [b]
+  (case (:kind b)
+    :heading :section
+    :cell :src
+    :result :result
+    :block :block
+    :prose-code :block
+    :prose))
+
+(defn classify
+  "{:type :key :attrs} for span `b` whose first line is `l`."
+  [rt ed b l]
+  (let [hit (first (filter (fn [e] ((:match e) b l)) rt))
+        po (get (:obj-index ed) (:from b))]
+    (cond
+      (some? hit) {:type (:type hit) :attrs (if (:attrs hit) ((:attrs hit) b l) {})}
+      (some? po) {:type (keyword (:type po)) :attrs {:key (:key po) :task (:task po)}}
+      :else {:type (kind-type b) :attrs {}})))
+
+(defn- object-of [rt ed b ends]
+  (let [l (t/line (:text ed) (:from b))
+        {:keys [type attrs]} (classify rt ed b l)
+        to (if (= :heading (:kind b)) (get ends (:from b) (:to b)) (:to b))]
+    {:type type
+     :key (or (:key attrs) (:id b) (str (name type) "@" (:from b)))
+     :from (:from b) :to to :span b :attrs attrs :kids []}))
+
+(defn- close-top
+  "Pop the top of the section stack into its parent's kids."
+  [stack]
+  (let [top (peek stack) st (pop stack)]
+    (conj (pop st) (update (peek st) :kids conj top))))
+
+(defn read-doc
+  "The object tree of the editor's document under readtable `rt`."
+  [rt ed]
+  (let [n (t/line-count (:text ed))
+        ends (reduce (fn [m h] (assoc m (:row h) (:end h))) {} (:outline (:struct ed)))
+        root {:type :doc :key "doc" :from 0 :to n :kids [] :attrs {}}
+        stack (reduce
+                (fn [stack b]
+                  (let [stack (loop [st stack]
+                                (if (and (> (count st) 1) (<= (:to (peek st)) (:from b))) (recur (close-top st)) st))
+                        o (object-of rt ed b ends)]
+                    (if (= :heading (:kind b))
+                      (conj stack (assoc o :level (:level (:span o))))
+                      (conj (pop stack) (update (peek stack) :kids conj o)))))
+                [root] (:blocks (:struct ed)))]
+    (loop [st stack] (if (> (count st) 1) (recur (close-top st)) (peek st)))))
+
+(defn walk
+  "Every object of the tree, depth first (parents before kids)."
+  [o]
+  (cons o (mapcat walk (:kids o))))
+
+(defn object-at-row
+  "The innermost object whose rows contain `r`."
+  [tree r]
+  (loop [o tree]
+    (let [k (first (filter (fn [k] (and (<= (:from k) r) (< r (:to k)))) (:kids o)))]
+      (if (nil? k) o (recur k)))))

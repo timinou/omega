@@ -1,0 +1,186 @@
+; pp/present.bl — presenters → marks → grid layout (spike: spikes/present-pipeline.bl.md).
+;
+;   text ─read─▶ objects ─present─▶ marks ─layout─▶ slots+frames ─paint─▶ host
+;
+; MARKS (plain maps, every one knows where it came from):
+;   {:m :text  :row r}                       a source row, drawn by ed.main/line-view (EDITABLE)
+;   {:m :line  :src r :segs [seg] :key k}    an ornament row: derived text; `:src` is where a
+;                                            click / RET lands (NOT editable)
+;   {:m :stack :kids [mark]}
+;   {:m :card  :key k :tone s :kids [mark]}  a frame around its kids' slots
+;   {:m :sticky :key k :kids [mark]}         drawn in place, or pinned to the viewport's bottom
+;                                            edge while its place is below it (position: sticky)
+;
+; PRESENTERS: a table {type (fn [o ctx] mark)} looked up through an isa
+; hierarchy (:omega/cell → :src → :node), wrapped by :around advice
+; [{:type t :fn (fn [o ctx next] mark)}] — CLOS-style method combination, so a
+; mode changes how a type draws without editing its presenter.
+;
+; LOD: ctx carries (:lod ctx) = (fn [o] 0..3). 0 = folded to its first row,
+; 3 = everything. Folding is no longer a mechanism of its own: the default
+; policy gives a folded section lod 0.
+;
+; LAYOUT is arithmetic on a monospace grid: a mark tree flattens to SLOTS (one
+; screen row each) and FRAMES ({:key :tone :y0 :y1 :depth}). Expensive work
+; (segments) happens only for slots inside the viewport.
+
+(ns pp.present
+  (:require [ed.main :as m]
+            [ed.text :as t]
+            [ed.core :as c]
+            [pp.read :as rd]))
+
+; ─── marks ─────────────────────────────────────────────────────────────────
+
+(defn text-mark [r] {:m :text :row r})
+(defn line-mark [src segs key] {:m :line :src src :segs segs :key key})
+(defn stack [kids] {:m :stack :kids (vec kids)})
+(defn card [key tone kids] {:m :card :key key :tone tone :kids (vec kids)})
+(defn sticky [key kids] {:m :sticky :key key :kids (vec kids)})
+
+; ─── presenter lookup ──────────────────────────────────────────────────────
+
+(def ISA
+  {:section :node :src :node :result :node :prose :node :block :node :doc :node
+   :omega/turn :section :omega/traces :section :omega/composer :section
+   :omega/cell :src :omega/result :result :omega/task :prose :omega/trace :prose})
+
+(defn lineage
+  "ty, its parents, … and always :node last: a type nobody declared (a
+   provider's new object type) still draws, as text."
+  [isa ty]
+  (let [l (loop [t ty out []] (if (nil? t) out (recur (get isa t) (conj out t))))]
+    (if (= :node (last l)) l (conj l :node))))
+
+(defn present
+  "The mark for object `o` under ctx {:table :around :isa :lod …}."
+  [o ctx]
+  (let [line (lineage (:isa ctx) (:type o))
+        base (some (fn [t] (get (:table ctx) t)) line)
+        advice (filter (fn [a] (some (fn [t] (= t (:type a))) line)) (:around ctx))]
+    ((reduce (fn [nxt a] (fn [o ctx] ((:fn a) o ctx nxt))) base (reverse advice)) o ctx)))
+
+; ─── the default presenter: the text itself ────────────────────────────────
+
+(defn rows-with-kids
+  "o's rows in order, each kid presented where it starts: today's screen."
+  [o ctx]
+  (let [kids-at (reduce (fn [m k] (assoc m (:from k) k)) {} (:kids o))]
+    (loop [r (:from o) out []]
+      (if (>= r (:to o)) out
+        (if-let [k (get kids-at r)]
+          (recur (max (inc r) (:to k)) (conj out (present k ctx)))
+          (recur (inc r) (conj out (text-mark r))))))))
+
+(defn present-node [o ctx]
+  (if (and (= 0 ((:lod ctx) o)) (> (:to o) (inc (:from o))))
+    (text-mark (:from o))
+    (stack (rows-with-kids o ctx))))
+
+(def default-table {:node present-node})
+
+(defn default-lod
+  "Today's policy: a folded section shows its heading only."
+  [ed]
+  (let [folds (or (:folds ed) #{})]
+    (fn [o] (if (and (= :heading (:kind (:span o))) (contains? folds (:from o))) 0 3))))
+
+; ─── layout: marks → slots + frames ────────────────────────────────────────
+
+(defn flatten-mark
+  "acc = {:slots [] :frames [] :sticky [] :index {row y}}; depth = frame nesting."
+  [acc mk depth]
+  (let [kind (:m mk)]
+    (cond
+      (= kind :text) (-> acc (assoc-in [:index (:row mk)] (count (:slots acc)))
+                         (update :slots conj {:kind :text :row (:row mk)}))
+      (= kind :line) (update acc :slots conj {:kind :line :src (:src mk) :segs (:segs mk) :key (:key mk)})
+      (= kind :stack) (reduce (fn [a k] (flatten-mark a k depth)) acc (:kids mk))
+      (contains? #{:card :sticky} kind)
+        (let [y0 (count (:slots acc))
+              a (reduce (fn [a k] (flatten-mark a k (inc depth))) acc (:kids mk))
+              fr {:key (:key mk) :tone (:tone mk) :y0 y0 :y1 (count (:slots a)) :depth depth :sticky? (= :sticky kind)}]
+          (if (= :sticky kind) (update a :sticky conj fr) (update a :frames conj fr)))
+      :else acc)))
+
+(defn layout [mk] (flatten-mark {:slots [] :frames [] :sticky [] :index {}} mk 0))
+
+(defn slot-row [s] (if (= :text (:kind s)) (:row s) (:src s)))
+
+; ─── one cache per stage, keyed by identity (pure memo: same inputs → same value) ─
+
+(def ^:private read-cache (atom nil))
+(def ^:private layout-cache (atom nil))
+
+(defn tree-of [rt ed]
+  (let [k [(:struct ed) (:obj-index ed) rt] c @read-cache]
+    (if (and (some? c) (identical? (nth (:k c) 0) (nth k 0)) (identical? (nth (:k c) 1) (nth k 1)) (identical? (nth (:k c) 2) rt))
+      (:v c)
+      (let [v (rd/read-doc rt ed)] (reset! read-cache {:k k :v v}) v))))
+
+(defn screen-of
+  "Slots and frames for the editor under presentation `p`
+   {:readtable :table :around :isa :lod-of (fn [ed tree] lod-fn) :focus-of (fn [ed tree] key)}."
+  [p ed]
+  (let [tree (tree-of (:readtable p) ed)
+        focus ((:focus-of p) ed tree)
+        c @layout-cache]
+    (if (and (some? c) (identical? (:tree c) tree) (= (:focus c) focus) (identical? (:p c) p))
+      (:v c)
+      (let [ctx {:table (:table p) :around (:around p) :isa (:isa p) :ed ed :lod ((:lod-of p) ed tree)}
+            v (layout (present tree ctx))]
+        (reset! layout-cache {:tree tree :focus focus :p p :v v})
+        v))))
+
+; ─── the view model ────────────────────────────────────────────────────────
+
+(defn- first-slot-at-or-after [slots index top]
+  (or (get index top)
+      (first (filter (fn [i] (let [r (slot-row (nth slots i))] (and (some? r) (>= r top)))) (range (count slots))))
+      (max 0 (dec (count slots)))))
+
+(defn render
+  "ed.main/render's view model, drawn through presentation `p`. :lines are
+   today's line maps for text slots; ornament slots add {:ornament? :src :key}.
+   :frames / :sticky are in VIEWPORT slot coordinates."
+  [p ed]
+  (let [{:keys [slots frames sticky index]} (screen-of p ed)
+        h (:height (:view ed))
+        cur (first (:head (c/primary ed)))
+        y-top (first-slot-at-or-after slots index (:top (:view ed)))
+        ; a presenter may grow or shrink what is between :top and the cursor:
+        ; if the cursor is on screen in TEXT space, keep it on screen here too
+        top (:top (:view ed))
+        yc (when (and (>= cur top) (< cur (+ top h))) (get index cur))
+        y-top (cond (nil? yc) y-top
+                    (< yc y-top) yc
+                    (>= yc (+ y-top h)) (max 0 (- yc (dec h)))
+                    :else y-top)
+        ; a presentation that shrinks the document fills the screen from the end
+        ; (today's text drawing may leave the bottom empty: :fill? off keeps it)
+        y-top (if (:fill? p) (max 0 (min y-top (- (count slots) h))) y-top)
+        ; sticky frames below the viewport pin to its bottom edge
+        pinned (filter (fn [f] (>= (:y0 f) (+ y-top (- h (- (:y1 f) (:y0 f)))))) sticky)
+        pin-h (reduce + 0 (map (fn [f] (- (:y1 f) (:y0 f))) pinned))
+        body-h (- h pin-h)
+        shown (vec (concat (map (fn [y] [y (nth slots y)]) (range y-top (min (count slots) (+ y-top body-h))))
+                           (mapcat (fn [f] (map (fn [y] [y (nth slots y)]) (range (:y0 f) (:y1 f)))) pinned)))
+        rows (vec (keep (fn [[_ s]] (when (= :text (:kind s)) (:row s))) shown))
+        ; ONE pass of today's line drawing, over exactly the rows on screen
+        v (m/render-rows ed rows)
+        by-row (reduce (fn [acc l] (assoc acc (:row l) l)) {} (:lines v))
+        line-of (fn [[y s]]
+                  (if (= :text (:kind s))
+                    (assoc (get by-row (:row s)) :y y)
+                    {:row nil :src (:src s) :key (:key s) :y y :ornament? true :segments (:segs s)
+                     :current? (= cur (:src s))}))
+        ys (vec (map first shown))
+        vy (fn [y] (first (filter (fn [i] (= y (nth ys i))) (range (count ys)))))
+        frame-view (fn [f] (let [a (vy (:y0 f)) b (vy (dec (:y1 f)))]
+                             (when (or (some? a) (some? b) (and (< (:y0 f) y-top) (> (:y1 f) (+ y-top body-h))))
+                               (assoc f :from (or a 0) :to (inc (or b (dec body-h)))))))]
+    (assoc v
+           :lines (mapv line-of shown)
+           :frames (vec (keep frame-view (concat frames sticky)))
+           :slot-count (count slots)
+           :slot-top y-top)))
