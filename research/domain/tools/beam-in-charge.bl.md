@@ -78,6 +78,13 @@ The single most important design choice. **Never use seccomp-notify to enforce a
   kernel then opens whatever path is there now. This is the documented TOCTOU of
   `SECCOMP_USER_NOTIF_FLAG_CONTINUE`.
 
+**This is measured, not hypothetical** (`spikes/beam-jail.bl.md` §8, OBSERVED twice).
+- The setup: one thread flips a path buffer between an inside path and an outside path, while
+  another thread opens it.
+- Notify alone: BEAM denied every outside spelling it saw, and still **724–747 of 3,000 opens
+  wrote outside**.
+- With the Landlock floor added: **0 of 3,000**.
+
 So:
 - **Landlock is the wall.** "Writes only under the project, `/dev`, and the task's temp dir"
   holds in the kernel no matter what the notify answer was. OBSERVED: with BEAM answering
@@ -92,7 +99,7 @@ So:
 
 ---
 
-## 3. The probe (OBSERVED, `/tmp/h/jail`, to be made reproducible as `spikes/beam-jail.bl.md`)
+## 3. The probe (OBSERVED; reproducible as `spikes/beam-jail.bl.md`, `bin/bl run`, ~10 s)
 
 One C file, `notify.c`, used as the port program:
 
@@ -314,10 +321,28 @@ This is a separate decision (§6, Q4). Mediation works without it.
   shape plus fs-capture.
 - **Notify is not a security boundary for paths** (§2.1). Landlock is. Deny is safe; allow
   trusts the floor.
-- **io_uring** can perform file ops without the syscalls seccomp sees. The filter must refuse
-  `io_uring_setup` (EPERM); most tools fall back. The spike checks this.
-- **An fd opened before the jail** passes through. `notify` must close everything above 2 before
-  exec. This is the same discipline as the direnv fd-3 trap in this host's notes.
+- **io_uring** can perform file ops without the syscalls seccomp sees.
+  - On this host it is enabled (`kernel.io_uring_disabled = 0`), and a bare `io_uring_setup`
+    succeeds (OBSERVED).
+  - The wrapper's filter now returns EPERM for it (OBSERVED inside the jail); most tools fall
+    back.
+  - Landlock should still enforce ring opens on this kernel (INFERRED, not tested with a ring).
+- **An fd opened before the jail** stays writable. OBSERVED: a pre-opened fd 3 to a file outside
+  the project still accepted writes, while creating a new file outside was denied.
+  - Landlock checks *opens*, not already-open files.
+  - A port started by BEAM inherits only 0/1/2, but `notify` should `close_range(3, ~0)` before
+    exec anyway. This is the same discipline as the direnv fd-3 trap in this host's notes.
+- **Not every effect is an event** (INFERRED from the filter):
+  - `sendto` on an unconnected UDP socket, `bind`, `chmod`, `link`/`symlink`, and writes
+    through an mmap of an already-open fd are not reported;
+  - Landlock still enforces symlink creation and truncate under the floor.
+  - Network has no kernel floor in the probe. Landlock ABI ≥ 4 `NET_CONNECT_TCP`, or an empty
+    netns with a proxy, adds one.
+- **Distribution quirks for the jailed node** (OBSERVED from the bl VM):
+  - the host VM must `erlang:set_cookie` to the cookie file's value, or `peer:start` times out
+    with "Invalid challenge reply";
+  - the cookie file must be a `--rw` entry;
+  - `exec` must name `/usr/bin/erl`, not the drop's `erts` found on the VM's PATH.
 - **Landlock rules are fixed at exec.** A task that later needs a new writable dir needs a new
   process. That is fine for `sh` cells (one jail each); an eval node restarts.
 - **Paths in events are as the process wrote them** (relative to its cwd). The jail server
@@ -364,8 +389,15 @@ This is a separate decision (§6, Q4). Mediation works without it.
 
 ## 8. Sources
 
-- Probe code: `/tmp/h/jail/{notify.c,drive.escript,bench.escript,ll.sh,peer.escript}` (scratch).
-  `spikes/beam-jail.bl.md` is the reproducible version.
+- Probe: `spikes/beam-jail.bl.md`. It embeds `notify.c` (~190 lines), compiles it, drives it from
+  beam-lisp through `open_port`, and covers:
+  - capture;
+  - policy;
+  - the Landlock floor;
+  - overhead (≈70–135 µs per notified event across runs; reads and compute in the noise);
+  - the jailed peer node;
+  - io_uring, inherited fds, and the TOCTOU race.
+  The first scratch version used escripts and is not kept.
 - Earlier attempts:
   - `~/code/ora/relay/src/relay/sandbox.bl`, `docs/tailnet-executors.md` §5d–5e, PLAN-044,
     FEAT-001;
