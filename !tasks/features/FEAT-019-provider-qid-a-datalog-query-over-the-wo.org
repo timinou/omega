@@ -1,0 +1,37 @@
+#+TITLE: Provider q:<id> — a datalog query over the world as a live org table
+#+STATE: ITEM
+#+SESSION_ID: 15992c6b7bd3ff06
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl]]
+#+CUSTOM_ID: FEAT-019-provider-qid-a-datalog-query-over-the-wo
+#+DEPENDS: FEAT-016-ux-slice-s4-virtual-documents-scheme-pat
+
+* Initial Message
+
+ok this is all good and realise that we designed a lot. what's the slice that's specifically about user experience? what would it look like? what does it leave out, and how does it make it amenable to it next? you can take a look at the --js-actors and the main branch of beam lisp next, new stuff has emerged there
+
+* Initial Message
+
+(2026-10-04) "please make a design document for each of the providers you mentioned and how they fit into the wider vision and make it much more feasible and efficient and modular" / "it's also okay if you vendor bl-ed into here for the time being, if it makes things easier"
+
+* Source of truth
+
+research/domain/interface/providers/README.bl.md (protocol §2, bl-ed changes B1–B5 §3, cuts §4.3, modularity rules §4.4) and the provider's own file. bl-ed code is in omega at vendor/bl-ed (vendor/bl-ed/VENDOR.md: built by beam-lisp main via BL_TREE; every delta listed there for upstreaming). Parent: PLAN-003.
+
+* Common rules
+
+- Read-only document; acts through presentation commands that emit intents (README §2.3).
+- Renderer is a pure fn (projection → {:text :objects}) with plain-data unit tests; the provider's :read composes an existing projection with it (rule 2).
+- :rev uses the basis-t gate then a hash (README §2.2).
+
+* Design
+
+research/domain/interface/providers/q.bl.md
+
+* Scope
+
+- `POST /api/view {:kind :q :text}` → `q:<hash>`; `.omega/queries.edn` for texts and names; render-table (≤ 500 rows, clip 60 chars, run-time in title); errors inline.
+- task-id cells are `:omega/task` presentations; `e` edits into a new path.
+
+* Acceptance
+
+As q.bl.md §6.

@@ -40,3 +40,5 @@ The slice as a human sees it (ux-slice §2.1–2.6): ✦ gutter mark, one-line c
 - `drive.test.mjs` cases with a fake bridge: open → card running → ask → `y` answers → done → result rewritten once; `y` outside a card yanks; save with a stale base is refused with the message.
 - `ed.selftest` green on BEAM and JS.
 - Real run (S5): a human opens, answers and finishes a task in bl-ed; `apps/bl-ed/proof/10-task-card.png`.
+
+NOTE [2026-10-04]: 2026-10-04: bl-ed is vendored into omega at vendor/bl-ed (VENDOR.md; built by beam-lisp main via BL_TREE; drive tests 19/19). Build this item THERE, not in beam-lisp/apps/bl-ed; `ed/omega.bl` lives at vendor/bl-ed/ed/omega.bl (FUP-010's reference moves with it). The card-row contextual keymap is implemented as the general presentation mechanism B3 (providers/README.bl.md §3): `:objects` → row index → per-type keymap; the card is the `:omega/task` presentation. The 1 s card poll becomes a long-poll on the rev of an internal `omega:tasks?ids=…` document (README §2.2).

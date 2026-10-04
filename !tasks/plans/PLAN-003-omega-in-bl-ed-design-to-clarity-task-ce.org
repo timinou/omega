@@ -52,14 +52,15 @@ Earlier rounds: E17 (a) and E18 (a) were decided by the user in round 4. The oth
 Every E-row in §13 is "user" status; §14 waves each have an observable proof; FUP-003 (OT) filed.
 
 * Follow-ups
-Implementation, one feature per wave (bl-ed.bl.md §14 with the §15.7 deltas), in dependency order. **The UX slice (research/domain/interface/ux-slice.bl.md, decided 2026-10-04, E27–E29, bl-ed §15.10) is built first**: it runs on beam-lisp main over a loopback bridge, independent of W0. It takes the console half of FEAT-006/FEAT-008 (cards, answers, the §3.3 table); FEAT-006 shrinks to edn `:readers`, FEAT-008 keeps journal, TODO sync, headless runs and the buffer-server writer.
+Implementation, one feature per wave (bl-ed.bl.md §14 with the §15.7 deltas), in dependency order. **The UX slice (research/domain/interface/ux-slice.bl.md, decided 2026-10-04, E27–E29, bl-ed §15.10) is built first**, in omega's vendored bl-ed (`vendor/bl-ed`, VENDOR.md): it runs on beam-lisp main over a loopback bridge, independent of W0. It takes the console half of FEAT-006/FEAT-008 (cards, answers, the §3.3 table); FEAT-006 shrinks to edn `:readers`, FEAT-008 keeps journal, TODO sync, headless runs and the buffer-server writer.
 
 | wave | item | depends on |
 |---|---|---|
 | **UX** | **FEAT-013** S1 bl.doc.spans: task block :id + write-results after it (beam-lisp) | beam-lisp main (merged) |
 | **UX** | **FEAT-014** S2 omega bridge (open/say/answer/tasks/scratch) + `bin/omega serve` | — |
 | **UX** | **FEAT-015** S3 bl-ed console: cards, C-Enter on task blocks, card-row answers (E27), `/api/omega`, save base-hash; S5 proof | FEAT-013, FEAT-014 |
-| **UX** | **FEAT-016** S4 virtual documents (`scheme:` paths), `omega:scratch` (E29) | FEAT-015 |
+| **UX** | **FEAT-016** S4 provider protocol (B1 visit, B2 read-only, B4 rev long-poll, B5 scheme table) + `omega:scratch` (E29) | FEAT-015 |
+| **UX+** | FEAT-017 `omega:overview` · FEAT-018 `task:<id>` · FEAT-019 `q:<id>` · FEAT-020 `bl:<ns>` · FEAT-021 `effects:<id>` (v0) — research/domain/interface/providers/; parallel once FEAT-016 lands | FEAT-016 |
 | W0 | FEAT-001 re-pin + core C1, C2, C4, **C8 (first), C9**; C5 optional (closes BUG-001) | beam-lisp merges (E12) |
 | W0 | FEAT-002 C3 app-declared env.bl keys + omega.config | beam-lisp merges |
 | W1 | FEAT-003 world as realm app member, C6 file port, C7 CLI attach | FEAT-001, FEAT-002 |

@@ -36,3 +36,5 @@ E29: a document that is not a file. A path with a scheme (`omega:scratch`) loads
 
 - Drive test: `(omega/open "x")` from `:` then `space a s` shows the new task block with its card; editing prose there and saving survives a reload; a stale save is refused.
 - `apps/bl-ed/proof/11-scratch.png` from a real run.
+
+NOTE [2026-10-04]: 2026-10-04: scope grows into the provider PROTOCOL (research/domain/interface/providers/README.bl.md §2–3): B1 visit + C-o/C-i, B2 read-only documents, B4 rev long-poll refresh (`GET /api/rev`), B5 scheme→provider table in serve.bl with {:forward :omega}. Target is vendor/bl-ed (not beam-lisp/apps/bl-ed). The scratch provider design is providers/scratch.bl.md (eval: `codemode/run-eval` + `task/steer! … "human:me"` for `:ns omega.task.*` cells; harness/eval-cell in omega.scratch otherwise). FEAT-017..021 depend on this item.
