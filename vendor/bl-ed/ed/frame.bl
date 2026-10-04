@@ -1,0 +1,236 @@
+; ed/frame.bl — a FRAME: one window, several panes, wired together.
+;
+; A Genera program frame (Zmail: a summary pane drives a message pane), in
+; bl-ed terms. Design and decisions: research/domain/interface/frames.bl.md.
+;
+; ─── the data ──────────────────────────────────────────────────────────────
+;
+; A LAYOUT says what the window looks like. It is a plain value; a package
+; provides it under (:provides {:layouts {name layout}}).
+;
+;   {:name  "inbox"
+;    :panes [{:id :rail :doc "omega:overview" :width [:ch 38]}    ; an EDITOR pane
+;            {:id :main :doc :linked          :width :fill}       ; filled by a link
+;            {:id :map  :view [:minimap :main] :width [:ch 24]}]  ; a VIEW pane
+;    :links [{:from :rail :on :select :to :main :do :visit}
+;            {:from :map  :on :scroll :to :main :do :scroll}]
+;    :focus :rail}
+;
+; A FRAME is a layout brought to life:
+;
+;   {:layout  layout
+;    :editors {id ed}       ; one whole bl-ed editor per EDITOR pane
+;    :focus   id            ; the editor pane keys go to
+;    :effects [effect]}     ; what the panes asked the host for, tagged {:pane id}
+;
+; Two kinds of pane, and only two:
+;   EDITOR  has a document, a cursor and keys: an ed, exactly as bl-ed has one
+;   VIEW    has none of those: a pure function of another pane, recomputed when
+;           drawn (a minimap); it can SEND events to the pane it views
+;
+; ─── the rules ─────────────────────────────────────────────────────────────
+;
+;   1. Keys go to the focused editor. C-w w / C-w h / C-w l move focus
+;      between EDITOR panes (views are never focused).
+;   2. An event tagged {:pane id} goes to that pane: the host answering a
+;      pane's effect, or a view acting on the pane it views.
+;   3. A link fires after its :from pane changed. :select fires when the
+;      object under that pane's cursor changed; its :visit emits a :visit
+;      effect FOR the :to pane. A link never edits another pane directly:
+;      every interaction is data (an effect or an event), testable and
+;      replayable.
+;   4. Packages are not per pane. Every editor pane carries every loaded
+;      package; a document's :adopt picks how it draws.
+;   5. One pane is today's bl-ed: (single ed) is a frame whose only pane is
+;      that editor, and (frame/render) of it is ed.main/render plus a wrapper.
+
+(ns ed.frame
+  (:require [ed.main :as m]
+            [ed.core :as c]
+            [ed.docs :as docs]
+            [ed.pkg :as pkg]))
+
+; ─── panes ─────────────────────────────────────────────────────────────────
+
+(defn view-pane? [p] (some? (:view p)))
+(defn editor-pane? [p] (not (view-pane? p)))
+
+(defn panes [fr] (:panes (:layout fr)))
+(defn pane-spec [fr id] (first (filter (fn [p] (= id (:id p))) (panes fr))))
+(defn editor-ids [fr] (vec (map :id (filter editor-pane? (panes fr)))))
+
+(defn editor [fr id] (get (:editors fr) id))
+(defn focused [fr] (editor fr (:focus fr)))
+
+; ─── making a frame ────────────────────────────────────────────────────────
+
+(def SINGLE
+  "The layout of today's bl-ed: one editor pane, nothing else."
+  {:name "single" :panes [{:id :main :width :fill}] :links [] :focus :main})
+
+(defn single
+  "A frame of one pane: the editor `ed`."
+  [ed]
+  {:layout SINGLE :editors {:main ed} :focus :main :effects []})
+
+(defn- blank-editor
+  "An editor pane before its document arrives: it inherits the packages and
+   the user's tables of `like`, so a pane is the same editor, elsewhere."
+  [like]
+  (merge (m/boot "" "")
+         (select-keys like [:packages :pkg-state :user-commands :user-keys :registers])))
+
+(defn- open-docs
+  "Visit effects for the editor panes `ids` whose :doc is a path."
+  [fr ids]
+  (reduce (fn [fr id]
+            (let [d (:doc (pane-spec fr id))]
+              (if (string? d) (update fr :effects conj {:pane id :kind :visit :path d}) fr)))
+          fr ids))
+
+(defn arrange
+  "Re-arrange frame `fr` into `layout`. The focused editor is KEPT (its
+   document, cursor, history) in the layout's pane that shows the same :doc,
+   or else its first :linked pane; the other editor panes start blank and
+   their documents are fetched."
+  [fr layout]
+  (let [keep-ed (focused fr)
+        eds (filter editor-pane? (:panes layout))
+        here (or (first (filter (fn [p] (= (:doc p) (:path keep-ed))) eds))
+                 (first (filter (fn [p] (= :linked (:doc p))) eds))
+                 (first eds))
+        others (filter (fn [p] (not= (:id p) (:id here))) eds)]
+    (open-docs {:layout layout
+                :editors (into {(:id here) keep-ed} (map (fn [p] [(:id p) (blank-editor keep-ed)]) others))
+                :focus (or (:focus layout) (:id here))
+                :effects []}
+               (map :id others))))
+
+(defn unarrange
+  "Back to one pane: the focused editor."
+  [fr]
+  (assoc (single (focused fr)) :effects (:effects fr)))
+
+; ─── links ─────────────────────────────────────────────────────────────────
+
+(defn selection
+  "What a pane's cursor is on: the provider object's [type key], or nil."
+  [ed]
+  (let [o (docs/object-at ed)] (when (some? o) [(:type o) (:key o)])))
+
+(defn link-path
+  "Where an object leads: asked of the packages that provide links for its
+   type (:provides {:links {type (fn [obj] path)}})."
+  [ed [ty k]]
+  (let [f (some (fn [p] (get-in p [:provides :links ty])) (reverse (pkg/packages ed)))]
+    (when (some? f) (f {:type ty :key k}))))
+
+(defn- fire-link
+  "One :select link from pane `from`, whose selection changed."
+  [fr link sel]
+  (let [path (when (some? sel) (link-path (editor fr (:from link)) sel))]
+    (if (and (= :visit (:do link)) (some? path))
+      (update fr :effects conj {:pane (:to link) :kind :visit :path path})
+      fr)))
+
+(defn- follow-links
+  "After pane `id` changed from `before`: fire its :select links."
+  [fr id before]
+  (let [s0 (selection before) s1 (selection (editor fr id))]
+    (if (= s0 s1) fr
+      (reduce (fn [fr l] (fire-link fr l s1)) fr
+              (filter (fn [l] (and (= id (:from l)) (= :select (:on l)))) (:links (:layout fr)))))))
+
+; ─── events ────────────────────────────────────────────────────────────────
+
+(defn- step-editor
+  "Run one event through editor pane `id`; collect its effects, tagged."
+  [fr id ev]
+  (let [before (editor fr id)
+        after (m/handle before ev)
+        [after effs] (m/take-effects after)
+        fr (-> fr
+               (assoc-in [:editors id] after)
+               (update :effects into (map (fn [e] (assoc e :pane id)) effs)))]
+    (follow-links fr id before)))
+
+(defn- move-focus [fr dir]
+  (let [ids (editor-ids fr)
+        i (or (first (filter (fn [i] (= (nth ids i) (:focus fr))) (range (count ids)))) 0)]
+    (assoc fr :focus (nth ids (mod (+ i dir) (count ids))))))
+
+(def WINDOW-KEYS
+  "C-w then … (Vim's window keys)."
+  {"w" :next "l" :next "h" :prev "o" :only})
+
+(defn- window-key [fr k]
+  (let [cmd (get WINDOW-KEYS k)]
+    (cond (= :next cmd) (move-focus fr 1)
+          (= :prev cmd) (move-focus fr -1)
+          (= :only cmd) (unarrange fr)
+          :else fr)))
+
+(defn- layout-request
+  "A pane asked to (un)arrange the window (ed/layout sets :frame/layout on it)."
+  [fr id]
+  (let [ed (editor fr id) req (:frame/layout ed)]
+    (if (nil? req) fr
+      (let [fr (assoc-in fr [:editors id] (dissoc ed :frame/layout))]
+        (cond (= :none req) (unarrange fr)
+              (map? req) (arrange fr req)
+              :else fr)))))
+
+(defn handle
+  "One host event into the frame."
+  [fr ev]
+  (let [target (or (:pane ev) (:focus fr))
+        key? (and (= :key (:type ev)) (nil? (:pane ev)))]
+    (cond
+      ; C-w is the frame's own prefix, in normal mode, in every layout
+      (and key? (= "C-w" (:key ev)) (= :normal (:mode (focused fr))) (empty? (:pending (focused fr))))
+        (assoc fr :chord "C-w")
+      (and key? (some? (:chord fr)))
+        (window-key (dissoc fr :chord) (:key ev))
+      ; a resize reaches every editor pane, each with its own width in cells
+      (= :resize (:type ev))
+        (reduce (fn [fr id]
+                  (let [cols (get (:cols ev) id)
+                        fr (step-editor fr id (dissoc ev :cols))]
+                    (if (some? cols) (assoc-in fr [:editors id :view :cols] cols) fr)))
+                fr (editor-ids fr))
+      ; an event for a pane that no longer exists (a late host answer) is dropped
+      (nil? (editor fr target)) fr
+      :else
+        (layout-request (step-editor fr target (dissoc ev :pane)) target))))
+
+(defn take-effects [fr] [(assoc fr :effects []) (:effects fr)])
+
+; ─── drawing ───────────────────────────────────────────────────────────────
+
+(defn render
+  "What the host paints:
+     {:layout name :focus id :chord s?
+      :panes [{:id :width :focus? :kind :editor :view (ed.main/render ed)}
+              {:id :width :kind :view :view-kind kw :of id :view (view-fn ed)}]}
+   A view's model comes from the packages: (:provides {:views {kind (fn [ed] model)}})."
+  [fr]
+  {:layout (:name (:layout fr))
+   :focus (:focus fr)
+   :chord (:chord fr)
+   :panes (vec (map (fn [p]
+                      (if (view-pane? p)
+                        (let [[kind of] (:view p)
+                              ed (editor fr of)
+                              f (some (fn [q] (get-in q [:provides :views kind])) (reverse (pkg/packages ed)))]
+                          {:id (:id p) :width (:width p) :kind :view :view-kind kind :of of
+                           :view (when (some? f) (f ed))})
+                        {:id (:id p) :width (:width p) :kind :editor :focus? (= (:id p) (:focus fr))
+                         :view (m/render (editor fr (:id p)))}))
+                    (panes fr)))})
+
+; ─── the layouts packages provide ──────────────────────────────────────────
+
+(defn layouts
+  "{name layout} from every loaded package of `ed`."
+  [ed]
+  (reduce (fn [m p] (merge m (get-in p [:provides :layouts]))) {} (pkg/packages ed)))

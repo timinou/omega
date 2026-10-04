@@ -68,11 +68,13 @@ kbd {
 }
 
 /* ── the page ───────────────────────────────────────────────────────────── */
-#editor {
-  position: relative; overflow: hidden;
+/* the window: one column per pane (a layout adds panes; one pane = today) */
+#panes { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; overflow: hidden; }
+.pane.editor {
+  position: relative; overflow: hidden; min-width: 0;
   display: grid; grid-template-columns: 4.2rem 1fr 6px;
 }
-#gutter {
+.gutter {
   padding-top: 1rem; text-align: right; padding-right: .9rem;
   color: var(--latte); user-select: none;
   background: var(--snow);
@@ -82,30 +84,30 @@ kbd {
 /* where a cell runs: a small mark before its first row's number */
 .gnum.place-local::before { content: "●"; color: var(--sage); margin-right: .45rem; font-size: .7rem; }
 .gnum.place-beam::before  { content: "◆"; color: var(--mist); margin-right: .45rem; font-size: .66rem; }
-#page { position: relative; padding: 1rem 0 0 .4rem; }
-#lines { position: relative; z-index: 2; white-space: pre; line-height: var(--row); cursor: text; }
+.page { position: relative; padding: 1rem 0 0 .4rem; min-width: 0; }
+.lines { position: relative; z-index: 2; white-space: pre; line-height: var(--row); cursor: text; }
 /* every line is exactly one row; a cell's lines are a full-width band */
 .line { height: var(--row); overflow: hidden; padding-right: 1.6rem; }
 .line.in-cell { background: var(--snow-2); }
 .line.in-cell.first { border-top-left-radius: var(--radius); border-top-right-radius: var(--radius); }
 .line.in-cell.last { border-bottom-left-radius: var(--radius); border-bottom-right-radius: var(--radius); }
 .line.cur-line { box-shadow: inset 3px 0 0 var(--oat); }
-#selections, #caret { position: absolute; left: .4rem; top: 1rem; pointer-events: none; }
+.selections, .caret { position: absolute; left: .4rem; top: 1rem; pointer-events: none; }
 /* selections sit ABOVE the text and multiply into it: line bands (cells) have
    their own background, so a layer underneath would be hidden by them */
-#selections { z-index: 3; mix-blend-mode: multiply; }
+.selections { z-index: 3; mix-blend-mode: multiply; }
 .sel { position: absolute; background: #e6e0f0; border-radius: 3px; }
 .sel.primary { background: #d8cfea; }
 /* the caret is positioned by inline top/left from the host (row grid);
    margins carry the page offset the #selections container carries */
-#caret { z-index: 4; position: absolute; top: 0; left: 0; margin: 1rem 0 0 .4rem; background: var(--espresso); opacity: .28; border-radius: 2px; }
-body[data-mode="insert"] #caret { opacity: .9; background: var(--rose); animation: blink 1.1s steps(1) infinite; }
+.caret { z-index: 4; position: absolute; top: 0; left: 0; margin: 1rem 0 0 .4rem; background: var(--espresso); opacity: .28; border-radius: 2px; }
+body[data-mode="insert"] .pane.focus .caret, body[data-mode="insert"] #panes:not(.multi) .caret { opacity: .9; background: var(--rose); animation: blink 1.1s steps(1) infinite; }
 body[data-mode="select"] .sel.primary { background: var(--butter-bg); }
 @keyframes blink { 50% { opacity: .15; } }
 #input-sink { position: absolute; opacity: 0; width: 1px; height: 1em; padding: 0; border: 0; resize: none; z-index: 0; }
 
-#scrollbar { position: relative; background: var(--snow); }
-#scroll-hint { position: absolute; left: 1px; right: 1px; background: var(--oat); border-radius: 3px; }
+.scrollbar { position: relative; background: var(--snow); }
+.scroll-hint { position: absolute; left: 1px; right: 1px; background: var(--oat); border-radius: 3px; }
 
 /* ── org ────────────────────────────────────────────────────────────────── */
 .k-prose { color: var(--espresso); }
@@ -216,7 +218,7 @@ footer { border-top: 1px solid var(--oat); background: var(--snow-2); font-famil
  * A package may draw a document as ORNAMENT rows (derived, not editable),
  * double-height rows (:size 2, a VT100 DECDHL headline), roles (:role → a
  * face) and frames (boxes under the lines). The grid stays monospace. */
-#frames { position: absolute; left: .4rem; right: 1.2rem; top: 1rem; z-index: 1; pointer-events: none; }
+.frames { position: absolute; left: .4rem; right: 1.2rem; top: 1rem; z-index: 1; pointer-events: none; }
 .frame { position: absolute; left: -.35rem; right: 0; border-radius: 8px; }
 .frame.tone-focus { background: var(--snow-2); box-shadow: inset 3px 0 0 var(--latte); }
 .frame.tone-you { background: var(--lav-bg); box-shadow: inset 3px 0 0 var(--lavender); opacity: .55; }
@@ -243,3 +245,29 @@ footer { border-top: 1px solid var(--oat); background: var(--snow-2); font-famil
 .k-rail-title { color: var(--espresso); font-weight: 700; }
 #status .pres { color: var(--apricot); }
 #status .mode { color: var(--sage); }
+
+/* ─── frames: several panes (ed/frame.bl) ───────────────────────────────────
+ * One design language: a pane is the same editor, separated by a hairline;
+ * the focused pane is the one whose caret shows. A narrow pane drops the
+ * gutter (its numbers are noise in a rail). */
+#panes.multi > .pane { border-right: 1px solid var(--oat); }
+#panes.multi > .pane:last-child { border-right: 0; }
+#panes.multi > .pane.editor:not(.focus) .caret { display: none; }
+#panes.multi > .pane.editor:not(.focus) .lines { opacity: .96; }
+#panes.multi > .pane.editor[data-pane="rail"] { grid-template-columns: 0 1fr 0; background: var(--snow-2); }
+#panes.multi > .pane.editor[data-pane="rail"] .gutter, #panes.multi > .pane.editor[data-pane="rail"] .scrollbar { visibility: hidden; }
+
+/* the minimap view: one bar per screen row of the pane it views, coloured
+   by role; your questions carry their words; the lens is what that pane shows */
+.pane.view-minimap { position: relative; overflow: hidden; padding: 8px 12px; cursor: grab; user-select: none; background: var(--snow); }
+.view-minimap .view-body { position: absolute; inset: 1rem 12px 8px; }
+.view-minimap .view-lens { transform: translateY(1rem); }
+.view-minimap .bar { position: absolute; left: 0; border-radius: 1px; background: var(--oat); }
+.view-minimap .bar.r-answer { background: var(--latte); opacity: .55; }
+.view-minimap .bar.r-tool { background: var(--mist); opacity: .5; }
+.view-minimap .bar.r-label { background: var(--apricot); opacity: .6; }
+.view-minimap .bar.r-title, .view-minimap .bar.r-question { background: var(--roast); }
+.view-minimap .maplabel { position: absolute; left: 0; right: 0; transform: translateY(-1px); font: 700 10px/1.1 var(--font-code);
+  color: var(--espresso); background: color-mix(in srgb, var(--snow) 80%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 1px 2px; }
+.view-minimap .view-lens { position: absolute; left: 6px; right: 6px; border-radius: 4px; pointer-events: none;
+  background: color-mix(in srgb, var(--rose) 10%, transparent); box-shadow: inset 0 0 0 1.5px var(--rose); margin-top: 0; }

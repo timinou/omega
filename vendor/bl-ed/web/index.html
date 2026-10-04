@@ -12,16 +12,18 @@
     <span class="brand">bl<span class="dot">·</span>ed</span>
     <span class="hint"><kbd>space</kbd><kbd>?</kbd> keys &nbsp; <kbd>space</kbd><kbd>space</kbd> commands &nbsp; <kbd>:</kbd> beam lisp &nbsp; <kbd>space</kbd><kbd>o</kbd> outline</span>
   </header>
-  <main id="editor" aria-label="editor">
-    <div id="gutter" aria-hidden="true"></div>
-    <div id="page">
-      <div id="frames" aria-hidden="true"></div>
-      <div id="selections" aria-hidden="true"></div>
-      <div id="caret" aria-hidden="true"></div>
-      <div id="lines" role="textbox" aria-multiline="true"></div>
+  <main id="panes">
+  <section id="editor" class="pane editor" aria-label="editor">
+    <div id="gutter" class="gutter" aria-hidden="true"></div>
+    <div id="page" class="page">
+      <div id="frames" class="frames" aria-hidden="true"></div>
+      <div id="selections" class="selections" aria-hidden="true"></div>
+      <div id="caret" class="caret" aria-hidden="true"></div>
+      <div id="lines" class="lines" role="textbox" aria-multiline="true"></div>
       <textarea id="input-sink" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="input"></textarea>
     </div>
-    <div id="scrollbar" aria-hidden="true"><div id="scroll-hint"></div></div>
+    <div id="scrollbar" class="scrollbar" aria-hidden="true"><div id="scroll-hint" class="scroll-hint"></div></div>
+  </section>
   </main>
   <footer>
     <div id="status"></div>

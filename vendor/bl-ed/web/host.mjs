@@ -13,6 +13,11 @@
 //
 // Rendering is keyed by row and diffed against the previous frame per line,
 // so a keystroke repaints the lines it changed, not the viewport.
+//
+// The host holds a FRAME (ed/frame.bl), not an editor: one or more panes,
+// each a whole editor (or a VIEW of one, like a minimap). A frame of one
+// pane is the bl-ed this file always drew — same DOM, same ids. A layout
+// (:(ed/layout "inbox"), ?layout=inbox) adds panes beside it.
 
 // Beam Lisp itself (reader + compiler + macros, compiled to JS) for the `:`
 // command line: started before the editor module loads, so `js/eval-ed` is
@@ -27,6 +32,7 @@ window.blRepl = repl;
 
 import * as R from "./out/rt.mjs";
 const M = await import("./out/ed.main.mjs");
+const F = await import("./out/ed.frame.mjs");
 
 const K = R.kw;
 const get = (m, k) => (m == null ? null : m.get(K(k), null));
@@ -35,20 +41,27 @@ const ev = (...kv) => R.hashMap(...kv);
 // ─── DOM scaffold ──────────────────────────────────────────────────────────
 
 const $ = (sel) => document.querySelector(sel);
-const view = $("#lines");
-const gutter = $("#gutter");
 const sink = $("#input-sink");
 const status = $("#status");
 const echo = $("#echo");
 const minibuf = $("#minibuf");
 const overlay = $("#overlay");
-const selLayer = $("#selections");
-const caret = $("#caret");
-const frameLayer = $("#frames");          // boxes a package's presentation draws under the lines
 
-let ed = null;
+// A PANE's DOM: the #editor element (id :main) is the first pane; a layout
+// clones it for the others. Every per-pane node is looked up by class inside
+// the pane, so painting is the same code for every editor pane.
+const panesEl = $("#panes");
+const paneDom = new Map();                  // pane id → {root, view, gutter, selLayer, caret, frameLayer, hint}
+function domFor(root) {
+  const q = (c) => root.querySelector(c);
+  return { root, view: q(".lines"), gutter: q(".gutter"), selLayer: q(".selections"), caret: q(".caret"),
+           frameLayer: q(".frames"), hint: q(".scroll-hint"), page: q(".page") };
+}
+paneDom.set("main", domFor($("#editor")));
+
+let fr = null;                              // the frame (ed/frame.bl)
+const ed$ = () => F.d_focused(fr);          // the focused editor
 let metrics = { line: 22, ch: 8.4 };       // measured once fonts load
-let prevLines = new Map();                  // row → signature, for diffing
 
 function measure() {
   // the row height is a CSS token (--row); every line is exactly that tall,
@@ -57,7 +70,7 @@ function measure() {
   const probe = document.createElement("span");
   probe.className = "seg";
   probe.textContent = "M".repeat(100);
-  view.appendChild(probe);
+  paneDom.get("main").view.appendChild(probe);
   metrics.ch = probe.getBoundingClientRect().width / 100;
   metrics.line = row || probe.getBoundingClientRect().height;
   probe.remove();
@@ -67,12 +80,12 @@ function measure() {
 
 function dispatch(event) {
   const t0 = performance.now();
-  ed = M.d_handle(ed, event);
-  const [ed2, effects] = M.d_take_effects(ed).toArray();
-  ed = ed2;
+  fr = F.d_handle(fr, event);
+  const [fr2, effects] = F.d_take_effects(fr).toArray();
+  fr = fr2;
   for (const e of effects) perform(e);
   draw();
-  if (event.get(K("type"), null) !== K("key") || effects.length) { watchDoc(); watchCards(false); }
+  if (event.get(K("type"), null) !== K("key") || effects.length) { watchDocs(); watchCards(false); }
   const dt = performance.now() - t0;
   lastFrame.push(dt); if (lastFrame.length > 60) lastFrame.shift();
 }
@@ -98,53 +111,59 @@ function toJS(x) {
 }
 const postJSON = (url, body) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
-async function loadDoc(path, visit, goto) {
+// an event for the pane that asked (a host answer carries {:pane id} back)
+const toPane = (pane, e) => (pane == null ? e : e.assoc(K("pane"), pane));
+
+async function loadDoc(path, visit, goto, pane) {
   const r = await fetch("/api/doc?path=" + encodeURIComponent(path));
   const j = await r.json();
-  if (!j.ok) { dispatch(ev(K("type"), K("eval-result"), K("id"), path, K("text"), j.message || "cannot open")); return; }
+  if (!j.ok) { dispatch(toPane(pane, ev(K("type"), K("eval-result"), K("id"), path, K("text"), j.message || "cannot open"))); return; }
   let e = ev(K("type"), K("doc"), K("path"), path, K("text"), j.text, K("rev"), j.rev, K("read-only?"), !!j.readOnly,
              K("title"), j.title || path, K("objects"), toBL(j.objects || []), K("visit?"), !!visit);
   if (goto) e = e.assoc(K("goto"), goto);
-  dispatch(e);
-  if (visit) history.replaceState(null, "", "?file=" + encodeURIComponent(path));
+  dispatch(toPane(pane, e));
+  if (visit && (pane == null || pane === get(fr, "focus"))) history.replaceState(null, "", "?file=" + encodeURIComponent(path) + layoutParam());
 }
 
-async function perform(e) {
+async function perform(eff) {
+  const pane = get(eff, "pane");
+  const e = eff;
+  const dispatchP = (x) => dispatch(toPane(pane, x));
   const kind = get(e, "kind").name;
   if (kind === "visit") {
-    try { await loadDoc(get(e, "path"), true, get(e, "goto")); }
-    catch (err) { dispatch(ev(K("type"), K("eval-result"), K("id"), get(e, "path"), K("text"), "no server to open documents")); }
+    try { await loadDoc(get(e, "path"), true, get(e, "goto"), pane); }
+    catch (err) { dispatchP(ev(K("type"), K("eval-result"), K("id"), get(e, "path"), K("text"), "no server to open documents")); }
   } else if (kind === "intent") {
     try {
       const r = await postJSON("/api/intent", { intent: get(e, "intent"), args: toJS(get(e, "args")) });
       const j = await r.json();
-      dispatch(ev(K("type"), K("intent-result"), K("ok?"), j.ok === true, K("message"), j.message || null,
+      dispatchP(ev(K("type"), K("intent-result"), K("ok?"), j.ok === true, K("message"), j.message || null,
                   K("data"), toBL(j), K("then"), get(e, "then"), K("block"), get(e, "block"), K("path"), get(e, "path")));
       watchCards(true);
     } catch (err) {
-      dispatch(ev(K("type"), K("intent-result"), K("ok?"), false, K("message"), "no omega world — run bin/bl-ed"));
+      dispatchP(ev(K("type"), K("intent-result"), K("ok?"), false, K("message"), "no omega world — run bin/bl-ed"));
     }
   } else if (kind === "save") {
     const body = { path: get(e, "path"), text: get(e, "text"), base: get(e, "base") };
     try {
       const r = await postJSON("/api/save", body);
       const j = await r.json();
-      dispatch(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), r.ok && j.ok === true, K("message"), j.message || "",
+      dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), r.ok && j.ok === true, K("message"), j.message || "",
                   K("conflict?"), j.conflict === true, K("doc-rev"), j.rev || null));
     } catch (err) {
       // no server (opened as a static page): fall back to a download
       download(body.path.split("/").pop(), body.text);
-      dispatch(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), true, K("message"), "downloaded"));
+      dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), true, K("message"), "downloaded"));
     }
   } else if (kind === "eval-cell") {
     try {
       const r = await fetch("/api/eval", { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ path: get(e, "path"), id: get(e, "id"), text: get(e, "text") }) });
       const j = await r.json();
-      if (j.text != null) dispatch(ev(K("type"), K("load"), K("text"), j.text, K("path"), get(e, "path")));
-      dispatch(ev(K("type"), K("eval-result"), K("id"), get(e, "id"), K("text"), j.result || j.message || "done"));
+      if (j.text != null) dispatchP(ev(K("type"), K("load"), K("text"), j.text, K("path"), get(e, "path")));
+      dispatchP(ev(K("type"), K("eval-result"), K("id"), get(e, "id"), K("text"), j.result || j.message || "done"));
     } catch (err) {
-      dispatch(ev(K("type"), K("eval-result"), K("id"), get(e, "id"), K("text"), "no evaluation server — run `bl run apps/bl-ed/serve.bl`"));
+      dispatchP(ev(K("type"), K("eval-result"), K("id"), get(e, "id"), K("text"), "no evaluation server — run `bl run apps/bl-ed/serve.bl`"));
     }
   } else if (kind === "place") {
     // where each cell may run (system.place on the BEAM): local cells then
@@ -156,7 +175,7 @@ async function perform(e) {
       if (j.ok) {
         let cells = R.EMPTY_MAP;
         for (const [id, p] of Object.entries(j.cells)) cells = cells.assoc(id, R.hashMap(K("place"), K(p.place), K("why"), p.why ?? null));
-        dispatch(ev(K("type"), K("placements"), K("cells"), cells));
+        dispatchP(ev(K("type"), K("placements"), K("cells"), cells));
       }
     } catch (err) { /* offline: placements stay unknown */ }
   } else if (kind === "load-package") {
@@ -168,9 +187,9 @@ async function perform(e) {
     try {
       const mod = await import(new URL(url, location.href).href);
       const p = mod.package ?? mod.d_bl_package;
-      dispatch(ev(K("type"), K("use"), K("package"), typeof p === "function" ? p() : p, K("message"), p ? null : url + " exports no `package`"));
+      dispatchP(ev(K("type"), K("use"), K("package"), typeof p === "function" ? p() : p, K("message"), p ? null : url + " exports no `package`"));
     } catch (err) {
-      dispatch(ev(K("type"), K("use"), K("package"), null, K("message"), "cannot load " + url + ": " + err.message));
+      dispatchP(ev(K("type"), K("use"), K("package"), null, K("message"), "cannot load " + url + ": " + err.message));
     }
   } else if (kind === "clipboard-write") {
     navigator.clipboard?.writeText(get(e, "text")).catch(() => {});
@@ -204,11 +223,18 @@ function watch(key, path, since, onChange) {
 }
 function unwatch(key) { const w = watchers.get(key); if (w) { w.alive = false; watchers.delete(key); } }
 
-function watchDoc() {
-  const v = M.d_render(ed);
-  const path = get(get(v, "status"), "path");
-  if (!path) return;
-  watch("doc", path, get(v, "doc-rev"), () => loadDoc(path, false));
+// one watch per editor pane's document; a pane that left drops its watch
+function watchDocs() {
+  const live = new Set();
+  for (const id of F.d_editor_ids(fr).toArray()) {
+    const v = M.d_render(F.d_editor(fr, id));
+    const path = get(get(v, "status"), "path");
+    if (!path) continue;
+    const key = "doc:" + id.name;
+    live.add(key);
+    watch(key, path, get(v, "doc-rev"), () => loadDoc(path, false, null, id));
+  }
+  for (const k of [...watchers.keys()]) if (k.startsWith("doc:") && !live.has(k)) unwatch(k);
 }
 
 let cardIds = "";
@@ -218,7 +244,7 @@ async function loadCards(path) {
   if (j.ok) dispatch(ev(K("type"), K("cards"), K("data"), toBL(j.data || [])));
 }
 function watchCards(force) {
-  const ids = get(M.d_render(ed), "cards").toArray().join(",");
+  const ids = get(M.d_render(ed$()), "cards").toArray().join(",");
   if (!ids) { unwatch("cards"); cardIds = ""; return; }
   if (ids === cardIds && !force) return;
   cardIds = ids;
@@ -240,7 +266,125 @@ function download(name, text) {
 function segSig(segs) { let s = ""; for (const g of segs) s += get(g, "kind").name + "\u0001" + get(g, "text") + "\u0002"; return s; }
 
 function draw() {
-  const v = M.d_render(ed);
+  const rv = F.d_render(fr);
+  const panes = get(rv, "panes").toArray();
+  syncPanes(panes);
+  let focusV = null;
+  for (const p of panes) {
+    const id = get(p, "id").name, dom = paneDom.get(id);
+    if (get(p, "kind") === K("view")) { paintView(dom, p); continue; }
+    const v = get(p, "view");
+    dom.root.classList.toggle("focus", !!get(p, "focus?"));
+    paint(dom, v, !!get(p, "focus?"));
+    if (get(p, "focus?")) focusV = v;
+  }
+  chrome(focusV, rv);
+}
+
+// ─── panes: the DOM follows the frame's layout ─────────────────────────────
+//
+// #panes holds one element per pane, in layout order. The first editor pane
+// is the original #editor; other editor panes are clones of its skeleton; a
+// view pane is a plain box its painter fills. Widths come from :width:
+// [:ch n] → n cells, :fill / [:fr n] → a share of the rest.
+
+const editorSkeleton = $("#editor").cloneNode(true);
+function cssWidth(w) {
+  if (w == null || w === K("fill")) return "minmax(0, 1fr)";
+  const a = w.toArray ? w.toArray() : null;
+  if (a && a[0] === K("ch")) return `${a[1]}ch`;
+  if (a && a[0] === K("fr")) return `minmax(0, ${a[1]}fr)`;
+  return "minmax(0, 1fr)";
+}
+let layoutSig = "";
+function syncPanes(panes) {
+  const sig = panes.map((p) => get(p, "id").name + ":" + get(p, "kind").name).join(",");
+  panesEl.style.gridTemplateColumns = panes.map((p) => cssWidth(get(p, "width"))).join(" ");
+  panesEl.classList.toggle("multi", panes.length > 1);
+  if (sig === layoutSig) return;
+  layoutSig = sig;
+  const want = new Set(panes.map((p) => get(p, "id").name));
+  for (const [id, dom] of [...paneDom]) if (!want.has(id)) { if (dom.root.id !== "editor") dom.root.remove(); paneDom.delete(id); }
+  // the original #editor serves the FIRST editor pane, whatever its id
+  const firstEd = panes.find((p) => get(p, "kind") === K("editor"));
+  for (const p of panes) {
+    const id = get(p, "id").name;
+    if (paneDom.has(id)) continue;
+    let root;
+    if (get(p, "kind") === K("view")) {
+      root = document.createElement("aside");
+      root.className = "pane view view-" + get(p, "view-kind").name;
+      root.innerHTML = '<div class="view-body"></div><div class="view-lens"></div>';
+    } else if (p === firstEd && ![...paneDom.values()].some((d) => d.root.id === "editor")) {
+      root = $("#editor");
+    } else {
+      root = editorSkeleton.cloneNode(true);
+      root.removeAttribute("id");
+      for (const n of root.querySelectorAll("[id]")) n.removeAttribute("id");
+      root.querySelector(".lines").textContent = ""; root.querySelector(".gutter").textContent = "";
+    }
+    root.dataset.pane = id;
+    paneDom.set(id, get(p, "kind") === K("view") ? { root, body: root.querySelector(".view-body"), lens: root.querySelector(".view-lens") } : domFor(root));
+  }
+  // keep the original #editor's mapping honest when ids differ
+  for (const [id, dom] of paneDom) if (dom.root.id === "editor" && firstEd && get(firstEd, "id").name !== id) { paneDom.delete(id); paneDom.set(get(firstEd, "id").name, dom); dom.root.dataset.pane = get(firstEd, "id").name; }
+  for (const p of panes) panesEl.appendChild(paneDom.get(get(p, "id").name).root);
+  requestAnimationFrame(fitHeight);
+}
+
+// ─── view panes: a painter per view kind ───────────────────────────────────
+//
+// A view's model comes from BL (a package :provides {:views {kind fn}});
+// the host only paints it and turns pointer input into events FOR the pane
+// it views ({:pane of …}). Painters are keyed by kind.
+
+const MAP_ROW = 3;                          // px per screen row in a minimap
+const viewPainters = {
+  minimap(dom, p) {
+    const m = get(p, "view");
+    dom.body.textContent = "";
+    if (!m) return;
+    const bars = get(m, "bars").toArray();
+    const ys = []; let y = 0;
+    for (const b of bars) { ys.push(y); y += (get(b, "size") || 1) * MAP_ROW; }
+    const H = dom.root.clientHeight - 16, k = Math.min(1, H / Math.max(1, y));
+    const ch = (dom.root.clientWidth - 24) / 84;
+    dom.root.dataset.k = k; dom.root.dataset.ys = JSON.stringify(ys); dom.root.dataset.of = get(p, "of").name;
+    bars.forEach((b, i) => {
+      const d = document.createElement("div");
+      d.className = "bar r-" + get(b, "role").name;
+      d.style.cssText = `top:${ys[i] * k}px;height:${Math.max(1, (get(b, "size") || 1) * MAP_ROW * k - 1)}px;width:${Math.max(2, Math.min(84, get(b, "w")) * ch)}px`;
+      dom.body.appendChild(d);
+      const label = get(b, "label");
+      if (label) { const t = document.createElement("div"); t.className = "maplabel"; t.textContent = label; t.style.top = ys[i] * k + "px"; dom.body.appendChild(t); }
+    });
+    const top = get(m, "top"), end = get(m, "end");
+    dom.lens.style.cssText = `top:${(ys[top] ?? 0) * k}px;height:${Math.max(8, ((ys[end] ?? y) - (ys[top] ?? 0)) * k)}px`;
+  },
+};
+function paintView(dom, p) { const f = viewPainters[get(p, "view-kind").name]; if (f) f(dom, p); }
+function minimapSlotAt(root, clientY) {
+  const k = +root.dataset.k, ys = JSON.parse(root.dataset.ys || "[]");
+  const y = (clientY - root.querySelector(".view-body").getBoundingClientRect().top) / k;
+  let i = 0; while (i + 1 < ys.length && ys[i + 1] <= y) i++;
+  return i;
+}
+let mapDrag = null;
+panesEl.addEventListener("mousedown", (e) => {
+  const root = e.target.closest(".view-minimap"); if (!root) return;
+  e.preventDefault(); mapDrag = root;
+  dispatch(ev(K("type"), K("scroll-to-slot"), K("pane"), K(root.dataset.of), K("y"), Math.max(0, minimapSlotAt(root, e.clientY) - 6)));
+});
+window.addEventListener("mousemove", (e) => { if (mapDrag) dispatch(ev(K("type"), K("scroll-to-slot"), K("pane"), K(mapDrag.dataset.of), K("y"), Math.max(0, minimapSlotAt(mapDrag, e.clientY) - 6))); });
+window.addEventListener("mouseup", () => { mapDrag = null; });
+
+// ─── one editor pane ───────────────────────────────────────────────────────
+
+function paint(dom, v, focused) {
+  const { view, gutter, selLayer, caret, frameLayer } = dom;
+  const lineNode = (row) => lineNodeIn(view, row);
+  const xOf = (row, col) => xOfIn(view, row, col);
+  const lineLen = (row) => lineLenIn(view, row);
   const lines = get(v, "lines");
   const top = get(v, "top");
 
@@ -305,7 +449,6 @@ function draw() {
   }
   while (view.children.length > frag.length) view.lastChild.remove();
   while (gutter.children.length > frag.length) gutter.lastChild.remove();
-  prevLines = nextLines;
 
   // frames: boxes a presentation draws under its lines (cards, a sticky head,
   // the docked composer), in viewport ROWS; reused by index
@@ -345,15 +488,24 @@ function draw() {
   const cur = get(v, "cursor").toArray();
   const cy = yOf(cur[0]);
   const m = get(v, "mode").name;
-  document.body.dataset.mode = m;
+  if (focused) document.body.dataset.mode = m;
   if (cy != null) {
     caret.style.cssText = `top:${cy}px;left:${xOf(cur[0], cur[1])}px;height:${metrics.line}px;` +
       (m === "insert" ? "width:2px" : `width:${Math.max(metrics.ch, xOf(cur[0], cur[1] + 1) - xOf(cur[0], cur[1]))}px`);
     caret.hidden = false;
     // keep the hidden input under the caret so the IME popup appears there
-    sink.style.top = cy + "px"; sink.style.left = xOf(cur[0], cur[1]) + "px";
+    if (focused && sink.parentElement !== dom.page) dom.page.appendChild(sink);
+    if (focused) { sink.style.top = cy + "px"; sink.style.left = xOf(cur[0], cur[1]) + "px"; }
   } else caret.hidden = true;
 
+  // scrollbar hint
+  if (dom.hint) dom.hint.style.cssText = `top:${(get(v, "top") / Math.max(1, get(v, "total"))) * 100}%;height:${Math.max(4, (frag.length / Math.max(1, get(v, "total"))) * 100)}%`;
+}
+
+// ─── the chrome: status, echo, minibuffer, overlay (the focused pane's) ────
+
+function chrome(v, rv) {
+  const m = get(v, "mode").name;
   // status line
   const st = get(v, "status");
   const pos = get(st, "pos").toArray();
@@ -369,6 +521,9 @@ function draw() {
   // loaded packages, the document's presentation and its modes
   if (get(v, "presentation")) chip("crumb pres", "▣ " + get(v, "presentation"));
   for (const l of (get(v, "modes") ? get(v, "modes").toArray() : [])) chip("crumb mode", l);
+  // the window: its layout and the C-w chord
+  if (get(rv, "layout") && get(rv, "layout") !== "single") chip("crumb pres", "⊞ " + get(rv, "layout"));
+  if (get(rv, "chord")) chip("pending", get(rv, "chord") + "-");
   const pend = get(st, "pending");
   if (pend) chip("pending", pend + (get(st, "count") ? " ×" + get(st, "count") : ""));
   else if (get(st, "count")) chip("pending", "×" + get(st, "count"));
@@ -424,25 +579,22 @@ function draw() {
       list.appendChild(li);
     }
   } else overlay.hidden = true;
-
-  // scrollbar hint
-  $("#scroll-hint").style.cssText = `top:${(top / Math.max(1, get(v, "total"))) * 100}%;height:${Math.max(4, (frag.length / Math.max(1, get(v, "total"))) * 100)}%`;
 }
 
 // grapheme column → x pixel offset within a row, measured from the DOM so
 // proportional emoji/CJK widths are honest
 const seg = typeof Intl !== "undefined" && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
-function lineNode(row) { for (const n of view.children) if (n.dataset.row == row) return n; return null; }
-function lineText(row) { const n = lineNode(row); return n ? n.textContent.replace(/\u200b/g, "").replace(/ ⋯$/, "") : ""; }
-function lineLen(row) { const t = lineText(row); return seg ? [...seg.segment(t)].length : [...t].length; }
-function xOf(row, col) {
-  const node = lineNode(row);
+function lineNodeIn(view, row) { for (const n of view.children) if (n.dataset.row == row) return n; return null; }
+function lineTextIn(view, row) { const n = lineNodeIn(view, row); return n ? n.textContent.replace(/\u200b/g, "").replace(/ ⋯$/, "") : ""; }
+function lineLenIn(view, row) { const t = lineTextIn(view, row); return seg ? [...seg.segment(t)].length : [...t].length; }
+function xOfIn(view, row, col) {
+  const node = lineNodeIn(view, row);
   if (!node || col === 0) return 0;
   // walk text nodes to the UTF-16 offset of grapheme `col`
-  const t = lineText(row);
+  const t = lineTextIn(view, row);
   const gs = seg ? [...seg.segment(t)] : [...t].map((s, i) => ({ segment: s }));
   let u = 0; for (let i = 0; i < Math.min(col, gs.length); i++) u += gs[i].segment.length;
-  if (col > gs.length) return xOf(row, gs.length) + (col - gs.length) * metrics.ch;
+  if (col > gs.length) return xOfIn(view, row, gs.length) + (col - gs.length) * metrics.ch;
   const range = document.createRange();
   let acc = 0;
   const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
@@ -507,41 +659,63 @@ sink.addEventListener("paste", (e) => {
   if (text) { e.preventDefault(); dispatch(ev(K("type"), K("text"), K("text"), text)); }
 });
 
-$("#editor").addEventListener("mousedown", (e) => {
+// a click focuses its pane (the frame's :focus) and lands in it
+const paneOf = (node) => node.closest("[data-pane]")?.dataset.pane ?? "main";
+function focusPane(id) { if (get(fr, "focus").name !== id) fr = fr.assoc(K("focus"), K(id)); }
+panesEl.addEventListener("mousedown", (e) => {
+  if (e.target.closest(".view")) return;
   const lineNode = e.target.closest(".line");
-  if (!lineNode) { sink.focus(); return; }
+  const id = paneOf(e.target);
+  if (!lineNode) { focusPane(id); draw(); sink.focus(); return; }
   e.preventDefault();
+  focusPane(id);
+  const dom = paneDom.get(id);
   if (lineNode.dataset.src != null) {        // an ornament: land on its source row
     dispatch(ev(K("type"), K("click"), K("pos"), R.vec(Number(lineNode.dataset.src), 0), K("extend?"), e.shiftKey));
     sink.focus(); return;
   }
   const row = Number(lineNode.dataset.row);
   const x = e.clientX - lineNode.getBoundingClientRect().left;
-  let col = 0; const n = lineLen(row);
-  while (col < n && xOf(row, col + 1) <= x + metrics.ch / 2) col++;
+  let col = 0; const n = lineLenIn(dom.view, row);
+  while (col < n && xOfIn(dom.view, row, col + 1) <= x + metrics.ch / 2) col++;
   dispatch(ev(K("type"), K("click"), K("pos"), R.vec(row, col), K("extend?"), e.shiftKey));
   sink.focus();
 });
-$("#editor").addEventListener("wheel", (e) => {
+panesEl.addEventListener("wheel", (e) => {
+  if (e.target.closest(".view")) return;
   e.preventDefault();
-  const v = M.d_render(ed);
+  const id = K(paneOf(e.target));
+  const v = M.d_render(F.d_editor(fr, id));
   const rows = Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / metrics.line));
   // a presentation scrolls by SCREEN rows (a wrapped answer is many rows of one text row)
-  if (get(v, "slot-top") != null) { dispatch(ev(K("type"), K("scroll-slots"), K("delta"), rows)); return; }
-  const top = get(v, "top") + rows;
-  dispatch(ev(K("type"), K("scroll"), K("top"), Math.max(0, top)));
+  if (get(v, "slot-top") != null) { dispatch(ev(K("type"), K("scroll-slots"), K("pane"), id, K("delta"), rows)); return; }
+  dispatch(ev(K("type"), K("scroll"), K("pane"), id, K("top"), Math.max(0, get(v, "top") + rows)));
 }, { passive: false });
 
+// every editor pane learns its height (rows) and width (cells)
 function fitHeight() {
+  const first = [...paneDom.values()].find((d) => d.page);
+  if (!first || !fr) return;
   // the page's top padding is not rows (the last row was clipped by a few px)
-  const pad = parseFloat(getComputedStyle($("#page")).paddingTop) || 0;
-  const h = Math.floor(($("#editor").clientHeight - pad) / metrics.line);
-  dispatch(ev(K("type"), K("resize"), K("height"), h));
+  const pad = parseFloat(getComputedStyle(first.page).paddingTop) || 0;
+  const h = Math.floor((first.root.clientHeight - pad) / metrics.line);
+  let cols = R.EMPTY_MAP;
+  for (const [id, d] of paneDom) if (d.page) cols = cols.assoc(K(id), Math.floor((d.page.clientWidth - 24) / metrics.ch));
+  dispatch(ev(K("type"), K("resize"), K("height"), h, K("cols"), cols));
 }
 window.addEventListener("resize", fitHeight);
 // the boot-time fit measures before the status line lays out: refit on any change
-new ResizeObserver(() => { if (ed) fitHeight(); }).observe($("#editor"));
+new ResizeObserver(() => { if (fr) fitHeight(); }).observe(panesEl);
 document.addEventListener("click", () => sink.focus());
+
+// the ?layout= of the page's URL, kept across visits
+function layoutParam() { const l = get(F.d_render(fr), "layout"); return l && l !== "single" ? "&layout=" + encodeURIComponent(l) : ""; }
+// run a `:` command as if typed (boot-time ?layout=)
+function runCommandLine(src) {
+  dispatch(ev(K("type"), K("key"), K("key"), ":"));
+  dispatch(ev(K("type"), K("text"), K("text"), src));
+  dispatch(ev(K("type"), K("key"), K("key"), "Enter"));
+}
 
 // ─── boot ──────────────────────────────────────────────────────────────────
 
@@ -562,14 +736,17 @@ async function loadInitial() {
 await document.fonts?.ready;
 measure();
 const { text, path, doc } = await loadInitial();
-ed = M.d_boot(text, path);
+fr = F.d_single(M.d_boot(text, path));
 fitHeight();
 // the document's rev / read-only flag / objects: the same event a visit uses
 if (doc) dispatch(ev(K("type"), K("doc"), K("path"), path, K("text"), doc.text, K("rev"), doc.rev, K("read-only?"), !!doc.readOnly,
                      K("title"), doc.title || path, K("objects"), toBL(doc.objects || []), K("visit?"), false));
-watchDoc(); watchCards(true);
-// ?use=a,b loads packages at boot (as ~/.bl-ed/init would)
-for (const name of (new URLSearchParams(location.search).get("use") || "").split(",").filter(Boolean))
-  perform(ev(K("kind"), K("load-package"), K("name"), name));
+watchDocs(); watchCards(true);
+// ?use=a,b loads packages at boot (as ~/.bl-ed/init would); ?layout=x then
+// arranges the window as a loaded package's layout says
+const params = new URLSearchParams(location.search);
+const wantLayout = params.get("layout");
+for (const name of (params.get("use") || "").split(",").filter(Boolean)) await perform(ev(K("kind"), K("load-package"), K("name"), name));
+if (wantLayout) runCommandLine(`(ed/layout "${wantLayout}")`);
 sink.focus();
-window.blEd = { dispatch, state: () => ed, render: () => M.d_render(ed), R, K };
+window.blEd = { dispatch, state: () => ed$(), frame: () => fr, render: () => M.d_render(ed$()), R, K, F };

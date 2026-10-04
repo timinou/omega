@@ -88,7 +88,16 @@
    ; imports it and answers with a :use event
    "use" (fn [nm] (swap! cell c/effect {:kind :load-package :name (str nm)}) (str "loading " nm "…"))
    "unuse" (fn [nm] (swap! cell pkg/unuse (str nm)) (str "removed " nm))
-   "packages" (fn [] (pkg/names @cell))})
+   "packages" (fn [] (pkg/names @cell))
+   ; frames (ed/frame.bl): arrange the window as a package's layout says;
+   ; the frame takes the request off the pane after this event
+   "layout" (fn [nm]
+              (if (nil? nm)
+                (do (swap! cell assoc :frame/layout :none) "one pane")
+                (let [l (get (reduce (fn [m p] (merge m (get-in p [:provides :layouts]))) {} (pkg/packages @cell)) (str nm))]
+                  (if (nil? l) (str "no layout " nm " — a package provides layouts (ed/packages)")
+                    (do (swap! cell assoc :frame/layout l) (str "layout " nm))))))
+   "layouts" (fn [] (vec (sort (keys (reduce (fn [m p] (merge m (get-in p [:provides :layouts]))) {} (pkg/packages @cell))))))})
 
 (defn eval-command
   "Evaluate the command-line text as REAL Beam Lisp — the self-hosted
