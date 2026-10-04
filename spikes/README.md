@@ -20,6 +20,7 @@ feature they de-risk lands.
 | `task-refs.bl.md` | do per-task history refs fix gate blame? | no; a per-path gate does, on one shared main; refs add merge and blame, not test isolation |
 | `claims-advisory.bl.md` | do claims refuse a second writer? | no (advisory, as designed), but `edit` drops the conflict instead of telling the agent |
 | `async-checkpoint.bl.md` | can step checkpoints be exact AND non-blocking (snapshot inline + cast)? | yes: 0 skew, p50 3.8 ms vs 127 ms blocking, history identical to the blocking hook's, commit order = hook arrival order; historian 27-36 commits/s |
+| `fs-capture.bl.md` | how do we also catch file changes that are not `edit` (sh, File/write!, git checkout)? | trace the cell's BEAM file calls (exact, <1 ms, sees spawned children), scan the tree only after cells that ran `sh` (60-140 ms on 2,000 files, racy-hash rule), window-attribute with `:ambiguous` for overlapping `sh` cells; inotify has no writer and loses files in new dirs; strace x3-31 |
 
 The decisions these change are recorded in `research/domain/interface/bl-ed.bl.md` §15 (spike
 results) and in the FEAT/FUP/BUG items it names.
