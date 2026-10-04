@@ -207,11 +207,17 @@ convention the task with the older claim on the path keeps the region while the 
 note (rung 3). Rungs 0–1 were OBSERVED in spikes; rungs 2–4 (marks on `read`, contention traces,
 escalation to you) are design only (ed §5.4).
 
-**A gate fails.** With the jj tier on (opt-in, E6), each model step that changed files becomes one jj change
-(ed §5.9). The gate runs before the checkpoint is described, and a failure still checkpoints, described
-`[gate ✗]`, with a `:finding` trace on the task. Its card goes red with the failing line (E18, decided). You
-see which step broke the build and steer from that change: a human eval in the sidebar, or `jj abandon` on
-the step (ed §5.9; the sidebar's evals as steers are wave W4, ed §14).
+**A gate fails.** Each model step that changed files becomes one change in omega's native history
+(`omega.history`, ed §15.1). The step's written texts are snapshotted inline and committed by one
+historian process, so the task barely notices (~5 ms, ed §15.8).
+- The gate runs on the files that change carries (ed §15.2, E23), so t-43 is never failed for t-41's
+  broken file.
+- A failure still records the change, marked `[gate ✗]`, with a `:finding` trace on the task that
+  wrote it. Its card goes red with the failing line (E18, decided).
+- You see which step broke the build and steer from that change: a human eval in the sidebar, or
+  reverting the step, which is a merge that appends a new change and keeps everyone else's later work
+  (ed §15.1).
+- The sidebar's evals as steers are wave W4 (ed §14).
 
 **Effectful cells are shown, not re-run.** In t-41's sidebar, `space e` on the cell that edited `reader.py`
 does not run it again. It shows its trace: the diff, who made it, when, and whether it is still present.
@@ -219,10 +225,13 @@ does not run it again. It shows its trace: the diff, who made it, when, and whet
 new cell, which is the honest way to "run it again" (ed §7.1, decision 11). The cell's `#+RESULTS` is a
 reference to the effect, the same mechanism as a task card (ed §7.2).
 
-**Why does this line look like this?** `jj file annotate` leads from the line to its change, whose trailers
-name the task (`Omega-Task: t-41`) and its home cell (`Omega-Cell: journal/…::hex`). bl-ed shows it as a
-margin decoration that links to the conversation that wrote the line (ed §5.9; the margin decoration is a
-bl-ed growth item, ed §10). "What did t-41 change?" is one query over the facts (ed §5.5, §5.10).
+**Why does this line look like this?** Blame is stored with every file version, so asking costs one read
+(1.8 ms for 400 lines, ed §15.1).
+- It leads from the line to the change that wrote it, and from the change to the task and its home cell.
+- bl-ed shows it as a margin decoration that links to the conversation that wrote the line. The margin
+  decoration is a bl-ed growth item (ed §10).
+- Blame survives merges, reverts and renames.
+- "What did t-41 change?" is one query over the facts (ed §5.5, §15.1).
 
 **Evening.** The tasks are done or idle; each finished task's result was rewritten once to a self-contained
 summary in the journal (ed §3.4, E9 lean). With no running or waiting task and no console for the configured

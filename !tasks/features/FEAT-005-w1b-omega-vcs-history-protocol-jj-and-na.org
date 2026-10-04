@@ -53,3 +53,14 @@ What the spike proved, on the durable store:
 - A failing gate records `[gate ✗]` plus a finding on the task that wrote the broken file, and never on the other task.
 - `log {:by t}` and blame answer in < 50 ms at 1000 changes.
 - p50 checkpoint < 100 ms on the durable store, flat over 1000 steps (needs C8 so the hook's surroundings stay flat too).
+
+* Async checkpoints (spikes/async-checkpoint.bl.md, 2026-10-03; E22 refined)
+
+The `:tool/after` hook SNAPSHOTS the texts the step wrote (inline) and `cast`s `[:snap task step why {path text} gate]` to the one historian, which commits in arrival order.
+- **Observed.** 0 skew, 0 misattribution and 0 per-task order errors (5/5 runs); per-task histories identical to the blocking variant; task-side cost ~5 ms p50 vs 70–130 ms blocking.
+- **Hook implementation:**
+  - Drop `task/view` from the hook (~3 ms of the 5).
+  - Record written paths inside `write`/`edit` (with C6's port, or next to the existing claim), into a small per-task write buffer the hook drains. Not the cell's process dictionary: cells are separate processes.
+  - A `:sync` option blocks the hook until commit, for gates that must hold the task.
+  - Bound the historian's mailbox (a 60-cast burst queued 59; throughput 27–36 commits/s) and add `:flush` for tests and shutdown.
+- **Gotcha.** A prelude wrapper that calls the saved original `write`/`edit` recursed and hung. Use the C6 port, not wrappers.

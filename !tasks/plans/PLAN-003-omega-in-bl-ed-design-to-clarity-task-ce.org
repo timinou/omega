@@ -40,61 +40,64 @@ Design only. Parse every design question for "omega as a bl-ed package" until th
 research/domain/interface/bl-ed.bl.md (runnable; both spikes pass under bin/bl run). Sections: §3 :task cell (full params, reference results, home cells/journal), §4 card + sidebar, §5 buffer servers (second cursor, consensus ladder, bitemporal op log, routing, disk publishing, history tiers), §6 attention, §7 non-re-runnable effectful cells, §8 one world many runners, §9 wire, §10 bl-ed growth, §13 decision register E1–E14, §14 waves W0–W6.
 
 * Open decisions (need the user)
-None. Round 4 settled E17 (a) and E18 (a). The remaining items in bl-ed.bl.md §13 marked "lean" (E3, E8–E10, E13–E16, E19–E21) are proposals the user has not objected to ("everything else is good", round 4); they become "user" when implementation confirms them or the user says otherwise.
+For the user's confirmation after the spike round (all are "lean", with evidence in bl-ed.bl.md §15):
+1. **E6′ + FEAT-005.** jj leaves the plan entirely; omega.history is native from day one (the user's direction, made concrete by spikes/history.bl.md).
+2. **C8 and C9.** Two more core changes, raised ahead of time per E15. C8 fixes a slowdown omega has TODAY regardless of bl-ed.
+3. **E24 rule (d).** An agent edit whose `:old` exists only in a human's unpublished text is refused (`:overlay`), not applied.
+4. **E23 / E17′.** Test isolation is not provided under the shared working copy; only the history records are honest. Isolation = E17 (b), not planned.
 
-Round 4 decisions (bl-ed.bl.md §1, 17–20):
-- E17 (a), shared working copy, behind a modular `omega.vcs` History protocol (jj + beam-lisp native backends, one contract suite) that teaches the autovcs redesign (§5.10, spike 3 RAN);
-- E18 (a), a failing gate checkpoints as `[gate ✗]` plus a finding, so the human can steer;
-- C3: apps declare their own env.bl keys; config in three layers with one owner each (§8.4.1, E20, E21);
-- `!*` is deprecated for future design, but this iteration files in `!tasks/` as it stands.
+Earlier rounds: E17 (a) and E18 (a) were decided by the user in round 4. The other "lean" rows (E3, E8–E10, E13–E16, E19–E21) were not objected to ("everything else is good").
 * Acceptance (of the design phase)
 
 Every E-row in §13 is "user" status; §14 waves each have an observable proof; FUP-003 (OT) filed.
 
 * Follow-ups
-Implementation, one feature per wave (bl-ed.bl.md §14), in dependency order:
+Implementation, one feature per wave (bl-ed.bl.md §14 with the §15.7 deltas), in dependency order:
 
 | wave | item | depends on |
 |---|---|---|
-| W0 | FEAT-001 re-pin + core C1, C2, C4, C5 (closes BUG-001) | beam-lisp merges (E12) |
+| W0 | FEAT-001 re-pin + core C1, C2, C4, **C8 (first), C9**; C5 optional (closes BUG-001) | beam-lisp merges (E12) |
 | W0 | FEAT-002 C3 app-declared env.bl keys + omega.config | beam-lisp merges |
 | W1 | FEAT-003 world as realm app member, C6 file port, C7 CLI attach | FEAT-001, FEAT-002 |
-| W1 | FEAT-004 buffer servers: op log, CAS, disk publish, adoption | FEAT-001, FEAT-003 |
-| W1b | FEAT-005 omega.vcs: History protocol, jj + native backends, contract suite, per-step checkpoints | FEAT-001 (C5), FEAT-003 |
-| W1c | FEAT-006 :task cell kind in bl.doc.spans, write-results after any cell | beam-lisp merges |
+| W1 | FEAT-004 buffer servers: convergent op model (E26), published layer + pending overlays (E24), disk publish, adoption | FEAT-001, FEAT-003 |
+| W1b | FEAT-005 **omega.history**: beam-lisp native history, async per-step checkpoint hook into one historian (E22), per-path gate (E23); no jj | FEAT-001 (C8), FEAT-003 (C6) |
+| W1c | FEAT-006 :task cells as a package with their own span kind; upstream only write-results + edn :readers | beam-lisp merges |
 | W2 | FEAT-007 bl-ed socket, remote cursors, publish on pause, attention, parked suggestions; ed.lisp removed | FEAT-004 |
 | W3 | FEAT-008 :task cells live: home cells, journal, cards, bl doc run --tasks, TODO sync | FEAT-006, FEAT-007 |
 | W4 | FEAT-009 task sidebar: transcript fact buffer, composer, human evals as steers, streaming | FEAT-008 |
 | W5 | FEAT-010 effectful cells not re-runnable: effect refs, trace card, revert, copy-as-new | FEAT-004, FEAT-008 |
 | W6 | FEAT-011 consensus: edit marks, contention traces, attention context lines | FEAT-004, FEAT-007 |
 
-Bugs: BUG-001 two omega worlds in one VM cross-write (fixed by FEAT-001's C2).
+Bugs:
+- BUG-001 two omega worlds in one VM cross-write (fixed by FEAT-001's C2)
+- BUG-002 datom entity reads/writes degrade O(updates); joins 10–70× slower than the raw index (upstream beam-lisp)
 
 Follow-ups:
-- FUP-003 OT / Eg-walker merge for buffer servers
-- FUP-004 native beam-lisp history (the autovcs redesign, measured by the omega.vcs contract suite)
+- FUP-003 OT / Eg-walker merge for buffer servers (intent preservation; convergence is solved by E26)
+- FUP-004 native history gaps + adoption by beam-lisp's autovcs redesign (largely pulled forward into FEAT-005)
 - FUP-005 contention escalation / attention between agents
 - FUP-006 buffer op log compaction, selections, grapheme columns
 - FUP-007 bl-ed late binding (namespace slots)
+- FUP-008 omega.history ↔ git export/import
 
-Docs and research filed (2026-10-03):
-- research/domain/interface/bl-ed.bl.md (the design; 4 runnable blocks: spikes 1–3 + the shared-VM probe)
-- research/domain/synthesis/decisions.bl.md (updates to D1, D3, D8, D9, D12; new D14 with E1–E21 and C1–C7)
-- docs/domain-model.bl.md (BUG-001 known defect in §6; §10 "omega inside bl-ed", NOT BUILT)
-- research/domain/synthesis/day-to-day.bl.md (§6, a day with bl-ed)
-- research/domain/README.bl.md (index row + start-here entry)
+Spikes (spikes/, index spikes/README.md; 13 runnable files, all `## Findings`):
+- history
+- step-checkpoint
+- async-checkpoint
+- task-refs
+- file-port
+- claims-advisory
+- c9-claim-conflict
+- convergence
+- buffer-overlay
+- hot-task
+- turn-read-cost
+- c8-turn-cache
+- task-cell (needs the js-actors beam-lisp)
 
-NOTE [2026-10-03]: Design phase complete: every E-row in bl-ed.bl.md §13 is user-decided or an unobjected lean; waves filed as FEAT-001–011; follow-ups FUP-003–007; BUG-001. Awaiting user review before implementation (which waits on the beam-lisp merges, E12).
-
-NOTE [2026-10-04]: Spike round before launch (user, 2026-10-03: "cut prototypes for the part that would look like autovcs, because we'll have to redo it from almost scratch anyway. make spikes for this and anything else you want before we launch the plan"; then "work autonomously … commit as you go").
-
-Nine spikes in spikes/ (index spikes/README.md), all runnable. The delta is in bl-ed.bl.md §15:
-- history.bl.md: native history from scratch. ~55 ms p50/step durable, flat over 1200 steps; blame written at checkpoint; merge/revert/rename. jj leaves the plan (E6′, E17′; FEAT-005 rewritten as omega.history).
-- step-checkpoint + task-refs: checkpoints must be a :tool/after hook into one historian (events skew/lose steps); attribute from the writer; gate per path (E22, E23); per-task refs optional, no test isolation.
-- file-port: C6 = 29 lines. An agent publish leaked the human's unpublished text → E24 overlay.
-- claims-advisory: claims never block, but edit drops the conflict → C9.
-- convergence: §5.3 rebase diverges on 63% of pairs; atomic-op transform → 0/6000 (E26; FEAT-004 updated).
-- hot-task + turn-read-cost: a long omega task slows 1.2 s → 2.7 s/step today (loop/turns O(turns) per step) → C8 first in W0 (FEAT-001 updated); BUG-002 upstream datom perf.
-- task-cell (on the js-actors bl.doc.spans): the :task cell works as a package with no scanner change; it must keep its own span kind (FEAT-006 updated, E25).
-
-New items: BUG-002, FUP-008. FUP-004 is largely pulled forward.
+Docs and research:
+- research/domain/interface/bl-ed.bl.md: the design, §15 = what the spikes changed
+- research/domain/synthesis/decisions.bl.md: D14 incl. the spike round
+- docs/domain-model.bl.md §10, NOT BUILT
+- research/domain/synthesis/day-to-day.bl.md §6
+- research/domain/README.bl.md

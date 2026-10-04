@@ -51,3 +51,25 @@ One defserver per file in use, owning its text, its revisions and its op log as 
 - **Publishing (E24).** A disk publish writes only *published* ops. The human's unpublished ops are an overlay that agent reads see but disk does not. spikes/file-port.bl.md observed an agent publish writing the human's half-typed line to disk.
 - **The server reuses `prelude/apply-edits`** for `edit`, so error text matches: ":old not found …; changed since you read it (rev N): <task> in cell <cell> at rev M".
 - **Buffer state lives in the server process.** Never in an atom: a beam-lisp atom deref copies the whole value.
+
+* Overlay semantics (spikes/buffer-overlay.bl.md, 2026-10-03; E24)
+
+Verified 0 violations over 3×500 random cases. Implement exactly this:
+
+- **State.** `pub` (== disk text); per human actor `pend` (atomic ops based on pub) and `ovlog` (landed ops in that actor's view coordinates).
+- **`[:human-op actor base ops]`.**
+  - Atomize the ops, then `tl` them over `ovlog[actor][base..]`, and append to the actor's branch.
+  - Reject `base > rev`.
+  - Validate by applying to pub; return `:invalid-op` rather than crash.
+- **Landing (a publish or an agent edit).**
+  - Apply to pub.
+  - Transform the landed ops over every other branch, and append them to each `ovlog`.
+  - Write disk.
+- **Agent edit.**
+  - Applies to PUBLISHED text.
+  - A replace is encoded as insert-new-at-end-of-old, then delete-old, so a pending insert at either edge keeps its side.
+  - `:old` must occur exactly once in the view and once in pub. Errors: `:not-found`, `:ambiguous`, `:overlay` (old exists only in an unpublished overlay: refuse), `:published-ambiguous`.
+  - A self-check (new view == old view with old→new) turns a disagreement into `:conflict` with nothing changed.
+- **Reads.** `read` = pub ⊕ branches merged with `tl` in sorted-actor order; `own` returns `{text rev}` as the client's base.
+- **Performance.** Cache the view per revision in server state: 6 pending ops made reads 0.5 ms and agent edits 5.5 ms.
+- **Not covered:** ≥3 humans' view order, pipelined client sends (needs a per-op base or an ack-serialised client), disk write errors.

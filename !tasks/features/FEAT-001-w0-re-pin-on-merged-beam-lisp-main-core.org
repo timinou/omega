@@ -56,3 +56,25 @@ W0 now also carries two new core changes. They come FIRST, because every later w
   - Acceptance: two tasks editing one file each get a result naming the other.
 - **C5 is downgraded.** A `:tool/after` hook already gives exact step boundaries (spikes/step-checkpoint.bl.md). `:step/end` is optional; skip it unless W1b needs it.
 - **Also measure** `trace/claim!` (11–100 ms per call in the spikes, on every write/edit). If it is the same hot-entity effect, make claims append-only facts.
+
+* C8 prototyped (spikes/c8-turn-cache.bl.md, 2026-10-03)
+
+- **Measured.** A 120-step task: 138 s → 31 s (4.4×). Late steps ~1.45 s → ~275 ms.
+- **Design correction.** Do NOT cache behind `loop/turns` in the process dictionary. A reader in
+  another process (the spike's poller) cached a stale view and saw `:turns 0`.
+- **Correct shape.**
+  - `turns` stays the store read for everyone.
+  - `turn!` reads the list once per run and threads it as a loop-local value through `request`,
+    `record!` (which returns the appended list) and `run-tool`'s trace subject.
+  - `turn-count` disappears from the hot path.
+- **The second half: append-only usage.** Stop rewriting `:task/cost`; sum `:turn/usage` on read,
+  cached in the executor. The spike shows residual growth (~3.0 s → ~5.5 s per 20 steps) consistent
+  with the hot-entity writes it left in place.
+- **Acceptance (refined).** The spike's before/after harness becomes a test. After C8, per-20-step
+  wall time at steps 100–120 is within 1.5× of steps 0–20.
+
+* C9 prototyped (spikes/c9-claim-conflict.bl.md)
+
+~12 lines. `write`/`edit` append " (t-1 also holds a.py; claims are advisory: coordinate with send/wait if you overlap)" to their result; both edits still land.
+
+Follow-up inside this FEAT: `read` reports fresh claims on the path too, for symmetric awareness. Do that only after claims are append-only facts, since `claim!` costs 11–100 ms today.

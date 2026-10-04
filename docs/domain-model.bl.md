@@ -254,13 +254,25 @@ It extends this model rather than adding a second one:
   bl-ed console, MCP) is a `run` member that attaches to it, with a cold fallback to today's direct
   open. The world exits after `:omega {:idle 1800}` seconds with no running or waiting task and no
   console (§8.5, E19 lean); nothing is lost because the store is the truth.
-- **History behind a protocol, `omega.vcs`** (§5.10, E17, decided). A five-verb `History` protocol
-  (`checkpoint!` `changes` `tree-at` `diff` `abandon!`) with a jj backend (one change per model step,
-  trailers `Omega-Task`/`Omega-Cell`, a failing gate still checkpoints as `[gate ✗]`, E18) and a
-  beam-lisp native backend (a change is a fact, blobs are `:db.type/file`, undo is a compensating
-  change). Spike 3 ran the protocol and a native backend; the native backend's open gaps are listed in
-  §5.10 (merges, renames, binary files, git export/import, blame index, large trees).
+- **History is beam-lisp native: `omega.history`** (§15.1–15.2 and §15.8 of the note, E6′/E17′/E22/E23;
+  revised by the spike round, which removed jj from the plan).
+  - **One change per tool step.** A file version is a content-addressed object `{:text :origins}` in
+    datom's blob store, so line blame is written at checkpoint time.
+  - **Changes and refs are immutable/append-only facts.**
+  - **Operations.** A three-way merge commits conflicts as data; undo is a merge that appends a change.
+  - **Mechanism.** A `:tool/after` hook snapshots the texts the step wrote and casts them to one
+    historian process. Each change is gated on the files it carries; a failing gate still records
+    `[gate ✗]` (E18).
+  - **Cost.** Prototyped in `spikes/history.bl.md` and `spikes/async-checkpoint.bl.md`: ~55 ms per
+    durable checkpoint, flat over 1200 steps; ~5 ms task-side.
+  - git interop is FUP-008.
+- **Known defect found by the spikes: long tasks slow themselves down** (`spikes/hot-task.bl.md`,
+  OBSERVED). A trivial step costs 1.2 s at the start and 2.7 s by step 160, because `loop/turns`
+  re-reads every turn from the store several times per step and `:task/cost` is rewritten in place.
+  - Core change C8, prototyped at 4.4× (`spikes/c8-turn-cache.bl.md`), threads the turn list
+    through `turn!` and makes usage append-only.
+  - The datom side is BUG-002.
 
-The full list of core changes (C1–C7) is §8.4; the decision register (E1–E21) is §13; the build order
+The full list of core changes (C1–C9) is §8.4 and §15 of the note; the decision register (E1–E26) is §13 and §15.7; the build order
 (W0–W6) is §14. Everything else is a package and a projection on this model.
 

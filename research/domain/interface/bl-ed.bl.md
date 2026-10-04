@@ -1539,15 +1539,53 @@ unchanged** (the file port; C6 measured); new **E22–E26**:
 |---|---|---|---|
 | E6′ | history tier | lean (supersedes E6 (a)'s jj) | `omega.history`, beam-lisp native, one change per tool step; jj/git import/export only (FUP-008) |
 | E17′ | concurrent tasks vs history | lean (refines E17 (a)) | one shared working copy; per-path attribution from the writer; optional per-task refs merged at idle/done |
-| E22 | checkpoint mechanism | lean | a `:tool/after` hook into ONE historian process; never `:on` events |
+| E22 | checkpoint mechanism | lean | a `:tool/after` hook snapshots the texts the step wrote and casts them to ONE historian (async, exact, ~5 ms task-side); `:sync` option for blocking gates; never `:on` events (§15.8) |
 | E23 | gate scope | lean | per path: a change is gated on the files it carries; test isolation is E17 (b), not the gate |
-| E24 | unpublished human text | lean | a disk publish writes published ops only; unpublished human ops are an overlay visible to agent reads |
+| E24 | unpublished human text | lean | published layer (== disk) + per-human pending overlays; agent edits apply to published text and transform the overlays; an agent `:old` found only in an overlay is refused `:overlay` (§15.8) |
 | E25 | id-less task cells | lean | the derived id is written into the header once, by actor `omega` |
 | E26 | buffer op model | lean | atomic ops + split + actor tiebreak + list transform (convergence spike); Eg-walker stays FUP-003 |
 
 Core changes (§8.4) gain **C8** (executor caches turns and cost; usage append-only) and **C9** (`edit`
 and `write` report claim conflicts in their result). C5 is downgraded: the `:tool/after` hook already
 gives exact step boundaries; `:step/end` stays a nice-to-have.
+
+### 15.8 Improvement round: prototypes of the fixes
+
+A second round prototyped the fixes the first round called for, each by runtime redefinition (omega's
+source untouched):
+
+- **C8 turn cache** (`spikes/c8-turn-cache.bl.md`).
+  - A 120-step task: 138 s → 31 s (**4.4×**).
+  - A process-dictionary cache behind `loop/turns` went stale for a reader in another process
+    (`:turns 0`). The shipped C8 threads the turn list through `turn!` as a loop-local value, and
+    `turns` stays the store read.
+  - Residual growth points at the hot-entity writes (`:task/cost`), the other half of C8.
+- **C9 claim conflicts** (`spikes/c9-claim-conflict.bl.md`).
+  - ~12 lines. The second writer's model receives "t-1 also holds a.py; claims are advisory …" in
+    its tool result. Both edits still land.
+  - Only the second claimer learns; symmetric awareness needs `read` to report claims too. That is
+    cheap only once claims are append-only.
+- **Async checkpoints** (`spikes/async-checkpoint.bl.md`).
+  - The `:tool/after` hook snapshots only the texts the step wrote and **casts** them to the one
+    historian. 0 skew, 0 misattribution and 0 per-task order errors in 5/5 runs.
+  - Task-side cost: **~5 ms p50** vs 70–130 ms blocking. ~3 ms of that is a `task/view` the hook
+    can drop.
+  - Per-task histories are identical to the blocking variant; gate verdicts are identical.
+  - The historian commits 27–36 changes/s. A 60-cast burst queued 59 deep, so add a pending-depth
+    bound.
+  - **E22 refined:** snapshot inline, commit async, with a `:sync` option for gates that must block.
+- **Buffer overlay** (`spikes/buffer-overlay.bl.md`, E24).
+  - **Layers.** The published layer (== disk) plus per-human pending overlays, all on the convergent
+    op model: 0 invariant violations in 3×500 random cases, deterministic replay.
+  - **Agent edits** apply to the *published* text, then every pending branch is transformed over
+    them. A replace is encoded as insert-at-end-then-delete, so a human's pending insert at either
+    edge of the replaced text keeps its side.
+  - **Rule for (d):** an agent's `:old` that exists only in a human's unpublished overlay is refused
+    with `:overlay`. Applying it would create an agent edit that never reaches disk while the agent
+    believes it landed.
+  - **Errors as data:** `:not-found`, `:ambiguous`, `:overlay`, `:published-ambiguous`, `:conflict`
+    (a self-check), `:invalid-op`.
+  - **Latency:** read 0.04–0.5 ms, agent edit 1–5.5 ms. FEAT-004 should cache the view per revision.
 
 Waves (§14):
 - W0 gains C8 and C9; they come first, because every later wave adds per-step work.
