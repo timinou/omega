@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- spikes/present/web/mock.html — design mock: one screen (rail | conversation).
+     See mock.mjs. Served by spikes/present/serve.mjs; /api → a bin/bl-ed world. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>omega · mock: one screen</title>
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./mock.css">
+<script type="module" src="./mock.mjs"></script>
+</head>
+<body class="mock">
+  <header id="bar">
+    <span class="brand">omega</span>
+    <span id="total"></span>
+    <input id="filter" placeholder="/ filter tasks" autocomplete="off">
+    <span class="keys"><kbd>j</kbd><kbd>k</kbd> task · <kbd>J</kbd><kbd>K</kbd> question · <kbd>i</kbd> write · <kbd>y</kbd><kbd>n</kbd> answer</span>
+  </header>
+  <main id="screen">
+    <nav id="rail"></nav>
+    <section id="pane"></section>
+    <aside id="index"></aside>
+  </main>
+  <footer id="composer">
+    <span id="composer-to">say ▸</span>
+    <input id="composer-text" placeholder="i to write — Enter sends · Esc leaves" autocomplete="off">
+    <span id="echo"></span>
+  </footer>
+</body>
+</html>

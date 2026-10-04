@@ -57,6 +57,21 @@ the say block is where you write.
 ** W7 — time as input: scrub revs with the same presenters; diff as :around
 ** W8 — nested panes / semantic zoom (a task in the overview at lod 1)
 
+
+** W9 — sticky TOP headers + mark roles (the conversation's type scale)
+- :sticky generalised: pinned to the top while its section is on screen (bottom = composer, built).
+- marks carry :role (:title :question :answer :aside :tool :label); theme maps role → face/size; rows of varying height, measured (needs W4).
+- Design: research/domain/interface/scroll-and-type.bl.md §3. Mock: spikes/present/web/mock.html.
+
+** W10 — the overview is ONE screen: rail | pane | index
+- root presentation lays out [rail pane index]; a mode loads task:<id> into the pane when the rail's selection changes (no RET, no C-o).
+- groups only when non-empty; rows = id·age / goal as words / two-line clamped snippet.
+- Design: scroll-and-type.bl.md §4. Mock proof: spikes/present/proof/12–14.
+
+** W11 — question index (scroll-spy) as a presentation of the thread tree; J/K jump
+
+** W12 — composer addressed to the pane's task; triage (y/n/x) on the rail moves to the next task that needs you
+
 * Acceptance (whole plan)
 
 - The default presentation reproduces today's screen on the corpus (equivalence check, 0 mismatches).
