@@ -38,3 +38,14 @@ The document grammar learns cell kinds as data, so `#+begin_task` is a cell when
 - Without the kind registered, today's partition (`:block` + `:result`) is unchanged.
 - With it, the block is a cell, and a first evaluation inserts `#+RESULTS: <id>`.
 - The BEAM and JS selftests agree.
+
+* Revised by spikes/task-cell.bl.md (bl-ed.bl.md §15.6)
+
+The full §3.3 lifecycle ran as a PACKAGE on the js-actors `bl.doc.spans` with NO change to the scanner: open, focus, refine, `:after`, reopen with `:prev`, TODO mirroring, idempotent sync.
+
+- **Do NOT make a task cell `{:kind :cell}`.** `bl.doc/cells-source` joins every `:cell` into the document's program. The package lifts `{:kind :block :lang "task"}` into its own `:task` kind.
+- **Upstream scope shrinks** to:
+  1. `write-results` accepts an `:after-kinds` set, or the package writes its own result span using bl.doc's blank-terminator rule. The spike found blank-line doubling until the insert consumed the block's trailing blank.
+  2. `clojure.edn/read-string` consults `:readers`, for `#omega/task`. The spike strips the tag first.
+- **E25:** an id-less task cell gets its derived id written into its header once, so renaming the heading cannot break `:after`.
+- Acceptance becomes: the spike's observed lifecycle reproduces as a test against the package, and `bl.doc` cells and program are unchanged by task blocks.

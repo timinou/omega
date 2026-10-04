@@ -48,3 +48,11 @@ A five-verb `History` protocol over datom + `:db.type/file`: no-op checkpoints, 
 * Acceptance
 
 The contract suite is green on the native backend, including merges, renames and conflicts. `:vcs {:backend :native}` runs a real omega day without jj installed (note: jj is not even installed on this workstation today).
+
+* Update 2026-10-03: largely pulled forward
+
+spikes/history.bl.md built the native backend, and FEAT-005 (W1b) now ships it as THE implementation. Remaining for this FUP:
+- the gaps listed in the spike's Findings §6: fuzzy renames, binary files, criss-cross merge-base, an indexed `log`, large-file diff performance;
+- making beam-lisp's autovcs redesign adopt `omega.history`'s model, or extract it into beam-lisp as a `history` namespace that omega then uses.
+
+git interop is FUP-008.

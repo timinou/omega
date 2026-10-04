@@ -1,0 +1,47 @@
+#+TITLE: datom: entity reads/writes degrade O(updates); datalog joins 10–70× slower than the raw index (upstream beam-lisp)
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: BUG-002-datom-entity-reads-writes-degrade-oupdat
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+(PLAN-003 spike round, 2026-10-03; the user's direction: "cut prototypes for the part that would look like autovcs … make spikes for this and anything else you want before we launch the plan".)
+
+* Symptoms (OBSERVED on omega's pin 2360b32e AND beam-lisp main 766fcb93)
+
+1. **One entity updated N times costs O(N) to read and write.**
+   - Both the memory and fjall stores, `/tmp/h/hot.bl.md` (reproduction inlined in spikes/history.bl.md Findings §4):
+     - 100 updates: `entity` 9 ms, `transact!` 46 ms
+     - 400: 51 / 130 ms
+     - 1600: 161 / 514 ms
+   - `lookup-ref` stays O(1), so the cost is in assembling the entity and the tx's current-value check over its history.
+2. **Datalog joins and `entity` are far slower than the raw index.**
+   - spikes/turn-read-cost.bl.md, 602 turns of one task:
+     - a 4-clause query: 1398 ms
+     - eids by query: 206 ms
+     - the same eids via `(datom/datoms db :avet :turn/task t)`: 20 ms
+     - `entity` per turn: ~0.6 ms each
+     - three `:aevt` column scans: 30–40 ms each
+3. **Related, beam-lisp runtime:** an `atom` deref copies the whole value out of its NIF cell (`BeamLisp.LazyMemo/read`). 100 `(get @a 5)` reads: 0.9 ms at 10 entries, 27 ms at 1000, 109 ms at 10000; the process dictionary is 0.3 ms flat (/tmp/h/atom2.bl.md).
+
+* Impact
+
+- omega long tasks slow themselves down: 1.2 s → 2.7 s per trivial step by step 160 (spikes/hot-task.bl.md).
+- Any long-lived fact store design must avoid updating an entity in place; history refs had to become append-only.
+
+* Where to file
+
+Upstream in beam-lisp (datom + host refs). omega works around it (C8, append-only refs and usage) and does not depend on the fix.
+
+* Acceptance (upstream)
+
+- `entity` and single-attr `transact!` on an entity with 1600 prior updates are within 2× of a fresh entity.
+- The 4-clause turn query over 602 turns is < 30 ms.
+- `deref` cost is independent of value size, or atoms are documented as small-value-only.

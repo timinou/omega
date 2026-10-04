@@ -40,3 +40,14 @@ One defserver per file in use, owning its text, its revisions and its op log as 
 - Spike 1's and spike 2's OBSERVED outputs reproduce as tests against the package namespace.
 - An agent `edit` through the port lands as an op tagged with its C4 cell id.
 - `as-of` the op's tx returns the file text at that moment.
+
+* Spike results (2026-10-03, bl-ed.bl.md §15.3–15.4)
+
+- **Op model: use spikes/convergence.bl.md, not §5.3.**
+  - §5.3's `transform` diverges on 63% of random concurrent pairs.
+  - The fix that reached 0/6000: atomic ops (replace = delete + insert); a transformed op may split; an actor tiebreak for same-point inserts; `shift-end` for delete ends; a list-vs-list transform (`tl`). The code is `atomize` / `t1` / `transform3` / `tl` in that spike.
+  - So: log entries are op lists, ops carry an actor, and the `:op` reply is a list.
+  - Port the spike's seeded 2000-case property test into test/ as the acceptance test.
+- **Publishing (E24).** A disk publish writes only *published* ops. The human's unpublished ops are an overlay that agent reads see but disk does not. spikes/file-port.bl.md observed an agent publish writing the human's half-typed line to disk.
+- **The server reuses `prelude/apply-edits`** for `edit`, so error text matches: ":old not found …; changed since you read it (rev N): <task> in cell <cell> at rev M".
+- **Buffer state lives in the server process.** Never in an atom: a beam-lisp atom deref copies the whole value.

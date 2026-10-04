@@ -1,4 +1,4 @@
-#+TITLE: W1b — omega.vcs: History protocol, jj and native backends, contract suite, per-step checkpoints
+#+TITLE: W1b — omega.history: beam-lisp native history, per-step checkpoint hook, per-path gate
 #+STATE: ITEM
 #+SESSION_ID: 159824fd6c1be22c
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
@@ -23,23 +23,33 @@ research/domain/interface/bl-ed.bl.md (runnable: `bin/bl run research/domain/int
 beam-lisp main has merged `prototype/bl-js-actors` (bl-ed, bl.doc.spans), `realm` (PLAN-158) and `autovcs` (PLAN-109), per user decision E12.
 
 * Goal
+**Revised by the spikes (bl-ed.bl.md §15.1–15.2; E6′, E17′, E22, E23).** History is beam-lisp native from day one: one implementation, `omega.history`, built from spikes/history.bl.md. jj leaves the plan; jj/git become import/export only (FUP-008). The five-verb protocol remains as the CONTRACT SUITE, the test the autovcs redesign must pass.
 
-History per tool step behind a backend-free protocol, so jj is replaceable by beam-lisp native history. The contract suite is what teaches the autovcs redesign (§5.9–5.10, E6, E17, E18).
-
+What the spike proved, on the durable store:
+- **Objects.** Content-addressed `{:text :origins}`, so line blame is written at checkpoint time (1.8 ms to read for 400 lines).
+- **Changes.** Immutable facts with who/why/when/gate/conflicts/renames; a keyframe every 32 steps.
+- **Refs.** Append-only move facts (a hot ref entity made every checkpoint slower).
+- **Operations.** Three-way merge with conflicts as data; revert-by-merge preserving blame; rename following.
+- **Cost.** ~55 ms p50 per checkpoint, flat over 1200 steps.
 * Scope
-
-- `omega/vcs.bl.md`: `History` protocol (`checkpoint! changes tree-at diff abandon!`) plus the checkpoint policy as an omega extension (on `:step/end` from C5): trailers `Omega-Task`/`Omega-Cell`; the gate before describe; on gate failure checkpoint anyway as `[gate ✗]`, leave a `:finding` trace and turn the card line red (E18).
-- `omega/vcs/jj.bl.md`: `JjHistory` over beam-lisp `vcs.jj`.
-- `omega/vcs/native.bl.md`: `NativeHistory`, datom + `:db.type/file` (spike 3).
-- `omega/vcs/test.bl.md`: ONE contract suite run against both backends.
-- Facts `{:jj/change :jj/commit :jj/op}` (or backend-neutral `:history/change`) on the step.
-- Shared working copy (E17 a); split by per-actor paths when disjoint.
-- Upstream to beam-lisp `vcs`: `checkpoint!` takes `:trailers` and returns ids; `mirror!` optional/lazy/paged; daemon hook re-seated on realm `vm.session/dispatch-command`.
-
+- `omega/history.bl.md`, ported from spikes/history.bl.md:
+  - the store (`open checkpoint! head log diff blame tree-at text-at branch! merge! revert!`) runs in ONE historian process (a defserver). Its memos live in that process's dictionary, because changes are immutable and so cacheable forever.
+  - Without one owner, spikes/step-checkpoint.bl.md observed forked history (2 of 6 changes reachable).
+- The checkpoint is a `:tool/after` HOOK (E22), never an `:on` event. Events run in spawned processes after the task moved on, so they skew and lose steps (3–5 of 6).
+- The hook records only the files the stepping task WROTE (E17′).
+  - Attribution comes from the writer: `write`/`edit` (through the C6 file port) report task + path + exact text to the historian.
+  - Not from claims, which cannot split two tasks' hunks in one file.
+  - Files changed by `sh` are found by a working-tree diff and attributed by L0 adoption (reap tags), else to actor `disk`.
+- **Gate per path (E23).** A change is gated on the files it carries; a failing gate still records the change (`:gate :fail`), leaves a `:finding` and turns the card red (E18).
+  - spikes/task-refs.bl.md: per-path gating never failed B for A's broken file (0/5); gating head ∪ my files did.
+- **Optional per-task refs.** Branch at task open, merge into main at idle/done; conflicts become a finding plus needs-input.
+  - They give per-task blame across merges.
+  - They do NOT give test isolation: that is E17 (b).
+- The contract suite in `omega/history/test.bl.md`: the spike's behaviour block as assertions, plus the gaps as they land (fuzzy renames, binary files, criss-cross merge-base, indexed log).
+- Upstream nothing to jj. beam-lisp's autovcs redesign starts from this namespace.
 * Acceptance
-
-- The contract suite is green on both backends (the spike's assertions: no-op checkpoint = nil; query by actor and by path; abandon keeps other tasks' work; a second abandon → `{:conflict paths}`).
-- A 3-step scripted task produces 3 jj changes with trailers.
-- 'what did t-N change' is one query.
-- A failing gate produces a `[gate ✗]` change plus a finding.
-- Measure the per-step cost on omega (the 0.2–0.6 s figure in §5.8 is INFERRED).
+- The contract suite is green.
+- A 3-step scripted task records exactly 3 changes, each carrying only that task's files, with `why` = "<goal> · step n" (no skew in 10 runs, two concurrent tasks).
+- A failing gate records `[gate ✗]` plus a finding on the task that wrote the broken file, and never on the other task.
+- `log {:by t}` and blame answer in < 50 ms at 1000 changes.
+- p50 checkpoint < 100 ms on the durable store, flat over 1000 steps (needs C8 so the hook's surroundings stay flat too).

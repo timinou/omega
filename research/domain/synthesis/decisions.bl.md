@@ -323,9 +323,10 @@ second cursor; agents settle contention stigmergically through marks and traces 
 with OT deferred (FUP-003). Human attention is a transient, decaying signal in the domain model. Disk is
 a projection, published on pause. Agent edits route through the C6 file port.
 
-**History & vcs (§5.8–5.10; E6, E17, E18).** Four granularities of history on one stack; jj per tool step,
-opt-in, behind an `omega.vcs` protocol with jj and native backends, because history will eventually be
-beam-lisp native. A failing gate still checkpoints, visibly marked, so the human can steer.
+**History & vcs (§5.8–5.10, §15.1–15.2; E6′, E17′, E18, E22, E23).** Four granularities of history on one
+stack. *Originally* jj per tool step behind a two-backend protocol; the spike round replaced that with one
+beam-lisp native implementation (`omega.history`), checkpointed by a `:tool/after` hook with per-path
+gating. A failing gate still checkpoints, visibly marked, so the human can steer.
 
 **Runners & realm (§8, §9; E3, E12, E16, E19).** The world is a realm `app` member that owns `.omega/db`;
 CLI and `bl doc run --tasks` attach as runners (C7); task cells can run headless. C2 is the prerequisite
@@ -336,8 +337,25 @@ realm, autovcs) are assumed merged before implementation.
 taste in `~/.config/omega/config.bl`; omega's build config in its own repo. Apps declare their own
 `env.bl` keys with a validator (C3); undeclared keys stay errors.
 
-**Build order:** waves W0–W6 plus follow-ups, §14 of the note.
-**Absorbs:** `bl-ed.bl.md` §1 decisions 1–20 and §13 E1–E21.
+**Spike round (2026-10-03, `bl-ed.bl.md` §15, `spikes/`).** Nine runnable spikes ran before launch.
+They change:
+- **History.** It is beam-lisp native from day one: `omega.history`, ~55 ms per step, line blame
+  written at checkpoint. jj leaves the plan (E6′, E17′).
+- **Checkpoints and gate.** Checkpoints are a `:tool/after` hook into one historian process (E22),
+  and the gate is per path (E23).
+- **Buffers.** The buffer op model must be the convergent one; §5.3 diverges on 63% of concurrent
+  pairs (E26).
+- **Task cells.** A task cell keeps its own span kind, never `:cell` (§15.6).
+- **Unpublished text.** The human's unpublished text is an overlay, never published by an agent's
+  write (E24).
+- **Core changes.** Two more, raised ahead of time:
+  - **C8:** the executor caches turns and cost. A long omega task already slows from 1.2 s to 2.7 s
+    per step today.
+  - **C9:** `edit` reports claim conflicts instead of dropping them.
+- **Upstream.** BUG-002 for datom performance.
+
+**Build order:** waves W0–W6 plus follow-ups, §14 of the note, with the §15.7 deltas.
+**Absorbs:** `bl-ed.bl.md` §1 decisions 1–20, §13 E1–E21, and §15 E22–E26.
 
 ---
 

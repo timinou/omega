@@ -285,6 +285,10 @@ and the outcome arrives as a message. Everywhere else, agent edits apply immedia
 
 ### 5.3 Spike 1 (RAN): rebase, cursors, attention, parked suggestion
 
+> **Caveat from §15.4:** this `transform` diverges on 63% of random concurrent pairs. It shows the
+> shape (cursors, attention, parking), not the op model. The convergent op model is in
+> `spikes/convergence.bl.md`.
+
 Positions are `[row col]`; an op is `[from to text]`.
 
 ```beam-lisp
@@ -672,6 +676,10 @@ must not break an agent's test run.
 
 ### 5.9 jj per turn — autovcs, made good (E6)
 
+> **Superseded by §15.1–15.2.** The spikes built native history (no jj) and showed checkpoints
+> must be a `:tool/after` hook with per-path gating. This section is kept for the reasoning; its
+> jj specifics are out of the plan.
+
 The autovcs branch (PLAN-109) proved the split *jj in front, datom behind*. It records one jj change per
 daemon command, mirrors jj's op log into its own datom store under `.autovcs/`, and spills the request
 intent (`:req/by :req/why`) to JSONL first, because a second process could not write the store.
@@ -743,6 +751,10 @@ Valid time can mark a checkpoint too: `:db.valid/from` = the turn's first op, so
 believed it" and "the tree as recorded" both stay queryable.
 
 ### 5.10 `omega.vcs` — one protocol, jj today, beam-lisp native tomorrow (E17)
+
+> **Superseded by §15.1:** native is today, and there is one implementation (`omega.history`). The
+> protocol below survives as the contract suite; the "lessons" survive and are confirmed by
+> `spikes/history.bl.md`.
 
 jj is a backend, not the design. Everything above (§5.9) is written against a five-verb protocol. jj
 is one implementation. A **native** implementation, history as datom facts with content-addressed
@@ -1149,6 +1161,10 @@ additive, and the current tests and playground keep their meaning.
 | **C6** | `prelude/read`, `write`, `edit` dispatch through a **file port** (`(:files sys)`, default = today's disk functions) | `omega.prelude` | replaces §5.6's advice: the package installs a buffer-backed port instead of redefining core functions. `advise` is then not needed in beam-lisp | ~15 lines |
 | **C7** | `omega.cli` attaches to the realm's world when one is running (`--warm`), cold otherwise | `omega.cli` + `bin/omega` | §8.2 runner coexistence | ~30 lines |
 
+**C8, C9: added by the spikes, see §15.5 and §15.3.** C8 = the executor caches a task's turns and
+cost (usage append-only), fixing the O(turns) re-read per step. C9 = `edit`/`write` report a claim
+conflict in their result instead of dropping it.
+
 C6 retires §5.6 L1 (advice). The cleaner design is a seam omega owns, and L0 adoption stays for writes
 that bypass it (`sh`).
 
@@ -1241,7 +1257,8 @@ queries datom. The vocabulary follows live.socket's (`[:assign] [:intent] [:navi
 
 ## 10. What bl-ed grows (ranked by what this design needs)
 
-1. **A cell-kind registry.**
+1. **A cell-kind registry.** *(Revised by §15.6: a task cell keeps its own `:task` kind and is lifted
+   in the package, never `:cell`; upstream only `write-results` changes.)*
    - `bl.doc.spans` takes `:cell-kinds` in opts, as data, keeping the shared portable scanner pure.
    - `bl.doc`'s runner dispatches evaluation by kind, and `write-results` inserts after any cell.
    - With no package, the block stays prose. That *is* the independence property.
@@ -1366,6 +1383,7 @@ Status: **user** = decided by the user · **lean** = proposed, awaiting confirma
 | E19 | world idle exit | lean | stop after `:omega {:idle 1800}` with no running/waiting task and no console; restart on the next runner (§8.5) |
 | E20 | where config lives | lean | three layers with one owner each: project policy = project `env.bl :omega`; personal taste = `~/.config/omega/config.bl`; omega's build = omega's repo `env.bl`. Precedence defaults < user < project < `.env.local.bl` (§8.4.1) |
 | E21 | app-declared `env.bl` keys | lean | apps declare key + validator as data; `bl.env` dispatches, keeps refusing undeclared keys; `:apps` becomes built-in (§8.4.1) |
+| E22–E26, E6′, E17′ | spike-driven | lean | see §15.7 (checkpoint hook, per-path gate, unpublished overlay, id-less cells, convergent op model; native history replaces jj) |
 
 ## 14. Build order
 
@@ -1381,3 +1399,156 @@ Status: **user** = decided by the user · **lean** = proposed, awaiting confirma
 | W5 | effect references; trace card; revert; copy-as-new; footprint badge | §7 end to end |
 | W6 | marks + contention traces + `:context` lines (rungs 2–3); attention privacy | two agents settle a region without a human |
 | FUP | OT/Eg-walker (FUP-003); jj workspaces for `:isolate` tasks; lazy paged mirror for external changes; footprint `File/*!` entries | — |
+
+## 15. What the spikes changed (2026-10-03, before launch)
+
+Nine runnable spikes in `spikes/` (index: `spikes/README.md`; each ends with `## Findings`). The user
+directed: *prototype the autovcs-like part from scratch* (it will be redone almost entirely anyway),
+and spike anything else before the plan launches. This section is the delta. Where it contradicts an
+earlier section, **this section wins**, and the register (§13) and waves (§14) are updated to match.
+
+### 15.1 History is beam-lisp native from day one; jj is out of the plan
+
+`spikes/history.bl.md` builds history from first principles in ~300 lines over datom:
+- **Objects.** Content-addressed in datom's blob store. A file version is one object
+  `{:text :origins}`, so **line blame is written at checkpoint time** and read in 1.8 ms (400 lines),
+  never computed by walking history.
+- **Changes.** Immutable facts: parents, delta, touched paths, who/why/when, gate verdict,
+  conflicts, renames. A keyframe every 32 steps.
+- **Refs.** Append-only move facts.
+- **Operations.** Three-way merge that commits conflicts as data; revert = merge as a new change, with
+  restored lines keeping their original blame; exact rename following for `log` and blame.
+- **Cost.** ~55 ms p50 per checkpoint on the durable store, flat over 1200 steps. The autovcs
+  checkpoint with jj measured 1.4–1.8 s.
+
+**Consequences:**
+- **E6/E17 change.** §5.9's jj backend and §5.10's protocol-with-two-backends are superseded:
+  there is one implementation, `omega.history`, native.
+- **jj and git become import/export only.** git export at the human-decision tier is FUP-008.
+- The five-verb protocol stays as the *contract suite*. It is the test the autovcs redesign must
+  pass; it is no longer a seam for jj.
+- jj is not installed on this workstation either.
+
+### 15.2 Per-step checkpoints are a hook, and the gate is per path
+
+- **Use a `:tool/after` hook, not an event.** `spikes/step-checkpoint.bl.md`: an `:on :tool/result`
+  event handler runs in a spawned process *after* the task moved on, so it skews (a "step 1" change
+  holds step 2's text) and loses steps (3–5 of 6 recorded). A `:tool/after` **hook** runs inline in
+  the task's process and gave exact checkpoints (6/6, 0 skew, 0 pollution) in every run. Cost: it
+  blocks the task ~160–200 ms per step today; see C8 for the part that is not history.
+- **One owner process.** Without a single "historian", the history forked: 2 of 6 changes were
+  reachable, from a racy head read-then-write plus per-process memos.
+- **Per-path attribution.** A change carries only the files the stepping task wrote. Attributing
+  "everything changed since the last checkpoint" polluted 2–3 of 3 changes with the other task's file.
+- **Per-path gate.** `spikes/task-refs.bl.md`: gating only the files the change carries gives honest
+  blame on ONE shared `main`. B was never failed for A's broken file (0/5 runs). Gating "head ∪ my
+  files" failed B for A's file.
+- **Per-task refs are optional.** They add a real end-of-task merge with per-task line blame (OBSERVED:
+  `A3/l2/l3/l4/B5`, each line blamed on its writer), but they do **not** give test isolation. Under
+  E17 (a) the shared directory still shows A's broken file to B's own `sh` tests.
+  - **E23:** history records stay honest; test isolation, if wanted, is E17 (b) (a directory per task).
+- **Attribution source.** Attribution comes from the writer, not from claims. `write`/`edit` know the
+  task and the exact text; claims are per path and cannot split two tasks' hunks in one file.
+
+### 15.3 C6 measured; edit drops the claim conflict
+
+`spikes/file-port.bl.md`:
+- **C6 is 29 changed lines** (prelude +17/−10, `task/start-system` must forward `:files`). It touches
+  read/write/edit only.
+- An agent edit through a buffer server behaves as designed: the agent reads unsaved buffer text, and
+  the op carries actor and cell. A stale `:old` is refused with "changed since you read it (rev 1): t-3
+  in cell t-3.123 at rev 2".
+- The cell id key is `:omega/cell`. Its value today is `<task>.<n>`, which is why C4 exists.
+- **Open question raised:** an agent's publish wrote the human's *unpublished* text to disk too. Rule
+  (E24): a disk publish writes only *published* ops. The server keeps the human's unpublished ops as a
+  pending overlay, shown to agents' reads but never written to disk until the human pauses.
+- **Claims are advisory.** `spikes/claims-advisory.bl.md` corrects a mis-diagnosis in task-refs: two
+  tasks edited one file under the default policy, and both landed. But `prelude/edit` writes, then
+  calls `claim!`, and **drops** the `{:conflict …}`, so the agent never learns another task holds the
+  path. Fix (C9): put the conflict in the tool result. That is rung 2 of the consensus ladder, for free.
+
+### 15.4 The buffer rebase in §5.3 diverges; the fix is known
+
+`spikes/convergence.bl.md`, a 2000-case property test over two actors and random ops:
+- **§5.3's `transform` violates convergence in 63% of cases** (3.6% even for single-op pairs).
+  Failures: same-position inserts with no tiebreak, inserts inside a replaced range, overlapping
+  replaces, and deletes spanning another's insert.
+- **Tiebreak + clip alone:** 42%.
+- **The fix that reached 0/6000 (3 seeds):**
+  - atomic ops (replace = delete + insert);
+  - a transformed op may split into two;
+  - an actor tiebreak for same-point inserts;
+  - delete ends shift differently from starts (`shift-end`);
+  - a list-vs-list transform for multi-op submissions.
+- **Consequences for the buffer server:** log entries are op lists; ops carry an actor; the `:op`
+  reply is a list.
+- **What it does not give:** intent preservation (keystroke interleaving, orphaned inserts,
+  replace-vs-replace concatenation, per-actor undo). That is why FUP-003 (Eg-walker) stays, after W1.
+- Spike 1 in §5.3 is kept as the first sketch; FEAT-004 builds on the convergence spike's `transform3`.
+
+### 15.5 omega's long tasks slow themselves down today (C8)
+
+`spikes/hot-task.bl.md` + `spikes/turn-read-cost.bl.md`, independent of bl-ed:
+- A scripted task of trivial steps went from **1.2 s to 2.7 s per step by step 160**, with a model
+  that answers instantly.
+- **Main cause: `loop/turns` re-reads every turn from datom on every step** (`request`), plus
+  `turn-count` in `record!`. That is O(turns) per step: 0.84 s at 300 turns, so a long task costs
+  O(turns²) overall.
+- **The underlying datom costs:**
+  - a 4-clause query over 602 turns: 1.4 s;
+  - the same ids from the raw `:avet` index: 20 ms;
+  - per-entity reads: ~0.6 ms each.
+- **Also:**
+  - `:task/cost` is rewritten per step, and an entity updated N times reads and writes in O(N)
+    (`spikes/history.bl.md` §4, OBSERVED on the pin and on beam-lisp main);
+  - `trace/claim!` costs 11 → 63 ms (one spike saw ~100 ms) and runs on every write/edit;
+  - a beam-lisp `atom` deref copies the whole value (O(size)), so caches belong in a process.
+- **C8 (new core change, raised ahead of time per E15).** The executor process caches the task's turn
+  list and running cost: one writer per task, so exact. `request` and `turn-count` read the cache.
+  Usage becomes append-only per turn, summed on read. The store stays the truth for recovery and other
+  readers. Without C8, every bl-ed feature that adds per-step work (checkpoints, marks, attention lines)
+  lands on an already-quadratic loop.
+- **Upstream (BUG-002, filed for beam-lisp):** datalog joins and `entity` are 10–70× slower than the
+  raw index, and entities slow down with every update.
+
+### 15.6 The `:task` cell works as a package — with its own span kind
+
+`spikes/task-cell.bl.md`, on the js-actors branch's `bl.doc.spans` (it is not in omega's pin):
+- The lifecycle of §3.3 ran against a real omega system **without changing `bl.doc.spans`**: open,
+  focus, refine (the model receives the edited goal with heading context), `:after` waiting (a
+  cancelled dependency does not count as done), reopen with `:prev`, TODO mirroring, idempotent sync.
+- **Reverses §10.1:** a task cell must NOT become `{:kind :cell}`, because `bl.doc/cells-source` joins
+  every `:cell` into the document's program. The package keeps its own `:task` kind, lifted from
+  `{:kind :block :lang "task"}`. The upstream change shrinks to `write-results` accepting other kinds
+  to insert after.
+- References parse as EDN (data, never evaluated). `clojure.edn` does not consult `:readers` yet, so
+  the `#omega/task` tag is stripped before reading until that lands.
+- **E25:** a task cell evaluated without `:id` gets its derived id written into its header once, so
+  renaming the heading cannot break `:after`.
+
+### 15.7 Register and wave deltas
+
+Register (§13) additions and changes: **E6 and E17 are revised** (native history, no jj); **E13 is
+unchanged** (the file port; C6 measured); new **E22–E26**:
+
+| # | decision | status | resolution |
+|---|---|---|---|
+| E6′ | history tier | lean (supersedes E6 (a)'s jj) | `omega.history`, beam-lisp native, one change per tool step; jj/git import/export only (FUP-008) |
+| E17′ | concurrent tasks vs history | lean (refines E17 (a)) | one shared working copy; per-path attribution from the writer; optional per-task refs merged at idle/done |
+| E22 | checkpoint mechanism | lean | a `:tool/after` hook into ONE historian process; never `:on` events |
+| E23 | gate scope | lean | per path: a change is gated on the files it carries; test isolation is E17 (b), not the gate |
+| E24 | unpublished human text | lean | a disk publish writes published ops only; unpublished human ops are an overlay visible to agent reads |
+| E25 | id-less task cells | lean | the derived id is written into the header once, by actor `omega` |
+| E26 | buffer op model | lean | atomic ops + split + actor tiebreak + list transform (convergence spike); Eg-walker stays FUP-003 |
+
+Core changes (§8.4) gain **C8** (executor caches turns and cost; usage append-only) and **C9** (`edit`
+and `write` report claim conflicts in their result). C5 is downgraded: the `:tool/after` hook already
+gives exact step boundaries; `:step/end` stays a nice-to-have.
+
+Waves (§14):
+- W0 gains C8 and C9; they come first, because every later wave adds per-step work.
+- W1b becomes `omega.history` (native) + the checkpoint hook + per-path gate, built from
+  `spikes/history.bl.md` and the contract suite. jj work leaves the plan.
+- W1 (FEAT-004) builds the buffer server on the convergence spike's op model.
+- W1c shrinks: the `:task` kind is lifted in the package; upstream is only `write-results`.
+

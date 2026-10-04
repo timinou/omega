@@ -41,3 +41,18 @@ The kernel changes the bl-ed design needs, each additive and named ahead of time
 - C4: an effectful eval's `:omega/cell` matches the tool-use id in the recorded turn.
 - C5: a scripted 3-step run emits exactly 3 `:step/end`.
 - omega's full suite and `bin/bl run omega.bl.md` stay green.
+
+* Spike results (2026-10-03, research/domain/interface/bl-ed.bl.md §15)
+
+W0 now also carries two new core changes. They come FIRST, because every later wave adds per-step work:
+
+- **C8: the executor caches a task's turns and running cost.**
+  - Evidence: spikes/hot-task.bl.md and spikes/turn-read-cost.bl.md. A scripted task of trivial steps went from 1.2 s to 2.7 s per step by step 160. `loop/turns` re-reads every turn from datom on every step (0.84 s at 300 turns) and `record!`'s `turn-count` queries again.
+  - Fix: the process that runs `turn!` owns an in-process turn list and count. It appends on `record!`; `request` and `turn-count` read it. One writer per task, so the cache is exact.
+  - Usage becomes append-only per turn (`:turn/usage` already exists), with cost = sum on read. Stop rewriting `:task/cost` in place: an entity updated N times reads and writes in O(N).
+  - Recovery reads the store once.
+  - Acceptance: the hot-task spike's per-20-step wall time is flat (±20%) from step 20 to 160, and `request` at 300 turns is < 20 ms.
+- **C9: `edit` and `write` report a claim conflict in their result** instead of dropping it (spikes/claims-advisory.bl.md). Example: "applied 1 edit(s) to a.py (t-1 also holds a.py)". Still advisory, never a lock.
+  - Acceptance: two tasks editing one file each get a result naming the other.
+- **C5 is downgraded.** A `:tool/after` hook already gives exact step boundaries (spikes/step-checkpoint.bl.md). `:step/end` is optional; skip it unless W1b needs it.
+- **Also measure** `trace/claim!` (11–100 ms per call in the spikes, on every write/edit). If it is the same hot-entity effect, make claims append-only facts.

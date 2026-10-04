@@ -1,0 +1,31 @@
+#+TITLE: omega.history ↔ git: export changes as commits at the human tier, import an existing repo
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FUP-008-omega-history-git-export-changes-as-comm
+
+* Initial Message
+
+look at this and look at bl-ed which is in one f the worktrees of beam lisp. how would an omega that lives as bl-ed config files (a la Emacs) look like? think about full-featured but bl-ed native. you are very encouraged to think of bl-ed improvements through this work.
+
+this is very much design only for now. go investigate deeply and surprise me with your insights, and then we can talk about it
+
+* Initial Message
+
+(PLAN-003 spike round, 2026-10-03.) User: "cut prototypes for the part that would look like autovcs, because we'll have to redo it from almost scratch anyway."
+
+* Context
+
+spikes/history.bl.md made history beam-lisp native (bl-ed.bl.md §15.1). jj leaves the plan, but git stays the team's exchange format.
+
+* Goal
+
+- **Export.** A range of omega.history changes → git commits, squashed per task or per human checkpoint. Trailers: `Omega-Task`, `Omega-Cell`, `Omega-Change`.
+- **Import.** Seed an omega.history from a repo's HEAD tree. Optionally walk history to seed blame origins: one change per commit, `by` = the author.
+- **Round-trip.** A file edited in git outside omega is adopted as a change by actor `git:<author>`.
+
+* Acceptance
+
+- Exporting then importing preserves trees and per-line origins at commit granularity.
+- `git log` shows the trailers.
+- Works without jj installed.

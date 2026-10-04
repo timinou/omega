@@ -85,3 +85,16 @@ Docs and research filed (2026-10-03):
 - research/domain/README.bl.md (index row + start-here entry)
 
 NOTE [2026-10-03]: Design phase complete: every E-row in bl-ed.bl.md §13 is user-decided or an unobjected lean; waves filed as FEAT-001–011; follow-ups FUP-003–007; BUG-001. Awaiting user review before implementation (which waits on the beam-lisp merges, E12).
+
+NOTE [2026-10-04]: Spike round before launch (user, 2026-10-03: "cut prototypes for the part that would look like autovcs, because we'll have to redo it from almost scratch anyway. make spikes for this and anything else you want before we launch the plan"; then "work autonomously … commit as you go").
+
+Nine spikes in spikes/ (index spikes/README.md), all runnable. The delta is in bl-ed.bl.md §15:
+- history.bl.md: native history from scratch. ~55 ms p50/step durable, flat over 1200 steps; blame written at checkpoint; merge/revert/rename. jj leaves the plan (E6′, E17′; FEAT-005 rewritten as omega.history).
+- step-checkpoint + task-refs: checkpoints must be a :tool/after hook into one historian (events skew/lose steps); attribute from the writer; gate per path (E22, E23); per-task refs optional, no test isolation.
+- file-port: C6 = 29 lines. An agent publish leaked the human's unpublished text → E24 overlay.
+- claims-advisory: claims never block, but edit drops the conflict → C9.
+- convergence: §5.3 rebase diverges on 63% of pairs; atomic-op transform → 0/6000 (E26; FEAT-004 updated).
+- hot-task + turn-read-cost: a long omega task slows 1.2 s → 2.7 s/step today (loop/turns O(turns) per step) → C8 first in W0 (FEAT-001 updated); BUG-002 upstream datom perf.
+- task-cell (on the js-actors bl.doc.spans): the :task cell works as a package with no scanner change; it must keep its own span kind (FEAT-006 updated, E25).
+
+New items: BUG-002, FUP-008. FUP-004 is largely pulled forward.
