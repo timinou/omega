@@ -1,0 +1,12 @@
+#+TITLE: omega-runs-on-a-pinned-beam-lisp-build--
+
+** ITEM omega runs on a pinned beam-lisp build, not the live checkout
+:PROPERTIES:
+:CUSTOM_ID: CON-omega-runs-on-a-pinned-beam-lisp-build--
+:KIND: concept
+:CONFIDENCE: 0.6
+:CREATED: 2026-10-03T09:18:34Z
+:END:
+:RELATIONS:
+:END:
+omega's env.bl pins `:bl "commit:<sha>"` (2360b32e as of 2026-10-03); bin/bl resolves it via the ~/.local/bin/bl launcher (BL_USE from env.bl) and always starts the VM in omega's root (a cwd with a stray build/ dir, e.g. /tmp, or another beam-lisp tree broke the pinned image). OMEGA_BL=<bl> runs any other bl. Why: uncommitted priv/boot edits in the main checkout make every run recompile the boot tier for minutes; under load that hung tasks' test runs. Rebuilding main = `bin/bl build` (run with TMPDIR off /tmp: /tmp tmpfs hit "Disk quota exceeded" mid-build and left build/ half-written → move build/ aside and rebuild), then `bl seed --check`. To move the pin: run bin/bl test + bin/omega-headless with BL_USE=commit:<sha>, then edit env.bl.
