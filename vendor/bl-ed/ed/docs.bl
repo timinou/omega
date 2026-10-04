@@ -92,7 +92,9 @@
                   q (t/clamp (:text fresh) p)]
               (-> (keep-session ed fresh)
                   (assoc :doc meta :obj-index (index-objects (:objects ev))
-                         :sels [{:anchor q :head q}] :primary 0 :view (:view ed) :mode :normal)
+                         :sels [{:anchor q :head q}] :primary 0 :view (:view ed) :mode :normal
+                         ; a refresh is not news: keep what the echo area says
+                         :message (:message ed))
                   (c/scroll-to-cursor)))
           (c/dirty? ed) (c/message (assoc-in ed [:doc :stale] (:rev ev)) "changed elsewhere since you loaded it — your copy is kept; C-s overwrites")
           :else (let [ed2 (c/replace-text ed (:text ev))]

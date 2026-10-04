@@ -42,7 +42,7 @@
         (when (and (contains? DEFS head) (some? nm))
           (first (clojure.string/split nm #"[\)\[\]]")))))))
 
-(defn- balanced-end
+(defn balanced-end
   "The offset just past the `)` that closes the list opening at `from` in the
    codepoint vector `cps` (strings, chars and comments skipped), or nil. The
    reader's own :end-offset stops one codepoint short on a form whose symbol
@@ -67,20 +67,36 @@
             (contains? #{41 93 125} c) (if (= depth 1) (inc i) (recur (inc i) (dec depth) false false false))
             :else (recur (inc i) depth false false false)))))))
 
+(defn top-forms
+  "[{:text :line}] of the top-level lists in source `src`, found by one scan
+   (comments, strings and char literals skipped). Not the reader's positions:
+   its :offset drifts by a few codepoints deep into a file with multi-codepoint
+   glyphs in strings (OBSERVED on the pin, src/omega/ed/render.bl), which cut
+   forms mid-symbol."
+  [src]
+  (let [cps (vec (unicode/characters_to_list src))
+        n (count cps)]
+    (loop [i 0 line 1 out []]
+      (if (>= i n)
+        out
+        (let [c (nth cps i)]
+          (cond
+            (= c 10) (recur (inc i) (inc line) out)
+            (= c 59) (let [j (loop [j i] (if (or (>= j n) (= 10 (nth cps j))) j (recur (inc j))))] (recur j line out))
+            (= c 40)
+              (let [end (or (balanced-end cps i) n)
+                    body (subvec cps i end)
+                    nl (count (filter (fn [x] (= x 10)) body))]
+                (recur end (+ line nl) (conj out {:text (unicode/characters_to_binary (apply list body)) :line line})))
+            :else (recur (inc i) line out)))))))
+
 (defn file-defs
   "{var-name {:hash :line}} of a source file's top-level defs."
   [path]
-  (let [src (File/read! path)
-        cps (vec (unicode/characters_to_list src))
-        forms (BeamLisp.Ns.Reader/read_string src path)]
-    (reduce (fn [m f]
-              (let [pos (BeamLisp.Ns.Reader-node/node-pos f)
-                    from (get pos :offset)
-                    end (when (some? from) (or (balanced-end cps from) (get pos :end-offset)))
-                    text (when (some? end) (unicode/characters_to_binary (apply list (subvec cps from end))))
-                    nm (def-name text)]
-                (if (nil? nm) m (assoc m nm {:hash (try (form-hash text) (catch _ nil)) :line (get pos :line)}))))
-            {} forms)))
+  (reduce (fn [m {:keys [text line]}]
+            (let [nm (def-name text)]
+              (if (nil? nm) m (assoc m nm {:hash (try (form-hash text) (catch _ nil)) :line line}))))
+          {} (top-forms (File/read! path))))
 
 (defn source-path [ns] (try (BeamLisp.Loader/source_path ns) (catch _ nil)))
 
@@ -92,11 +108,15 @@
   ([ns loaded path]
   (let [live (set (BeamLisp.Env/own_names ns))
         file (if (and path (File/regular? path)) (file-defs path) {})
-        names (sort (distinct (concat live (keys file))))]
+        names (sort (distinct (concat live (keys file))))
+        ; beam-lisp interns a namespace's vars on first use (OBSERVED: 0 vars
+        ; before the first call, all after) — an untouched ns is not "unloaded"
+        lazy? (and (empty? live) (seq file))]
     (mapv (fn [v]
             (let [f (get file v) in-image? (contains? live v)]
               {:var v :line (:line f)
                :state (cond
+                        lazy? :lazy
                         (and in-image? (nil? f)) :live-only
                         (and f (not in-image?)) :not-loaded
                         (nil? (get loaded v)) :unknown
@@ -106,7 +126,8 @@
 
 (def ^:private MARK {:matches "✓ matches its source" :changed "✎ source changed since loaded (r reloads this ns)"
                      :live-only "⚠ live only: not in the file (x undefines)" :not-loaded "+ in the file, not loaded"
-                     :unknown "· loaded before bl-ed saw it"})
+                     :unknown "· loaded before bl-ed saw it"
+                     :lazy "· not interned yet (the namespace loads its vars on first use)"})
 
 (defn render-ns
   "The `bl:<ns>` document."

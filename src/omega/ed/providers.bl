@@ -43,7 +43,7 @@
   (File/mkdir_p! (Path/dirname path))
   (File/write! path (pr-str v)))
 
-(def SCRATCH-SEED "#+TITLE: omega scratch — tasks with no home, and your notes\n\n")
+(def SCRATCH-SEED "#+TITLE: omega scratch — tasks with no home, and your notes\n")
 
 (defn- rev [s] (str (erlang/phash2 (str s) 4294967296)))
 

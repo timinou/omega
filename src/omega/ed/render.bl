@@ -152,7 +152,9 @@
                 (emit (str "#+TITLE: " id " · " (one-line (or (:title row) (:goal row)) 60) " · " (glyph (:status row)) " " (word (:status row)) " · " (age (:age-ms row)))
                       {:type "omega/task" :key id})
                 (emit (str "home: " (home-label homes id) (when (:owner row) (str " · parent: " (:owner row))) " · effects:" id))
-                (emit "C-Enter re-runs a cell as you (a steer) · c copies it to scratch · s say · y/n answer · C-o back")
+                (emit (if (contains? #{:done :failed :cancelled} (:status row))
+                        "finished: its cells are history · c copies one to scratch to run it in a new task · C-o back"
+                        "C-Enter re-runs a cell as you (a steer) · c copies it to scratch · s say · y/n answer · C-o back"))
                 (emit ""))
         acc (if (pos? hidden) (emit acc (str "* … " hidden " earlier turns (RET shows all)") {:type "omega/expand" :key (str "task:" id "?all=1")}) acc)
         acc (reduce

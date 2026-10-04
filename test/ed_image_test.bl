@@ -33,6 +33,20 @@
       (is (= {"a" :changed "b" :matches "c" :not-loaded "live" :live-only}
              (states (img/var-states ns loaded path)))))))
 
+(deftest an-untouched-namespace-is-lazy-not-unloaded
+  (let [{:keys [path ns]} (fixture)]
+    (File/write! path (str "(ns " ns ")\n(defn a [] 1)\n"))
+    (is (= [:lazy] (map :state (img/var-states ns {} path))))))
+
+(deftest every-def-of-a-real-file-is-found
+  ;; omega's own renderer: long, with multi-codepoint glyphs in its strings —
+  ;; where the reader's positions drift (the bug this guards)
+  (let [path (str (System/get_env "OMEGA_HOME") "/src/omega/ed/render.bl")
+        path (if (File/regular? path) path "src/omega/ed/render.bl")
+        defs (img/file-defs path)]
+    (is (every? (fn [v] (contains? defs v)) ["age" "overview" "task-doc" "query-doc" "effects-doc" "task-id?"]))
+    (is (every? some? (map :hash (vals defs))) "every form slices whole, so every form hashes")))
+
 (deftest the-document-marks-rows-as-vars
   (let [d (img/render-ns "x.y" [{:var "a" :state :changed :line 2} {:var "b" :state :live-only}] "/p/x/y.bl" [])]
     (is (str/includes? (:text d) "#+TITLE: bl:x.y · 2 vars · 1 changed · 1 live-only"))
