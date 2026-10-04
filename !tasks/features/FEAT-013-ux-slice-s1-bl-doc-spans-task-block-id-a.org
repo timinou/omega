@@ -1,0 +1,39 @@
+#+TITLE: UX slice S1 — bl.doc.spans: task block :id and write-results after an id'd block (beam-lisp)
+#+STATE: ITEM
+#+SESSION_ID: 15992c6b7bd3ff06
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl]]
+#+CUSTOM_ID: FEAT-013-ux-slice-s1-bl-doc-spans-task-block-id-a
+
+* Initial Message
+
+ok this is all good and realise that we designed a lot. what's the slice that's specifically about user experience? what would it look like? what does it leave out, and how does it make it amenable to it next? you can take a look at the --js-actors and the main branch of beam lisp next, new stuff has emerged there
+
+* Initial Message
+
+(2026-10-04) "what's the slice that's specifically about user experience? what would it look like? what does it leave out, and how does it make it amenable to it next?" — then: "great plan. record this. commit as you go / UX-Q1: yes for your req / UX-Q2: ok sure, put the load package code live as a fast-follow FUP with ref to that file / UX-Q3: make a scratch pad for the tasks showed there? even if it's a virtual scratch pad? only implement that if you thnk this will open up more unforeseen features"
+
+* Source of truth
+
+research/domain/interface/ux-slice.bl.md (decided: E27–E29 in bl-ed.bl.md §13; §15.10). Parent: PLAN-003. Built on beam-lisp main 55f0a2af (split cells / system.place, `:` as real Beam Lisp in the page, the bl-ed effects loop). Does NOT wait for FEAT-001 (re-pin) and changes no omega core namespace.
+
+* Goal
+
+A `#+begin_task :id hex` block gets a result span written after it by the one shared writer, so bl-ed can put the `#omega/task` reference line under a task block (ux-slice §3.1).
+
+* Scope (beam-lisp `priv/std/bl/doc/spans.bl`)
+
+- `org-span-at`: a `:block` span reads `:id` from its header with the same rules as `src-attrs` (`:explicit-id`). Markdown is out of scope (task blocks are org only).
+- `write-results`: a missing result for an id is inserted directly after a `:block` whose `:explicit-id` equals it, exactly as after a `:cell` (org: no extra blank; keep the parse→write→parse fixpoint).
+- `assign-ids` is unchanged: blocks never become cells, so `bl.doc/cells` and the document's program are unchanged (FEAT-006's revised rule).
+
+* Edge
+
+- A block without `:id` gets no result (the console always writes an id, E25).
+- An existing `#+RESULTS: hex` after the block is rewritten in place (already true).
+- A `:cell` and a `:block` with the same id: the cell wins; test it.
+
+* Acceptance
+
+- New tests in the spans test file run on BEAM and on JS (the selftest/differential that already covers spans).
+- `bl doc run` on a document containing a task block produces identical cells, program and results as without the change.
+- Supersedes upstream item 1 of FEAT-006's revision.

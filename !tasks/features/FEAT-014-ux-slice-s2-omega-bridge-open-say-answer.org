@@ -1,0 +1,41 @@
+#+TITLE: UX slice S2 — omega bridge: open/say/answer/tasks + scratch pad over loopback, bin/omega serve
+#+STATE: ITEM
+#+SESSION_ID: 15992c6b7bd3ff06
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl]]
+#+CUSTOM_ID: FEAT-014-ux-slice-s2-omega-bridge-open-say-answer
+
+* Initial Message
+
+ok this is all good and realise that we designed a lot. what's the slice that's specifically about user experience? what would it look like? what does it leave out, and how does it make it amenable to it next? you can take a look at the --js-actors and the main branch of beam lisp next, new stuff has emerged there
+
+* Initial Message
+
+(2026-10-04) "what's the slice that's specifically about user experience? what would it look like? what does it leave out, and how does it make it amenable to it next?" — then: "great plan. record this. commit as you go / UX-Q1: yes for your req / UX-Q2: ok sure, put the load package code live as a fast-follow FUP with ref to that file / UX-Q3: make a scratch pad for the tasks showed there? even if it's a virtual scratch pad? only implement that if you thnk this will open up more unforeseen features"
+
+* Source of truth
+
+research/domain/interface/ux-slice.bl.md (decided: E27–E29 in bl-ed.bl.md §13; §15.10). Parent: PLAN-003. Built on beam-lisp main 55f0a2af (split cells / system.place, `:` as real Beam Lisp in the page, the bl-ed effects loop). Does NOT wait for FEAT-001 (re-pin) and changes no omega core namespace.
+
+* Goal
+
+bl-ed (another VM) can open, steer, answer and watch omega tasks, and read/write the virtual scratch pad (ux-slice §3.3, §2.7).
+
+* Scope
+
+New `src/omega/ed/bridge.bl` (no change to omega core namespaces):
+- `POST /open {goal scope}` → `{id}` via `task/open!` (existing keys only). Without a cell (homeless), also append `* <title>` + `#+begin_task :id <id>` / goal / `#+end_task` + `#+RESULTS: <id>` / `: #omega/task {:id … :goal <digest>}` to the scratch pad.
+- `POST /say {id text}` via `task/say!`; `POST /answer {msg choice}` via `actor/reply!`.
+- `GET /tasks?ids=…` → `{id row}` from `omega.ui.model/task-row`, plus `:summary` (`:task/result`) and `:touched` for terminal tasks.
+- `GET /scratch` → `{text hash}`; `POST /scratch {text base}` → `{ok hash}` or 409 when base ≠ current hash. Stored in `.omega/scratch.bl.org` (gitignored). The first GET seeds `#+TITLE: omega scratch — tasks with no home`.
+- `bin/omega serve`: start the world + bridge on loopback, write the URL to `.omega/url`, remove it on exit.
+
+* Edge
+
+- Loopback only; JSON bodies; unknown task ids answer `{}` rows, not errors.
+- The scratch append and a human save race: both go through the base-hash check; the append retries on its own fresh read.
+
+* Acceptance
+
+- One test with a scripted model: open → poll shows :running → the model asks → poll shows the ask → answer → done, with the summary in the row; all over HTTP.
+- Scratch: homeless open appends exactly one task block; a stale-base POST gets 409.
+- omega's full suite stays green.

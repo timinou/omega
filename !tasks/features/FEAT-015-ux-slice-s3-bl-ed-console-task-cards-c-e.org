@@ -1,0 +1,42 @@
+#+TITLE: UX slice S3 — bl-ed console: task cards, C-Enter on task blocks, card-row answers, /api/omega forward
+#+STATE: ITEM
+#+SESSION_ID: 15992c6b7bd3ff06
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl]]
+#+CUSTOM_ID: FEAT-015-ux-slice-s3-bl-ed-console-task-cards-c-e
+#+DEPENDS: FEAT-013-ux-slice-s1-bl-doc-spans-task-block-id-a FEAT-014-ux-slice-s2-omega-bridge-open-say-answer
+
+* Initial Message
+
+ok this is all good and realise that we designed a lot. what's the slice that's specifically about user experience? what would it look like? what does it leave out, and how does it make it amenable to it next? you can take a look at the --js-actors and the main branch of beam lisp next, new stuff has emerged there
+
+* Initial Message
+
+(2026-10-04) "what's the slice that's specifically about user experience? what would it look like? what does it leave out, and how does it make it amenable to it next?" — then: "great plan. record this. commit as you go / UX-Q1: yes for your req / UX-Q2: ok sure, put the load package code live as a fast-follow FUP with ref to that file / UX-Q3: make a scratch pad for the tasks showed there? even if it's a virtual scratch pad? only implement that if you thnk this will open up more unforeseen features"
+
+* Source of truth
+
+research/domain/interface/ux-slice.bl.md (decided: E27–E29 in bl-ed.bl.md §13; §15.10). Parent: PLAN-003. Built on beam-lisp main 55f0a2af (split cells / system.place, `:` as real Beam Lisp in the page, the bl-ed effects loop). Does NOT wait for FEAT-001 (re-pin) and changes no omega core namespace.
+
+* Goal
+
+The slice as a human sees it (ux-slice §2.1–2.6): ✦ gutter mark, one-line card drawn in place of the `#omega/task` result row, contextual `y`/`n`/`RET` answers (E27), the §3.3 evaluation table, `:` commands.
+
+* Scope (beam-lisp `apps/bl-ed`; console code in `ed/omega.bl`, E28)
+
+- `ed/omega.bl`: the evaluation table (open / focus / refine with goal digest / new task with `:prev`), card model from rows, `(omega/tasks) (omega/open g) (omega/say id text)`.
+- `ed/main.bl`: events `:tasks {id → row}` and `:task-opened {:block-id :id :goal}` (writes the identity result via `bl.doc.spans/write-results`); terminal rows rewrite the result ONCE with `:status :summary :touched`; render: `:card` on a result row whose value is `#omega/task`, `:place "agent"` on a task block's first row; status line `⚑ n` for open asks.
+- `ed/keymap.bl`: card-row contextual keymap merged into `km/keymap-of` (`y` `n` `RET`); `y` yanks elsewhere.
+- `web/host.mjs`: effects `:task-open :task-say :task-answer :task-watch` (1 s poll only while a card is visible or an ask is open); card drawing; tones shared with omega `ui/theme.bl STATUS`.
+- `serve.bl`: `/api/omega/*` forwards to `OMEGA_URL` or `<BLED_ROOT>/.omega/url`; `/api/place` marks task blocks `agent`; `/api/save` takes a `base` hash and answers 409 *changed on disk* when it differs.
+
+* Edge
+
+- No omega world: dimmed ✦ with the `bin/omega serve` hint; C-Enter shows the same message, writes nothing.
+- The card replaces only the DRAWING of its row: motions, folding and byte-for-byte round trip unchanged (the existing round-trip test must still pass on all .bl.org files).
+- A terminal rewrite happens only if the console has the file open; otherwise on the next open.
+
+* Acceptance
+
+- `drive.test.mjs` cases with a fake bridge: open → card running → ask → `y` answers → done → result rewritten once; `y` outside a card yanks; save with a stale base is refused with the message.
+- `ed.selftest` green on BEAM and JS.
+- Real run (S5): a human opens, answers and finishes a task in bl-ed; `apps/bl-ed/proof/10-task-card.png`.

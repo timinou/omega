@@ -1,0 +1,42 @@
+#+TITLE: Load omega's console code into bl-ed as a live package (fast-follow of the UX slice)
+#+STATE: ITEM
+#+SESSION_ID: 15992c6b7bd3ff06
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl]]
+#+CUSTOM_ID: FUP-010-load-omegas-console-code-into-bl-ed-as-a
+#+DEPENDS: FEAT-015-ux-slice-s3-bl-ed-console-task-cards-c-e
+
+* Initial Message
+
+ok this is all good and realise that we designed a lot. what's the slice that's specifically about user experience? what would it look like? what does it leave out, and how does it make it amenable to it next? you can take a look at the --js-actors and the main branch of beam lisp next, new stuff has emerged there
+
+* Initial Message
+
+(2026-10-04) "what's the slice that's specifically about user experience? what would it look like? what does it leave out, and how does it make it amenable to it next?" — then: "great plan. record this. commit as you go / UX-Q1: yes for your req / UX-Q2: ok sure, put the load package code live as a fast-follow FUP with ref to that file / UX-Q3: make a scratch pad for the tasks showed there? even if it's a virtual scratch pad? only implement that if you thnk this will open up more unforeseen features"
+
+* Source of truth
+
+research/domain/interface/ux-slice.bl.md (decided: E27–E29 in bl-ed.bl.md §13; §15.10). Parent: PLAN-003. Built on beam-lisp main 55f0a2af (split cells / system.place, `:` as real Beam Lisp in the page, the bl-ed effects loop). Does NOT wait for FEAT-001 (re-pin) and changes no omega core namespace.
+
+* Goal
+
+E28 fast-follow. The slice's console code lives in `apps/bl-ed/ed/omega.bl` (beam-lisp repo), compiled into bl-ed's bundle. Move it into omega's package (`omega/ed/omega.bl.org`, bl-ed.bl.md §11) and load it into a running bl-ed, so omega ships its console half without a bl-ed rebuild.
+
+* Reference
+
+- The file to move: `~/code/undefine/beam-lisp/apps/bl-ed/ed/omega.bl` (created by FEAT-015).
+- Design: bl-ed.bl.md §10.3 (extension points are tables; hot-load = compile on the warm VM with `priv/lib/js/emit.bl`, `import()`, merge) and §11 (`ed/defpackage`).
+- New since: `:` already compiles and runs full Beam Lisp in the page (FUP-134 on beam-lisp main) — an in-page compile may replace the VM-side emit.
+
+* Scope
+
+- `ed/use` / `ed/defpackage` merging commands, keys, cell kinds, decorations, effect handlers, document providers; exact uninstall.
+- Load from `~/.bl-ed/init.bl.org` `(ed/use omega)`.
+
+* Acceptance
+
+- bl-ed built WITHOUT `ed/omega.bl` + `(ed/use omega)` gives the same drive-test results as FEAT-015/016.
+- Unloading removes every key, command and decoration it added.
+
+* Related
+
+FUP-007 (late binding of internal ed.* fns) is different: packages need tables, not slots.
