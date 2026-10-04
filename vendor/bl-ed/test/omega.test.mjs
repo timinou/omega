@@ -203,6 +203,20 @@ test("a refreshed read-only view keeps the cursor; a refreshed dirty file keeps 
   assert.equal(save.base, "p2");
 });
 
+test("a refresh of a read-only view keeps what you are typing in the minibuffer", () => {
+  const s = session(PLAN);
+  s.send(ev(K("type"), K("doc"), K("path"), "omega:overview", K("text"), "a\nb", K("rev"), "r1", K("read-only?"), true, K("objects"), toBL([]), K("visit?"), true));
+  s.keys("<sp> a n");
+  s.send(ev(K("type"), K("text"), K("text"), "half a thou"));
+  // the world ticks (an age, a new turn) while the prompt is open
+  s.send(ev(K("type"), K("doc"), K("path"), "omega:overview", K("text"), "a\nb\nc", K("rev"), "r2", K("read-only?"), true, K("objects"), toBL([]), K("visit?"), false));
+  assert.equal(get(get(s.render(), "minibuf"), "text"), "half a thou", "the draft survives the refresh");
+  assert.equal(T.d_to_string(get(s.ed, "text")), "a\nb\nc", "and the view still follows the world");
+  s.send(ev(K("type"), K("text"), K("text"), "ght")).key("Enter");
+  const [op] = s.drain("intent");
+  assert.deepEqual(op.args, { goal: "half a thought" });
+});
+
 test("space a n opens a homeless task through the minibuffer", () => {
   const s = session(PLAN);
   s.keys("<sp> a n");

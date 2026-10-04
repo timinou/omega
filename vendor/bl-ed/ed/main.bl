@@ -344,60 +344,69 @@
       (if (or (>= r n) (>= (count out) height)) out
         (recur (inc r) (if (hidden? r) out (conj out r)))))))
 
-(defn render
-  "The view model the host draws."
-  [ed]
-  (let [tx (:text ed)
-        bs (:blocks (:struct ed))
-        rows (visible-rows ed)
-        folds (or (:folds ed) #{})
+(defn line-context
+  "What drawing any row of `rows` needs, computed once per frame: the spans,
+   the code marks of the cells intersecting `rows`, the folds, the cursor row."
+  [ed rows]
+  (let [bs (:blocks (:struct ed))
         ; only the cells that intersect the visible rows contribute marks
         r-lo (if (empty? rows) 0 (first rows))
         r-hi (if (empty? rows) 0 (inc (last rows)))
         marks (reduce (fn [acc b] (into acc (code-marks (get (:forms ed) (:from b) []) rows)))
-                      [] (filter (fn [b] (= :cell (:kind b))) (org/blocks-in bs r-lo r-hi)))
-        marks-by-row (group-by :row marks)
-        cur-row (first (:head (c/primary ed)))
-        line-view (fn [r]
-                    (let [l (t/line tx r) b (org/block-at bs r) k (hl-kind b r)
-                          blk? (and (some? b) (contains? #{:cell :prose-code :block :result} (:kind b)))]
-                      {:row r
-                       :folded? (contains? folds r)
-                       ; the block band a line belongs to: lets the host draw a
-                       ; cell as ONE full-width card, with rounded first/last rows
-                       :band (if blk? (name (:kind b)) nil)
-                       :band-first? (and blk? (= r (:from b)))
-                       :band-last? (and blk? (= r (dec (:to b))))
-                       ; where a cell runs (system.place, from the BEAM), on its
-                       ; first row: "local" (in the page) | "beam" (+ why)
-                       :place (when (and (= :cell (:kind b)) (= r (:from b)))
-                                (let [p (get (:placements ed) (:id b))]
-                                  (when (some? p) (name (:place p)))))
-                       :place-why (when (and (= :cell (:kind b)) (= r (:from b)))
-                                    (:why (get (:placements ed) (:id b))))
-                       ; a task block runs as an agent (✦); a reference row
-                       ; is DRAWN as its task's live card (the text is unchanged)
-                       :agent? (and (omega/task-block? b) (= r (:from b)))
-                       :card (let [ref (when (= :result (:kind b)) (omega/reference-at l))]
-                               (when ref
-                                 (let [cd (get (:cards ed) (:id ref))]
-                                   (if (some? cd)
-                                     {:text (omega/card-line cd) :tone (if (:ask cd) "ask" (:status cd))}
-                                     {:text (str "… " (:id ref) (if (:status ref) (str " · " (:status ref)) "") " (no live world)") :tone (or (:status ref) "unknown")}))))
-                       :object (when-let [o (get (:obj-index ed) r)] (:type o))
-                       :current? (= r cur-row)
-                       :segments (cond
-                                   (= :heading (:kind b)) (heading-segments l b)
-                                   (= k :code) (if (= :cell (:kind b)) (segments-with-marks l (get marks-by-row r []) :code) [{:text l :kind :code}])
-                                   (= k :prose) (prose-segments l :prose)
-                                   :else [{:text l :kind k}])}))
+                      [] (filter (fn [b] (= :cell (:kind b))) (org/blocks-in bs r-lo r-hi)))]
+    {:bs bs :marks-by-row (group-by :row marks) :folds (or (:folds ed) #{})
+     :cur-row (first (:head (c/primary ed)))}))
+
+(defn line-view
+  "How row `r` draws today: segments, block band, placement, card, object.
+   The default presenter of every text row (spikes/present-pipeline.bl.md)."
+  [ed lc r]
+  (let [tx (:text ed) bs (:bs lc)
+        l (t/line tx r) b (org/block-at bs r) k (hl-kind b r)
+        blk? (and (some? b) (contains? #{:cell :prose-code :block :result} (:kind b)))]
+    {:row r
+     :folded? (contains? (:folds lc) r)
+     ; the block band a line belongs to: lets the host draw a
+     ; cell as ONE full-width card, with rounded first/last rows
+     :band (if blk? (name (:kind b)) nil)
+     :band-first? (and blk? (= r (:from b)))
+     :band-last? (and blk? (= r (dec (:to b))))
+     ; where a cell runs (system.place, from the BEAM), on its
+     ; first row: "local" (in the page) | "beam" (+ why)
+     :place (when (and (= :cell (:kind b)) (= r (:from b)))
+              (let [p (get (:placements ed) (:id b))]
+                (when (some? p) (name (:place p)))))
+     :place-why (when (and (= :cell (:kind b)) (= r (:from b)))
+                  (:why (get (:placements ed) (:id b))))
+     ; a task block runs as an agent (✦); a reference row
+     ; is DRAWN as its task's live card (the text is unchanged)
+     :agent? (and (omega/task-block? b) (= r (:from b)))
+     :card (let [ref (when (= :result (:kind b)) (omega/reference-at l))]
+             (when ref
+               (let [cd (get (:cards ed) (:id ref))]
+                 (if (some? cd)
+                   {:text (omega/card-line cd) :tone (if (:ask cd) "ask" (:status cd))}
+                   {:text (str "… " (:id ref) (if (:status ref) (str " · " (:status ref)) "") " (no live world)") :tone (or (:status ref) "unknown")}))))
+     :object (when-let [o (get (:obj-index ed) r)] (:type o))
+     :current? (= r (:cur-row lc))
+     :segments (cond
+                 (= :heading (:kind b)) (heading-segments l b)
+                 (= k :code) (if (= :cell (:kind b)) (segments-with-marks l (get (:marks-by-row lc) r []) :code) [{:text l :kind :code}])
+                 (= k :prose) (prose-segments l :prose)
+                 :else [{:text l :kind k}])}))
+
+(defn render-rows
+  "The view model with `rows` as its text lines (a presentation chooses them)."
+  [ed rows]
+  (let [tx (:text ed)
+        lc (line-context ed rows)
         prim (c/primary ed)
         mb (:minibuf ed)
         fc (c/forest-at-cursor ed)
         probs (if (nil? fc) [] (forms/problems (:forest fc)))
         h (org/heading-at (:outline (:struct ed)) (first (c/cursor ed)))
         b (c/block-at-cursor ed)]
-    {:lines (mapv line-view rows)
+    {:lines (mapv (fn [r] (line-view ed lc r)) rows)
      :top (:top (:view ed))
      :total (t/line-count tx)
      :sels (mapv (fn [s] (let [[a e] (c/sel-range ed s)] {:from a :to e :head (:head s) :primary? (= s prim)})) (:sels ed))
@@ -426,3 +435,8 @@
                 (= :help (:overlay ed)) {:kind :help :items (mapv (fn [[k n]] {:keys k :name (name n) :doc (:doc (cmds/lookup ed n))})
                                                                   (sort-by first (get (km/keymap-of ed) (if (= :insert (:mode ed)) :insert :normal) {})))}
                 :else nil)}))
+
+(defn render
+  "The view model the host draws."
+  [ed]
+  (render-rows ed (visible-rows ed)))

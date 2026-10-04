@@ -16,14 +16,14 @@ and omega's world run on one beam-lisp.
 | `build.sh` | compiles with omega's `bin/bl`; the in-page language comes from `$BL_TREE` (default `../beam-lisp`), which must be checked out at the pin (it refuses otherwise); writes to `vendor/bl-ed/web/out` | the in-page language is compiled from beam-lisp source paths |
 | `src/bl_ed/serve.bl` (new) + `serve.bl` | the server is a LIBRARY (`bl-ed.serve/start!`) with `/api/doc`, `/api/rev` (long-poll), rev-checked `/api/save`, `scheme:` providers, `/api/intent`; `serve.bl` is a thin script over it | omega starts the same server in its own VM with its providers (one VM, no bridge) |
 | `src/bl_ed/image.bl` (new) | the `bl:` provider: namespaces and per-var state (matches / changed / live-only / not loaded / lazy) against the source, reload through `reload/commit` | generic beam-lisp, useful without omega |
-| `ed/docs.bl` (new) | documents that are not files: visit, `C-o` back, read-only views, refresh by rev, minibuffer prompts | generic |
+| `ed/docs.bl` (new) | documents that are not files: visit, `C-o` back, read-only views, refresh by rev, minibuffer prompts; a refresh keeps an open prompt (2026-10-04: it dropped your draft on every rev) | generic |
 | `ed/keymap.bl` | presentations: the row under the cursor may BE an object; its type's keys win on that row (`:presentation-keys`, `:object-at`) | generic |
-| `ed/main.bl` | `:doc :cards :intent-result` events; render carries `:card :agent? :object`, `:cards :doc-rev :virtual?`; status `:read-only? :asks :back`; `:prompt` minibuffer kind; package install (`install`, replaced by FUP-010) | |
+| `ed/main.bl` | `:doc :cards :intent-result` events; render carries `:card :agent? :object`, `:cards :doc-rev :virtual?`; status `:read-only? :asks :back`; `:prompt` minibuffer kind; package install (`install`, replaced by FUP-010); `render` split into `line-context` / `line-view` / `render-rows` (no behaviour change; the seam presentations draw through, PLAN-004) | |
 | `ed/commands.bl` | `save` sends `:base` (the loaded rev); refuses on read-only views | lost-update safety |
 | `ed/omega.bl` (new) | omega's console half (E28): task cells, cards, presentation commands, `space a o/s/n/q/i` | moves into omega's package with FUP-010 |
 | `web/host.mjs` | effects `:visit :intent`; save with base; long-poll watchers for the shown document and the cards; boot through `/api/doc`; card drawing; status chips | |
 | `web/theme.css` | `✦` agent mark, card tones, presentation row | |
-| `test/omega.test.mjs` (new) | 10 drive tests of the console contract | |
+| `test/omega.test.mjs` (new) | 11 drive tests of the console contract (+1 2026-10-04: a refresh keeps the draft) | |
 | `proof/` | upstream's 1.6 MB not copied; ours are `10-` … `15-` (2026-10-04, real browser run) | |
 
 Every later change made here is listed in this table, so that it can be upstreamed.
@@ -37,10 +37,14 @@ BLED_OUT=vendor/bl-ed/web/out BLED_ROOT=../beam-lisp \
   node --test vendor/bl-ed/test/drive.test.mjs vendor/bl-ed/test/omega.test.mjs
 ```
 The drive tests' round-trip corpus is the beam-lisp tree's `.bl.org` files, hence `BLED_ROOT`.
-Verified 2026-10-04 on the pin: drive tests 29/29 (19 upstream + 10 omega); omega's suite
+Verified 2026-10-04 on the pin: drive tests 30/30 (19 upstream + 11 omega); omega's suite
 18/18 files (incl. `ed_test`, `ed_image_test`); a real browser run (proof/10–15).
 
 **Host traps found on the way** (this workstation):
+- `build.sh` refuses unless `../beam-lisp` is AT the pin. To rebuild only the editor modules (the
+  in-page language unchanged): `bin/bl js build ed.main -p vendor/bl-ed --host eval-ed,eval-cells --out vendor/bl-ed/web/out`.
+- `fitHeight` in `web/host.mjs` counts `#page`'s top padding as rows and measures before the status
+  line lays out: the last row is clipped by a few px (found by spikes/present-pipeline.bl.md; fixed in the spike's host only).
 - the shell's `kill` builtin rejects `-9`, so `kill -9` does nothing. Use `/bin/kill -KILL`, or a
   stale server keeps its port and every "restart" silently serves old code.
 - `edit`/`create` on a script resets its mode; `chmod +x bin/bl bin/bl-ed vendor/bl-ed/build.sh`
