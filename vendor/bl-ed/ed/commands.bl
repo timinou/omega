@@ -16,7 +16,8 @@
             [ed.forms :as forms]
             [ed.core :as c]
             [ed.motion :as m]
-            [bl.doc.spans :as spans]))
+            [bl.doc.spans :as spans]
+            [ed.pkg :as pkg]))
 
 ; ─── helpers to define commands ─────────────────────────────────────────────
 
@@ -463,5 +464,7 @@
    :outline {:doc "Show the document outline." :run (fn [ed] (assoc ed :overlay (if (= :outline (:overlay ed)) nil :outline)))}
    :close-overlay {:doc "Close the overlay / clear the message." :run (fn [ed] (assoc ed :overlay nil :message nil :pending []))}})
 
-(defn lookup [ed name]
-  (get (merge table (:user-commands ed)) name))
+(defn lookup
+  "A command: the user's (ed/defcmd) over loaded packages' over the core's."
+  [ed name]
+  (get (merge table (pkg/commands ed) (:user-commands ed)) name))

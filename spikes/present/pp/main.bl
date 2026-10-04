@@ -9,6 +9,7 @@
 
 (ns pp.main
   (:require [ed.main :as m]
+            [ed.pkg :as pkg]
             [ed.core :as c]
             [ed.text :as t]
             [pp.read :as rd]
@@ -112,16 +113,12 @@
 ; the frame's link then opens the selection in the pane.
 (def rail-keys {"j" :pp/next-task "k" :pp/prev-task})
 
-(defn- install [ed]
-  (-> ed
-      (update :user-commands (fn [cm] (merge cm commands)))
-      (update-in [:user-keys :normal] (fn [km] (merge km keys-normal (if (= "rail" (:name (:presentation ed))) rail-keys {}))))))
+(defn- keys-of
+  "The package's keys for the shown document (the rail moves task to task)."
+  [ed]
+  {:normal (merge keys-normal (if (= "rail" (:name (:presentation ed))) rail-keys {}))})
 
 ; ─── the host API ──────────────────────────────────────────────────────────
-
-(defn boot [s path] (install (adopt (m/boot s path) path)))
-
-(declare handle*)
 
 (defn- presented? [ed] (contains? #{"omega" "conversation"} (:name (:presentation ed))))
 
@@ -187,8 +184,11 @@
       (let [q [(if (> y (:slot-top v)) (:row (first body)) (:row (last body))) 0]]
         (assoc ed2 :sels [{:anchor q :head q}] :primary 0)))))
 
-(defn handle [ed ev]
+(defn- intercept
+  "Events the package answers instead of the core (nil: let the core run)."
+  [ed ev]
   (cond
+    (nil? (:presentation ed)) nil
     (= :scroll-slots (:type ev)) (scroll-to-slot ed (+ (:slot-top (p/render (:presentation ed) ed)) (:delta ev)))
     (= :scroll-to-slot (:type ev)) (scroll-to-slot ed (:y ev))
     ; a draft is several lines: S-Enter breaks the line (Enter still sends)
@@ -200,24 +200,46 @@
       (compose-key ed "")
     (and (presented? ed) (some? (typed-char ev)) (on-composer? ed) (some? (task-id ed)))
       (compose-key ed (typed-char ev))
-    :else (handle* ed ev)))
+    :else nil))
 
-(defn- handle* [ed ev]
-  (let [new (m/handle ed ev)
-        ; a visit makes a new editor (ed.docs): it keeps nothing of ours
-        new (if (nil? (:presentation new)) (install (adopt new (:path new))) new)
-        new (if (and (= :doc (:type ev)) (:visit? ev)) (install (adopt new (:path new))) new)]
-    (reduce (fn [acc k] ((:on-event (get MODES k)) ed acc ev)) new (:modes new))))
+(defn- on-event
+  "After the core: the active modes react to what it did."
+  [old new ev]
+  (reduce (fn [acc k] ((:on-event (get MODES k)) old acc ev)) new (or (:modes new) [])))
 
+(defn- draw
+  "The document, drawn through its presentation (nil: no presentation → text)."
+  [ed]
+  (when (and (some? (:presentation ed)) (not= "text" (:name (:presentation ed))))
+    (let [v (p/render (:presentation ed) ed)
+          lighters (vec (map (fn [k] (:lighter (get MODES k))) (:modes ed)))]
+      (cond-> (assoc v :modes lighters :presentation (:name (:presentation ed)))
+        (and (some? (:minibuf v)) (presented? ed) (= :prompt (:kind (:minibuf ed))))
+          (assoc-in [:minibuf :inline?] true)))))
+
+(def bl-package
+  "The presentation spike as a bl-ed package (ed/pkg.bl): load it into a
+   running bl-ed with `:(ed/use \"present\")` (or ?use=present)."
+  {:name "present"
+   :doc "Draw documents through presentations: task: as a conversation, omega:overview as a rail; follow/compose modes; a docked multi-line composer."
+   :commands commands
+   :keys keys-of
+   :intercept intercept
+   :on-event on-event
+   :adopt (fn [ed] (adopt ed (:path ed)))
+   :render draw})
+
+; A module exports its package as `bl-package` (`package` is a reserved word in
+; JS, so the compiled export would be mangled).
+
+; ─── the host API (what the spike's pages and tests call) ──────────────────
+; ed.main with this package used: the SAME code path as a loaded module.
+
+(defn boot [s path] (pkg/use (m/boot s path) bl-package))
+(defn handle [ed ev] (m/handle ed ev))
 (defn take-effects [ed] (m/take-effects ed))
-
-(defn render [ed]
-  (let [v (p/render (:presentation ed) ed)
-        lighters (vec (map (fn [k] (:lighter (get MODES k))) (:modes ed)))]
-    (cond-> (assoc v :modes lighters :presentation (:name (:presentation ed)))
-      (and (some? (:minibuf v)) (presented? ed) (= :prompt (:kind (:minibuf ed))))
-        (assoc-in [:minibuf :inline?] true))))
+(defn render [ed] (m/render ed))
 
 (defn render-text
   "Today's view model, for comparison."
-  [ed] (m/render ed))
+  [ed] (m/render-rows ed (range (:top (:view ed)) (min (t/line-count (:text ed)) (+ (:top (:view ed)) (:height (:view ed)))))))

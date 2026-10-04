@@ -1,0 +1,76 @@
+; ed/pkg.bl — packages: what a loaded module adds to a running editor.
+;
+; A PACKAGE is a value (a BL map) a module exports as `bl-package` (compiled:
+; `d_bl_package`; a hand-written ES module may export it as `package`):
+;
+;   {:name      "present"                         ; unique; (ed/unuse name) removes it
+;    :doc       "…"
+;    :commands  {kw {:doc s :run (fn [ed] ed)}}   ; layered under the user's ed/defcmd
+;    :keys      {mode {seq kw}} | (fn [ed] …)     ; layered under the user's ed/bind
+;    :intercept (fn [ed ev] ed-or-nil)            ; may take an event BEFORE the core
+;    :on-event  (fn [old new ev] new)             ; reacts to what the core did
+;    :adopt     (fn [ed] ed)                      ; a document arrived (visit/boot): set up
+;    :render    (fn [ed] view-or-nil)}            ; may draw the document (a presentation)
+;
+; Packages are LAYERS, never merged into the editor's own tables, so unloading
+; is exact by construction: dissoc the layer and every key, command and
+; drawing it added is gone. Order is load order; a later package wins.
+; The host loads modules (an :load-package effect → import() → a :use event);
+; the editor stays a pure function of its events.
+
+(ns ed.pkg)
+
+(defn packages [ed] (or (:packages ed) []))
+
+(defn names [ed] (vec (map :name (packages ed))))
+
+(defn use
+  "Add (or replace, by name) a package; it adopts the shown document."
+  [ed p]
+  (let [others (vec (remove (fn [q] (= (:name q) (:name p))) (packages ed)))
+        ed (assoc ed :packages (conj others p))]
+    (if (:adopt p) ((:adopt p) ed) ed)))
+
+(defn unuse
+  "Remove a package and what it left on the editor (:pkg-state under its name)."
+  [ed nm]
+  (-> ed
+      (assoc :packages (vec (remove (fn [q] (= (:name q) nm)) (packages ed))))
+      (update :pkg-state dissoc nm)))
+
+(defn commands
+  "Every package's commands, later packages winning."
+  [ed]
+  (reduce (fn [m p] (merge m (:commands p))) {} (packages ed)))
+
+(defn keymap
+  "Every package's keys, by mode."
+  [ed]
+  (reduce (fn [m p] (let [k (:keys p) k (if (fn? k) (k ed) k)] (merge-with merge m (or k {}))))
+          {} (packages ed)))
+
+(defn intercept
+  "The first package that takes the event, or nil."
+  [ed ev]
+  (loop [ps (reverse (packages ed))]
+    (if (empty? ps) nil
+      (let [f (:intercept (first ps)) r (when f (f ed ev))]
+        (if (some? r) r (recur (rest ps)))))))
+
+(defn after
+  "Fold every package's :on-event over what the core did."
+  [old new ev]
+  (reduce (fn [ed p] (if (:on-event p) ((:on-event p) old ed ev) ed)) new (packages new)))
+
+(defn adopt
+  "A document arrived: every package may set it up."
+  [ed]
+  (reduce (fn [ed p] (if (:adopt p) ((:adopt p) ed) ed)) ed (packages ed)))
+
+(defn render
+  "The first package (latest first) that draws this document, or nil."
+  [ed]
+  (loop [ps (reverse (packages ed))]
+    (if (empty? ps) nil
+      (let [f (:render (first ps)) v (when f (f ed))]
+        (if (some? v) v (recur (rest ps)))))))

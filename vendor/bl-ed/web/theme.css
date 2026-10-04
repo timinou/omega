@@ -211,3 +211,35 @@ footer { border-top: 1px solid var(--oat); background: var(--snow-2); font-famil
 .line.obj.cur-line { box-shadow: inset 3px 0 0 var(--rose); }
 #status .asks { color: var(--rose); font-weight: 700; }
 
+
+/* ─── presentations (ed/pkg.bl :render) ────────────────────────────────────
+ * A package may draw a document as ORNAMENT rows (derived, not editable),
+ * double-height rows (:size 2, a VT100 DECDHL headline), roles (:role → a
+ * face) and frames (boxes under the lines). The grid stays monospace. */
+#frames { position: absolute; left: .4rem; right: 1.2rem; top: 1rem; z-index: 1; pointer-events: none; }
+.frame { position: absolute; left: -.35rem; right: 0; border-radius: 8px; }
+.frame.tone-focus { background: var(--snow-2); box-shadow: inset 3px 0 0 var(--latte); }
+.frame.tone-you { background: var(--lav-bg); box-shadow: inset 3px 0 0 var(--lavender); opacity: .55; }
+.frame.tone-thread { border-left: 2px solid var(--oat); }
+.frame.tone-composer { background: var(--peach-bg); box-shadow: inset 0 0 0 1px var(--apricot); }
+.frame.tone-drafting { background: var(--snow); box-shadow: inset 0 0 0 2px var(--rose); }
+.frame.tone-ask { background: var(--rose-bg); }
+.frame.tone-picked { background: var(--rose-bg); box-shadow: inset 3px 0 0 var(--rose); }
+.line.ornament { color: var(--crema); cursor: pointer; }
+.line.big { line-height: calc(var(--row) * 2); }
+.gnum.orn { color: var(--oat); }
+.r-title .k-title { font-size: 1.75em; font-weight: 800; color: var(--espresso); }
+.r-question .k-question { font-size: 1.45em; font-weight: 700; color: var(--espresso); }
+.k-who { color: var(--lavender); font-size: .8em; }
+.k-meta { color: var(--mocha); font-size: .86em; }
+.k-label { color: var(--apricot); font-weight: 700; letter-spacing: .08em; font-size: .86em; }
+.k-tool-glyph { color: var(--mist); }
+.k-tool { color: var(--crema); font-size: .9em; }
+.k-answer, .k-draft { color: var(--espresso); }
+.k-strong { font-weight: 800; color: var(--roast); }
+.k-bullet { color: var(--rose); }
+.k-rule { color: var(--latte); }
+.k-aside { color: var(--crema); font-size: .9em; }
+.k-rail-title { color: var(--espresso); font-weight: 700; }
+#status .pres { color: var(--apricot); }
+#status .mode { color: var(--sage); }

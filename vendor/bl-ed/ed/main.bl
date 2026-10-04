@@ -26,7 +26,8 @@
             [ed.commands :as cmds]
             [ed.keymap :as km]
             [ed.docs :as docs]
-            [ed.omega :as omega]))
+            [ed.omega :as omega]
+            [ed.pkg :as pkg]))
 
 ; ─── packages ───
 ; What omega adds goes in through the same tables a user's `ed/defcmd` and
@@ -82,7 +83,12 @@
                                  (c/scroll-to-cursor (assoc ed :sels hits :primary 0 :message (str (count hits) " matches")))))))
                nil)
    "outline" (fn [] (mapv (fn [h] [(:level h) (:title h) (inc (:row h))]) (:outline (:struct @cell))))
-   "cells" (fn [] (mapv (fn [b] [(:id b) (inc (:from b))]) (filter (fn [b] (= :cell (:kind b))) (:blocks (:struct @cell)))))})
+   "cells" (fn [] (mapv (fn [b] [(:id b) (inc (:from b))]) (filter (fn [b] (= :cell (:kind b))) (:blocks (:struct @cell)))))
+   ; packages (ed/pkg.bl): load a compiled module by name or URL; the host
+   ; imports it and answers with a :use event
+   "use" (fn [nm] (swap! cell c/effect {:kind :load-package :name (str nm)}) (str "loading " nm "…"))
+   "unuse" (fn [nm] (swap! cell pkg/unuse (str nm)) (str "removed " nm))
+   "packages" (fn [] (pkg/names @cell))})
 
 (defn eval-command
   "Evaluate the command-line text as REAL Beam Lisp — the self-hosted
@@ -165,8 +171,31 @@
     (= :show-result (:then ev)) (c/message ed (str (get (:data ev) :result)))
     :else ed))
 
+(declare handle-core)
+
 (defn handle
-  "Apply one host event to the editor."
+  "Apply one host event to the editor. Loaded packages (ed/pkg.bl) may take
+   the event first (:intercept), react to what the core did (:on-event), and
+   set up a document that arrives (:adopt)."
+  [ed ev]
+  (let [ty (:type ev)]
+    (cond
+      ; the host loaded a module: install its package (or report why not)
+      (= ty :use) (if (some? (:package ev))
+                    (c/message (pkg/use ed (:package ev)) (str "using " (:name (:package ev))))
+                    (c/message ed (str "error: " (or (:message ev) "no package"))))
+      :else
+        (let [taken (pkg/intercept ed ev)
+              new (if (some? taken) taken (handle-core ed ev))
+              ; a :doc that made a fresh editor (a visit, a refresh of a
+              ; read-only view) dropped what packages set on the old one:
+              ; they adopt the document again
+              new (if (and (= ty :doc) (not (identical? (:text new) (:text ed))))
+                    (pkg/adopt new) new)]
+          (if (some? taken) new (pkg/after ed new ev))))))
+
+(defn- handle-core
+  "The core's answer to one event."
   [ed ev]
   (let [ty (:type ev)]
     (cond
@@ -437,6 +466,8 @@
                 :else nil)}))
 
 (defn render
-  "The view model the host draws."
+  "The view model the host draws: a loaded package may draw the document
+   (a presentation); otherwise the text, row by row."
   [ed]
-  (render-rows ed (visible-rows ed)))
+  (let [v (or (pkg/render ed) (render-rows ed (visible-rows ed)))]
+    (assoc v :packages (pkg/names ed))))

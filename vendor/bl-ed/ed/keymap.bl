@@ -18,7 +18,8 @@
   (:require [ed.num :as num]
             [ed.core :as c]
             [ed.commands :as cmds]
-            [ed.text :as t]))
+            [ed.text :as t]
+            [ed.pkg :as pkg]))
 
 (def normal
   {"h" :move-left "j" :move-down "k" :move-up "l" :move-right
@@ -52,7 +53,9 @@
 
 (def default {:normal normal :select select :insert insert})
 
-(defn keymap-of [ed] (merge-with merge default (:user-keys ed)))
+(defn keymap-of
+  "The keys: the user's (ed/bind) over loaded packages' over the core's."
+  [ed] (merge-with merge default (pkg/keymap ed) (:user-keys ed)))
 
 ; Presentations: in normal mode, the row under the cursor may BE an object
 ; ({:type "omega/task" …}, from the document's :objects or a reference row);

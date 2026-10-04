@@ -71,7 +71,9 @@
   "What survives a visit: registers, user commands and keys, the view height,
    the back stack, cards and the search needle."
   [old new]
-  (merge new (select-keys old [:registers :user-commands :user-keys :back :cards :search]
+  (merge new (select-keys old [:registers :user-commands :user-keys :back :cards :search
+                               ; loaded packages and their state live across documents
+                               :packages :pkg-state]
                           )
          {:view (assoc (:view new) :height (get-in old [:view :height] 40))}))
 

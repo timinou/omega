@@ -16,13 +16,15 @@ and omega's world run on one beam-lisp.
 | `build.sh` | compiles with omega's `bin/bl`; the in-page language comes from `$BL_TREE` (default `../beam-lisp`), which must be checked out at the pin (it refuses otherwise); writes to `vendor/bl-ed/web/out` | the in-page language is compiled from beam-lisp source paths |
 | `src/bl_ed/serve.bl` (new) + `serve.bl` | the server is a LIBRARY (`bl-ed.serve/start!`) with `/api/doc`, `/api/rev` (long-poll), rev-checked `/api/save`, `scheme:` providers, `/api/intent`; `serve.bl` is a thin script over it | omega starts the same server in its own VM with its providers (one VM, no bridge) |
 | `src/bl_ed/image.bl` (new) | the `bl:` provider: namespaces and per-var state (matches / changed / live-only / not loaded / lazy) against the source, reload through `reload/commit` | generic beam-lisp, useful without omega |
+| `ed/pkg.bl` (new) | packages: a loaded module's layers (`:commands :keys :intercept :on-event :adopt :render`), never merged into the editor's tables, so `unuse` is exact; `ed/use` / `ed/unuse` / `ed/packages` on the `:` line; `:use` event; `:load-package` effect | FUP-010's seam (2026-10-04) |
 | `ed/docs.bl` (new) | documents that are not files: visit, `C-o` back, read-only views, refresh by rev, minibuffer prompts; a refresh keeps an open prompt (2026-10-04: it dropped your draft on every rev) | generic |
 | `ed/keymap.bl` | presentations: the row under the cursor may BE an object; its type's keys win on that row (`:presentation-keys`, `:object-at`) | generic |
-| `ed/main.bl` | `:doc :cards :intent-result` events; render carries `:card :agent? :object`, `:cards :doc-rev :virtual?`; status `:read-only? :asks :back`; `:prompt` minibuffer kind; package install (`install`, replaced by FUP-010); `render` split into `line-context` / `line-view` / `render-rows` (no behaviour change; the seam presentations draw through, PLAN-004) | |
+| `ed/main.bl` | `handle` = package intercept → core → package on-event (+ adopt after a fresh document); `render` = a package's `:render` or the text, `:packages` in the view; `:doc :cards :intent-result` events; render carries `:card :agent? :object`, `:cards :doc-rev :virtual?`; status `:read-only? :asks :back`; `:prompt` minibuffer kind; package install (`install`, replaced by FUP-010); `render` split into `line-context` / `line-view` / `render-rows` (no behaviour change; the seam presentations draw through, PLAN-004) | |
 | `ed/commands.bl` | `save` sends `:base` (the loaded rev); refuses on read-only views | lost-update safety |
 | `ed/omega.bl` (new) | omega's console half (E28): task cells, cards, presentation commands, `space a o/s/n/q/i` | moves into omega's package with FUP-010 |
 | `web/host.mjs` | effects `:visit :intent`; save with base; long-poll watchers for the shown document and the cards; boot through `/api/doc`; card drawing; status chips | |
 | `web/theme.css` | `✦` agent mark, card tones, presentation row | |
+| `test/pkg.test.mjs` (new) | 3 drive tests of packages: use/unuse exact, intercept/on-event/adopt/render, `ed/use` → effect (fail on the pre-seam build) | |
 | `test/omega.test.mjs` (new) | 11 drive tests of the console contract (+1 2026-10-04: a refresh keeps the draft) | |
 | `proof/` | upstream's 1.6 MB not copied; ours are `10-` … `15-` (2026-10-04, real browser run) | |
 
@@ -37,8 +39,10 @@ BLED_OUT=vendor/bl-ed/web/out BLED_ROOT=../beam-lisp \
   node --test vendor/bl-ed/test/drive.test.mjs vendor/bl-ed/test/omega.test.mjs
 ```
 The drive tests' round-trip corpus is the beam-lisp tree's `.bl.org` files, hence `BLED_ROOT`.
-Verified 2026-10-04 on the pin: drive tests 30/30 (19 upstream + 11 omega); omega's suite
+Verified 2026-10-04 on the pin: drive tests 33/33 (19 upstream + 11 omega + 3 packages); omega's suite
 18/18 files (incl. `ed_test`, `ed_image_test`); a real browser run (proof/10–15).
+
+`web/host.mjs` draws what a package's presentation returns: ornament rows (`:ornament? :src`, a click lands on `:src`), `:size`/`:role` rows, frames under the lines (`#frames`), an inline minibuffer (`:inline?`), `S-Enter`, wheel by screen rows (`:scroll-slots`), and loads packages (`:load-package` → `import('./pkg/<name>.mjs')`; `?use=a,b` at boot). `fitHeight` subtracts the page's padding and refits on resize (the clipped-last-row trap below is fixed). `web/pkg/` holds package loaders (generated, e.g. `spikes/present/build.sh pkg`).
 
 **Host traps found on the way** (this workstation):
 - `build.sh` refuses unless `../beam-lisp` is AT the pin. To rebuild only the editor modules (the

@@ -99,3 +99,38 @@ that regroups turns into threads, presenters, a rows-aware grid layout with stic
 pure frame of panes linked by a mode. There is no proportional layout and no DOM state. It reads as
 bl-ed: monospace, keys, objects with sources, the org text unchanged underneath. Typing stays
 under 1 ms. Relayout at 3–7 ms is the next thing to memoise.
+
+## Round 2 (2026-10-04): minimap, a chat composer, and the spike as a bl-ed package
+
+**Minimap** (`pp.present/minimap`, generic): the right column is a miniature of the pane's LAID-OUT
+screen, one bar per screen row, coloured by role; your questions carry their words; a lens shows what
+the pane shows. Clicking or dragging scrolls the pane (`:scroll-to-slot`), and it never switches the
+view. Scrolling is by screen rows now: the view keeps an anchor `{:row :off}` (the k-th slot of a
+wrapped row is at the top), so a long answer scrolls line by line instead of jumping (`proof/17`).
+
+**Chat composer** (`pp.conv/present-composer`): the say block is a DOCK (`p/dock`): always at the
+bottom of the pane, outside the scrolling body. `i` writes from anywhere in a task, and the draft is
+drawn in the dock, wrapped to the measure. `S-Enter` breaks the line and the dock grows with the
+draft (`proof/18`: three lines, one wrapped). Enter sends; Esc leaves. Driven against the live world
+and cancelled with Esc: nothing was sent (the task text has no trace of the draft).
+
+**Loadable into bl-ed** (FUP-010's seam): `vendor/bl-ed/ed/pkg.bl`. A package is a BL map of layers
+(`:commands :keys :intercept :on-event :adopt :render`) that `ed.main` consults and never merges, so
+`(ed/unuse "present")` is exact by construction. `spikes/present/build.sh pkg` compiles `pp.*` into
+the vendored page's `out/` (one shared `ed.*`) and writes `web/pkg/present.mjs`. Then, in the real
+bl-ed served by `bin/bl-ed`: `?use=present`, or `:(ed/use "present")` at runtime, and
+`:(ed/unuse "present")` to remove it (`proof/20`). The package is `pp.main/bl-package`, not a
+copy: the spike's pages call `pkg/use` on the same value. Verified on the live 8790 world: loaded →
+`task:t-1` drawn as the conversation (▣ conversation · follow · compose in the status line);
+`space a o` → the overview as a rail; `j j t` → back to a conversation; unuse → plain text and `J`
+unbound; use again → conversation. Without `?use`, bl-ed is unchanged (no frames, no packages).
+`proof/19` is the first try: the loader reported "does not provide an export named 'd_package'"
+(`package` is a reserved word in JS, so the var is `bl-package`).
+
+Tests: `vendor/bl-ed/test/pkg.test.mjs` (3) pins use/unuse exactness, intercept/on-event/adopt/
+render and the `ed/use` effect; it fails on the pre-seam build (built from HEAD in a temporary
+worktree) and passes now. Drive tests 33/33; equivalence 38/38.
+
+Not done: the frame (rail | pane | minimap) is still the spike's own page (`frame.html`). In bl-ed
+proper, a package draws ONE editor; splitting bl-ed's window into panes is a host change (a frame
+host), the next step. `~/.bl-ed/init` autoload is not built (`?use=` stands in).

@@ -44,6 +44,7 @@ const minibuf = $("#minibuf");
 const overlay = $("#overlay");
 const selLayer = $("#selections");
 const caret = $("#caret");
+const frameLayer = $("#frames");          // boxes a package's presentation draws under the lines
 
 let ed = null;
 let metrics = { line: 22, ch: 8.4 };       // measured once fonts load
@@ -158,6 +159,19 @@ async function perform(e) {
         dispatch(ev(K("type"), K("placements"), K("cells"), cells));
       }
     } catch (err) { /* offline: placements stay unknown */ }
+  } else if (kind === "load-package") {
+    // a module is an ES module exporting `package` (a BL map, ed/pkg.bl) — or
+    // a compiled BL namespace with a `bl-package` var (d_bl_package);
+    // a bare name resolves to ./pkg/<name>.mjs next to the page
+    const name = get(e, "name");
+    const url = /[/.:]/.test(name) ? name : `./pkg/${name}.mjs`;
+    try {
+      const mod = await import(new URL(url, location.href).href);
+      const p = mod.package ?? mod.d_bl_package;
+      dispatch(ev(K("type"), K("use"), K("package"), typeof p === "function" ? p() : p, K("message"), p ? null : url + " exports no `package`"));
+    } catch (err) {
+      dispatch(ev(K("type"), K("use"), K("package"), null, K("message"), "cannot load " + url + ": " + err.message));
+    }
   } else if (kind === "clipboard-write") {
     navigator.clipboard?.writeText(get(e, "text")).catch(() => {});
   }
@@ -235,6 +249,10 @@ function draw() {
   const frag = [];
   for (const ln of lines) {
     const row = get(ln, "row");
+    // a package's presentation may draw ORNAMENT rows: derived text with no
+    // row of its own; :src is the row a click lands on (ed/pkg.bl :render)
+    const orn = get(ln, "ornament?");
+    const size = get(ln, "size") || 1, role = get(ln, "role");
     const segs = get(ln, "segments");
     const band = get(ln, "band");
     const cls = "line" + (band ? " in-cell band-" + band : "") + (get(ln, "band-first?") ? " first" : "") +
@@ -243,22 +261,24 @@ function draw() {
     // a reference row is DRAWN as its task's card: same row, same height
     const card = get(ln, "card");
     const obj = get(ln, "object");
-    const cls2 = cls + (card ? " card tone-" + get(card, "tone") : "") + (obj ? " obj" : "");
+    const cls2 = cls + (card ? " card tone-" + get(card, "tone") : "") + (obj ? " obj" : "") + (orn ? " ornament" : "")
+      + (role ? " r-" + role.name : "") + (size > 1 ? " big" : "");
     const shown = card ? R.vec(ev(K("kind"), K("card"), K("text"), get(card, "text"))) : segs;
     const sig = segSig(shown) + (get(ln, "folded?") ? "\u0003" : "") + "\u0004" + cls2;
-    nextLines.set(row, sig);
-    frag.push([row, sig, shown, get(ln, "folded?"), cls2, get(ln, "current?"), place, why]);
+    nextLines.set(row ?? "o" + get(ln, "key"), sig);
+    frag.push([row, sig, shown, get(ln, "folded?"), cls2, get(ln, "current?"), place, why, orn ? get(ln, "src") : null, size, get(ln, "vy")]);
   }
   // Reconcile by SLOT: slot i shows row frag[i]. A slot is touched only when
   // its row's signature changed (a scroll shifts every slot; a keystroke
   // usually touches one or two). The gutter is reconciled the same way.
   for (let i = 0; i < frag.length; i++) {
-    const [row, sig, segs, folded, cls, current, place, why] = frag[i];
+    const [row, sig, segs, folded, cls, current, place, why, src, size, vy] = frag[i];
     let node = view.children[i];
     if (!node || node.dataset.sig !== sig) {
       const fresh = document.createElement("div");
       fresh.className = cls;
-      fresh.dataset.row = row;
+      if (row != null) fresh.dataset.row = row; else fresh.dataset.src = src;
+      if (size > 1) fresh.style.height = size * metrics.line + "px";
       fresh.dataset.sig = sig;
       for (const g of segs) {
         const s = document.createElement("span");
@@ -273,9 +293,11 @@ function draw() {
     let g = gutter.children[i];
     // a cell's first row carries its placement: ● local (runs in the page),
     // ◆ beam (runs on the BEAM; the title says why), ✦ agent (a task block)
-    const gcls = "gnum" + (current ? " cur" : "") + (place ? " place-" + place : ""), gtxt = String(row + 1);
+    const gcls = "gnum" + (current ? " cur" : "") + (place ? " place-" + place : "") + (row == null ? " orn" : ""), gtxt = row == null ? "·" : String(row + 1);
     if (!g) { g = document.createElement("div"); gutter.appendChild(g); }
     if (g.className !== gcls) g.className = gcls;
+    const gh = size > 1 ? size * metrics.line + "px" : "";
+    if (g.style.height !== gh) g.style.height = gh;
     if (g.textContent !== gtxt) g.textContent = gtxt;
     const title = place === "local" ? "runs here, in the page (pure, terminates)" : place === "beam" ? "runs on the BEAM — " + (why || "")
       : place === "agent" ? "runs as an agent in omega: C-Enter opens a task (again: refine it)" : "";
@@ -285,8 +307,23 @@ function draw() {
   while (gutter.children.length > frag.length) gutter.lastChild.remove();
   prevLines = nextLines;
 
+  // frames: boxes a presentation draws under its lines (cards, a sticky head,
+  // the docked composer), in viewport ROWS; reused by index
+  const frames = get(v, "frames") ? get(v, "frames").toArray() : [];
+  for (let i = 0; i < frames.length; i++) {
+    const f = frames[i];
+    let n = frameLayer.children[i];
+    if (!n) { n = document.createElement("div"); frameLayer.appendChild(n); }
+    const cls = "frame tone-" + (get(f, "tone") || "plain") + (get(f, "sticky?") ? " sticky" : "") + (get(f, "head?") ? " head" : "") + " d" + get(f, "depth");
+    if (n.className !== cls) n.className = cls;
+    const css = `top:${get(f, "from") * metrics.line}px;height:${(get(f, "to") - get(f, "from")) * metrics.line}px`;
+    if (n.style.cssText !== css) n.style.cssText = css;
+  }
+  while (frameLayer.children.length > frames.length) frameLayer.lastChild.remove();
+
   // selections + caret, positioned by grapheme column → pixel (measured per line)
-  const slotOf = new Map(frag.map((f, i) => [f[0], i]));
+  // a row's y: its viewport row offset (:vy, when a presentation sized rows), else its slot
+  const slotOf = new Map(frag.filter((f) => f[0] != null).map((f, i) => [f[0], f[10] ?? frag.indexOf(f)]));
   const yOf = (row) => { const i = slotOf.get(row); return i === undefined ? null : i * metrics.line; };
   // selections: reuse box elements by index
   let boxI = 0;
@@ -329,6 +366,9 @@ function draw() {
   if (get(st, "section")) chip("crumb", "§ " + get(st, "section"));
   if (get(st, "block")) chip("crumb", get(st, "block"));
   if (get(st, "problems") > 0) chip("problems", get(st, "problems") + " unbalanced");
+  // loaded packages, the document's presentation and its modes
+  if (get(v, "presentation")) chip("crumb pres", "▣ " + get(v, "presentation"));
+  for (const l of (get(v, "modes") ? get(v, "modes").toArray() : [])) chip("crumb mode", l);
   const pend = get(st, "pending");
   if (pend) chip("pending", pend + (get(st, "count") ? " ×" + get(st, "count") : ""));
   else if (get(st, "count")) chip("pending", "×" + get(st, "count"));
@@ -341,7 +381,9 @@ function draw() {
 
   // minibuffer
   const mb = get(v, "minibuf");
-  if (mb) {
+  if (mb && get(mb, "inline?")) {
+    minibuf.hidden = true;                   // a presentation draws the draft in place (the composer)
+  } else if (mb) {
     minibuf.hidden = false;
     minibuf.querySelector(".prompt").textContent = get(mb, "prompt");
     minibuf.querySelector(".text").textContent = get(mb, "text");
@@ -427,7 +469,7 @@ function keyName(e) {
   let k = e.key;
   if (k === "Dead" || k === "Process" || k === "Unidentified") return null;
   const mods = (e.ctrlKey ? "C-" : "") + (e.altKey ? "M-" : "");
-  if (NAMED.has(k)) return mods + (e.shiftKey && k === "Tab" ? "S-Tab" : k);
+  if (NAMED.has(k)) return mods + (e.shiftKey && (k === "Tab" || k === "Enter") ? "S-" + k : k);
   if (k.length === 1 || [...k].length === 1) return mods + k;   // shift already applied by the layout
   return null;
 }
@@ -469,6 +511,10 @@ $("#editor").addEventListener("mousedown", (e) => {
   const lineNode = e.target.closest(".line");
   if (!lineNode) { sink.focus(); return; }
   e.preventDefault();
+  if (lineNode.dataset.src != null) {        // an ornament: land on its source row
+    dispatch(ev(K("type"), K("click"), K("pos"), R.vec(Number(lineNode.dataset.src), 0), K("extend?"), e.shiftKey));
+    sink.focus(); return;
+  }
   const row = Number(lineNode.dataset.row);
   const x = e.clientX - lineNode.getBoundingClientRect().left;
   let col = 0; const n = lineLen(row);
@@ -479,15 +525,22 @@ $("#editor").addEventListener("mousedown", (e) => {
 $("#editor").addEventListener("wheel", (e) => {
   e.preventDefault();
   const v = M.d_render(ed);
-  const top = get(v, "top") + Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / metrics.line));
+  const rows = Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / metrics.line));
+  // a presentation scrolls by SCREEN rows (a wrapped answer is many rows of one text row)
+  if (get(v, "slot-top") != null) { dispatch(ev(K("type"), K("scroll-slots"), K("delta"), rows)); return; }
+  const top = get(v, "top") + rows;
   dispatch(ev(K("type"), K("scroll"), K("top"), Math.max(0, top)));
 }, { passive: false });
 
 function fitHeight() {
-  const h = Math.floor($("#editor").clientHeight / metrics.line);
+  // the page's top padding is not rows (the last row was clipped by a few px)
+  const pad = parseFloat(getComputedStyle($("#page")).paddingTop) || 0;
+  const h = Math.floor(($("#editor").clientHeight - pad) / metrics.line);
   dispatch(ev(K("type"), K("resize"), K("height"), h));
 }
 window.addEventListener("resize", fitHeight);
+// the boot-time fit measures before the status line lays out: refit on any change
+new ResizeObserver(() => { if (ed) fitHeight(); }).observe($("#editor"));
 document.addEventListener("click", () => sink.focus());
 
 // ─── boot ──────────────────────────────────────────────────────────────────
@@ -515,5 +568,8 @@ fitHeight();
 if (doc) dispatch(ev(K("type"), K("doc"), K("path"), path, K("text"), doc.text, K("rev"), doc.rev, K("read-only?"), !!doc.readOnly,
                      K("title"), doc.title || path, K("objects"), toBL(doc.objects || []), K("visit?"), false));
 watchDoc(); watchCards(true);
+// ?use=a,b loads packages at boot (as ~/.bl-ed/init would)
+for (const name of (new URLSearchParams(location.search).get("use") || "").split(",").filter(Boolean))
+  perform(ev(K("kind"), K("load-package"), K("name"), name));
 sink.focus();
 window.blEd = { dispatch, state: () => ed, render: () => M.d_render(ed), R, K };
