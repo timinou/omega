@@ -72,6 +72,13 @@ the say block is where you write.
 
 ** W12 — composer addressed to the pane's task; triage (y/n/x) on the rail moves to the next task that needs you
 
+
+** Progress 2026-10-04 (round 3)
+- DONE (spike): minimap (pp.present/minimap) replaces the question list — scrolls the pane, never switches view; scrolling by screen rows (view anchor {:row :off}).
+- DONE (spike): composer as a DOCK (always at the pane's bottom), multi-line draft (S-Enter), i writes.
+- DONE (vendor): packages — ed/pkg.bl; the spike loads into the real bl-ed with ?use=present / :(ed/use "present"). W1's "cut over" can now be: ed.present + ed.readtable inside bl-ed, omega's presentation as a PACKAGE (not compiled into ed.main).
+- NEXT: a frame host in bl-ed proper (panes: rail | pane | minimap) so the one-screen overview is in bl-ed, not only frame.html; memoise presenters per (object, lod) — relayout is 3–7 ms.
+
 * Acceptance (whole plan)
 
 - The default presentation reproduces today's screen on the corpus (equivalence check, 0 mismatches).
