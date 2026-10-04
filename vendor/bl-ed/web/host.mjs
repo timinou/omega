@@ -303,32 +303,38 @@ function syncPanes(panes) {
   panesEl.classList.toggle("multi", panes.length > 1);
   if (sig === layoutSig) return;
   layoutSig = sig;
+  // 1. the original #editor always serves the FIRST editor pane (re-key it)
+  const first = get(panes.find((p) => get(p, "kind") === K("editor")), "id").name;
+  const original = [...paneDom].find(([, d]) => d.root.id === "editor");
+  if (original && original[0] !== first) {
+    const displaced = paneDom.get(first);          // a clone that held `first` before: drop it
+    if (displaced && displaced.root.id !== "editor") displaced.root.remove();
+    paneDom.delete(original[0]); paneDom.set(first, original[1]);
+  }
+  // 2. panes the layout no longer has go away (the original is kept in the
+  //    map under the first editor pane's id, so it is never removed here)
   const want = new Set(panes.map((p) => get(p, "id").name));
-  for (const [id, dom] of [...paneDom]) if (!want.has(id)) { if (dom.root.id !== "editor") dom.root.remove(); paneDom.delete(id); }
-  // the original #editor serves the FIRST editor pane, whatever its id
-  const firstEd = panes.find((p) => get(p, "kind") === K("editor"));
+  for (const [id, d] of [...paneDom]) if (!want.has(id)) { if (d.root.id !== "editor") d.root.remove(); paneDom.delete(id); }
+  for (const n of [...panesEl.children]) if (![...paneDom.values()].some((d) => d.root === n)) n.remove();
+  // 3. new panes: an editor pane clones the skeleton, a view pane is a box
   for (const p of panes) {
     const id = get(p, "id").name;
     if (paneDom.has(id)) continue;
-    let root;
     if (get(p, "kind") === K("view")) {
-      root = document.createElement("aside");
+      const root = document.createElement("aside");
       root.className = "pane view view-" + get(p, "view-kind").name;
       root.innerHTML = '<div class="view-body"></div><div class="view-lens"></div>';
-    } else if (p === firstEd && ![...paneDom.values()].some((d) => d.root.id === "editor")) {
-      root = $("#editor");
+      paneDom.set(id, { root, body: root.querySelector(".view-body"), lens: root.querySelector(".view-lens") });
     } else {
-      root = editorSkeleton.cloneNode(true);
+      const root = editorSkeleton.cloneNode(true);
       root.removeAttribute("id");
       for (const n of root.querySelectorAll("[id]")) n.removeAttribute("id");
       root.querySelector(".lines").textContent = ""; root.querySelector(".gutter").textContent = "";
+      paneDom.set(id, domFor(root));
     }
-    root.dataset.pane = id;
-    paneDom.set(id, get(p, "kind") === K("view") ? { root, body: root.querySelector(".view-body"), lens: root.querySelector(".view-lens") } : domFor(root));
   }
-  // keep the original #editor's mapping honest when ids differ
-  for (const [id, dom] of paneDom) if (dom.root.id === "editor" && firstEd && get(firstEd, "id").name !== id) { paneDom.delete(id); paneDom.set(get(firstEd, "id").name, dom); dom.root.dataset.pane = get(firstEd, "id").name; }
-  for (const p of panes) panesEl.appendChild(paneDom.get(get(p, "id").name).root);
+  // 4. layout order, and each root knows its pane id
+  for (const p of panes) { const id = get(p, "id").name, d = paneDom.get(id); d.root.dataset.pane = id; panesEl.appendChild(d.root); }
   requestAnimationFrame(fitHeight);
 }
 

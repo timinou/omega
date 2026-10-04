@@ -12,7 +12,6 @@ out="$here/web/out"
 mkdir -p "$out"
 cp -r "$root/vendor/bl-ed/web/out/." "$out/"
 "$root/bin/bl" js build pp.main -p "$root/vendor/bl-ed" -p "$here" --host eval-ed,eval-cells --out "$out"
-"$root/bin/bl" js build pp.frame -p "$root/vendor/bl-ed" -p "$here" --host eval-ed,eval-cells --out "$out"
 "$root/bin/bl" js build pp.check -p "$root/vendor/bl-ed" -p "$here" --host eval-ed,eval-cells --out "$out"
 # --- as a package of the vendored bl-ed (ed/pkg.bl) -------------------------
 # Compiled INTO the page's own out/ (modules import siblings by relative path,

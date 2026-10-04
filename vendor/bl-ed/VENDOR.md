@@ -25,7 +25,7 @@ and omega's world run on one beam-lisp.
 | `ed/omega.bl` (new) | omega's console half (E28): task cells, cards, presentation commands, `space a o/s/n/q/i` | moves into omega's package with FUP-010 |
 | `web/host.mjs` | effects `:visit :intent`; save with base; long-poll watchers for the shown document and the cards; boot through `/api/doc`; card drawing; status chips | |
 | `web/theme.css` | `✦` agent mark, card tones, presentation row | |
-| `test/frame.test.mjs` (new) | 7 drive tests of frames: one pane ≡ ed.main, arrange keeps your editor, :select link → one visit for the right pane, effects/answers per pane, C-w skips views + C-w o, views draw from their pane, unknown layout | |
+| `test/frame.test.mjs` (new) | 8 drive tests of frames: one pane ≡ ed.main, arrange keeps your editor, :select link → one visit for the right pane, effects/answers per pane, C-w skips views + C-w o, views draw from their pane, unknown layout, unuse spreads and ends its layout | |
 | `test/pkg.test.mjs` (new) | 3 drive tests of packages: use/unuse exact, intercept/on-event/adopt/render, `ed/use` → effect (fail on the pre-seam build) | |
 | `test/omega.test.mjs` (new) | 11 drive tests of the console contract (+1 2026-10-04: a refresh keeps the draft) | |
 | `proof/` | upstream's 1.6 MB not copied; ours are `10-` … `15-` (2026-10-04, real browser run) | |
@@ -41,7 +41,7 @@ BLED_OUT=vendor/bl-ed/web/out BLED_ROOT=../beam-lisp \
   node --test vendor/bl-ed/test/drive.test.mjs vendor/bl-ed/test/omega.test.mjs
 ```
 The drive tests' round-trip corpus is the beam-lisp tree's `.bl.org` files, hence `BLED_ROOT`.
-Verified 2026-10-04 on the pin: drive tests 40/40 (19 upstream + 11 omega + 3 packages + 7 frames); omega's suite
+Verified 2026-10-04 on the pin: drive tests 41/41 (19 upstream + 11 omega + 3 packages + 8 frames); omega's suite
 18/18 files (incl. `ed_test`, `ed_image_test`); a real browser run (proof/10–15).
 
 `web/host.mjs` is a FRAME host (holds an `ed.frame`, paints each pane into `#panes`; the first editor pane is the original `#editor`, others clone its skeleton; view panes have painters by kind — `minimap`); per-pane node lookup is by class (`.lines .gutter .page …`, ids kept for the first pane). It draws what a package's presentation returns: ornament rows (`:ornament? :src`, a click lands on `:src`), `:size`/`:role` rows, frames under the lines (`#frames`), an inline minibuffer (`:inline?`), `S-Enter`, wheel by screen rows (`:scroll-slots`), and loads packages (`:load-package` → `import('./pkg/<name>.mjs')`; `?use=a,b` at boot). `fitHeight` subtracts the page's padding and refits on resize (the clipped-last-row trap below is fixed). `web/pkg/` holds package loaders (generated, e.g. `spikes/present/build.sh pkg`).

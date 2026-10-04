@@ -10,7 +10,9 @@
 ;    :intercept (fn [ed ev] ed-or-nil)            ; may take an event BEFORE the core
 ;    :on-event  (fn [old new ev] new)             ; reacts to what the core did
 ;    :adopt     (fn [ed] ed)                      ; a document arrived (visit/boot): set up
-;    :render    (fn [ed] view-or-nil)}            ; may draw the document (a presentation)
+;    :render    (fn [ed] view-or-nil)             ; may draw the document (a presentation)
+;    :owns      [kw]}                             ; editor keys it sets (e.g. :presentation);
+;                                                 ; unuse removes them with the layer
 ;
 ; Packages are LAYERS, never merged into the editor's own tables, so unloading
 ; is exact by construction: dissoc the layer and every key, command and
@@ -32,11 +34,13 @@
     (if (:adopt p) ((:adopt p) ed) ed)))
 
 (defn unuse
-  "Remove a package and what it left on the editor (:pkg-state under its name)."
+  "Remove a package and everything it left on the editor: its :pkg-state and
+   the keys it :owns. The editor is then as if it had never been used."
   [ed nm]
-  (-> ed
-      (assoc :packages (vec (remove (fn [q] (= (:name q) nm)) (packages ed))))
-      (update :pkg-state dissoc nm)))
+  (let [p (first (filter (fn [q] (= (:name q) nm)) (packages ed)))]
+    (-> (apply dissoc ed (or (:owns p) []))
+        (assoc :packages (vec (remove (fn [q] (= (:name q) nm)) (packages ed))))
+        (update :pkg-state dissoc nm))))
 
 (defn commands
   "Every package's commands, later packages winning."

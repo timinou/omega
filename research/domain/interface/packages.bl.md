@@ -1,8 +1,8 @@
 # Packages and frames: how a bl-ed extension is written
 
 *Design, 2026-10-04. The contract every spike under `spikes/` that touches the editor must follow
-(AGENTS.md → "Spikes"). Built so far: `vendor/bl-ed/ed/pkg.bl` (packages, commit c3e0f25), with
-the presentation spike as the first package. Designed here, NOT built: frames (§5–§7). Plan: PLAN-004.*
+(AGENTS.md → "Spikes"). Built: `vendor/bl-ed/ed/pkg.bl` (packages) and `vendor/bl-ed/ed/frame.bl` (frames; design,
+decisions and verification in [`frames.bl.md`](frames.bl.md), which supersedes §5–§7 here). Plan: PLAN-004.*
 
 The question this answers: a spike shows an idea. How does it have to be written so the idea
 loads into the REAL editor as a module, comes out again exactly, and composes with everything
@@ -46,6 +46,7 @@ else, instead of being a page of its own that has to be rewritten later?
    :on-event  (fn [old new ev] new) ; after the core: react to what it DID (old → new)
    :adopt     (fn [ed] ed)          ; a fresh document arrived (visit, refresh): set it up
    :render    (fn [ed] nil)         ; draw this document (a view model) or pass (nil)
+   :owns      [:presentation]       ; editor keys :adopt sets — unuse removes them (F7)
 
    ;; contributions other packages consume (data, by convention keyed by name)
    :provides {:presentations {"conversation" conversation}
@@ -59,8 +60,9 @@ Rules:
   mangled to `d_package$R` (proof/19 shows that failure). The host accepts `d_bl_package`, or
   `package` from a hand-written ES module.
 - **State** a package keeps per editor lives under `(:pkg-state ed)` keyed by its `:name`
-  (`unuse` drops it), or on the document (`:presentation`, `:modes`): whatever `:adopt` set,
-  re-set on every fresh document.
+  (`unuse` drops it). Keys it sets directly on the editor (`:presentation`, `:modes`) MUST be
+  listed in `:owns` so `unuse` removes them (found live: without it the conversation outlived the
+  package). `:adopt` re-sets them on every fresh document.
 - **Precedence:** user (`ed/bind`, `ed/defcmd`) > later package > earlier package > core.
 - **Names:** commands `:<pkg>/<verb>`; event types the package invents `:<pkg>/<noun>`; CSS
   classes it needs go in `theme.css` under its section (a package cannot ship CSS yet; see §8).
@@ -115,7 +117,7 @@ active modes. That is exactly what `pp.main/bl-package` does today.
 Hosts ignore events and effects they don't know; the core ignores event types it doesn't know.
 That is how a package adds its own (`:thing/…`) without touching either.
 
-## 5. Frames: the three-pane screen (DESIGN)
+## 5. Frames: the three-pane screen (first design; BUILT — see frames.bl.md)
 
 The spike's `pp.frame` showed the shape. This section makes it a first-class part of bl-ed so
 the one-screen overview runs IN bl-ed, loaded by a package, not in `frame.html`.

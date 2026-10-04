@@ -9,8 +9,10 @@ package. Contract and rationale: `research/domain/interface/packages.bl.md`.
   :adopt :render :provides})`, as plain maps and fns. Not `package` (a reserved word in JS). No
   `defmacro` in code built with `bl js build`: the build drops it.
 - **Layers, never merges:** never write into `:user-commands` / `:user-keys`, never mutate shared
-  tables. Per-editor state goes under `(:pkg-state ed)` by name. `:(ed/unuse "<name>")` must leave
-  the editor exactly as before.
+  tables. Per-editor state goes under `(:pkg-state ed)` by name; editor keys `:adopt` sets go in
+  `:owns`. `:(ed/unuse "<name>")` must leave the editor, and every pane, exactly as before.
+- **Screens are layouts:** several panes = a `:provides {:layouts …}` value for `ed/frame.bl`
+  (`research/domain/interface/frames.bl.md`); never a page of your own.
 - **Pure:** functions of `ed` and events only; IO goes out as effects for the host.
 - **Generic below, domain above:** `vendor/bl-ed/ed/*` knows nothing about omega.
 - **Loads into the real editor:** compile into `vendor/bl-ed/web/out` and a loader at

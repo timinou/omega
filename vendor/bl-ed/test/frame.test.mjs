@@ -149,3 +149,11 @@ test("(ed/layout nil) and unknown layouts", () => {
   s.cmd('(ed/layout "two")').cmd("(ed/layout nil)");
   assert.equal(get(F.d_render(s.fr), "layout"), "single");
 });
+
+test("packages are frame-wide: unuse in one pane removes it everywhere, and its layout", () => {
+  const s = session().cmd('(ed/layout "two")');
+  assert.deepEqual(get(M.d_render(s.ed("main")), "packages").toArray(), ["demo"], "a pane opened by the layout carries the package");
+  s.cmd('(ed/unuse "demo")');                    // typed in :rail
+  assert.equal(get(F.d_render(s.fr), "layout"), "single", "the layout its package provided ended");
+  assert.deepEqual(get(M.d_render(F.d_focused(s.fr)), "packages").toArray(), []);
+});

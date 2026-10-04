@@ -134,3 +134,19 @@ worktree) and passes now. Drive tests 33/33; equivalence 38/38.
 Not done: the frame (rail | pane | minimap) is still the spike's own page (`frame.html`). In bl-ed
 proper, a package draws ONE editor; splitting bl-ed's window into panes is a host change (a frame
 host), the next step. `~/.bl-ed/init` autoload is not built (`?use=` stands in).
+
+## Round 3 (2026-10-04): the frame in bl-ed proper, as a layout
+
+The three-pane screen is no longer `frame.html`: it is a LAYOUT value (`pp/inbox.bl`, ~15 lines)
+that the `present` package provides, run by bl-ed's generic frame (`vendor/bl-ed/ed/frame.bl`; design
+and decisions: `research/domain/interface/frames.bl.md`). `pp/frame.bl`, `web/frame.{html,mjs,css}`
+were deleted. One implementation.
+
+- `?use=present&layout=inbox` on the live world: rail | conversation | minimap (`proof/23`), with
+  parity to the mockup's interactions: `j` opens, `C-w w` + `J` jump threads, the minimap drags
+  end to end, `i` drafts in the docked composer (`proof/24`).
+- `:(ed/unuse "present")` → one pane, plain org, no frames (exact, via `:owns`); `use` + `layout`
+  again → three panes; `C-w o` keeps the pane you are in.
+- `proof/22` is the first boot: the host threw in `syncPanes` (the original `#editor` was keyed
+  under the wrong pane) and left the `:` command on screen.
+- Tests: `vendor/bl-ed/test/frame.test.mjs` (8). Drive 41/41. One-pane parity: `proof/21`.

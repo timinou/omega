@@ -39,7 +39,8 @@ const shout = R.hashMap(
   // marks every document it adopts
   K("adopt"), (ed) => ed.assoc(K("shout-adopted"), get(ed, "path")),
   // draws only shout: documents
-  K("render"), (ed) => (String(get(ed, "path")).startsWith("shout:") ? R.hashMap(K("lines"), R.vecFromArray([]), K("drawn-by"), "shout") : null));
+  K("render"), (ed) => (String(get(ed, "path")).startsWith("shout:") ? R.hashMap(K("lines"), R.vecFromArray([]), K("drawn-by"), "shout") : null),
+  K("owns"), R.vec(K("shout-adopted")));
 
 const use = (ed, p) => M.d_handle(ed, ev(K("type"), K("use"), K("package"), p));
 
@@ -60,6 +61,7 @@ test("a used package adds keys and commands; unuse removes exactly them", () => 
   assert.match(get(ed, "message"), /not bound/, "unuse removed the key");
   assert.equal(get(ed, "user-keys"), before, "the user's own tables were never touched");
   assert.deepEqual(get(M.d_render(ed), "packages").toArray(), []);
+  assert.equal(get(ed, "shout-adopted"), null, "the key it :owns is gone too");
 });
 
 test("a package intercepts before the core, reacts after it, adopts visited documents", () => {

@@ -40,7 +40,9 @@
 ;      every interaction is data (an effect or an event), testable and
 ;      replayable.
 ;   4. Packages are not per pane. Every editor pane carries every loaded
-;      package; a document's :adopt picks how it draws.
+;      package (use/unuse in one pane spreads to all); a document's :adopt
+;      picks how it draws. Removing the package that provided the active
+;      layout returns to one pane.
 ;   5. One pane is today's bl-ed: (single ed) is a frame whose only pane is
 ;      that editor, and (frame/render) of it is ed.main/render plus a wrapper.
 
@@ -107,9 +109,11 @@
                (map :id others))))
 
 (defn unarrange
-  "Back to one pane: the focused editor."
+  "Back to one pane: the focused editor, keeping its pane id."
   [fr]
-  (assoc (single (focused fr)) :effects (:effects fr)))
+  (let [id (:focus fr)]
+    {:layout (assoc SINGLE :panes [{:id id :width :fill}] :focus id)
+     :editors {id (focused fr)} :focus id :effects (:effects fr)}))
 
 ; ─── links ─────────────────────────────────────────────────────────────────
 
@@ -170,6 +174,32 @@
           (= :only cmd) (unarrange fr)
           :else fr)))
 
+; ─── packages are frame-wide (rule 4) ──────────────────────────────────────
+;
+; A package used or removed in one pane is used or removed in every editor
+; pane; removing the package that provided the active layout returns to one
+; pane. The frame notices by comparing a pane's package names before/after.
+
+(declare layouts)
+
+(defn- names [ed] (vec (map :name (pkg/packages ed))))
+
+(defn- spread-packages
+  "Pane `id` just used or removed packages: every other editor pane does the
+   same (pkg/use, pkg/unuse: exact in each pane), and a layout whose provider
+   is gone ends."
+  [fr id before]
+  (let [now (editor fr id)]
+    (if (= (names before) (names now)) fr
+      (let [gone (filter (fn [n] (not (some (fn [m] (= m n)) (names now)))) (names before))
+            added (filter (fn [p] (not (some (fn [m] (= m (:name p))) (names before)))) (pkg/packages now))
+            sync (fn [ed] (reduce pkg/use (reduce pkg/unuse ed gone) added))
+            fr (reduce (fn [fr other] (update-in fr [:editors other] sync))
+                       fr (filter (fn [o] (not= o id)) (editor-ids fr)))
+            provided? (contains? (layouts now) (:name (:layout fr)))]
+        (if (or (= "single" (:name (:layout fr))) provided?) fr (unarrange fr))))))
+
+
 (defn- layout-request
   "A pane asked to (un)arrange the window (ed/layout sets :frame/layout on it)."
   [fr id]
@@ -201,7 +231,9 @@
       ; an event for a pane that no longer exists (a late host answer) is dropped
       (nil? (editor fr target)) fr
       :else
-        (layout-request (step-editor fr target (dissoc ev :pane)) target))))
+        (let [before (editor fr target)
+              fr (step-editor fr target (dissoc ev :pane))]
+          (layout-request (spread-packages fr target before) target)))))
 
 (defn take-effects [fr] [(assoc fr :effects []) (:effects fr)])
 

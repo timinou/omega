@@ -1,0 +1,35 @@
+; pp/inbox.bl — omega's one screen, as a LAYOUT (research/domain/interface/frames.bl.md).
+;
+; This is the WHOLE domain part of the three-pane screen. The frame (panes,
+; focus, links, effects) is generic bl-ed (ed/frame.bl); the presentations
+; that draw each pane are pp.rail and pp.conv; the minimap is the generic
+; pp.present/minimap. Here we only say how they are put together.
+;
+;   ┌ rail ──────────┬ main ───────────────────────────┬ map ──────┐
+;   │ omega:overview │ the task the rail is on          │ a minimap │
+;   │ (j/k: task)    │ (a conversation, docked composer)│ of main   │
+;   └────────────────┴──────────────────────────────────┴───────────┘
+
+(ns pp.inbox)
+
+(def inbox
+  {:name  "inbox"
+   :doc   "Tasks on the left; the one you are on, as a conversation; its minimap."
+
+   :panes [;; an editor pane showing the overview (drawn as a rail by pp.rail)
+           {:id :rail :doc "omega:overview" :width [:ch 38]}
+
+           ;; an editor pane with no document of its own: the link below fills it
+           {:id :main :doc :linked :width :fill}
+
+           ;; a VIEW pane: no cursor, no keys; a miniature of :main
+           {:id :map :view [:minimap :main] :width [:ch 24]}]
+
+   :links [;; moving onto a task in the rail opens it in :main (no RET, no C-o)
+           {:from :rail :on :select :to :main :do :visit}]
+
+   :focus :rail})
+
+(defn task-path
+  "Where an omega/task object leads: its livebook."
+  [o] (str "task:" (:key o)))

@@ -16,7 +16,8 @@
             [pp.present :as p]
             [pp.omega :as om]
             [pp.conv :as cv]
-            [pp.rail :as rl]))
+            [pp.rail :as rl]
+            [pp.inbox :as inbox]))
 
 ; ─── block motions from the readtable ──────────────────────────────────────
 
@@ -227,7 +228,13 @@
    :intercept intercept
    :on-event on-event
    :adopt (fn [ed] (adopt ed (:path ed)))
-   :render draw})
+   ;; what :adopt sets on the editor — removed with the package
+   :owns [:presentation :modes]
+   :render draw
+   ;; what other parts of bl-ed consume (ed/frame.bl reads :layouts :links :views)
+   :provides {:layouts {"inbox" inbox/inbox}
+              :links   {"omega/task" inbox/task-path}
+              :views   {:minimap (fn [ed] (when (some? (:presentation ed)) (p/minimap (:presentation ed) ed)))}}})
 
 ; A module exports its package as `bl-package` (`package` is a reserved word in
 ; JS, so the compiled export would be mangled).
