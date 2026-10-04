@@ -174,9 +174,11 @@
           (if (or (nil? pv) (nil? (:write pv)))
             (w/json conn 403 {:ok false :message (str p " is read-only")})
             (let [r ((:write pv) (:name pp) (:params pp) t base)]
-              (if (:conflict r)
+              (cond
+                (:read-only r) (w/json conn 403 {:ok false :message (str p " is read-only")})
+                (:conflict r)
                 (w/json conn 409 {:ok false :conflict true :rev (:conflict r) :message "changed since you loaded it — reload, or save again to overwrite"})
-                (w/json conn 200 {:ok true :path p :rev (:rev r)}))))))))
+                :else (w/json conn 200 {:ok true :path p :rev (:rev r)}))))))))
 
 (defn- api-eval [cfg conn]
   (let [[b conn] (body-json conn) p (get b "path") id (get b "id") t (get b "text")

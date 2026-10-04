@@ -162,6 +162,7 @@
     (= :task-opened (:then ev)) (omega/task-opened ed (assoc (:data ev) :block (:block ev)))
     (= :visit (:then ev)) (docs/visit ed (:path ev))
     (= :visit-path (:then ev)) (docs/visit ed (get (:data ev) :path))
+    (= :show-result (:then ev)) (c/message ed (str (get (:data ev) :result)))
     :else ed))
 
 (defn handle

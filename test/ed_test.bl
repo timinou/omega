@@ -87,7 +87,6 @@
         it (pv/intents sys)
         out ((get it "task/open") {:goal "say ok" :path "plan.bl.org" :block "hex"})]
     (is (re-matches #"t-[0-9]+" (:id out)))
-    (is (str/starts-with? (:reference out) "#omega/task {"))
     (task/await sys (:id out) 5000)
     (let [ov ((:read (get (pv/providers sys) "omega")) "overview" {})]
       (is (str/includes? (:text ov) (str (:id out) "  say-ok")) "the title is task/open!'s slug of the goal")
@@ -101,6 +100,7 @@
         out ((get (pv/intents sys) "task/open") {:goal "tidy imports"})
         s1 ((:read omega) "scratch" {})]
     (is (str/includes? (:text s1) (str "#+begin_task :id " (:id out))))
+    (is (str/includes? (:text s1) (str ": #omega/task {:id \"" (:id out) "\"}")) "the editor's reference shape, no digest")
     (is (some (fn [o] (= (:id out) (:key o))) (:objects s1)) "its reference row is a task presentation")
     (let [rev1 ((:rev omega) "scratch" {})]
       (is (= {:conflict rev1} ((:write omega) "scratch" {} "stale" "not-the-rev")))
@@ -117,8 +117,10 @@
         omega (get (pv/providers sys) "omega")
         id (:id ((get (pv/intents sys) "task/open") {:goal "ask"}))]
     (task/await sys id 5000)
-    (let [cards (clojure.edn/read-string (:text ((:read omega) "tasks" {:ids id})))
-          ask (get-in cards [id :ask])]
+    (let [d ((:read omega) "tasks" {:ids id})
+          card (first (filter (fn [c] (= id (:id c))) (:data d)))
+          ask (:ask card)]
+      (is (= {:path "omega:scratch" :block id} (:home card)) "a card carries where its task lives")
       (is (= "Ship it?" (:text ask)))
       ((get (pv/intents sys) "msg/answer") {:msg (:msg ask) :text "yes"})
       (loop [n 0] (when (and (< n 50) (not (str/includes? (str (:result (task/view sys id))) "yes"))) (Process/sleep 100) (recur (inc n))))

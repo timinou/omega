@@ -21,6 +21,8 @@ cmd=$1; shift
 for a; do shift; set -- "$@" "$(abs "$a")"; done
 cd "$ROOT" || exit 2
 case "$cmd" in
-  run|test|eval|check) exec "$BL" "$cmd" -p "$ROOT/src" "$@" ;;
+  # vendor/bl-ed/src: the editor's BEAM half (bl-ed.serve, bl-ed.image), which
+  # omega.ed.main starts in omega's own VM (vendor/bl-ed/VENDOR.md)
+  run|test|eval|check) exec "$BL" "$cmd" -p "$ROOT/src" -p "$ROOT/vendor/bl-ed/src" "$@" ;;
   *) exec "$BL" "$cmd" "$@" ;;
 esac

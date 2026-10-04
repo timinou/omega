@@ -1,0 +1,69 @@
+; omega/ed/main.bl — omega inside bl-ed, in ONE VM: the task world and the
+; editor's server share the pinned beam-lisp, so omega's documents and intents
+; are plain function calls (no bridge process, no .omega/url).
+;
+;   bin/bl-ed                       live model, documents under the cwd
+;   bin/bl-ed --offline             a scripted model (no network), for trying it
+;   flags: --root DIR  --port N (default 8790)  --db DIR | --memory
+;
+; It starts the task system exactly as bin/omega-ui does (same store, same
+; recovery), adds bl-ed.serve with omega's providers and intents, and prints
+; the URL. The page is vendor/bl-ed/web (built by bin/bl-ed build).
+
+(ns omega.ed.main
+  (:require [omega.env :as env]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.llm :as llm]
+            [omega.codemode :as cm]
+            [omega.cli :as cli]
+            [omega.ed.providers :as pv]
+            [bl-ed.serve :as serve]
+            [bl-ed.image :as image]))
+
+(defn offline-model
+  "A scripted model that does a little real work, asks one question, and
+   closes: enough to see every part of the slice without a network."
+  []
+  (loop/scripted
+    [(loop/call-tool "eval" {:code "(trace :finding \".\" \"looked at the goal\")\n(println (ls))"} "tu-1")
+     (loop/call-tool "eval" {:code "(send \"human:me\" :ask \"Shall I go ahead?\")"} "tu-2")
+     (loop/say "Waiting for your answer.")
+     (fn [req] (loop/call-tool "eval" {:code (str "(done \"Offline run finished; you said: "
+                                                   (clojure.string/replace (str (get-in (last (:messages req)) [:content 0 :text])) "\"" "'")
+                                                   "\")")} "tu-3"))]))
+
+(defn start!
+  "Start the world and the editor. opts {:root :port :web :offline? :db :memory? :step}.
+   Returns {:url :sys :env}."
+  [opts]
+  (let [root (or (:root opts) (File/cwd!))
+        home (or (System/get_env "OMEGA_HOME") (File/cwd!))
+        db (when-not (or (:memory? opts) (and (:offline? opts) (nil? (:db opts)))) (env/db-path root (:db opts)))
+        e (if db (env/open-durable! db) (env/open))
+        step (or (:step opts) (if (:offline? opts) (offline-model) (llm/step (llm/from-env home))))
+        sys (task/start-system e {:step step :tools cm/tools :root root :system-prompt cli/SYSTEM-PROMPT})
+        interrupted (task/recover! sys)
+        web (or (:web opts) (str home "/vendor/bl-ed/web"))
+        ;; bl: shows THIS VM's image — omega itself, live (a project's target
+        ;; VM forwards the same provider later)
+        img (image/provider)
+        r (serve/start! {:port (or (:port opts) 8790) :root root :web web
+                         :providers (assoc (pv/providers sys) "bl" (:provider img))
+                         :intents (merge (pv/intents sys) (:intents img))})]
+    (when db (println (str "omega: tasks are kept in " db (when (seq interrupted) (str " · interrupted: " (clojure.string/join " " interrupted))))))
+    (assoc r :sys sys :env e :db db)))
+
+(defn main
+  "bin/bl-ed: serve until killed."
+  []
+  (env/exit-on-user-error
+    (fn []
+      (let [args (vec (BeamLisp/argv))
+            flag? (fn [f] (some (fn [a] (= a f)) args))
+            opt (fn [f] (second (drop-while (fn [a] (not= a f)) args)))
+            r (start! {:root (opt "--root") :offline? (flag? "--offline") :memory? (flag? "--memory") :db (opt "--db")
+                       :port (when-let [p (opt "--port")] (erlang/binary_to_integer p))})]
+        (println (str "bl-ed + omega: " (:url r) "?file=omega:overview   (documents under " (:root r) ")"))
+        (println "  space a o  overview · space a s  scratch · space a n  new task · C-Enter on a #+begin_task block")
+        (receive :never nil)))))

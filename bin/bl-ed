@@ -1,16 +1,17 @@
-#!/bin/sh
-# bin/bl-ed — run the vendored bl-ed on omega's pinned beam-lisp.
-#   bin/bl-ed                     serve http://127.0.0.1:8790/ over this repo
-#   bin/bl-ed build               (re)compile the page (vendor/bl-ed/build.sh)
-#   BLED_ROOT=dir BLED_PORT=n bin/bl-ed
-# The page needs vendor/bl-ed/web/out; a missing build is made first.
+#!/bin/bash
+# bin/bl-ed — omega inside bl-ed: the task world and the editor in ONE VM.
+#   bin/bl-ed                 live model; documents under the current directory
+#   bin/bl-ed --offline       a scripted model (no network)
+#   bin/bl-ed build           (re)compile the page (vendor/bl-ed/build.sh)
+#   flags: --root DIR  --port N (8790)  --db DIR | --memory
+# Then open the printed URL. The page needs vendor/bl-ed/web/out; a missing
+# build is made first (~3 min cold).
 ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
 V="$ROOT/vendor/bl-ed"
-case "${1:-serve}" in
-  build) exec "$V/build.sh" ;;
-  serve)
-    [ -f "$V/web/out/ed.main.mjs" ] || "$V/build.sh" || exit 2
-    export BLED_WEB="$V/web" BLED_ROOT="${BLED_ROOT:-$ROOT}"
-    exec "$ROOT/bin/bl" run "$V/serve.bl" ;;
-  *) echo "usage: bin/bl-ed [serve|build]" >&2; exit 2 ;;
-esac
+if [ "${1:-}" = build ]; then exec "$V/build.sh"; fi
+[ -f "$V/web/out/ed.main.mjs" ] || "$V/build.sh" || exit 2
+ENTRY=$(mktemp --suffix=.bl)
+trap 'rm -f "$ENTRY"' EXIT
+printf '(ns omega.ed.entry (:require [omega.ed.main :as m]))\n(m/main)\n' > "$ENTRY"
+set -o pipefail
+OMEGA_HOME="$ROOT" "$ROOT/bin/bl" run "$ENTRY" -- --root "$PWD" "$@" 2>&1 | grep --line-buffered -v -e '^bl-stage-hosts:' -e '^:ok$'

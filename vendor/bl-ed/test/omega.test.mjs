@@ -138,6 +138,14 @@ test("C-Enter again: same body focuses, an edited body refines, a finished task 
   assert.match(done.text(), /\{:id "t-9" :goal "\d+" :prev "t-7"\}/);
 });
 
+test("a reference the world wrote (no digest) is adopted on C-Enter, not refined", () => {
+  const s = session(PLAN.replace("#+end_task", "#+end_task\n#+RESULTS: hex\n: #omega/task {:id \"t-10\"}"));
+  s.goto(4).key("C-Enter");
+  assert.equal(s.drain("intent").length, 0, "nothing is sent");
+  assert.match(s.text(), /: #omega\/task \{:id "t-10" :goal "\d+"\}/, "the digest is added");
+  assert.match(s.msg(), /t-10 is live/);
+});
+
 test("a finished task's reference is rewritten once with its summary", () => {
   const s = session(PLAN.replace("#+end_task", "#+end_task\n#+RESULTS: hex\n: #omega/task {:id \"t-7\" :goal \"1\"}"));
   s.send(ev(K("type"), K("cards"), K("data"), toBL([{ id: "t-7", status: "done", glyph: "✓", word: "done", title: "x", age: "4m", result: "parses 0x" }])));

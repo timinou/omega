@@ -1,0 +1,176 @@
+; bl-ed/image.bl — the `bl:` provider: a namespace as the live image holds it.
+;
+; Generic beam-lisp (no omega): register it under scheme "bl" in any VM that
+; serves bl-ed, and `bl:` lists the application namespaces, `bl:<ns>` shows
+; one with, per var:
+;
+;   ✓ matches its source        the def's form hash equals the form the image
+;                               was loaded from (snapshot when first seen)
+;   ✎ source changed            the file's form differs from what is loaded
+;   ⚠ live only                 in the image (Env/own_names), not in the file
+;   + not loaded                in the file, not (yet) in the image
+;
+; Hashes are of the position-stripped READER form (spikes/live-image.bl.md
+; finding 1: whitespace never counts, a changed body does). "What is loaded" is
+; the file's forms the first time this provider sees the namespace — exact for
+; anything loaded before (the file has not moved since image start, per
+; reload/drift), and an honest "unknown" otherwise.
+;
+; Read-only document. Actions are intents: "bl/reload" (through reload/commit's
+; coherence gate — a hold is reported, never forced) and "bl/undefine".
+
+(ns bl-ed.image
+  (:require [reload] [clojure.edn :as edn] [clojure.string]))
+
+(defn- form-hash
+  "The hash of a top-level form's text with positions and whitespace gone."
+  [src]
+  (str (erlang/phash2 (pr-str (edn/read-string src)) 4294967296)))
+
+(def ^:private DEFS #{"defn" "defn-" "def" "defmacro" "defmulti" "defprotocol" "defserver" "defrecord" "deftype" "defonce"})
+
+(defn- def-name
+  "The var a top-level form source defines, or nil: `(defn ^:private x …)` →
+   \"x\". Plain token work (no regex): the head, then the first token that is
+   not metadata."
+  [src]
+  (let [s (clojure.string/trim (str src))]
+    (when (clojure.string/starts-with? s "(")
+      (let [toks (vec (remove clojure.string/blank? (clojure.string/split (subs s 1) #"\s+")))
+            head (first toks)
+            nm (first (remove (fn [t] (clojure.string/starts-with? t "^")) (rest toks)))]
+        (when (and (contains? DEFS head) (some? nm))
+          (first (clojure.string/split nm #"[\)\[\]]")))))))
+
+(defn- balanced-end
+  "The offset just past the `)` that closes the list opening at `from` in the
+   codepoint vector `cps` (strings, chars and comments skipped), or nil. The
+   reader's own :end-offset stops one codepoint short on a form whose symbol
+   carries ^metadata (OBSERVED on the pin: `(def ^:private r 3)` → `(def
+   ^:private r 3`), so the slice is measured here."
+  [cps from]
+  (let [n (count cps)]
+    (loop [i from depth 0 in-str false esc false comment false]
+      (if (>= i n)
+        nil
+        (let [c (nth cps i)]
+          (cond
+            comment (recur (inc i) depth false false (not= c 10))
+            esc (recur (inc i) depth in-str false false)
+            in-str (cond (= c 92) (recur (inc i) depth true true false)
+                         (= c 34) (recur (inc i) depth false false false)
+                         :else (recur (inc i) depth true false false))
+            (= c 92) (recur (+ i 2) depth false false false)       ; \x char literal
+            (= c 34) (recur (inc i) depth true false false)
+            (= c 59) (recur (inc i) depth false false true)
+            (contains? #{40 91 123} c) (recur (inc i) (inc depth) false false false)
+            (contains? #{41 93 125} c) (if (= depth 1) (inc i) (recur (inc i) (dec depth) false false false))
+            :else (recur (inc i) depth false false false)))))))
+
+(defn file-defs
+  "{var-name {:hash :line}} of a source file's top-level defs."
+  [path]
+  (let [src (File/read! path)
+        cps (vec (unicode/characters_to_list src))
+        forms (BeamLisp.Ns.Reader/read_string src path)]
+    (reduce (fn [m f]
+              (let [pos (BeamLisp.Ns.Reader-node/node-pos f)
+                    from (get pos :offset)
+                    end (when (some? from) (or (balanced-end cps from) (get pos :end-offset)))
+                    text (when (some? end) (unicode/characters_to_binary (apply list (subvec cps from end))))
+                    nm (def-name text)]
+                (if (nil? nm) m (assoc m nm {:hash (try (form-hash text) (catch _ nil)) :line (get pos :line)}))))
+            {} forms)))
+
+(defn source-path [ns] (try (BeamLisp.Loader/source_path ns) (catch _ nil)))
+
+(defn var-states
+  "[{:var :state :line}] for namespace `ns`, against `loaded` = {var hash} (the
+   snapshot of what the image was loaded from). `path` defaults to the
+   loader's source path for `ns`."
+  ([ns loaded] (var-states ns loaded (source-path ns)))
+  ([ns loaded path]
+  (let [live (set (BeamLisp.Env/own_names ns))
+        file (if (and path (File/regular? path)) (file-defs path) {})
+        names (sort (distinct (concat live (keys file))))]
+    (mapv (fn [v]
+            (let [f (get file v) in-image? (contains? live v)]
+              {:var v :line (:line f)
+               :state (cond
+                        (and in-image? (nil? f)) :live-only
+                        (and f (not in-image?)) :not-loaded
+                        (nil? (get loaded v)) :unknown
+                        (= (get loaded v) (:hash f)) :matches
+                        :else :changed)}))
+          names))))
+
+(def ^:private MARK {:matches "✓ matches its source" :changed "✎ source changed since loaded (r reloads this ns)"
+                     :live-only "⚠ live only: not in the file (x undefines)" :not-loaded "+ in the file, not loaded"
+                     :unknown "· loaded before bl-ed saw it"})
+
+(defn render-ns
+  "The `bl:<ns>` document."
+  [ns states path journal]
+  (let [counts (frequencies (map :state states))
+        head [(str "#+TITLE: bl:" ns " · " (count states) " vars"
+                   (if (pos? (get counts :changed 0)) (str " · " (get counts :changed) " changed") "")
+                   (if (pos? (get counts :live-only 0)) (str " · " (get counts :live-only) " live-only") ""))
+              (str "source: " (or path "— (no file)") " · r reload (coherence-gated) · RET visit the file · C-o back")
+              ""
+              "* vars"]
+        rows (map (fn [s] (str "- " (:var s) "   " (get MARK (:state s)))) states)
+        tail (concat ["" "* reload journal (newest last)"]
+                     (if (empty? journal) ["- none in this image"]
+                         (map (fn [j] (str "- " (name (or (:event j) :event)) " " (clojure.string/join ", " (or (:nses j) []))
+                                           (when (:why j) (str " — " (:why j)))))
+                              journal)))
+        lines (vec (concat head rows tail))]
+    {:title (str "bl:" ns)
+     :text (clojure.string/join "\n" lines)
+     :objects (vec (concat
+                     [{:row 0 :type "bl/ns" :key ns}]
+                     (map-indexed (fn [i s] {:row (+ (count head) i) :type "bl/var" :key (str ns "/" (:var s)) :state (name (:state s))
+                                             :path path :line (:line s)})
+                                  states)))}))
+
+(defn render-index
+  "The `bl:` document: every application namespace."
+  [rows]
+  (let [head ["#+TITLE: bl: · the live image" "RET opens a namespace · C-o back" ""]]
+    {:title "bl:"
+     :text (clojure.string/join "\n" (concat head (map (fn [r] (str "- " (:ns r) "   " (:count r) " vars")) rows)))
+     :objects (vec (map-indexed (fn [i r] {:row (+ (count head) i) :type "bl/ns" :key (:ns r)}) rows))}))
+
+(defn provider
+  "The `bl` provider (and its intents) for bl-ed.serve/start!. Keeps the
+   per-namespace load snapshot it compares against."
+  []
+  (let [seen (atom {})
+        snapshot (fn [ns]
+                   (or (get @seen ns)
+                       (let [path (source-path ns)
+                             snap (if (and path (File/regular? path))
+                                    (reduce-kv (fn [m k v] (assoc m k (:hash v))) {} (file-defs path))
+                                    {})]
+                         (swap! seen assoc ns snap)
+                         snap)))
+        read-doc (fn [nm _]
+               (if (clojure.string/blank? nm)
+                 (render-index (vec (reload/namespaces)))
+                 (render-ns nm (var-states nm (snapshot nm)) (source-path nm) (reload/journal 5))))]
+    {:provider {:read read-doc
+                :rev (fn [nm p] (str (erlang/phash2 (:text (read-doc nm p)) 4294967296)))}
+     :intents {"bl/reload"
+               (fn [{:keys [ns]}]
+                 ;; stage the file's source, then commit through reload's
+                 ;; coherence gate: a held bundle leaves the old code serving
+                 (let [path (source-path ns)
+                       r (try (reload/stage ns (File/read! path)) (reload/commit)
+                              (catch e {:status :error :error (ex-message e)}))]
+                   (when (= :applied (:status r)) (swap! seen dissoc ns))
+                   {:result (str (name (or (:status r) :unknown))
+                                 (when (seq (:errors r)) (str " — " (clojure.string/join "; " (map :msg (:errors r))))))}))
+               "bl/undefine"
+               (fn [{:keys [ns var]}]
+                 (BeamLisp.Env/undefine_var ns var)
+                 {:result (str "undefined " ns "/" var)})}}))

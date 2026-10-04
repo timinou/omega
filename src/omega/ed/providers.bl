@@ -204,15 +204,13 @@
                                  "overview" ((:rev (overview-provider sys opts cache)) nm p)
                                  "tasks" ((:rev (tasks-provider sys opts cache)) nm p)
                                  nil))
-               :write (fn [nm p t base] (if (= nm "scratch") ((:write (scratch-provider sys opts)) nm p t base) {:conflict "read-only"}))
+               :write (fn [nm p t base] (if (= nm "scratch") ((:write (scratch-provider sys opts)) nm p t base) {:read-only true}))
                :eval (fn [nm p id t] (if (= nm "scratch") ((:eval (scratch-provider sys opts)) nm p id t) {:result "cells here do not run"}))}
       "task" (task-provider sys opts cache)
       "q" (q-provider sys opts cache)
       "effects" (effects-provider sys cache)})))
 
 ; ─── intents ────────────────────────────────────────────────────────────────
-
-(defn- goal-digest [s] (rev (str/trim (str s))))
 
 (defn- scratch-append!
   "Append `text` to the scratch document (the bridge's only write there)."
@@ -227,9 +225,12 @@
     (write-edn! p (assoc (read-edn p) id home))))
 
 (defn reference
-  "The #+RESULTS value a task block holds: `#omega/task {…}` (one line)."
+  "The #+RESULTS value of a task block the WORLD writes (a homeless task in
+   scratch), in the shape the editor writes: `#omega/task {:id \"t-1\"}`. No
+   :goal — the goal digest is the editor's (ed/omega.bl `digest`); a reference
+   without one counts as unedited, and the editor adds it on the next C-Enter."
   [m]
-  (str "#omega/task " (pr-str m)))
+  (str "#omega/task {:id " (pr-str (:id m)) "}"))
 
 (defn intents
   "The intent map for bl-ed.serve/start!. Each fn takes keywordized args and
@@ -245,12 +246,11 @@
                 home (if (and path block) {:path path :block block} {:path "omega:scratch" :block id})]
             (remember-home! sys opts id home)
             (when-not (and path block)
-              (scratch-append! sys opts (str "\n* " (r/one-line goal 70) "\n#+begin_task :id " id "\n" goal "\n#+end_task\n#+RESULTS: " id "\n: " (reference {:id id :goal (goal-digest goal)}) "\n")))
-            {:id id :goal (goal-digest goal) :reference (reference {:id id :goal (goal-digest goal)})}))))
+              (scratch-append! sys opts (str "\n* " (r/one-line goal 70) "\n#+begin_task :id " id "\n" goal "\n#+end_task\n#+RESULTS: " id "\n: " (reference {:id id}) "\n")))
+            {:id id}))))
     "task/say" (fn [{:keys [id text]}] (task/say! sys id (str text) "human:me") {})
     "task/steer" (fn [{:keys [id text]}] (task/steer! sys id (str text) "human:me") {})
     "task/cancel" (fn [{:keys [id]}] (task/cancel! sys id) {})
-    "task/digest" (fn [{:keys [goal]}] {:goal (goal-digest goal)})
     "msg/answer" (fn [{:keys [msg text]}] {:reply (actor/reply! (:env sys) msg (str text))})
     "cell/to-scratch"
     (fn [{:keys [task cell code]}]

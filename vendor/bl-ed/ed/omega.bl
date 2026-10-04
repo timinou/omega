@@ -118,8 +118,13 @@
             finished? (contains? #{"done" "failed" "cancelled"} (or (:status card) (:status ref)))]
         (cond
           (blank? goal) (c/message ed "a task block needs a goal: write it between #+begin_task and #+end_task")
-          (and (some? ref) (not finished?) (= (:goal ref) (digest goal)))
-            (c/message ed (str (:id ref) " is " (or (:word card) "live") (if (:title card) (str " — " (:title card)) "") "   (edit the block to refine it)"))
+          ; same body (or a reference the world wrote, which has no digest yet:
+          ; adopt the body as it is now) → focus
+          (and (some? ref) (not finished?) (or (nil? (:goal ref)) (= (:goal ref) (digest goal))))
+            (let [ed (if (nil? (:goal ref))
+                       (write-reference ed b bid (str "#omega/task {:id \"" (:id ref) "\" :goal \"" (digest goal) "\"}"))
+                       ed)]
+              (c/message ed (str (:id ref) " is " (or (:word card) "live") (if (:title card) (str " — " (:title card)) "") "   (edit the block to refine it)")))
           (and (some? ref) (not finished?))
             (-> (write-reference ed b bid (str "#omega/task {:id \"" (:id ref) "\" :goal \"" (digest goal) "\"}"))
                 (c/effect {:kind :intent :intent "task/say" :args {:id (:id ref) :text goal}})
@@ -278,6 +283,26 @@
                                                      :then :visit :path "omega:scratch"})
                                        (c/message "copied to omega:scratch")))
                                  (c/message ed "c copies a cell: put the cursor in one"))))}
+   :bl/open {:doc "Open the namespace (bl:<ns>) or a var's source file."
+             :run (fn [ed] (let [o (object-at ed)]
+                             (cond
+                               (nil? o) (c/message ed "nothing to open here")
+                               (= "bl/ns" (:type o)) (if (= (:path ed) (str "bl:" (:key o)))
+                                                       (c/message ed "this namespace is already open")
+                                                       (docs/visit ed (str "bl:" (:key o))))
+                               :else (c/message ed (str (:key o) " — " (:state o))))))}
+   :bl/reload {:doc "Reload the namespace from its file (coherence-gated; a hold is reported)."
+               :run (with-object #{"bl/ns" "bl/var"}
+                      (fn [ed o] (let [ns (first (split (:key o) "/"))]
+                                   (-> ed (c/effect {:kind :intent :intent "bl/reload" :args {:ns ns} :then :show-result})
+                                       (c/message (str "reloading " ns "…"))))))}
+   :bl/undefine {:doc "Undefine a live-only var."
+                 :run (with-object #{"bl/var"}
+                        (fn [ed o] (let [[ns v] (split (:key o) "/")]
+                                     (if (= "live-only" (:state o))
+                                       (intent ed "bl/undefine" {:ns ns :var v} (str "undefined " (:key o)))
+                                       (c/message ed (str (:key o) " is in its file — edit the file instead"))))))}
+   :bl/index {:doc "The live image: every application namespace (bl:)." :run (fn [ed] (docs/visit ed "bl:"))}
    :omega/overview {:doc "Every task, by urgency (omega:overview)." :run (fn [ed] (docs/visit ed "omega:overview"))}
    :omega/scratch {:doc "The scratch pad: homeless tasks and notes (omega:scratch)." :run (fn [ed] (docs/visit ed "omega:scratch"))}
    :omega/new-task {:doc "Open a task with no home (it lands in omega:scratch)."
@@ -295,8 +320,11 @@
      "omega/cell" {"c" :omega/to-scratch "e" :omega/effects}
      "omega/trace" {"Enter" :omega/home}
      "omega/effect" {"Enter" :omega/home}
-     "omega/expand" {"Enter" :omega/home}}))
+     "omega/expand" {"Enter" :omega/home}
+     "bl/ns" {"Enter" :bl/open "r" :bl/reload}
+     "bl/var" {"Enter" :bl/open "r" :bl/reload "x" :bl/undefine}}))
 
 (def global-keys
   {"space a o" :omega/overview "space a s" :omega/scratch "space a n" :omega/new-task "space a q" :omega/query
+   "space a i" :bl/index
    "C-o" :back})

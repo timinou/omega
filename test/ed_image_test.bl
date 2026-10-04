@@ -1,0 +1,42 @@
+(ns ed-image-test
+  (:require [bl-ed.image :as img]
+            [clojure.string :as str]))
+
+;; The bl: provider over a namespace this test writes, loads and changes.
+
+(defn- fixture []
+  (let [dir (str "/tmp/omega-ed-image-" (erlang/unique_integer (to-list [:positive])))
+        ns (str "edimg" (erlang/unique_integer (to-list [:positive])) ".cart")
+        path (str dir "/" (str/replace ns "." "/") ".bl")]
+    (File/mkdir_p! (Path/dirname path))
+    {:dir dir :ns ns :path path}))
+
+(deftest file-defs-hash-forms-not-whitespace
+  (let [{:keys [path ns]} (fixture)]
+    (File/write! path (str "(ns " ns ")\n(defn total [xs] (reduce + xs))\n(defn- tax [x] (* x 2))\n(def ^:private rate 3)\n"))
+    (let [a (img/file-defs path)]
+      (is (= #{"total" "tax" "rate"} (set (keys a))))
+      (is (every? some? (map :hash (vals a))) "every def hashes")
+      (File/write! path (str "(ns " ns ")\n(defn total  [xs]\n  (reduce + xs))\n(defn- tax [x] (* x 3))\n(def ^:private rate 3)\n"))
+      (let [b (img/file-defs path)]
+        (is (= (get-in a ["total" :hash]) (get-in b ["total" :hash])) "whitespace is not a change")
+        (is (not= (get-in a ["tax" :hash]) (get-in b ["tax" :hash])) "a changed body is")))))
+
+(deftest var-states-name-every-difference
+  (let [states (fn [m] (into {} (map (fn [s] [(:var s) (:state s)]) m)))
+        {:keys [path ns]} (fixture)]
+    (File/write! path (str "(ns " ns ")\n(defn a [] 1)\n(defn b [] 2)\n"))
+    (BeamLisp.Compiler/eval_string (File/read! path) (BeamLisp.Compiler/new_env "user") path)
+    (let [loaded (reduce-kv (fn [m k v] (assoc m k (:hash v))) {} (img/file-defs path))]
+      (File/write! path (str "(ns " ns ")\n(defn a [] 10)\n(defn b [] 2)\n(defn c [] 3)\n"))
+      (BeamLisp.Compiler/eval_string "(defn live [] 0)" (BeamLisp.Compiler/new_env ns) "x")
+      (is (= {"a" :changed "b" :matches "c" :not-loaded "live" :live-only}
+             (states (img/var-states ns loaded path)))))))
+
+(deftest the-document-marks-rows-as-vars
+  (let [d (img/render-ns "x.y" [{:var "a" :state :changed :line 2} {:var "b" :state :live-only}] "/p/x/y.bl" [])]
+    (is (str/includes? (:text d) "#+TITLE: bl:x.y · 2 vars · 1 changed · 1 live-only"))
+    (is (= ["x.y" "x.y/a" "x.y/b"] (map :key (:objects d))))
+    (let [lines (str/split-lines (:text d))]
+      (doseq [o (rest (:objects d))]
+        (is (str/includes? (nth lines (:row o)) (last (str/split (:key o) "/"))))))))
