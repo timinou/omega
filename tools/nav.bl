@@ -1,0 +1,94 @@
+(ns nav (:require [clojure.string :as str]))
+;; nav.bl — planning/navigation tools over the omega codebase. Load with (load-file ...) or paste into eval.
+(def ROOTS ["src" "test"])
+
+(defn sh-lines [cmd] (vec (remove str/blank? (str/split-lines (elem (System/cmd "sh" (list "-c" cmd)) 0)))))
+
+(defn files [] (vec (sort (mapcat (fn [r] (sh-lines (str "find " r " -name '*.bl' -o -name '*.bl.md'"))) ROOTS))))
+
+(defn file->ns [f] (-> f (str/replace #"^(src|test)/" "") (str/replace #"\.bl$" "") (str/replace "/" ".") (str/replace "_" "-")))
+
+;; ── 1. INDEX: ns, requires, defs with line numbers + first doc line
+(defn parse-file [f]
+  (let [txt (File/read! f)
+        lines (str/split-lines txt)
+        req (set (map second (re-seq #"\[(omega\.[a-z0-9.-]+)" (or (re-find #"\(:require[^)]*(?:\[[^\]]*\][^)]*)*\)" txt) ""))))
+        defs (vec (keep-indexed
+                    (fn [i l] (when-let [m (re-find #"^\((defn-?|def|defmacro|deftest|defserver)\s+(?:\^:private\s+)?([^\s\[\]()]+)" l)]
+                                {:line (inc i) :kind (second m) :name (nth m 2) :private (= "defn-" (second m))}))
+                    lines))
+        header (str/join " " (take 2 (map #(str/trim (str/replace % #"^;+\s*" "")) (filter #(re-find #"^;\s*[a-zA-Z]" %) (take 12 lines)))))]
+    {:file f :ns (or (second (re-find #"\(ns\s+([^\s)]+)" txt)) (file->ns f))
+     :requires req :defs defs :loc (count lines) :header header :text txt}))
+
+(defn build-index [] (let [ps (map parse-file (files))] {:by-file (into {} (map (fn [p] [(:file p) p]) ps))
+                                                       :by-ns (into {} (map (fn [p] [(:ns p) p]) ps))}))
+
+;; ── 2. DEPENDENCY GRAPH + IMPACT
+(defn dependents [idx] ; ns -> #{ns that require it}
+  (reduce (fn [m p] (reduce (fn [m r] (update m r (fnil conj #{}) (:ns p))) m (:requires p))) {} (vals (:by-file idx))))
+
+(defn closure [graph start]
+  (loop [seen #{} frontier [start]]
+    (if (empty? frontier) (disj seen start)
+      (let [n (first frontier)
+            nxt (remove seen (get graph n #{}))]
+        (recur (into (conj seen n) nxt) (into (rest frontier) nxt))))))
+
+(defn impact [idx nsname]
+  (let [g (dependents idx) all (closure g nsname)
+        tests (filter #(str/ends-with? % "-test") all)]
+    {:ns nsname :direct (sort (get g nsname #{})) :transitive (sort all) :tests-to-run (sort tests)
+     :blast (count all)}))
+
+;; ── 3. HOTSPOTS: churn x size x fan-in, and hidden co-change coupling
+(defn churn [] (frequencies (filter #(re-find #"\.bl(\.md)?$" %) (sh-lines "git log --name-only --pretty=format: -- src test"))))
+
+(defn commits-files [] (let [out (str/join "\n" (sh-lines "git log --name-only --pretty=format:@@ -- src test"))]
+                         (vec (map (fn [blk] (vec (filter #(re-find #"\.bl" %) (remove str/blank? (str/split-lines blk))))) (rest (str/split out "@@"))))))
+
+(defn hotspots [idx n]
+  (let [c (churn) g (dependents idx)]
+    (vec (take n (sort-by (fn [r] (- (:score r)))
+      (map (fn [[f p]] (let [ch (get c f 0) fan (count (get g (:ns p) #{}))]
+                         {:file f :churn ch :loc (:loc p) :fan-in fan :score (* ch (math/log (+ 2 (:loc p))) (+ 1 fan))}))
+           (:by-file idx)))))))
+
+(defn cochange [idx n]
+  (let [cs (commits-files)
+        pairs (frequencies (mapcat (fn [fs] (let [fs (vec (sort (distinct fs)))]
+                                              (when (< (count fs) 9) (for [i (range (count fs)) j (range (inc i) (count fs))] [(nth fs i) (nth fs j)])))) cs))
+        ns-of (fn [f] (:ns (get (:by-file idx) f)))
+        linked? (fn [a b] (let [pa (get (:by-file idx) a) pb (get (:by-file idx) b)]
+                            (or (contains? (:requires pa) (:ns pb)) (contains? (:requires pb) (:ns pa)))))]
+    (vec (take n (sort-by (fn [r] (- (:times r)))
+      (for [[[a b] k] pairs :when (and (>= k 2) (get (:by-file idx) a) (get (:by-file idx) b) (not (linked? a b)))]
+        {:a a :b b :times k}))))))
+
+;; ── 4. WHERE: definitions + textual callers of a symbol
+(defn where [idx sym]
+  (let [pat (re-pattern (str "[\\s(/]" (str/replace sym "." "\\.") "[\\s)\\]]"))
+        defs (for [p (vals (:by-file idx)) d (:defs p) :when (= (last (str/split sym "/")) (:name d))] [(:file p) (:line d) (:kind d)])
+        uses (for [p (vals (:by-file idx)) [i l] (map-indexed vector (str/split-lines (:text p)))
+                   :when (and (re-find pat l) (not (re-find #"^\s*;" l)) (not (re-find (re-pattern (str "^\\((defn-?|def)\\s+" (str/replace sym "." "\\."))) l)))]
+               [(:file p) (inc i) (str/trim l)])]
+    {:defs (vec defs) :uses (vec (sort-by (juxt first second) uses))}))
+
+;; ── 5. TASKS: org task files -> state + DEPENDS graph
+(defn tasks []
+  (vec (for [f (sort (sh-lines "find '!tasks' -name '*.org' -not -path '*/drafts/*'"))]
+         (let [t (File/read! f) g (fn [k] (second (re-find (re-pattern (str "#\\+" k ":\\s*(.*)")) t)))]
+           {:id (or (g "CUSTOM_ID") f) :title (g "TITLE") :state (g "STATE") :dep (g "DEPENDS") :file f :text t})))) 
+
+(defn tasks-mentioning [ts needle] (vec (for [t ts :when (str/includes? (:text t) needle)] [(:id t) (:state t)])))
+
+;; ── 6. PLAN: one question -> one briefing
+(defn plan [idx ts files-to-change]
+  (let [g (dependents idx) co (cochange idx 400)]
+    (vec (for [f files-to-change :let [p (get (:by-file idx) f)] :when p]
+           {:file f :ns (:ns p) :loc (:loc p) :header (:header p)
+            :public-api (vec (map :name (remove :private (filter #(#{"defn" "defmacro" "defserver"} (:kind %)) (:defs p)))))
+            :requires (sort (:requires p))
+            :impact (impact idx (:ns p))
+            :hidden-coupling (vec (for [c co :when (or (= f (:a c)) (= f (:b c)))] [(if (= f (:a c)) (:b c) (:a c)) (:times c)]))
+            :tasks (tasks-mentioning ts f)}))))

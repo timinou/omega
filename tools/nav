@@ -1,0 +1,12 @@
+#!/bin/sh
+# usage: tools/nav impact omega.task | where tr/leave! | hot | plan src/omega/task.bl ...
+cd "$(dirname "$0")/.."
+cmd=$1; shift
+case $cmd in
+  impact) body="(println (impact (build-index) \"$1\"))";;
+  where)  body="(let [w (where (build-index) \"$1\")] (println \"DEFS\" (:defs w)) (doseq [u (:uses w)] (println u)))";;
+  hot)    body='(let [i (build-index)] (doseq [h (hotspots i 10)] (println h)) (println "-- co-change without require edge") (doseq [c (cochange i 10)] (println c)))';;
+  plan)   fs=$(for f in "$@"; do printf '"%s" ' "$f"; done); body="(let [i (build-index)] (doseq [p (plan i (tasks) [$fs])] (println (dissoc p :header)) (println)))";;
+esac
+{ cat tools/nav.bl; echo "$body"; } > tools/.run.bl
+exec bin/bl run tools/.run.bl
