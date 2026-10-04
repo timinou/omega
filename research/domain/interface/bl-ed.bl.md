@@ -1594,3 +1594,126 @@ Waves (§14):
 - W1 (FEAT-004) builds the buffer server on the convergence spike's op model.
 - W1c shrinks: the `:task` kind is lifted in the package; upstream is only `write-results`.
 
+
+### 15.9 Round three (2026-10-04): core changes landed; captures, caching, the live image
+
+The user's answers to §15.7's leans:
+- jj out: **yes**, provided the history also catches file changes made by anything other than `edit`.
+- Core changes are welcome; they are made and committed on main.
+- Edit logic must be written down as rules that can be tuned after use.
+- Test isolation may come later.
+
+**Core changes, done (bfd3a9f, 88bf867).** C1, C2, C4, C5, C6, C8 and C9 are in `src/`, covered by
+`test/core_changes_test.bl`, and the suite is green (16 files). C3 (app-declared `env.bl` keys) needs
+beam-lisp and C7 (CLI attach) needs realm, so both stay in their waves. Details:
+- **C2** fixes BUG-001.
+- **C8** on the real code: a 120-step task went from 65.7 s to 16.7 s (3.9×), with the same 242
+  turns and the same cost. `loop/turns` stays the store read.
+- **The edit contract** is one data table, `omega.edit/RULES`:
+  - `:occurrences :unique|:first`;
+  - `:empty-old :refuse|:prepend`;
+  - `:atomic`;
+  - `:claims :report|:refuse|:ignore`;
+  - `:preview`.
+  It can be overridden per system with `:edit-rules`. Later rules (`:overlay`, `:changed-since`)
+  join that table.
+- **Encoding bugs found by the caching spike.** `jsonable` crashed on a `:meta` key, which killed a
+  task for good, and turned JSON null into the string `"null"`. Both are fixed in omega. The `:meta`
+  destructuring itself is a beam-lisp bug, filed upstream as BUG-003.
+
+**Catching every file change, not only `edit`** (`spikes/fs-capture.bl.md`), for E22:
+- **The precise part is a call trace of the cell.** `erlang:trace` on the cell process, with
+  `set_on_spawn`, plus trace patterns on `file`/`prim_file` writes, renames and deletes and on
+  `open_port`.
+  - It sees every BEAM-level write: `File/*`, `:file`, raw handles, `prim_file` NIFs, spawned
+    children.
+  - Each event is attributed exactly, by pid.
+  - Cost: under 1 ms per cell.
+  - It subsumes the `write`/`edit` recorder.
+- **The rest is a scan, only after cells that started an OS process** (`sh`).
+  - What it is: a stat walk of the root, diffed against the previous after-scan (cached).
+  - Skipped: `.git`, `.omega`, `_build`, `node_modules`, `target`.
+  - Racy files are hashed: mtime has one-second granularity here.
+  - Renames are detected by inode.
+  - Cost: ~60–140 ms per 2,000 files. It runs in the cell or historian, off the 5 ms task-side budget.
+- **Each path in a change records where it came from:**
+  - `:source :trace` (exact);
+  - `:source :scan` (the only OS-process cell in its window);
+  - `:source :scan :ambiguous [tasks]` (overlapping `sh` cells);
+  - `:source :external` (no omega cell running: a human or a daemon).
+- **Rejected as the primary mechanism:**
+  - inotify: events carry no writer, it races on new directories, and `.git` floods it;
+  - `strace -f`: 3–31× slower;
+  - overlayfs: it changes the paths the agent sees.
+  `strace` stays an opt-in for paths that come out `:ambiguous`.
+- **What it misses:** a create-then-delete inside one `sh` eval, and writes outside the root.
+- **Hook point:** `codemode/run-eval` (the preamble starts the trace; it is collected after
+  `eval-cell` returns), feeding the `:tool/after` hook → historian path of §15.8.
+- This is FEAT-005 scope.
+
+**Prompt caching** (`spikes/prompt-cache.bl.md`):
+- **Today's requests already cache well.** `omega.loop/request` is already append-only and byte-stable
+  (9/9 pairs over a real task).
+- **The contract `omega.loop` keeps:**
+  - append-only history;
+  - one canonical encoder;
+  - a stable head (system, tools and model fixed per task);
+  - volatile context (attention lines, bl-ed's "what the human is looking at") only in a request-time
+    `:tail` that is never recorded;
+  - opaque provider blocks round-trip verbatim;
+  - compaction and fork are explicit cache resets;
+  - per-step hit-rate telemetry.
+- **Per-provider adapters:**
+  - **Anthropic:** explicit `cache_control`, 3 breakpoints: the last system block, a ladder ≥8
+    messages back, and the last block before the tail. Confirmed live through the proxy: a 5,311-token
+    read on step 2.
+  - **OpenAI Chat:** automatic, plus `prompt_cache_key` = task id.
+  - **Responses/Codex:** stateless replay with `store:false` and `reasoning.encrypted_content`, as
+    the Codex CLI does; `previous_response_id` is only a later transport optimisation.
+- **Cost:** a 40-step task drops to 15–23% of uncached input cost. One volatile line placed in the
+  system prompt makes it 125%, silently.
+- **∴** The `:tail` field is the rule bl-ed's attention lines must follow (E10/E14 placement), and
+  the Anthropic planner is a W0 item: FEAT-012.
+
+**The live image when the project is beam-lisp** (`spikes/live-image.bl.md`, all on the pin).
+
+What the spike observed:
+- **The image diff.** A step's code change can be recorded exactly as an `:image` part:
+  - a per-var hash of the position-stripped source form; a whitespace-only re-eval changes 0 vars;
+  - the compiled AST cannot be hashed: gensyms and module names change on every eval.
+- **Removed vars.** Plain eval never removes a var, so "removed" needs `own_names`.
+- **What running code sees after a reload:**
+  - fully-qualified callers and held var values get the new code;
+  - closures made by the old `defn` keep the old code;
+  - a redefined `defserver` runs its NEW handlers on its OLD state, with no `code_change`.
+- **Restoring code is cheap; restoring state is impossible.**
+  - Replaying the stored text of only the vars that differ took 15–31 ms for 3 vars.
+  - Whole-namespace eval is superlinear (100 fns = 4.2 s), so reload and restore must touch only the
+    vars that differ.
+  - Nothing restores process state, mailboxes or datom heads.
+- **The ward gate.** `reload.ward/run-sandboxed` keeps the real registry untouched (~80–110 ms warm,
+  7–8 s cold). Plain `ward/run` and a same-namespace `env/fork` LEAK into the live image: the real
+  `f` changed in both cases.
+- **Leftover modules.** Every redefinition leaves ~4 body modules loaded (no purge).
+
+The experiences to support:
+- **(a)** A step that edits `foo.bl` shows the human "changed `price`, added `extra`" next to the
+  file diff, and the live app picks the change up.
+- **(b)** "Back to step 12" restores the code and says plainly that the state did not come back.
+- **(c)** A risky change is gated in a sandboxed ward before it reaches the live image.
+- **(d)** Two tasks reloading one namespace are detected through claims and a `:prev` mismatch, not
+  isolated.
+- **(e)** The gate for a beam-lisp step is the ward, not `sh`.
+
+The scope split proposed to the user (open: their choice):
+
+| candidate | proposed | why |
+|---|---|---|
+| `:image` part per change (var hashes, added/changed/removed) | **in scope** (FEAT-005) | cheap, exact, same CAS as files |
+| reload-on-checkpoint, opt-in, `reload/commit` of the touched namespaces, never on a failed gate; dev image only | **in scope** (FEAT-005, policy off by default) | the live app follows the agent; refusal on a failed gate |
+| ward gate via `run-sandboxed` only, warmed at task start; lint that refuses a non-sandboxed ward | **in scope** (FEAT-005) | the leak is the easiest way to silently corrupt the live app |
+| restore the image at step N (code only, explicit "state not restored") | FUP-009 | needs the history CAS of var texts first |
+| process-state / datom-head checkpoints, `code_change` migrations | FUP-009 | no beam-lisp API; needs the project's cooperation |
+| stale-closure detection, purging old body modules | FUP-009 / upstream | runtime work in beam-lisp |
+| per-task images | not built | one registry per VM; claims + `:prev` warn instead |
+

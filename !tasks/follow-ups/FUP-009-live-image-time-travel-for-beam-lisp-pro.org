@@ -1,0 +1,38 @@
+#+TITLE: Live image time-travel for beam-lisp projects: restore code at step N, state checkpoints, stale closures
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FUP-009-live-image-time-travel-for-beam-lisp-pro
+
+* Initial Message
+
+exlpain all the problems you found through the spikes in details, and exlain the changes you've made and their reasoning as well
+
+* Context
+
+When omega works on a beam-lisp project, a step changes the live image as well as files. `spikes/live-image.bl.md` (bl-ed.bl.md §15.9) puts the cheap, exact parts in FEAT-005:
+- an `:image` part per change (per-var source hashes: added, changed, removed);
+- opt-in reload on checkpoint;
+- a `run-sandboxed` ward gate.
+
+This item holds the rest.
+
+* Items
+
+1. **Restore the image at step N, code only.**
+   - Replay the stored text of the vars that differ.
+   - `undefine_var` the vars added since.
+   - Evaluate per var, never the whole namespace: whole-ns eval is superlinear, 100 fns = 4.2 s against 25–200 ms for one var.
+   - The UI must say plainly that process state was not restored.
+2. **Process state and datom heads.**
+   - beam-lisp has no snapshot or restore API.
+   - Options: restart supervised servers; migrations via `reload.migrate` / `reload.upgrade`, which need the project's cooperation; datom: record the head `t` per change and offer "as-of" reads, not a rewind.
+3. **New handlers on old state.** A redefined `defserver` runs its new handlers on its OLD state, with no `code_change` (OBSERVED). At minimum, detect it and warn in the change.
+4. **Stale closures** made by an old `defn` keep the old code. List them, or warn.
+5. **Old body modules are never purged.** That is ~4 modules per redefinition, so a long session leaks. This is upstream beam-lisp work.
+6. **Macros.** A changed macro changes its callers without changing their hashes. Record macro dependents.
+7. **Release images.** `reload/commit` refuses in a release image (`BEAM_LISP_RELOAD` unset). The policy must state "dev image only".
+
+* Not planned
+
+Per-task images. There is one var registry per VM; use claims and a `:prev`-hash mismatch to warn instead.

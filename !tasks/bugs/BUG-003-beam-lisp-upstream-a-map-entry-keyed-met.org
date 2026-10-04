@@ -1,0 +1,37 @@
+#+TITLE: beam-lisp upstream: a map entry keyed :meta destructures as nil in (fn [[k v]] …)
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: BUG-003-beam-lisp-upstream-a-map-entry-keyed-met
+
+* Initial Message
+
+exlpain all the problems you found through the spikes in details, and exlain the changes you've made and their reasoning as well
+
+* Symptom (OBSERVED 2026-10-04, omega pin 2360b32e)
+
+Iterating a map with destructuring loses an entry whose key is `:meta`. Every other key tried so far (~30) works.
+
+```clojure
+(def m {:meta 1 :a 2})
+(map (fn [[k v]] [k v]) m)     ; throws: no function clause matching in BeamLisp.Ns.Rt.nth/2
+(map (fn [e] (first e)) m)     ; (nil :a)       ← the :meta entry's first is nil
+(filter (fn [e] (= :meta (key e))) m) ; ()      ← key is not :meta either
+(reduce-kv (fn [a k v] (assoc a k v)) {} m)  ; {:meta 1, :a 2}  ✓
+(maps/fold …)                                 ; ✓
+(let [[k v] [:meta 1]] [k v])                 ; [:meta 1] ✓ (a plain vector is fine)
+```
+
+Likely cause (INFERRED, not traced): the map entry for `:meta` is built or seen as something carrying metadata, e.g. a seq of a map treats `:meta` as a reserved key when producing the entry, so `nth` gets a non-tuple.
+
+* Impact on omega
+
+`omega.llm/jsonable` crashed on any map with `:meta`. A model's tool input holding such a key is recorded in the turn, so every later request of that task threw and the task was dead. Worked around in omega 88bf867: maps are walked with `reduce-kv` in llm.bl, llm/sse.bl and jev.bl.
+
+* Fix upstream
+
+Find where a map seq builds its entries and why `:meta` differs. Add a test: `(map (fn [[k v]] k) {:meta 1})` = `(:meta)`.
+
+* Repro
+
+`spikes/prompt-cache.bl.md` (found there), or the snippet above with `bin/bl run`.

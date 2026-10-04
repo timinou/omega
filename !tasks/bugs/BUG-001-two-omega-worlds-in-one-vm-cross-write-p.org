@@ -1,8 +1,9 @@
 #+TITLE: Two omega worlds in one VM cross-write: prelude registry and task namespaces keyed by bare task id
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 159824fd6c1be22c
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
 #+CUSTOM_ID: BUG-001-two-omega-worlds-in-one-vm-cross-write-p
+#+COMPLETION_HASH: a7521fd1dd7d6cb4
 
 * Initial Message
 
@@ -58,3 +59,5 @@ Qualify by world:
 * Until fixed
 
 Declare `:vm "own"` for omega projects (the realm default).
+
+NOTE [2026-10-04]: Fixed by C2 in bfd3a9f. Every env now carries a world id (`env/world`). Prelude SYSTEMS/DONE are keyed by [world task], task namespaces are `omega.w.<world>.<task>`, and stream groups are `[:omega/stream world]` (`watch!` takes the world). Acceptance is covered by test/core_changes_test.bl: `c2-two-worlds-in-one-vm-never-cross-write` checks roots, claims and that a `def` is invisible across worlds; `c2-a-stream-watcher-sees-only-its-world`. The full suite is green.

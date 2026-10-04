@@ -1,0 +1,54 @@
+#+TITLE: W0 — prompt caching: the :tail contract in omega.loop, Anthropic cache_control planner, OpenAI cache keys
+#+STATE: ITEM
+#+SESSION_ID: 159824fd6c1be22c
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl]]
+#+CUSTOM_ID: FEAT-012-w0-prompt-caching-the-tail-contract-in-o
+
+* Initial Message
+
+exlpain all the problems you found through the spikes in details, and exlain the changes you've made and their reasoning as well
+
+* Why
+
+A 40-step task costs 15–23% of its uncached input with caching, against 100% today. omega sends no `cache_control`, and Anthropic caching is opt-in. bl-ed will add per-step volatile context (attention lines). Put in the wrong place, that context makes a task cost 125% silently. Evidence: `spikes/prompt-cache.bl.md` and `research/domain/interface/bl-ed.bl.md` §15.9.
+
+* Already true (OBSERVED)
+
+- `omega.loop/request` is append-only and byte-stable: 9/9 consecutive request pairs share a 100% prefix.
+- `omega.llm.usage/unify` already reads cached tokens from Anthropic, OpenAI Chat and Responses.
+- The local proxy (localhost:8080) passes `cache_control` through. Step 2 of a live run read 5,311 cached tokens.
+- The encoding bugs the spike found are fixed in 88bf867 (`:meta` crash, JSON null), with BUG-003 filed upstream.
+
+* Contract (invariants omega.loop keeps; write them in loop.bl's header)
+
+1. History is append-only. A recorded turn is never re-rendered.
+2. One canonical encoder (`omega.llm/jsonable`, keys sorted where the VM does not guarantee it).
+3. The head is stable: system prompt, tool table, model and effort are fixed for a task's life. Changing any of them is a declared cache reset.
+4. Volatile, request-time content goes in a new request field `:tail` (blocks appended after the last cacheable block, never recorded). bl-ed's attention lines and any "now" context use it.
+5. Opaque provider blocks (thinking, encrypted reasoning) round-trip verbatim.
+6. Compaction and fork are explicit cache resets, recorded as a fact.
+7. Telemetry: per step `{:cache-read :cache-write :input}` from usage, so a hit-rate regression is visible.
+
+* Adapters (omega.llm)
+
+- `:anthropic`: a pure `cache-plan`, request → wire body (prototype in the spike). Breakpoints:
+  - the last system block, which covers tools; skipped below the model's minimum cacheable tokens;
+  - a ladder breakpoint ≥8 messages back, which guards the 20-block lookback;
+  - the last block before `:tail`.
+  The TTL is 5m by default, with `:cache-ttl :1h` in provider config. Never more than 4 breakpoints.
+- `:openai-chat` (new provider): automatic caching; send `prompt_cache_key` = task id and optional `prompt_cache_retention`.
+- `:openai-responses` / Codex (new provider): stateless replay, `store:false`, `include ["reasoning.encrypted_content"]`, `prompt_cache_key` = task id, and the session header on the ChatGPT backend. This is what the Codex CLI sends. `previous_response_id` is not used (FUP: a later transport optimisation).
+- `usage`: add the `cache_write_tokens` alias that GPT-5.6+ reports.
+
+* Scope
+
+- In scope: contract + `:tail` + the Anthropic planner + telemetry + the alias.
+- The two OpenAI providers can be a second step of this feature; they are independent of bl-ed.
+
+* Acceptance
+
+- A loop test: over a scripted 10-step task, the encoded body of step k is a byte prefix of step k+1 (markers and tail stripped).
+- A planner test: ≤4 breakpoints on every step, placed as above, and none below the model minimum.
+- An attention line added via `:tail` changes no byte before the last breakpoint.
+- A cassette test of the Anthropic body with `cache_control`.
+- The suite is green.

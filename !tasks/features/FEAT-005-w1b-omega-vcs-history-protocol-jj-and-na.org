@@ -64,3 +64,72 @@ The `:tool/after` hook SNAPSHOTS the texts the step wrote (inline) and `cast`s `
   - A `:sync` option blocks the hook until commit, for gates that must hold the task.
   - Bound the historian's mailbox (a 60-cast burst queued 59; throughput 27–36 commits/s) and add `:flush` for tests and shutdown.
 - **Gotcha.** A prelude wrapper that calls the saved original `write`/`edit` recursed and hung. Use the C6 port, not wrappers.
+
+* Round three additions (2026-10-04, bl-ed.bl.md §15.9)
+
+The user accepted "jj out", on one condition: the history must also catch file changes that do not go through `edit`.
+
+** Capture: trace + scan (spikes/fs-capture.bl.md)
+
+*** The trace
+
+`codemode/run-eval`'s preamble starts `erlang:trace` on the cell process: `[call, set_on_spawn]` with a per-cell collector, and VM-wide trace patterns on the `file`/`prim_file` write, rename and delete exports and on `erlang:open_port/2`.
+- After `eval-cell` returns: `erlang:trace_delivered`, then take the events.
+- The events give `claims` (written, deleted, renamed paths) and `os?` (any `open_port`).
+
+*** The scan, only when `os?`
+
+- One stat walk of the root, skipping `.git .omega _build node_modules target`; `.gitignore` later.
+- Diff against the previous after-scan, kept in a cache server, using Erlang `maps/*` functions: beam-lisp `filter`/`=` over 2,000-key maps is 15 ms to 1.8 s.
+- Hash only changed paths. Racy rule: hash any entry whose mtime ≥ scan second − 1 (mtime has one-second granularity).
+- Renames are paired by inode.
+- Cap changed paths per step (~500) and record `:truncated`.
+
+*** Per-path record
+
+- `:source :trace` — exact.
+- `:source :scan` — the only OS-process cell in its window.
+- `:source :scan :ambiguous [tasks]` — overlapping `sh` cells.
+- `:source :external` — no omega cell running.
+- Renames are `[from to]`; a delete is a path with nil text.
+
+*** Cost and limits
+
+- Pure-BEAM cells cost under 1 ms. An `sh` cell costs ~60–140 ms per 2,000 files, run in the cell process or the historian, never in the task-side 5 ms.
+- Known misses: create-then-delete inside one `sh` eval, and writes outside the root.
+- Opt-in for exactness on `:ambiguous` paths: `strace -f` (3–31× slower).
+- Rejected: inotify, overlayfs.
+- Use one trace collector per cell: a shared one misattributed everything in the spike.
+
+** Beam-lisp projects: the :image part (spikes/live-image.bl.md)
+
+*** The :image part of a change
+
+`{:vars {ns/name {:hash :prev}} :reloaded [ns] :gate {:ward …}}`. Var hashes are of the position-stripped source form. Never hash the compiled AST: gensyms and module names differ on every eval. "Removed" comes from `own_names`, because plain eval never removes a var. File edits get it from the file's new text; eval cells get it from their source.
+
+*** Opt-in reload on checkpoint
+
+- Policy `:omega {:reload :on-checkpoint}`, off by default.
+- `reload/commit` of the touched namespaces, never when the gate failed; recorded as `:reloaded`.
+- Dev image only: reload refuses in a release image.
+
+*** Ward gate for beam-lisp steps
+
+- Use `reload.ward/run-sandboxed` ONLY: ~80–110 ms warm; warm the test library at task start, cold is 7–8 s.
+- A lint refuses `ward/run` / a same-ns `env/fork`: both leaked into the live image in the spike.
+
+*** Left to FUP-009
+
+Image restore at step N, process-state and datom checkpoints, stale closures, module purge.
+
+*** Open: the user decides
+
+The scope split in §15.9's table.
+
+** Acceptance additions
+
+- A test where an eval cell does `(sh "sed -i …")`, `(File/rename! …)` and `(File/rm! …)`: all three paths land in that step's change with the right `:source`.
+- Two overlapping `sh` cells → `:ambiguous [both]`.
+- A human edit with no cell running → `:external`.
+- A beam-lisp file edit records changed/added/removed vars, and a whitespace-only edit records none.
+- A ward gate never changes a live var.

@@ -78,3 +78,16 @@ W0 now also carries two new core changes. They come FIRST, because every later w
 ~12 lines. `write`/`edit` append " (t-1 also holds a.py; claims are advisory: coordinate with send/wait if you overlap)" to their result; both edits still land.
 
 Follow-up inside this FEAT: `read` reports fresh claims on the path too, for symmetric awareness. Do that only after claims are append-only facts, since `claim!` costs 11–100 ms today.
+
+* Done ahead of the re-pin (2026-10-04)
+
+Landed on main on the current pin, in bfd3a9f and 88bf867: C1, C2 (closes BUG-001), C4, C5, C6, C8 and C9, plus `omega.edit` (the edit contract as the `RULES` data table, overridable with `:edit-rules`). Covered by `test/core_changes_test.bl`; the suite is green (16 files).
+
+C8 measured on the real code: 120 steps, 65.7 s → 16.7 s, with identical turns and cost.
+
+** Still open in this item
+
+- The re-pin itself (after the beam-lisp merges).
+- C3 belongs to FEAT-002.
+- The append-only `:task/cost` half of C8. The loop no longer reads the entity back, but still rewrites it each step: BUG-002 cost. Make usage append-only per turn and sum it on read.
+- C9's symmetric half: `read` reporting claims, once claims are append-only.
