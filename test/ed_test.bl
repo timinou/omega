@@ -1,0 +1,164 @@
+(ns ed-test
+  (:require [omega.env :as env]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.actor :as actor]
+            [omega.codemode :as cm]
+            [omega.ed.render :as r]
+            [omega.ed.providers :as pv]
+            [clojure.string :as str]))
+
+;; ── pure renderers: plain data in, text out ───────────────────────────────
+
+(def ^:private ROW
+  {:id "t-1" :title "make hex work" :goal "make hex work" :status :running :age-ms 72000
+   :asks [] :claims ["reader.py"] :owner nil :result nil})
+
+(deftest ages-are-coarse-so-revs-move-rarely
+  (is (= "9s" (r/age 9400)))
+  (is (= "1m" (r/age 72000)))
+  (is (= "2h" (r/age (* 2 3600 1000)))))
+
+(deftest the-overview-groups-by-urgency-and-every-task-line-is-a-presentation
+  (let [asking (assoc ROW :id "t-2" :asks [{:id "m-1" :text "Bump to 0.2?"}])
+        snap {:tasks [ROW asking] :by-group {:running [ROW] :needs-you [asking]}}
+        d (r/overview snap {"t-1" {:path "plan.org" :block "hex"}} 0)
+        lines (str/split-lines (:text d))]
+    (is (str/starts-with? (first lines) "#+TITLE: omega · 2 tasks · 1 needs you"))
+    (let [at (fn [s] (first (keep-indexed (fn [i l] (when (= s l) i)) lines)))]
+      (is (< (at "* Needs you (1)") (at "* Running (1)")) "needs-you comes first"))
+    (is (= #{"t-1" "t-2"} (set (map :key (:objects d)))))
+    (doseq [o (:objects d)]
+      (is (str/includes? (nth lines (:row o)) (:key o)) (str "object row " (:row o) " shows " (:key o))))
+    (is (str/includes? (:text d) "asks: Bump to 0.2?"))
+    (is (str/includes? (:text d) "· plan.org"))))
+
+(deftest a-card-is-plain-json-able-data
+  (let [c (r/card (assoc ROW :asks [{:id "m-9" :text "ok?"}]) 0)]
+    (is (= "⚑" (:glyph c)))
+    (is (= {:msg "m-9" :text "ok?"} (:ask c)))
+    (is (= "running" (:status c)))))
+
+(deftest a-task-renders-as-a-livebook-of-cells
+  (let [turns [{:n 0 :role :user :content [{:type :text :text "do it"}]}
+               {:n 1 :role :assistant :content [{:type :text :text "On it."}
+                                                {:type :tool-use :id "tu-1" :name "eval" :input {:code "(+ 1 2)"}}]}
+               {:n 2 :role :user :content [{:type :tool-result :id "tu-1" :content "=> 3"}]}]
+        d (r/task-doc ROW {:turns turns :traces [] :asks [{:id "m-1" :kind :ask :text "Ship?"}]} {} 0 false)
+        text (:text d)]
+    (is (str/includes? text "#+begin_src beam-lisp :id t-1/1 :ns omega.task.t-1"))
+    (is (str/includes? text "#+RESULTS: t-1/1\n: => 3"))
+    (is (not (str/includes? text "* result · 2")) "a turn of only results is folded into its call")
+    (is (some (fn [o] (= "omega/msg" (:type o))) (:objects d)) "the open ask is answerable in place")
+    (is (some (fn [o] (= "omega/composer" (:type o))) (:objects d)))))
+
+(deftest a-long-task-shows-its-last-turns-and-offers-the-rest
+  (let [turns (vec (for [n (range 45)] {:n n :role :assistant :content [{:type :text :text (str "turn " n)}]}))
+        d (r/task-doc ROW {:turns turns :traces [] :asks []} {} 0 false)]
+    (is (str/includes? (:text d) "* … 15 earlier turns"))
+    (is (not (str/includes? (:text d) "turn 3\n")))
+    (is (str/includes? (:text (r/task-doc ROW {:turns turns :traces [] :asks []} {} 0 true)) "turn 3\n"))))
+
+(deftest a-query-renders-as-an-org-table-with-task-ids-as-presentations
+  (let [d (r/query-doc "abc" "[:find ?id :where [?t :task/id ?id]]" {:vars ["?id"] :rows [["t-1"] ["t-2"]]} 3)]
+    (is (str/includes? (:text d) "| ?id |"))
+    (is (= ["t-1" "t-2"] (map :key (filter (fn [o] (= "omega/task" (:type o))) (:objects d)))))
+    (is (str/includes? (:text (r/query-doc "x" "[:bad" {:error "unbalanced"} 0)) "error: unbalanced"))))
+
+(deftest effects-group-by-cell-and-say-what-was-not-captured
+  (let [rows [{:cell "t-1/1" :op :write :path "a.txt" :source :edit :verdict :allow}
+              {:cell "t-1/2" :op :exec :path "sh ls" :source :opaque :verdict :opaque}]
+        d (r/effects-doc "t-1" nil rows)]
+    (is (str/includes? (:text d) "* t-1/1\n- write  a.txt"))
+    (is (str/includes? (:text d) ":opaque ?"))
+    (is (= 1 (count (str/split-lines (str/replace (:text (r/effects-doc "t-1" "t-1/2" rows)) #"(?s)^.*\* t-1/2\n" "")))))))
+
+;; ── providers + intents over a real (scripted) world ──────────────────────
+
+(defn- system [step dir]
+  (task/start-system (env/open) {:step step :tools cm/tools :root dir}))
+
+(defn- tmpdir []
+  (let [d (str "/tmp/omega-ed-test-" (erlang/unique_integer (to-list [:positive])))] (File/mkdir_p! d) d))
+
+(deftest open-from-a-block-records-its-home-and-answers-a-reference
+  (let [dir (tmpdir)
+        sys (system (loop/scripted [(loop/say "ok")]) dir)
+        it (pv/intents sys)
+        out ((get it "task/open") {:goal "say ok" :path "plan.bl.org" :block "hex"})]
+    (is (re-matches #"t-[0-9]+" (:id out)))
+    (is (str/starts-with? (:reference out) "#omega/task {"))
+    (task/await sys (:id out) 5000)
+    (let [ov ((:read (get (pv/providers sys) "omega")) "overview" {})]
+      (is (str/includes? (:text ov) (str (:id out) "  say-ok")) "the title is task/open!'s slug of the goal")
+      (is (str/includes? (:text ov) "plan.bl.org") "the home shows"))
+    (task/stop-system! sys)))
+
+(deftest a-homeless-task-lands-in-scratch-and-scratch-saves-are-rev-checked
+  (let [dir (tmpdir)
+        sys (system (loop/scripted [(loop/say "ok")]) dir)
+        omega (get (pv/providers sys) "omega")
+        out ((get (pv/intents sys) "task/open") {:goal "tidy imports"})
+        s1 ((:read omega) "scratch" {})]
+    (is (str/includes? (:text s1) (str "#+begin_task :id " (:id out))))
+    (is (some (fn [o] (= (:id out) (:key o))) (:objects s1)) "its reference row is a task presentation")
+    (let [rev1 ((:rev omega) "scratch" {})]
+      (is (= {:conflict rev1} ((:write omega) "scratch" {} "stale" "not-the-rev")))
+      (is (contains? ((:write omega) "scratch" {} (str (:text s1) "\nmy note\n") rev1) :rev))
+      (is (str/includes? (:text ((:read omega) "scratch" {})) "my note")))
+    (task/stop-system! sys)))
+
+(deftest the-cards-document-carries-asks-and-answering-reaches-the-task
+  (let [dir (tmpdir)
+        sys (system (loop/scripted [(loop/call-tool "eval" {:code "(send \"human:me\" :ask \"Ship it?\")"})
+                                    (loop/say "asked")
+                                    (fn [req] (loop/say (str "got " (get-in (last (:messages req)) [:content 0 :text]))))])
+                    dir)
+        omega (get (pv/providers sys) "omega")
+        id (:id ((get (pv/intents sys) "task/open") {:goal "ask"}))]
+    (task/await sys id 5000)
+    (let [cards (clojure.edn/read-string (:text ((:read omega) "tasks" {:ids id})))
+          ask (get-in cards [id :ask])]
+      (is (= "Ship it?" (:text ask)))
+      ((get (pv/intents sys) "msg/answer") {:msg (:msg ask) :text "yes"})
+      (loop [n 0] (when (and (< n 50) (not (str/includes? (str (:result (task/view sys id))) "yes"))) (Process/sleep 100) (recur (inc n))))
+      (is (str/includes? (str (:result (task/view sys id))) "yes") "the reply reached the model"))
+    (task/stop-system! sys)))
+
+(deftest revs-hold-still-while-the-world-does
+  (let [dir (tmpdir)
+        sys (system (loop/scripted [(loop/say "ok")]) dir)
+        omega (get (pv/providers sys) "omega")
+        id (:id ((get (pv/intents sys) "task/open") {:goal "x"}))]
+    (task/await sys id 5000)
+    (let [a ((:rev omega) "overview" {}) b ((:rev omega) "overview" {})]
+      (is (= a b) "no commit, no new rev"))
+    (task/stop-system! sys)))
+
+(deftest a-task-document-reruns-a-cell-as-a-steer
+  (let [dir (tmpdir)
+        sys (system (loop/scripted [(loop/call-tool "eval" {:code "(+ 40 2)"}) (loop/say "done")]) dir)
+        tp (get (pv/providers sys) "task")
+        id (:id ((get (pv/intents sys) "task/open") {:goal "add"}))]
+    (task/await sys id 5000)
+    (let [d ((:read tp) id {})
+          ;; turn 1 is the prompt; the eval call is turn 2
+          cell (str id "/2")]
+      (is (str/includes? (:text d) (str ":id " cell)))
+      (is (str/includes? (:text d) "=> 42"))
+      (is (= "=> 42" (:result ((:eval tp) id {} cell (:text d)))))
+      (Process/sleep 200)
+      (is (some (fn [m] (and (= :steer (:kind m)) (str/includes? (:text m) "re-ran your cell"))) (actor/messages (:env sys) id))))
+    (task/stop-system! sys)))
+
+(deftest a-query-becomes-a-path-and-a-live-table
+  (let [dir (tmpdir)
+        sys (system (loop/scripted [(loop/say "ok")]) dir)
+        it (pv/intents sys)
+        _ ((get it "task/open") {:goal "q me"})
+        path (:path ((get it "q/new") {:text "[:find ?id :where [?t :task/id ?id]]"}))
+        d ((:read (get (pv/providers sys) "q")) (subs path 2) {})]
+    (is (str/starts-with? path "q:"))
+    (is (str/includes? (:text d) "| ?id |"))
+    (is (= 1 (count (filter (fn [o] (= "omega/task" (:type o))) (:objects d)))))
+    (task/stop-system! sys)))

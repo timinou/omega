@@ -1,0 +1,252 @@
+; omega/ed/render.bl — omega's views as org documents, for bl-ed.
+;
+; PURE: data in, {:text :objects :title} out. No env, no processes, no clock
+; (`now` is an argument), so every renderer is tested as plain data. The data
+; comes from the projections the web UI already uses (omega.ui.model/snapshot,
+; task-detail, task-row) — one projection, two renderers (providers README §4.4).
+;
+;   (overview snap homes now)          omega:overview
+;   (task-doc row detail homes now)    task:<id>
+;   (query-doc text result ms)         q:<id>
+;   (effects-doc id rows)              effects:<id>
+;   (task-rows snap ids)               omega:tasks?ids=… (the cards' data, as edn)
+;
+; obj = {:row n :type "omega/task" :key id …}: the row IS the object; bl-ed
+; binds keys per type (presentations). Rows are 0-based line indexes.
+
+(ns omega.ed.render
+  (:require [omega.ui.theme :as th]
+            [omega.ui.model :as model]
+            [clojure.string :as str]))
+
+; ─── small pieces ──────────────────────────────────────────────────────────
+
+(defn age
+  "A coarse age, so a view's text (and so its rev) changes at most once per
+   unit: seconds under a minute, minutes under an hour, then hours."
+  [ms]
+  (let [s (quot (max 0 (or ms 0)) 1000)]
+    (cond (< s 60) (str s "s")
+          (< s 3600) (str (quot s 60) "m")
+          :else (str (quot s 3600) "h"))))
+
+(defn- glyph [st] (:glyph (th/status st)))
+(defn- word [st] (:word (th/status st)))
+
+(defn one-line
+  "First line of `s`, clipped to n graphemes with …"
+  [s n]
+  (let [l (first (str/split-lines (str s)))
+        l (or l "")]
+    (if (> (count l) n) (str (subs l 0 (dec n)) "…") l)))
+
+(defn- home-label [homes id]
+  (let [h (get homes id)]
+    (cond (nil? h) "—"
+          (str/starts-with? (str (:path h)) "omega:") (subs (:path h) 6)
+          :else (:path h))))
+
+(defn- doc
+  "Lines + objects accumulated in order → the provider's map."
+  [title acc]
+  {:title title :text (str/join "\n" (:lines acc)) :objects (:objects acc)})
+
+(defn- emit
+  ([acc line] (update acc :lines conj line))
+  ([acc line obj] (-> acc
+                      (update :objects conj (assoc obj :row (count (:lines acc))))
+                      (update :lines conj line))))
+
+(def ^:private EMPTY {:lines [] :objects []})
+
+; ─── task card / row ───────────────────────────────────────────────────────
+
+(defn card
+  "The card's data for one task row (what a #+RESULTS line draws as): plain
+   strings and numbers only, so it crosses JSON as-is."
+  [row now]
+  (let [ask (first (:asks row))]
+    {:id (:id row) :status (name (or (:status row) :open))
+     :glyph (if ask "⚑" (glyph (:status row)))
+     :word (if ask "needs you" (word (:status row)))
+     :title (one-line (or (:title row) (:goal row)) 60)
+     :age (age (:age-ms row))
+     :ask (when ask {:msg (:id ask) :text (one-line (:text ask) 80)})
+     :claims (vec (:claims row))
+     :result (when (contains? #{:done :failed :cancelled :idle} (:status row)) (one-line (:result row) 120))
+     :cost (:cost row)}))
+
+(defn task-line
+  "One task as an overview line: glyph id title — detail · age · home."
+  [row homes]
+  (let [ask (first (:asks row))
+        sub (when (:owner row) (str " (sub of " (:owner row) ")"))]
+    (str (if ask "⚑" (glyph (:status row))) " " (:id row) "  "
+         (one-line (or (:title row) (:goal row)) 56) (or sub "")
+         (cond ask (str " — asks: " (one-line (:text ask) 60))
+               (and (:result row) (contains? #{:done :failed :idle} (:status row))) (str " — " (one-line (:result row) 60))
+               :else "")
+         "  · " (age (:age-ms row)) " · " (home-label homes (:id row)))))
+
+; ─── omega:overview ────────────────────────────────────────────────────────
+
+(defn overview
+  "Every task grouped by urgency (model/GROUPS order)."
+  [snap homes now]
+  (let [by (:by-group snap)
+        n (count (:tasks snap))
+        need (count (get by :needs-you []))
+        acc (-> EMPTY
+                (emit (str "#+TITLE: omega · " n " task" (if (= 1 n) "" "s") (if (pos? need) (str " · " need " need" (if (= 1 need) "s" "") " you") "")))
+                (emit "")
+                (emit "RET home · t task · e effects · y/n answer · s say · x cancel · C-o back"))]
+    (doc "omega:overview"
+         (reduce (fn [acc [g label]]
+                   (let [rows (get by g [])
+                         acc (emit acc (str "* " label " (" (count rows) ")"))]
+                     (reduce (fn [acc r] (emit acc (task-line r homes) {:type "omega/task" :key (:id r)})) acc rows)))
+                 acc model/GROUPS))))
+
+; ─── omega:tasks (the cards' data) ─────────────────────────────────────────
+
+(defn task-rows
+  "{id card} for `ids` (missing ids are absent), as one edn line — an
+   internal document the editor long-polls for its cards."
+  [snap ids now]
+  (let [want (set ids)
+        cards (reduce (fn [m r] (if (contains? want (:id r)) (assoc m (:id r) (card r now)) m)) {} (:tasks snap))]
+    {:title "omega:tasks" :text (pr-str cards) :objects [] :cards cards}))
+
+; ─── task:<id> ─────────────────────────────────────────────────────────────
+
+(defn- text-of [blocks]
+  (str/join "\n" (keep (fn [b] (when (= :text (:type b)) (:text b))) blocks)))
+
+(defn- results-by-id [turns]
+  (into {} (for [t turns b (:content t) :when (= :tool-result (:type b))] [(:id b) b])))
+
+(defn- result-lines
+  "`#+RESULTS: id` + `: ` lines (at most 12, then a count)."
+  [id content]
+  (let [ls (str/split-lines (str content))
+        shown (take 12 ls)]
+    (concat [(str "#+RESULTS: " id)]
+            (map (fn [l] (str ": " l)) shown)
+            (when (> (count ls) 12) [(str ": … " (- (count ls) 12) " more lines")]))))
+
+(def TURNS-SHOWN 30)
+
+(defn task-doc
+  "A task as a livebook: its turns as headings, prose and cells (each code
+   tool call is a beam-lisp cell with its result), then open asks, traces and
+   the composer. Shows the last TURNS-SHOWN turns unless `all?`."
+  [row detail homes now all?]
+  (let [id (:id row)
+        turns (vec (:turns detail))
+        res (results-by-id turns)
+        visible (vec (remove (fn [t] (and (seq (:content t)) (every? (fn [b] (= :tool-result (:type b))) (:content t)))) turns))
+        hidden (if all? 0 (max 0 (- (count visible) TURNS-SHOWN)))
+        shown (drop hidden visible)
+        ns (str "omega.task." id)
+        acc (-> EMPTY
+                (emit (str "#+TITLE: " id " · " (one-line (or (:title row) (:goal row)) 60) " · " (glyph (:status row)) " " (word (:status row)) " · " (age (:age-ms row)))
+                      {:type "omega/task" :key id})
+                (emit (str "home: " (home-label homes id) (when (:owner row) (str " · parent: " (:owner row))) " · effects:" id))
+                (emit "C-Enter re-runs a cell as you (a steer) · c copies it to scratch · s say · y/n answer · C-o back")
+                (emit ""))
+        acc (if (pos? hidden) (emit acc (str "* … " hidden " earlier turns (RET shows all)") {:type "omega/expand" :key (str "task:" id "?all=1")}) acc)
+        acc (reduce
+              (fn [acc t]
+                (let [who (case (:role t) :user "you" :assistant "model" "result")
+                      acc (emit acc (str "* " who " · " (:n t)))
+                      prose (text-of (:content t))
+                      acc (if (str/blank? prose) acc (reduce emit acc (str/split-lines prose)))
+                      calls (filter (fn [b] (= :tool-use (:type b))) (:content t))]
+                  (reduce (fn [acc b]
+                            (let [cid (str id "/" (:n t) (when (> (count calls) 1) (str "-" (:id b))))
+                                  code (or (get-in b [:input :code]) (pr-str (:input b)))
+                                  r (get res (:id b))
+                                  acc (emit acc (str "#+begin_src beam-lisp :id " cid " :ns " ns) {:type "omega/cell" :key cid :task id})
+                                  acc (reduce emit acc (str/split-lines code))
+                                  acc (emit acc "#+end_src")]
+                              (if (some? r)
+                                (reduce emit acc (concat (result-lines cid (:content r)) [""]))
+                                (emit acc ""))))
+                          acc calls)))
+              acc shown)
+        asks (filter (fn [m] (and (= :ask (:kind m)) (not (:answered? m)))) (:asks detail))
+        acc (if (seq asks)
+              (reduce (fn [acc m] (emit acc (str "⚑ " (one-line (:text m) 100) "   y yes · n no · a answer…") {:type "omega/msg" :key (:id m) :task id}))
+                      (emit acc "* ⚑ asks you") asks)
+              acc)
+        traces (:traces detail)
+        acc (if (seq traces)
+              (reduce (fn [acc t] (emit acc (str "- " (name (:kind t)) " · " (:subject t) (when (seq (:text t)) (str " — " (one-line (:text t) 80))))
+                                        {:type "omega/trace" :key (str (:subject t))}))
+                      (emit acc "* traces") (take 20 traces))
+              acc)
+        acc (-> acc (emit "") (emit "* say ▸  (RET to message the task, C-Enter to steer it)" {:type "omega/composer" :key id}))]
+    (doc (str "task:" id) acc)))
+
+; ─── q:<id> ────────────────────────────────────────────────────────────────
+
+(def ROW-CAP 500)
+
+(defn- cell-str [v]
+  (let [s (if (string? v) v (pr-str v))
+        s (str/replace (str/replace s "\n" " ") "|" "¦")]
+    (if (> (count s) 60) (str (subs s 0 59) "…") s)))
+
+(defn- task-id? [s] (and (string? s) (some? (re-matches #"t-[0-9]+" s))))
+
+(defn query-doc
+  "A datalog query and its result as an org table. `result` is
+   {:rows [[…]…] :vars [\"?a\"…]} or {:error s}; `ms` is the run time."
+  [qid text result ms]
+  (let [acc (-> EMPTY
+                (emit (str "#+TITLE: q · " (if (:error result) "error" (str (count (:rows result)) " rows")) " · " ms " ms · live"))
+                (emit "e edits the query (a new q: path) · RET on a task id visits it · C-o back")
+                (emit "")
+                (emit (str "#+begin_src beam-lisp :id query"))
+                (#(reduce emit % (str/split-lines text)))
+                (emit "#+end_src")
+                (emit ""))]
+    (doc (str "q:" qid)
+         (if (:error result)
+           (-> acc (emit "#+RESULTS: query") (emit (str ": error: " (one-line (:error result) 200))))
+           (let [vars (:vars result)
+                 rows (:rows result)
+                 shown (take ROW-CAP rows)
+                 acc (-> acc (emit (str "| " (str/join " | " vars) " |"))
+                         (emit (str "|" (str/join "+" (map (fn [v] (apply str (repeat (+ 2 (count v)) "-"))) vars)) "|")))
+                 acc (reduce (fn [acc r]
+                               (let [line (str "| " (str/join " | " (map cell-str r)) " |")
+                                     tid (first (filter task-id? r))]
+                                 (if tid (emit acc line {:type "omega/task" :key tid}) (emit acc line))))
+                             acc shown)]
+             (if (> (count rows) ROW-CAP) (emit acc (str "… " (- (count rows) ROW-CAP) " more rows")) acc))))))
+
+; ─── effects:<id> ──────────────────────────────────────────────────────────
+
+(defn effects-doc
+  "What a task (or one cell, `cell` non-nil) did, grouped by cell. rows:
+   [{:cell :op :path :source :verdict :detail}] — the :effect/* shape
+   (how-it-fits §4.4); v0 rows come from the turns, with :source :edit or
+   :opaque for a shell command whose inner effects were not captured."
+  [id cell rows]
+  (let [rows (if cell (filter (fn [r] (= cell (:cell r))) rows) rows)
+        denied (count (filter (fn [r] (= :deny (:verdict r))) rows))
+        acc (-> EMPTY
+                (emit (str "#+TITLE: effects · " (or cell id) " · " (count rows) " effect" (if (= 1 (count rows)) "" "s") " · " denied " denied"))
+                (emit "RET visits the path · C-o back · v0: edits and shell commands from the turns; a shell command's own writes are not captured yet")
+                (emit ""))]
+    (doc (str "effects:" (or cell id))
+         (reduce (fn [acc [c rs]]
+                   (reduce (fn [acc r]
+                             (emit acc (str "- " (name (:op r)) "  " (:path r)
+                                            (when (:detail r) (str "  " (:detail r)))
+                                            "   :" (name (:source r)) " "
+                                            (case (:verdict r) :allow "✓" :deny "✗ denied" :opaque "?" "✓"))
+                                   {:type "omega/effect" :key (str (:path r)) :cell c}))
+                           (emit acc (str "* " c)) rs))
+                 acc (sort-by first (group-by :cell rows))))))

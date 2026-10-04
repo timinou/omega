@@ -1,0 +1,266 @@
+; bl-ed/serve.bl — the BEAM half of bl-ed as a LIBRARY: files, evaluation, and
+; documents that are not files (providers). No side effects on load: a caller
+; starts it with `(start! opts)`; vendor/bl-ed/serve.bl is the standalone script.
+;
+; Routes (all JSON unless noted):
+;
+;   GET  /                          the page, theme and compiled modules (static)
+;   GET  /api/file?path=p           the text of a document (text/plain; compat)
+;   GET  /api/doc?path=p            {ok path text rev readOnly title objects}
+;   GET  /api/rev?path=p&since=r    long-poll: answers {rev} once rev ≠ since,
+;                                   or after ~25 s with the same rev
+;   POST /api/save {path text base} write; base = the rev the editor loaded.
+;                                   A different current rev → 409 {conflict true}
+;   POST /api/eval {path id text}   run a cell (files: bl.doc's runner)
+;   POST /api/place {path text}     where each cell may run (system.place)
+;   POST /api/intent {intent args}  a named action (providers register them)
+;
+; A path is a FILE (a .bl.org/.bl.md under :root) or `scheme:name[?k=v&…]`,
+; served by the provider registered for `scheme`. A provider is a map of fns:
+;
+;   :read  (fn [name params] {:text s :read-only? b :title s :objects [obj …]})   required
+;   :rev   (fn [name params] r)            optional; cheap. Default: hash of :read's text
+;   :write (fn [name params text base] {:rev r} | {:conflict r})                  writable docs only
+;   :eval  (fn [name params id text] {:result s :text s?})                        cells it runs
+;
+; obj = {:row n :type "omega/task" :key "t-41" …} — a row IS that object
+; (presentations; the editor binds keys per type). Intents are
+; {"name" (fn [args] result-map)}; args arrive keywordized.
+
+(ns bl-ed.serve
+  (:require [web :as w] [bl.doc :as doc] [bl.json :as json] [system.place :as pl]))
+
+; ─── paths ──────────────────────────────────────────────────────────────────
+
+(defn parse-path
+  "`scheme:name?k=v&…` → {:scheme :name :params}; a file path → {:file p}."
+  [p]
+  (let [p (str p)
+        i (index-of p ":")]
+    (if (and (some? i) (> i 0) (re-matches #"[a-z][a-z0-9+-]*" (subs p 0 i)))
+      (let [scheme (subs p 0 i)
+            rest (subs p (inc i))
+            q (index-of rest "?")
+            name (if (some? q) (subs rest 0 q) rest)
+            params (if (some? q)
+                     (reduce (fn [m pair]
+                               (let [[k v] (split pair "=")]
+                                 (if (blank? k) m (assoc m (keyword k) (w/url-decode (or v "true"))))))
+                             {} (split (subs rest (inc q)) "&"))
+                     {})]
+        {:scheme scheme :name name :params params})
+      {:file p})))
+
+(defn text-rev
+  "The rev of a text: a content hash, as a string (equal texts, equal revs)."
+  [s]
+  (str (erlang/phash2 (str s) 4294967296)))
+
+; ─── files ──────────────────────────────────────────────────────────────────
+
+(defn- doc-path? [root p]
+  (let [abs (Path/expand p root)]
+    (and (or (ends-with? abs ".bl.org") (ends-with? abs ".bl.md"))
+         (starts-with? abs (str root "/")))))
+
+(defn- file-text [root p]
+  (let [abs (Path/expand p root)]
+    (if (and (doc-path? root p) (File/regular? abs)) (File/read! abs) nil)))
+
+; ─── providers ──────────────────────────────────────────────────────────────
+
+(defn- provider [cfg pp] (get (:providers cfg) (:scheme pp)))
+
+(defn read-doc
+  "{:text :rev :read-only? :title :objects} of any path, or {:error s :status n}."
+  [cfg path]
+  (let [pp (parse-path path)]
+    (if (contains? pp :file)
+      (let [t (file-text (:root cfg) (:file pp))]
+        (if (nil? t)
+          {:error (str "no such document: " path) :status 404}
+          {:text t :rev (text-rev t) :read-only? false :title (:file pp) :objects []}))
+      (let [pv (provider cfg pp)]
+        (if (nil? pv)
+          {:error (str "no provider for " (:scheme pp) ":") :status 404}
+          (let [r (try ((:read pv) (:name pp) (:params pp)) (catch e {:error (ex-message e) :status 500}))]
+            (if (contains? r :error)
+              r
+              (merge {:read-only? true :objects [] :title path} r {:rev (or (:rev r) (text-rev (:text r)))}))))))))
+
+(defn rev-of
+  "The current rev of `path` (cheap when the provider gives :rev)."
+  [cfg path]
+  (let [pp (parse-path path)
+        pv (when-not (contains? pp :file) (provider cfg pp))]
+    (if (and (some? pv) (some? (:rev pv)))
+      (str ((:rev pv) (:name pp) (:params pp)))
+      (:rev (read-doc cfg path)))))
+
+; ─── HTTP plumbing ──────────────────────────────────────────────────────────
+
+(def ^:private types
+  {"html" "text/html; charset=utf-8" "css" "text/css; charset=utf-8"
+   "mjs" "text/javascript; charset=utf-8" "js" "text/javascript; charset=utf-8"
+   "org" "text/plain; charset=utf-8" "svg" "image/svg+xml" "png" "image/png"})
+
+(defn- static [cfg conn rel]
+  (let [web (:web cfg)
+        abs (Path/expand rel web)
+        ext (last (split abs "."))]
+    (if (and (starts-with? abs (str web "/")) (File/regular? abs))
+      (-> conn (w/resp-header "cache-control" "no-store")
+          (w/bytes (get types ext "application/octet-stream") (File/read! abs)))
+      (w/text conn 404 "not found"))))
+
+(defn- body-json [conn]
+  (let [[body c] (w/read-body* conn)] [(json/decode body) c]))
+
+(defn- query-param [conn k]
+  (some (fn [pair]
+          (let [[a b] (split pair "=")]
+            (if (= a k) (w/url-decode (or b "")) nil)))
+        (split (or (w/query conn) "") "&")))
+
+(defn- keywordize [m]
+  (if (map? m) (reduce-kv (fn [acc k v] (assoc acc (keyword k) v)) {} m) {}))
+
+(defn- objects-json [objs]
+  (mapv (fn [o] (reduce-kv (fn [acc k v] (assoc acc (name k) (if (keyword? v) (subs (str v) 1) v))) {} o)) objs))
+
+; ─── routes ─────────────────────────────────────────────────────────────────
+
+(defn- api-file [cfg conn]
+  (let [d (read-doc cfg (query-param conn "path"))]
+    (if (contains? d :error) (w/text conn (:status d) (:error d)) (w/text conn 200 (:text d)))))
+
+(defn- api-doc [cfg conn]
+  (let [p (query-param conn "path") d (read-doc cfg p)]
+    (if (contains? d :error)
+      (w/json conn (:status d) {:ok false :message (:error d)})
+      (w/json conn 200 {:ok true :path p :text (:text d) :rev (:rev d) :readOnly (:read-only? d)
+                        :title (:title d) :objects (objects-json (:objects d))}))))
+
+(def ^:private POLL-MS 250)
+(def ^:private HOLD-MS 25000)
+
+(defn- api-rev [cfg conn]
+  (let [p (query-param conn "path") since (query-param conn "since")
+        deadline (+ (erlang/monotonic_time :millisecond) HOLD-MS)]
+    (loop []
+      (let [r (try (rev-of cfg p) (catch e nil))]
+        (if (or (nil? r) (not= r since) (> (erlang/monotonic_time :millisecond) deadline))
+          (w/json conn 200 {:ok (some? r) :rev r})
+          (do (Process/sleep POLL-MS) (recur)))))))
+
+(defn- api-save [cfg conn]
+  (let [[b conn] (body-json conn) p (get b "path") t (get b "text") base (get b "base")
+        pp (parse-path p)]
+    (cond
+      (not (string? t)) (w/json conn 400 {:ok false :message "no text"})
+      (contains? pp :file)
+        (let [root (:root cfg)]
+          (if (not (doc-path? root p))
+            (w/json conn 403 {:ok false :message (str "refusing to write " p)})
+            (let [abs (Path/expand p root)
+                  cur (if (File/regular? abs) (text-rev (File/read! abs)) nil)]
+              (if (and (some? base) (some? cur) (not= base cur))
+                (w/json conn 409 {:ok false :conflict true :rev cur :message (str "changed on disk since you loaded it — reload, or save again to overwrite")})
+                (do (File/write! abs t)
+                    (w/json conn 200 {:ok true :path p :rev (text-rev t) :bytes (count t)}))))))
+      :else
+        (let [pv (provider cfg pp)]
+          (if (or (nil? pv) (nil? (:write pv)))
+            (w/json conn 403 {:ok false :message (str p " is read-only")})
+            (let [r ((:write pv) (:name pp) (:params pp) t base)]
+              (if (:conflict r)
+                (w/json conn 409 {:ok false :conflict true :rev (:conflict r) :message "changed since you loaded it — reload, or save again to overwrite"})
+                (w/json conn 200 {:ok true :path p :rev (:rev r)}))))))))
+
+(defn- api-eval [cfg conn]
+  (let [[b conn] (body-json conn) p (get b "path") id (get b "id") t (get b "text")
+        pp (parse-path p)]
+    (if (contains? pp :file)
+      (if (not (doc-path? (:root cfg) p))
+        (w/json conn 403 {:ok false :message (str "refusing to evaluate " p)})
+        (let [sl (doc/slice-text t (doc/format-of p))]
+          (if (contains? sl :error)
+            (w/json conn 200 {:ok false :message (str "line " (get-in sl [:error :line]) ": " (get-in sl [:error :why]))})
+            (let [d (assoc (:ok sl) :path (Path/expand p (:root cfg)))
+                  r (doc/run-doc d)
+                  ; write back ONLY the asked cell's result: the others may hold
+                  ; results the page computed (local cells)
+                  text (doc/write-results d (select-keys (:results r) [id]))]
+              (w/json conn 200 {:ok true :text text :result (get (:results r) id "")
+                                :errors (vec (:errors r))})))))
+      (let [pv (provider cfg pp)]
+        (if (or (nil? pv) (nil? (:eval pv)))
+          (w/json conn 403 {:ok false :message (str "cells in " p " do not run")})
+          (let [r (try ((:eval pv) (:name pp) (:params pp) id t) (catch e {:result (str "error: " (ex-message e))}))]
+            (w/json conn 200 (merge {:ok true :result (str (:result r))} (if (some? (:text r)) {:text (:text r)} {})))))))))
+
+(defn- cell-forms [code]
+  (let [cps (unicode/characters_to_list code)]
+    (vec (keep (fn [f]
+                 (let [pos (BeamLisp.Ns.Reader-node/node-pos f)]
+                   (when (some? (get pos :end-offset))
+                     (unicode/characters_to_binary
+                       (lists/sublist cps (inc (get pos :offset)) (- (get pos :end-offset) (get pos :offset)))))))
+               (BeamLisp.Ns.Reader/read_string code "cell")))))
+
+(defn- place-json [p]
+  (if (= :local (:place p))
+    {:place "local"}
+    {:place "beam" :why (let [w (:why p)]
+                          (str (name (:reason w))
+                               (if (:form w) (str " in " (:form w)) "")
+                               (if (:via w) (str " (through " (:via w) ")") "")
+                               (if (:detail w) (str ": " (:detail w)) "")))}))
+
+(defn- api-place [cfg conn]
+  (let [[b conn] (body-json conn) p (get b "path") t (get b "text")
+        fmt (if (ends-with? (str p) ".bl.md") :md :org)
+        sl (doc/slice-text t fmt)]
+    (if (contains? sl :error)
+      (w/json conn 200 {:ok false :message (str "line " (get-in sl [:error :line]) ": " (get-in sl [:error :why]))})
+      (let [cells (mapv (fn [c] {:id (:id c) :forms (cell-forms (doc/cell-source c))}) (doc/cells (:ok sl)))
+            ps (try {:ok (pl/cell-placements cells)} (catch e {:err (ex-message e)}))]
+        (if (contains? ps :err)
+          (w/json conn 200 {:ok false :message (:err ps)})
+          (w/json conn 200 {:ok true :cells (reduce-kv (fn [m id pl] (assoc m id (place-json pl))) {} (:ok ps))}))))))
+
+(defn- api-intent [cfg conn]
+  (let [[b conn] (body-json conn) nm (get b "intent") f (get (:intents cfg) nm)]
+    (if (nil? f)
+      (w/json conn 404 {:ok false :message (str "no intent " nm)})
+      (let [r (try (f (keywordize (get b "args"))) (catch e {:ok false :message (ex-message e)}))]
+        (w/json conn 200 (merge {:ok true} r))))))
+
+(defn router
+  "The plug for config `cfg` = {:root :web :providers :intents}."
+  [cfg]
+  (fn [conn]
+    (let [m (upper-case (str (w/method conn))) p (w/path conn)]
+      (cond
+        (and (= m "GET") (= p "/")) (static cfg conn "index.html")
+        (and (= m "GET") (= p "/api/file")) (api-file cfg conn)
+        (and (= m "GET") (= p "/api/doc")) (api-doc cfg conn)
+        (and (= m "GET") (= p "/api/rev")) (api-rev cfg conn)
+        (and (= m "POST") (= p "/api/save")) (api-save cfg conn)
+        (and (= m "POST") (= p "/api/eval")) (api-eval cfg conn)
+        (and (= m "POST") (= p "/api/place")) (api-place cfg conn)
+        (and (= m "POST") (= p "/api/intent")) (api-intent cfg conn)
+        (= m "GET") (static cfg conn (subs p 1))
+        :else (w/text conn 405 "method not allowed")))))
+
+(defn start!
+  "Serve bl-ed on loopback. opts {:port :root :web :providers :intents}.
+   Returns {:url :port}."
+  [opts]
+  (let [cfg {:root (Path/expand (or (:root opts) "."))
+             :web (Path/expand (:web opts))
+             :providers (or (:providers opts) {})
+             :intents (or (:intents opts) {})}
+        port (or (:port opts) 8790)]
+    (w/serve {:port port :plug (router cfg) :ip (erlang/list_to_tuple (list 127 0 0 1))})
+    {:url (str "http://127.0.0.1:" port "/") :port port :root (:root cfg)}))

@@ -1,0 +1,259 @@
+; omega/ed/providers.bl — omega's documents and intents for bl-ed.
+;
+; Turns a running task system into the provider map and intent map the bl-ed
+; server takes (bl-ed.serve/start! {:providers … :intents …}). Every view is a
+; pure renderer (omega.ed.render) over a projection omega.ui already uses; this
+; namespace only reads the world, keeps three small side files, and maps
+; intents onto the public task verbs. It holds NO authority of its own: writes
+; are task/open! task/say! task/steer! task/cancel! actor/reply! (D1).
+;
+;   (providers sys opts) → {"omega" p "task" p "q" p "effects" p}
+;   (intents sys opts)   → {"task/open" f "task/say" f "task/steer" f "task/cancel" f
+;                           "msg/answer" f "cell/to-scratch" f "q/new" f}
+;
+; opts {:state dir} — where the side files live (default <root>/.omega/ed):
+;   scratch.bl.org  the one writable virtual document (omega:scratch)
+;   homes.edn       {task-id {:path p :block id}} — where each task's cell is
+;   queries.edn     {qid text} — the q: documents' query texts
+;
+; Revs: omega's documents gate on the store's basis-t (one read): unchanged
+; basis → the cached rev, no rendering. A moved basis re-renders, and the rev
+; is the hash of the TEXT, so an unrelated commit never reloads the page.
+
+(ns omega.ed.providers
+  (:require [omega.env :as env]
+            [omega.task :as task]
+            [omega.actor :as actor]
+            [omega.loop :as loop]
+            [omega.trace :as tr]
+            [omega.codemode :as cm]
+            [omega.ui.model :as model]
+            [omega.ed.render :as r]
+            [clojure.string :as str]))
+
+; ─── side files ─────────────────────────────────────────────────────────────
+
+(defn state-dir [sys opts]
+  (or (:state opts) (str (or (:root sys) (File/cwd!)) "/.omega/ed")))
+
+(defn- read-edn [path]
+  (if (File/regular? path) (try (clojure.edn/read-string (File/read! path)) (catch _ {})) {}))
+
+(defn- write-edn! [path v]
+  (File/mkdir_p! (Path/dirname path))
+  (File/write! path (pr-str v)))
+
+(def SCRATCH-SEED "#+TITLE: omega scratch — tasks with no home, and your notes\n\n")
+
+(defn- rev [s] (str (erlang/phash2 (str s) 4294967296)))
+
+; ─── the cache: rev per (path, basis) ───────────────────────────────────────
+
+(defn- basis [sys] (datom.db/basis-t (env/db (:env sys))))
+
+(defn- cached
+  "Memoise `render` (→ {:text …}) per key on the store's basis-t: an unchanged
+   world answers from the cache without rendering. Wall-clock ages only move
+   when the world moves; the per-unit rounding (render/age) keeps that cheap."
+  [cache k sys render]
+  (let [b (basis sys)
+        hit (get @cache k)]
+    (if (and hit (= b (:basis hit)) (< (- (erlang/monotonic_time :millisecond) (:at hit)) 1000))
+      (:doc hit)
+      (let [d (render)
+            d (assoc d :rev (rev (:text d)))]
+        (swap! cache assoc k {:basis b :doc d :at (erlang/monotonic_time :millisecond)})
+        d))))
+
+; ─── projections ────────────────────────────────────────────────────────────
+
+(defn- snapshot [sys] (model/snapshot (:env sys)))
+
+(defn- homes [sys opts] (read-edn (str (state-dir sys opts) "/homes.edn")))
+
+(defn- row-of [snap id] (first (filter (fn [x] (= id (:id x))) (:tasks snap))))
+
+(defn- effect-rows
+  "v0 effects of task `id` from its turns: each eval cell's edit/write calls
+   are file effects (:source :edit); an `sh` is one :opaque row (its inner
+   writes are not captured until the jail lands, FEAT-021 v1)."
+  [sys id]
+  (let [turns (loop/turns sys id)]
+    (vec (for [t turns
+               b (:content t)
+               :when (= :tool-use (:type b))
+               :let [code (str (get-in b [:input :code]))
+                     cell (str id "/" (:n t))]
+               [op path] (concat
+                           (map (fn [m] [:write (second m)]) (re-seq #"\((?:edit|write)\s+\"([^\"]+)\"" code))
+                           (map (fn [m] [:exec (str "sh " (r/one-line (second m) 60))]) (re-seq #"\(sh\s+\"((?:[^\"\\]|\\.)*)\"" code)))]
+           {:cell cell :op op :path path
+            :source (if (= op :exec) :opaque :edit)
+            :verdict (if (= op :exec) :opaque :allow)}))))
+
+; ─── providers ──────────────────────────────────────────────────────────────
+
+(defn- scratch-provider [sys opts]
+  (let [path (fn [] (str (state-dir sys opts) "/scratch.bl.org"))
+        text (fn [] (if (File/regular? (path)) (File/read! (path)) SCRATCH-SEED))]
+    {:read (fn [_ _] {:text (text) :read-only? false :title "omega:scratch"
+                      :objects (vec (keep-indexed
+                                      (fn [i l] (when-let [m (re-find #"^: #omega/task \{:id \"([^\"]+)\"" l)]
+                                                  {:row i :type "omega/task" :key (second m)}))
+                                      (str/split-lines (text))))})
+     :rev (fn [_ _] (rev (text)))
+     :write (fn [_ _ t base]
+              (let [cur (rev (text))]
+                (if (and (some? base) (not= base cur))
+                  {:conflict cur}
+                  (do (File/mkdir_p! (state-dir sys opts)) (File/write! (path) t) {:rev (rev t)}))))
+     :eval (fn [_ _ id t]
+             ;; a cell with `:ns omega.task.<id>` runs in that task as a steer
+             (let [m (re-find (re-pattern (str "#\\+begin_src beam-lisp[^\\n]*:id " id "[^\\n]*:ns omega\\.task\\.(t-[0-9]+)[^\\n]*\\n([\\s\\S]*?)\\n#\\+end_src")) t)]
+               (if (nil? m)
+                 {:result "this scratch cell names no task (add :ns omega.task.<id>), or it is not a beam-lisp cell"}
+                 (let [tid (nth m 1) code (nth m 2)
+                       out (cm/run-eval sys tid code)
+                       res (or (:ok out) (str "error: " (:error out)))]
+                   (task/steer! sys tid (str "The human ran this in your namespace:\n" code "\n=> " res) "human:me")
+                   {:result res}))))}))
+
+(defn- overview-provider [sys opts cache]
+  {:read (fn [_ _] (cached cache "overview" sys
+                           (fn [] (r/overview (snapshot sys) (homes sys opts) (env/now (:env sys))))))
+   :rev (fn [_ _] (:rev (cached cache "overview" sys
+                                (fn [] (r/overview (snapshot sys) (homes sys opts) (env/now (:env sys)))))))})
+
+(defn- tasks-provider
+  "omega:tasks?ids=a,b — the cards' rows as edn (internal; the editor polls it)."
+  [sys cache]
+  (let [render (fn [ids] (r/task-rows (snapshot sys) ids (env/now (:env sys))))
+        ids-of (fn [params] (vec (remove str/blank? (str/split (str (:ids params)) ","))))]
+    {:read (fn [_ params] (let [ids (ids-of params)] (cached cache (str "tasks:" ids) sys (fn [] (render ids)))))
+     :rev (fn [_ params] (let [ids (ids-of params)] (:rev (cached cache (str "tasks:" ids) sys (fn [] (render ids))))))}))
+
+(defn- task-provider [sys opts cache]
+  (let [render (fn [id params]
+                 (let [snap (snapshot sys)
+                       row (row-of snap id)]
+                   (if (nil? row)
+                     {:title (str "task:" id) :text (str "#+TITLE: task:" id "\n\nNo task " id " in this world.") :objects []}
+                     (r/task-doc row
+                                 (assoc (model/task-detail sys id) :asks (:asks row))
+                                 (homes sys opts) (env/now (:env sys)) (= "1" (:all params))))))]
+    {:read (fn [id params] (cached cache (str "task:" id (:all params)) sys (fn [] (render id params))))
+     :rev (fn [id params] (:rev (cached cache (str "task:" id (:all params)) sys (fn [] (render id params)))))
+     :eval (fn [id _ cell-id t]
+             ;; re-run one of the task's cells AS the human: same namespace and
+             ;; limits as the agent; the cell and its result reach the task as a steer
+             (let [m (re-find (re-pattern (str "#\\+begin_src beam-lisp :id " (str/replace cell-id "/" "\\/") "[^\\n]*\\n([\\s\\S]*?)\\n#\\+end_src")) t)
+                   code (when m (second m))]
+               (if (nil? code)
+                 {:result (str "no cell " cell-id)}
+                 (let [out (cm/run-eval sys id code)
+                       res (or (:ok out) (str "error: " (:error out)))]
+                   (task/steer! sys id (str "The human re-ran your cell " cell-id ":\n" code "\n=> " res) "human:me")
+                   {:result res}))))}))
+
+(defn- run-query [sys text]
+  (let [t0 (erlang/monotonic_time :millisecond)
+        res (try
+              (let [form (clojure.edn/read-string text)
+                    form (if (vector? form) form (throw (ex-info "a query is a vector: [:find ?x :where …]" {})))
+                    finds (vec (take-while (fn [x] (not (keyword? x))) (rest form)))
+                    rows (env/q (:env sys) form)]
+                {:vars (mapv str finds) :rows (vec (sort-by pr-str (map vec rows)))})
+              (catch e {:error (ex-message e)}))]
+    [res (- (erlang/monotonic_time :millisecond) t0)]))
+
+(defn- q-provider [sys opts cache]
+  (let [qfile (fn [] (str (state-dir sys opts) "/queries.edn"))
+        render (fn [qid]
+                 (let [text (get (read-edn (qfile)) qid)]
+                   (if (nil? text)
+                     {:title (str "q:" qid) :text (str "#+TITLE: q:" qid "\n\nNo such query. (omega/q '[:find …]) makes one.") :objects []}
+                     (let [[res ms] (run-query sys text)] (r/query-doc qid text res ms)))))]
+    {:read (fn [qid _] (cached cache (str "q:" qid) sys (fn [] (render qid))))
+     :rev (fn [qid _] (:rev (cached cache (str "q:" qid) sys (fn [] (render qid)))))
+     :eval (fn [qid _ _ _] (swap! cache dissoc (str "q:" qid)) {:result "re-ran"})}))
+
+(defn- effects-provider [sys cache]
+  (let [render (fn [nm]
+                 (let [[id cell] (if (str/includes? nm "/") [(first (str/split nm "/")) nm] [nm nil])]
+                   (r/effects-doc id cell (effect-rows sys id))))]
+    {:read (fn [nm _] (cached cache (str "effects:" nm) sys (fn [] (render nm))))
+     :rev (fn [nm _] (:rev (cached cache (str "effects:" nm) sys (fn [] (render nm)))))}))
+
+(defn providers
+  "The provider map for bl-ed.serve/start!."
+  ([sys] (providers sys {}))
+  ([sys opts]
+   (let [cache (atom {})]
+     {"omega" {:read (fn [nm p] (case nm
+                                  "scratch" ((:read (scratch-provider sys opts)) nm p)
+                                  "overview" ((:read (overview-provider sys opts cache)) nm p)
+                                  "tasks" ((:read (tasks-provider sys cache)) nm p)
+                                  {:error (str "no document omega:" nm) :status 404}))
+               :rev (fn [nm p] (case nm
+                                 "scratch" ((:rev (scratch-provider sys opts)) nm p)
+                                 "overview" ((:rev (overview-provider sys opts cache)) nm p)
+                                 "tasks" ((:rev (tasks-provider sys cache)) nm p)
+                                 nil))
+               :write (fn [nm p t base] (if (= nm "scratch") ((:write (scratch-provider sys opts)) nm p t base) {:conflict "read-only"}))
+               :eval (fn [nm p id t] (if (= nm "scratch") ((:eval (scratch-provider sys opts)) nm p id t) {:result "cells here do not run"}))}
+      "task" (task-provider sys opts cache)
+      "q" (q-provider sys opts cache)
+      "effects" (effects-provider sys cache)})))
+
+; ─── intents ────────────────────────────────────────────────────────────────
+
+(defn- goal-digest [s] (rev (str/trim (str s))))
+
+(defn- scratch-append!
+  "Append `text` to the scratch document (the bridge's only write there)."
+  [sys opts text]
+  (let [p (str (state-dir sys opts) "/scratch.bl.org")
+        cur (if (File/regular? p) (File/read! p) SCRATCH-SEED)]
+    (File/mkdir_p! (state-dir sys opts))
+    (File/write! p (str cur (if (str/ends-with? cur "\n") "" "\n") text))))
+
+(defn- remember-home! [sys opts id home]
+  (let [p (str (state-dir sys opts) "/homes.edn")]
+    (write-edn! p (assoc (read-edn p) id home))))
+
+(defn reference
+  "The #+RESULTS value a task block holds: `#omega/task {…}` (one line)."
+  [m]
+  (str "#omega/task " (pr-str m)))
+
+(defn intents
+  "The intent map for bl-ed.serve/start!. Each fn takes keywordized args and
+   returns a JSON-able map (merged into {:ok true})."
+  ([sys] (intents sys {}))
+  ([sys opts]
+   {"task/open"
+    (fn [{:keys [goal path block scope]}]
+      (let [goal (str/trim (str goal))]
+        (if (str/blank? goal)
+          {:ok false :message "a task needs a goal (the block's text)"}
+          (let [id (task/open! sys (cond-> {:goal goal} (seq scope) (assoc :scope (vec (str/split (str scope) " ")))))
+                home (if (and path block) {:path path :block block} {:path "omega:scratch" :block id})]
+            (remember-home! sys opts id home)
+            (when-not (and path block)
+              (scratch-append! sys opts (str "\n* " (r/one-line goal 70) "\n#+begin_task :id " id "\n" goal "\n#+end_task\n#+RESULTS: " id "\n: " (reference {:id id :goal (goal-digest goal)}) "\n")))
+            {:id id :goal (goal-digest goal) :reference (reference {:id id :goal (goal-digest goal)})}))))
+    "task/say" (fn [{:keys [id text]}] (task/say! sys id (str text) "human:me") {})
+    "task/steer" (fn [{:keys [id text]}] (task/steer! sys id (str text) "human:me") {})
+    "task/cancel" (fn [{:keys [id]}] (task/cancel! sys id) {})
+    "task/digest" (fn [{:keys [goal]}] {:goal (goal-digest goal)})
+    "msg/answer" (fn [{:keys [msg text]}] {:reply (actor/reply! (:env sys) msg (str text))})
+    "cell/to-scratch"
+    (fn [{:keys [task cell code]}]
+      (scratch-append! sys opts (str "\n* from task:" task " · cell " cell "\n#+begin_src beam-lisp :id s-" (erlang/unique_integer (list :positive)) " :ns omega.task." task "\n" code "\n#+end_src\n"))
+      {:path "omega:scratch"})
+    "q/new"
+    (fn [{:keys [text name]}]
+      (let [qid (or name (subs (rev text) 0 (min 8 (count (rev text)))))
+            p (str (state-dir sys opts) "/queries.edn")]
+        (write-edn! p (assoc (read-edn p) qid (str text)))
+        {:path (str "q:" qid)}))}))
