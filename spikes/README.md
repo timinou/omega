@@ -14,6 +14,7 @@ feature they de-risk lands.
 | `hot-task.bl.md` | does a long omega task slow itself down today? | yes: 1.2 s → 2.7 s per trivial step by step 160 |
 | `c8-turn-cache.bl.md` | does caching turns in the executor (C8) fix it? | yes: 4.4× faster on 120 steps; but a process-dictionary cache goes stale for non-executor readers, so C8 must thread the list through `turn!` as a value |
 | `c9-claim-conflict.bl.md` | is telling the agent who else holds a path (C9) small and effective? | yes: ~12 lines; the second writer's model reads "t-1 also holds a.py" in its tool result |
+| `buffer-overlay.bl.md` | can a buffer server keep the human's unpublished text off disk while agents still see it (E24)? | yes: published layer + per-human pending overlay, convergent ops; 0 violations in 1500 random cases; an agent `:old` found only in the overlay is refused (`:overlay`) |
 | `turn-read-cost.bl.md` | where does that time go? | re-reading every turn from datom on every step (O(turns), 0.84 s at 300 turns) plus a rewritten `:task/cost` entity |
 | `task-cell.bl.md` | does the `:task` cell work as a package on `bl.doc.spans`? (needs the js-actors beam-lisp, see its header) | yes, full lifecycle; it must keep its own span kind, never `:cell` |
 | `task-refs.bl.md` | do per-task history refs fix gate blame? | no; a per-path gate does, on one shared main; refs add merge and blame, not test isolation |
