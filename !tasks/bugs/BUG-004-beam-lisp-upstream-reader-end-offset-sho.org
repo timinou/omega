@@ -1,0 +1,27 @@
+#+TITLE: beam-lisp upstream: reader :end-offset short on ^meta forms, offsets drift after multi-codepoint glyphs
+#+STATE: ITEM
+#+SESSION_ID: 15992c6b7bd3ff06
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl]]
+#+CUSTOM_ID: BUG-004-beam-lisp-upstream-reader-end-offset-sho
+#+LAYER: upstream
+
+* Initial Message
+
+ok this is all good and realise that we designed a lot. what's the slice that's specifically about user experience? what would it look like? what does it leave out, and how does it make it amenable to it next? you can take a look at the --js-actors and the main branch of beam lisp next, new stuff has emerged there
+
+* Initial Message
+
+(2026-10-04, found while building the bl: provider for the UX slice; user: "change the pin of omega and then go for it please")
+
+* Observed (on the pin 94700545)
+
+1. `BeamLisp.Ns.Reader/read_string` gives `(def ^:private r 3)` a node whose `:end-offset` is one codepoint short: slicing yields `(def ^:private r 3` (no closing paren). A `(:meta …)` node wraps the list and the end is taken from the inner symbol's span.
+2. In `src/omega/ed/render.bl` (strings with `…`, `·`, `¦`), forms past line ~195 report `:end-offset` 1–3 codepoints short of the closing paren, drifting further down the file. Repro: compare the reader's `:end-offset` with a balanced-paren scan over `(unicode/characters_to_list src)` (`/tmp/p26.bl` pattern; `bl-ed.image/balanced-end`).
+
+* Impact
+
+Any tool slicing source by reader positions (bl-ed's `cell-forms` in serve.bl, system.place inputs, bl:) cuts forms. omega's bl: provider works around it with its own scan (`vendor/bl-ed/src/bl_ed/image.bl` `top-forms`).
+
+* Acceptance (upstream)
+
+For every top-level form, `(subs src offset end-offset)` over codepoints re-reads to an equal form; a test with ^meta and non-ASCII strings.

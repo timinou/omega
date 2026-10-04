@@ -1,8 +1,9 @@
 #+TITLE: UX slice S2 — omega bridge: open/say/answer/tasks + scratch pad over loopback, bin/omega serve
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 15992c6b7bd3ff06
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl]]
 #+CUSTOM_ID: FEAT-014-ux-slice-s2-omega-bridge-open-say-answer
+#+COMPLETION_HASH: 70558121f9155a41
 
 * Initial Message
 
@@ -39,3 +40,5 @@ New `src/omega/ed/bridge.bl` (no change to omega core namespaces):
 - One test with a scripted model: open → poll shows :running → the model asks → poll shows the ask → answer → done, with the summary in the row; all over HTTP.
 - Scratch: homeless open appends exactly one task block; a stale-base POST gets 409.
 - omega's full suite stays green.
+
+NOTE [2026-10-04]: Built as ONE VM instead of a bridge: omega.ed.main starts the task system and bl-ed.serve together (the re-pin made it possible); intents task/open say steer cancel, msg/answer, cell/to-scratch, q/new in src/omega/ed/providers.bl. bin/bl-ed is the launcher. Evidence (2026-10-04, omega 86a1a5a + docs commit): bin/bl test test → 18/18 files green (ed_test 47, ed_image_test 12); vendor/bl-ed drive tests 29/29 (19 upstream + 10 omega); real browser run vendor/bl-ed/proof/10–15. Departures from the design: research/domain/interface/ux-slice.bl.md §8.

@@ -1,6 +1,7 @@
 # Document providers: the world as documents you can read, act on, and stay in
 
-*2026-10-04. Design. What it contains:*
+*2026-10-04. Design, **now built** (`../ux-slice.bl.md` §8 records the departures: one VM instead of
+a bridge, presentations, rev long-poll). What it contains:*
 - *§1 the vision;*
 - *§2 the protocol all providers share;*
 - *§3 what bl-ed needs (five small, generic changes);*

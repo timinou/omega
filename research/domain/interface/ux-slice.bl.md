@@ -14,7 +14,8 @@
 - *`bl-ed.bl.md` (the design);*
 - *`../synthesis/how-it-fits.bl.md` (the integration).*
 
-*`clojure` and `text` fences are design sketches; nothing here is built.*
+*`clojure` and `text` fences are design sketches. **Built on 2026-10-04: see §8**, which records how
+the build departed from this design and why.*
 
 ---
 
@@ -325,3 +326,46 @@ or touches omega's core. Fast-follow: FUP-010 (load the console code as a live p
 | UX-Q1 | contextual `y` / `n` / `RET` on a card row only; `y` yanks everywhere else | E27 |
 | UX-Q2 | the slice's console code lives in `apps/bl-ed/ed/omega.bl`; loading it as a live package (bl-ed §10.3) is a fast-follow | E28, FUP-010 |
 | UX-Q3 | homeless tasks get a **virtual scratch pad** (`omega:scratch`, §2.7), built in the slice because the `scheme:` document rule opens fact buffers (overview, sidebar, query and effect views) | E29, FEAT-016 |
+
+## 8. Built (2026-10-04): what changed on the way
+
+omega was re-pinned to beam-lisp `94700545` (main, after the bl-js-actors merge). bl-ed is vendored
+at `vendor/bl-ed`. Run it with `bin/bl-ed --offline`, or `bin/bl-ed` with the live model.
+
+**Evidence:**
+- the suite passes 18/18 files, including `ed_test` (47 assertions) and `ed_image_test` (12);
+- the drive tests pass 29/29 (19 upstream + 10 omega);
+- a real browser run is recorded in `vendor/bl-ed/proof/10–15`: open → ask → `y` → done → saved
+  summary, then the overview, the task livebook, live ✎ drift and the scratch pad.
+
+| design said | built | why |
+|---|---|---|
+| two VMs and a loopback bridge (FEAT-014), `.omega/url` | **one VM**: `omega.ed.main` starts the task system and `bl-ed.serve` together; providers and intents are plain fn calls | the re-pin put omega and bl-ed on the same beam-lisp, so the bridge became an unneeded hop |
+| FEAT-013: `bl.doc.spans` learns task `:id` + write-results after a block | **no upstream change** | OBSERVED: `bl doc run` keeps a task block's `#+RESULTS` untouched, and the editor writes the reference line itself (`ed/omega.bl write-reference`) |
+| 1 s card poll | **long-poll on rev** (`/api/rev`), one parked request per watched path; cards are the internal document `omega:tasks?ids=…` | zero idle cost; the same mechanism as every view |
+| card-row keymap (E27) | **presentations**: a row IS an object; per-type keys | `y/n/a/s/x/t/e/RET` mean the same on a card, an overview row or a query row |
+| `/api/save` base-hash check | built: rev-checked saves; a refusal sets `:stale` and the next `C-s` overwrites on purpose | |
+| scratch as a bridge file | built: `.omega/ed/scratch.bl.org`; also `homes.edn` and `queries.edn` | no schema change |
+| the bridge writes `:goal` digests | **the editor owns the digest**; references the world writes carry only `:id` and are adopted on `C-Enter` | one hash function, in one place |
+
+All six providers are live. omega's own (`omega:scratch`, `omega:overview`, `omega:tasks`,
+`task:`, `q:`, `effects:` v0) are in `src/omega/ed/providers.bl` over pure renderers
+(`render.bl`). `bl:` is `vendor/bl-ed/src/bl_ed/image.bl` and has no omega dependency.
+
+**OBSERVED on the way:**
+- **Reader positions.** `BeamLisp.Ns.Reader` `:end-offset` stops one codepoint short on
+  `(def ^:meta x …)`, and offsets drift deep into a file with multi-codepoint glyphs in strings.
+  `bl:` therefore scans top-level forms itself (`top-forms`). This is worth an upstream bug.
+- **Lazy interning.** A namespace's vars are interned on first use (`Env/own_names` is empty until
+  then). `bl:` shows that as "not interned yet", never as "not loaded".
+- **Reload is off by default.** `reload/commit` is disabled unless `BEAM_LISP_RELOAD=1`, and `r`
+  reports the hold verbatim. Whether `bin/bl-ed` sets the flag is an open question (§9).
+
+## 9. Open after the build
+
+- **UX-Q4.** Should `bin/bl-ed` set `BEAM_LISP_RELOAD=1`, so `r` on `bl:` reloads? Lean: yes for
+  `bin/bl-ed` (a development tool), never for omega's own CLI.
+- **FEAT-021 v1** (effects from the jail) waits for the sandbox decisions (SB-Q1..Q6).
+- **The `effects:` v0 parser reads `(edit "…")` / `(write "…")` / `(sh "…")` from cell code.**
+  Paths built at run time are missed. That is the honest gap v1 closes.
+

@@ -1,9 +1,10 @@
 #+TITLE: UX slice S4 — virtual documents: scheme: paths in bl-ed, omega:scratch as the first provider
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 15992c6b7bd3ff06
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl]]
 #+CUSTOM_ID: FEAT-016-ux-slice-s4-virtual-documents-scheme-pat
 #+DEPENDS: FEAT-015-ux-slice-s3-bl-ed-console-task-cards-c-e
+#+COMPLETION_HASH: f3fa37b875b78a51
 
 * Initial Message
 
@@ -38,3 +39,5 @@ E29: a document that is not a file. A path with a scheme (`omega:scratch`) loads
 - `apps/bl-ed/proof/11-scratch.png` from a real run.
 
 NOTE [2026-10-04]: 2026-10-04: scope grows into the provider PROTOCOL (research/domain/interface/providers/README.bl.md §2–3): B1 visit + C-o/C-i, B2 read-only documents, B4 rev long-poll refresh (`GET /api/rev`), B5 scheme→provider table in serve.bl with {:forward :omega}. Target is vendor/bl-ed (not beam-lisp/apps/bl-ed). The scratch provider design is providers/scratch.bl.md (eval: `codemode/run-eval` + `task/steer! … "human:me"` for `:ns omega.task.*` cells; harness/eval-cell in omega.scratch otherwise). FEAT-017..021 depend on this item.
+
+NOTE [2026-10-04]: Built: bl-ed.serve providers by scheme, /api/doc /api/rev (long-poll) /api/intent; ed/docs.bl (visit, C-o, read-only, refresh by rev, prompts); omega:scratch (.omega/ed/scratch.bl.org). proof/15-scratch.png. Evidence (2026-10-04, omega 86a1a5a + docs commit): bin/bl test test → 18/18 files green (ed_test 47, ed_image_test 12); vendor/bl-ed drive tests 29/29 (19 upstream + 10 omega); real browser run vendor/bl-ed/proof/10–15. Departures from the design: research/domain/interface/ux-slice.bl.md §8.

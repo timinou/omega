@@ -91,3 +91,5 @@ C8 measured on the real code: 120 steps, 65.7 s → 16.7 s, with identical turns
 - C3 belongs to FEAT-002.
 - The append-only `:task/cost` half of C8. The loop no longer reads the entity back, but still rewrites it each step: BUG-002 cost. Make usage append-only per turn and sum it on read.
 - C9's symmetric half: `read` reporting claims, once claims are append-only.
+
+NOTE [2026-10-04]: 2026-10-04: RE-PIN DONE — env.bl pins 94700545 (beam-lisp main after the bl-js-actors merge; suite 16/16 then, headless 8/9 with the content-dependent live-model scenario passing on re-run). The core changes C1/C2/C4/C5 listed here were already landed on omega main (bfd3a9f); this item's remaining scope is whatever of C1–C5 is not yet in, to be re-checked.

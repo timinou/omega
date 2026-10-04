@@ -43,6 +43,17 @@ cd /some/project && ~/code/undefine/omega/bin/omega-ui        # live: type a goa
 ~/code/undefine/omega/bin/omega-headless                       # the real UI, off-screen: scenarios + screenshots
 ```
 
+omega inside bl-ed: the task world and the editor in one VM. Tasks are `#+begin_task` blocks in
+your `.bl.org` files, and every view is a document.
+
+```sh
+cd /some/project && ~/code/undefine/omega/bin/bl-ed --offline  # open the printed URL
+# C-Enter on a #+begin_task block  open/refine a task; its #+RESULTS row is drawn as a live card
+# y / n / a on a card              answer its question · t its livebook · e what it did · s say
+# space a o / s / n / q / i        overview · scratch · new task · query · the live image (bl:)
+# C-o                              back
+```
+
 ## Requirements
 
 - **beam-lisp, pinned** in `env.bl` (`:bl "commit:…"`) and run by the `bl`
@@ -85,6 +96,8 @@ cd /some/project && ~/code/undefine/omega/bin/omega-ui        # live: type a goa
 | `src/omega/ui/web.bl`, `bin/omega-ui` | the UI as a `live.app`: env + ephemeral stream conn observed, intents = task verbs |
 | `src/omega/stream.bl`, `src/omega/llm/sse.bl` | streaming: SSE parsed and folded purely; deltas and activity (the call or `sh` running now) broadcast over `pg`, never facts |
 | `src/omega/ui/probe.bl`, `bin/omega-headless`, `test/headless/ui.bl` | the real window in a private headless sway: drive, query, wait-for, screenshot |
+| `src/omega/ed/`, `bin/bl-ed` | omega in bl-ed: pure org renderers (`render.bl`), the providers and intents (`providers.bl`), the one-VM launcher (`main.bl`) |
+| `vendor/bl-ed/` | bl-ed, vendored from beam-lisp (`VENDOR.md` lists every delta): documents that are not files, presentations, `ed/omega.bl` |
 | `research/domain/` | the research basis (15 literate notes) and the decision register |
 | `!tasks/plans/PLAN-001-…` | the decisions this version implements |
 

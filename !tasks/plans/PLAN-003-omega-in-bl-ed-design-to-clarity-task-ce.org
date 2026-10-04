@@ -56,11 +56,8 @@ Implementation, one feature per wave (bl-ed.bl.md §14 with the §15.7 deltas), 
 
 | wave | item | depends on |
 |---|---|---|
-| **UX** | **FEAT-013** S1 bl.doc.spans: task block :id + write-results after it (beam-lisp) | beam-lisp main (merged) |
-| **UX** | **FEAT-014** S2 omega bridge (open/say/answer/tasks/scratch) + `bin/omega serve` | — |
-| **UX** | **FEAT-015** S3 bl-ed console: cards, C-Enter on task blocks, card-row answers (E27), `/api/omega`, save base-hash; S5 proof | FEAT-013, FEAT-014 |
-| **UX** | **FEAT-016** S4 provider protocol (B1 visit, B2 read-only, B4 rev long-poll, B5 scheme table) + `omega:scratch` (E29) | FEAT-015 |
-| **UX+** | FEAT-017 `omega:overview` · FEAT-018 `task:<id>` · FEAT-019 `q:<id>` · FEAT-020 `bl:<ns>` · FEAT-021 `effects:<id>` (v0) — research/domain/interface/providers/; parallel once FEAT-016 lands | FEAT-016 |
+| **UX ✓** | **BUILT 2026-10-04** (re-pin 94700545; `bin/bl-ed`; ux-slice.bl.md §8): FEAT-013 (not needed) · FEAT-014 (one VM, no bridge) · FEAT-015 cards + answers · FEAT-016 provider protocol + scratch · FEAT-017 overview · FEAT-018 task · FEAT-019 q · FEAT-020 bl · FEAT-021 effects v0 (v1 open) — suite 18/18, drive 29/29, proof/10–15 | — |
+| **UX next** | FUP-011 (reload flag UX-Q4, overview budget, footprint confirm, effects v1, upstream deltas) · FUP-010 (live package) · BUG-004 (reader offsets, upstream) | — |
 | W0 | FEAT-001 re-pin + core C1, C2, C4, **C8 (first), C9**; C5 optional (closes BUG-001) | beam-lisp merges (E12) |
 | W0 | FEAT-002 C3 app-declared env.bl keys + omega.config | beam-lisp merges |
 | W1 | FEAT-003 world as realm app member, C6 file port, C7 CLI attach | FEAT-001, FEAT-002 |

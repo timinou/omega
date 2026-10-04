@@ -1,8 +1,9 @@
 #+TITLE: UX slice S1 — bl.doc.spans: task block :id and write-results after an id'd block (beam-lisp)
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 15992c6b7bd3ff06
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl]]
 #+CUSTOM_ID: FEAT-013-ux-slice-s1-bl-doc-spans-task-block-id-a
+#+COMPLETION_HASH: 33163aeec655d81b
 
 * Initial Message
 
@@ -37,3 +38,5 @@ A `#+begin_task :id hex` block gets a result span written after it by the one sh
 - New tests in the spans test file run on BEAM and on JS (the selftest/differential that already covers spans).
 - `bl doc run` on a document containing a task block produces identical cells, program and results as without the change.
 - Supersedes upstream item 1 of FEAT-006's revision.
+
+NOTE [2026-10-04]: Not needed — OBSERVED: `bl doc run` leaves a task block's #+RESULTS untouched and the editor writes the reference itself (vendor/bl-ed/ed/omega.bl write-reference). No beam-lisp change. Evidence (2026-10-04, omega 86a1a5a + docs commit): bin/bl test test → 18/18 files green (ed_test 47, ed_image_test 12); vendor/bl-ed drive tests 29/29 (19 upstream + 10 omega); real browser run vendor/bl-ed/proof/10–15. Departures from the design: research/domain/interface/ux-slice.bl.md §8.

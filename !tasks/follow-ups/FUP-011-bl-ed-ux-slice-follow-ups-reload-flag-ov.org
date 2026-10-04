@@ -1,0 +1,26 @@
+#+TITLE: bl-ed UX slice follow-ups: reload flag, overview budget, footprint confirm, effects v1, upstream the vendored deltas
+#+STATE: ITEM
+#+SESSION_ID: 15992c6b7bd3ff06
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl]]
+#+CUSTOM_ID: FUP-011-bl-ed-ux-slice-follow-ups-reload-flag-ov
+
+* Initial Message
+
+ok this is all good and realise that we designed a lot. what's the slice that's specifically about user experience? what would it look like? what does it leave out, and how does it make it amenable to it next? you can take a look at the --js-actors and the main branch of beam lisp next, new stuff has emerged there
+
+* Initial Message
+
+(2026-10-04) Remaining after the UX slice was built (FEAT-013..020 DONE; ux-slice.bl.md §8–9).
+
+* Items
+
+1. UX-Q4 — should bin/bl-ed set BEAM_LISP_RELOAD=1 so `r` on bl: reloads? Lean yes for bin/bl-ed only. Today r reports the hold verbatim.
+2. Measure omega:overview render against the 20 ms / 100 tasks / 2,000 traces budget (overview.bl.md §5); fix in the projection if over.
+3. task: footprint confirm before re-running a cell that calls sh/write/edit (task.bl.md §6).
+4. effects: v1 from :effect/* facts once the jail lands (FEAT-021; SB-Q1..Q6).
+5. Upstream the vendored deltas (vendor/bl-ed/VENDOR.md table) to beam-lisp/apps/bl-ed, or move ed/omega.bl into a package (FUP-010).
+6. The headless scenario `live-model-streams-into-the-window` asserts the word "writing" disappears; a real model's answer about write-ahead logs can contain it — pick a sentinel the prompt cannot produce.
+
+* Acceptance
+
+Each item closed with evidence, or moved into its own item.

@@ -1,9 +1,10 @@
 #+TITLE: UX slice S3 — bl-ed console: task cards, C-Enter on task blocks, card-row answers, /api/omega forward
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 15992c6b7bd3ff06
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl]]
 #+CUSTOM_ID: FEAT-015-ux-slice-s3-bl-ed-console-task-cards-c-e
 #+DEPENDS: FEAT-013-ux-slice-s1-bl-doc-spans-task-block-id-a FEAT-014-ux-slice-s2-omega-bridge-open-say-answer
+#+COMPLETION_HASH: fbb421facc884eea
 
 * Initial Message
 
@@ -42,3 +43,5 @@ The slice as a human sees it (ux-slice §2.1–2.6): ✦ gutter mark, one-line c
 - Real run (S5): a human opens, answers and finishes a task in bl-ed; `apps/bl-ed/proof/10-task-card.png`.
 
 NOTE [2026-10-04]: 2026-10-04: bl-ed is vendored into omega at vendor/bl-ed (VENDOR.md; built by beam-lisp main via BL_TREE; drive tests 19/19). Build this item THERE, not in beam-lisp/apps/bl-ed; `ed/omega.bl` lives at vendor/bl-ed/ed/omega.bl (FUP-010's reference moves with it). The card-row contextual keymap is implemented as the general presentation mechanism B3 (providers/README.bl.md §3): `:objects` → row index → per-type keymap; the card is the `:omega/task` presentation. The 1 s card poll becomes a long-poll on the rev of an internal `omega:tasks?ids=…` document (README §2.2).
+
+NOTE [2026-10-04]: Built in vendor/bl-ed: ed/omega.bl (task cells, §3.3 table, cards on reference rows, terminal rewrite once), presentations in ed/keymap.bl, rev-checked saves, host long-poll watchers. proof/10-task-card-asks.png, proof/11-task-card-done.png. Evidence (2026-10-04, omega 86a1a5a + docs commit): bin/bl test test → 18/18 files green (ed_test 47, ed_image_test 12); vendor/bl-ed drive tests 29/29 (19 upstream + 10 omega); real browser run vendor/bl-ed/proof/10–15. Departures from the design: research/domain/interface/ux-slice.bl.md §8.
