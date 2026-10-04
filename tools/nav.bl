@@ -65,14 +65,49 @@
       (for [[[a b] k] pairs :when (and (>= k 2) (get (:by-file idx) a) (get (:by-file idx) b) (not (linked? a b)))]
         {:a a :b b :times k}))))))
 
-;; ── 4. WHERE: definitions + textual callers of a symbol
+;; ── 4. WHERE: alias-resolving definitions + callers
+(defn rx-esc [s] (reduce (fn [acc c] (str/replace acc c (str "\\" c))) s ["." "?" "*" "+" "^" "$" "|" "(" ")" "[" "]" "{" "}"]))
+
+(defn aliases [p] ; alias -> ns, from [omega.x :as y] in the file
+  (into {} (map (fn [m] [(nth m 2) (nth m 1)]) (re-seq #"\[(omega\.[a-z0-9.-]+)\s+:as\s+([a-z0-9-]+)\]" (:text p)))))
+
 (defn where [idx sym]
-  (let [pat (re-pattern (str "[\\s(/]" (str/replace sym "." "\\.") "[\\s)\\]]"))
-        defs (for [p (vals (:by-file idx)) d (:defs p) :when (= (last (str/split sym "/")) (:name d))] [(:file p) (:line d) (:kind d)])
-        uses (for [p (vals (:by-file idx)) [i l] (map-indexed vector (str/split-lines (:text p)))
-                   :when (and (re-find pat l) (not (re-find #"^\s*;" l)) (not (re-find (re-pattern (str "^\\((defn-?|def)\\s+" (str/replace sym "." "\\."))) l)))]
-               [(:file p) (inc i) (str/trim l)])]
-    {:defs (vec defs) :uses (vec (sort-by (juxt first second) uses))}))
+  (let [parts (str/split sym "/") bare (last parts) qual (when (> (count parts) 1) (first parts))
+        defs (vec (for [p (vals (:by-file idx)) d (:defs p) :when (= bare (:name d))] [(:file p) (:line d) (:kind d) (:ns p)]))
+        def-nses (set (map #(nth % 3) defs))
+        def-nses (if qual (set (filter (fn [n] (or (= n qual) (str/ends-with? n (str "." qual)))) def-nses)) def-nses)
+        e (rx-esc bare)
+        bare-pat (re-pattern (str "(?:^|[\\s(\\[{'#/])" e "(?:[\\s)\\]}]|$)"))
+        qual-pat (re-pattern (str "([a-z0-9.-]+)/" e "(?:[\\s)\\]}]|$)"))
+        def-pat (re-pattern (str "^\\((defn-?|def|defmacro|defserver)\\s+(\\^:private\\s+)?" e "(?:[\\s)]|$)"))
+        hits (for [p (vals (:by-file idx)) :let [al (aliases p)] [i l] (map-indexed vector (str/split-lines (:text p)))
+                   :when (and (re-find bare-pat l) (not (re-find #"^\s*;" l)) (not (re-find def-pat l)))]
+               (let [q (second (re-find qual-pat l))
+                     target (if q (get al q q) (:ns p))]
+                 {:file (:file p) :line (inc i) :text (str/trim l) :resolved (contains? def-nses target) :via (or q "(same ns)")}))]
+    {:defs (vec (filter #(contains? def-nses (nth % 3)) defs))
+     :uses (vec (sort-by (juxt :file :line) (filter :resolved hits)))
+     :ignored (vec (remove :resolved hits))}))
+
+(defn fmt-where [sym w]
+  (str "where " sym "\n  defined: " (str/join ", " (map (fn [d] (str (nth d 0) ":" (nth d 1) " (" (nth d 2) ")")) (:defs w))) "\n"
+       "  " (count (:uses w)) " call sites in " (count (distinct (map :file (:uses w)))) " files"
+       (when (seq (:ignored w)) (str "  (" (count (:ignored w)) " same-named uses resolved to a different ns, skipped)")) "\n"
+       (str/join "\n" (map (fn [u] (str "    " (:file u) ":" (:line u) "  " (let [t (:text u)] (if (> (count t) 70) (subs t 0 70) t)))) (:uses w)))))
+
+(defn fmt-impact [r]
+  (str "impact of " (:ns r) "  (blast radius " (:blast r) ")\n"
+       "  direct:  " (str/join " " (:direct r)) "\n"
+       "  also:    " (str/join " " (remove (set (:direct r)) (:transitive r))) "\n"
+       "  RUN:     bin/bl test " (str/join " " (map (fn [t] (str "test/" (str/replace t "-" "_") ".bl")) (:tests-to-run r)))))
+
+(defn fmt-plan [p]
+  (str "━━ " (:file p) "  (" (:loc p) " loc, ns " (:ns p) ")\n"
+       "  api:        " (str/join " " (:public-api p)) "\n"
+       "  requires:   " (str/join " " (:requires p)) "\n"
+       "  blast:      " (get-in p [:impact :blast]) " namespaces; tests: " (str/join " " (get-in p [:impact :tests-to-run])) "\n"
+       "  co-changes: " (if (seq (:hidden-coupling p)) (str/join ", " (map (fn [[f n]] (str f " x" n)) (:hidden-coupling p))) "none recorded") "\n"
+       "  tasks:      " (if (seq (:tasks p)) (str/join ", " (map (fn [[i s]] (str i " [" s "]")) (:tasks p))) "none mention it")))
 
 ;; ── 5. TASKS: org task files -> state + DEPENDS graph
 (defn tasks []

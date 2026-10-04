@@ -1,0 +1,94 @@
+;; lens.bl — the schema lens: for every datom attribute in omega.schema, who WRITES it and who READS it.
+;; Heuristic, line-based; classification is by syntactic context (see classify).
+
+(def KINDS ["actor" "task" "msg" "trace" "turn"])
+
+(defn schema-attrs []
+  (let [txt (File/read! "src/omega/schema.bl")
+        chunks (rest (str/split txt "{:db/ident "))]
+    (vec (for [c chunks :let [id (re-find #"^:([a-z]+)/([a-z0-9?!-]+)" c)] :when id]
+           {:attr (str (nth id 1) "/" (nth id 2)) :kind (nth id 1)
+            :type (second (re-find #":db/valueType :db\.type/([a-z]+)" c))
+            :many (str/includes? c ":db.cardinality/many")
+            :unique (str/includes? c ":db.unique/identity")
+            :doc (second (re-find #":db/doc \"((?:[^\"\\\\]|\\\\.)*)\"" c))}))))
+
+(defn code-lines [p] ; [[lineno text]] excluding comments, and prose in .md files
+  (let [md? (str/ends-with? (:file p) ".md")]
+    (loop [ls (map-indexed vector (str/split-lines (:text p))) fence false acc []]
+      (if (empty? ls) acc
+        (let [[i l] (first ls)
+              t (str/trim l)
+              fence' (if (str/starts-with? t "```") (not fence) fence)
+              keep? (and (or (not md?) (and fence fence')) (not (str/starts-with? t ";")) (not (str/starts-with? t "```")))]
+          (recur (rest ls) fence' (if keep? (conj acc [(inc i) l]) acc)))))))
+
+(defn classify [attr line window]
+  (let [a (rx-esc (str ":" attr))]
+    (cond
+      (re-find (re-pattern (str ":db/retract\\s+\\S+\\s+" a)) line) :retract
+      (re-find (re-pattern (str ":db/add\\s+\\S+\\s+" a)) line) :write
+      (re-find (re-pattern (str "\\[(\\?[a-z-]+|_)\\s+" a)) line) :query
+      (re-find (re-pattern (str "\\(" a "[\\s)]")) line) :access
+      (re-find (re-pattern (str "\\{" a "\\s+\\[")) line) :pull
+      (and (re-find (re-pattern (str "\\[[^\\]]*" a "[\\s\\]]")) line) (re-find #"PULL|pull" window)) :pull
+      (and (re-find (re-pattern (str a "\\s")) line) (re-find #":db/id|assoc|tx!|fact" window)) :write
+      (re-find (re-pattern (str "get-in\\s+\\S+\\s+\\[[^\\]]*" a)) line) :access
+      :else :mention)))
+
+(defn short-ns [f] (-> f (str/replace #"^src/omega/" "") (str/replace #"^test/" "t:") (str/replace #"\.bl(\.md)?$" "")))
+
+(defn scan-uses [idx attrs]
+  (let [names (set (map :attr attrs))
+        kw (re-pattern (str ":(" (str/join "|" KINDS) ")/([a-z0-9?!-]+)"))]
+    (vec (for [p (vals (:by-file idx)) :when (not= (:file p) "src/omega/schema.bl")
+               :let [cl (vec (code-lines p))] [k [ln l]] (map-indexed vector cl)
+               m (distinct (map (fn [x] (str (nth x 1) "/" (nth x 2))) (re-seq kw l)))
+               :let [window (str/join " " (map second (subvec cl (max 0 (- k 5)) (inc k))))]]
+           {:attr m :file (:file p) :line ln :text (str/trim l) :test (str/starts-with? (:file p) "test/")
+            :how (if (contains? names m) (classify m l window) :undeclared)}))))
+
+(def WRITES #{:write :retract}) (def READS #{:query :access :pull})
+
+(defn fmt-sites [us] (str/join "\n" (map (fn [u] (str "      " (:file u) ":" (:line u) " [" (name (:how u)) "]  " (let [t (:text u)] (if (> (count t) 64) (subs t 0 64) t)))) us)))
+
+(defn roles [us] ; src only
+  (let [src (remove :test us)
+        mods (fn [hows] (vec (sort (distinct (map #(short-ns (:file %)) (filter #(contains? hows (:how %)) src))))))]
+    {:w (mods WRITES) :r (mods READS) :m (mods #{:mention})}))
+
+(defn lens-attr [a us]
+  (let [mine (filter #(= (:attr a) (:attr %)) us) r (roles mine)
+        ws (filter #(contains? WRITES (:how %)) mine) rs (filter #(contains? READS (:how %)) mine)]
+    (str (:attr a) "  (" (or (:type a) "any") (when (:many a) ", many") (when (:unique a) ", unique") ")\n"
+         "  " (:doc a) "\n"
+         "  writes (" (count ws) "):\n" (fmt-sites ws) "\n"
+         "  reads (" (count rs) "):\n" (fmt-sites rs))))
+
+(defn lens-overview [idx attrs us]
+  (let [by (group-by :kind attrs)
+        findings (atom [])]
+    (str/join "\n"
+      (concat
+        (for [k KINDS]
+          (str "\n── :" k "/*\n"
+               (str/join "\n"
+                 (for [a (get by k)
+                       :let [mine (filter #(= (:attr a) (:attr %)) us) r (roles mine)
+                             tw (count (filter #(and (:test %) (contains? WRITES (:how %))) mine))
+                             tr' (count (filter #(and (:test %) (contains? READS (:how %))) mine))
+                             tag (cond (and (empty? (:w r)) (empty? (:r r)) (empty? (:m r))) (if (pos? (+ tw tr')) "  ⚠ only tests touch it" "  ⚠ UNUSED")
+                                       (and (empty? (:w r)) (seq (:r r))) "  ⚠ read, never written in src"
+                                       (and (seq (:w r)) (empty? (:r r)) (not (:unique a))) "  ⚠ written, never read in src"
+                                       :else "")]]
+                   (str "  " (:attr a) (apply str (repeat (max 1 (- 16 (count (:attr a)))) " "))
+                        "W: " (if (seq (:w r)) (str/join " " (:w r)) "-") "   R: " (if (seq (:r r)) (str/join " " (:r r)) "-") tag)))))
+        (let [und (frequencies (map :attr (filter #(= :undeclared (:how %)) (remove :test us))))]
+          [(str "\n── keywords in an attribute namespace but NOT in omega.schema (hook events like :turn/end are expected; anything else is drift or a typo)\n"
+                (if (empty? und) "  none" (str/join "\n" (map (fn [[k v]] (str "  :" k "  x" v " in " (str/join " " (distinct (map #(short-ns (:file %)) (filter #(and (= k (:attr %)) (not (:test %))) us)))))) (sort und)))))])))))
+
+(defn lens-report [idx only]
+  (let [attrs (schema-attrs) us (scan-uses idx attrs)]
+    (if only
+      (let [a (first (filter #(= only (:attr %)) attrs))] (if a (lens-attr a us) (str "no such attribute " only)))
+      (str "SCHEMA LENS — " (count attrs) " attributes, " (count us) " keyword uses scanned" (lens-overview idx attrs us)))))

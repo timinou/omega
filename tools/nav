@@ -1,12 +1,13 @@
 #!/bin/sh
-# usage: tools/nav impact omega.task | where tr/leave! | hot | plan src/omega/task.bl ...
+# usage: tools/nav impact NS | where SYM | hot | plan FILE... | lens [ATTR]
 cd "$(dirname "$0")/.."
 cmd=$1; shift
 case $cmd in
-  impact) body="(println (impact (build-index) \"$1\"))";;
-  where)  body="(let [w (where (build-index) \"$1\")] (println \"DEFS\" (:defs w)) (doseq [u (:uses w)] (println u)))";;
-  hot)    body='(let [i (build-index)] (doseq [h (hotspots i 10)] (println h)) (println "-- co-change without require edge") (doseq [c (cochange i 10)] (println c)))';;
-  plan)   fs=$(for f in "$@"; do printf '"%s" ' "$f"; done); body="(let [i (build-index)] (doseq [p (plan i (tasks) [$fs])] (println (dissoc p :header)) (println)))";;
+  impact) body="(println (fmt-impact (impact (build-index) \"$1\")))";;
+  where)  body="(println (fmt-where \"$1\" (where (build-index) \"$1\")))";;
+  hot)    body='(let [i (build-index)] (doseq [h (hotspots i 10)] (println (:file h) "churn" (:churn h) "loc" (:loc h) "fan-in" (:fan-in h))) (println "-- co-change without require edge") (doseq [c (cochange i 10)] (println (:times c) (:a c) "<->" (:b c))))';;
+  plan)   fs=$(for f in "$@"; do printf '"%s" ' "$f"; done); body="(let [i (build-index)] (doseq [p (plan i (tasks) [$fs])] (println (fmt-plan p)) (println)))";;
+  lens)   body="(println (lens-report (build-index) $( [ -n "$1" ] && printf '"%s"' "$1" || echo nil )))";;
 esac
-{ cat tools/nav.bl; echo "$body"; } > tools/.run.bl
+{ cat tools/nav.bl; [ -f tools/lens.bl ] && cat tools/lens.bl; echo "$body"; } > tools/.run.bl
 exec bin/bl run tools/.run.bl
