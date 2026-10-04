@@ -194,6 +194,10 @@ machinery:
 | `effects:t-41` | the jail's effect facts for a task, one row per effect | how-it-fits §4.4 |
 | `bl:<ns>` | a namespace's source as a document, from the live image | new |
 
+**Each provider now has its own design:** `providers/README.bl.md` (the shared protocol, bl-ed changes
+B1–B5, build order, cuts) and one file per provider. bl-ed is vendored at `vendor/bl-ed` for the
+duration (`vendor/bl-ed/VENDOR.md`).
+
 The journal (E7) is **not** replaced: once buffer servers give a single writer (W1), homeless
 tasks move to `journal/YYYY-MM-DD.bl.org`, and `omega:scratch` stays as a pure scratch pad
 (the Lisp machine's `*scratch*`). The provider rule stays.
