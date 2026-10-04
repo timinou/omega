@@ -385,6 +385,7 @@ gate); `mode :main` = the step-checkpoint variant (everything on `main`, gate on
 
 (defn now-us [] (erlang/monotonic_time :microsecond))
 
+;; (see Findings 0: the refusal diagnosed here was wrong; claims are advisory; kept for reproducibility)
 ;; claims: omega's default policy REFUSES task B's write to a path A holds (observed in the
 ;; first version of this spike: B's a.py edit never happened). Open the policy so both
 ;; tasks may write a.py; claims then act as attribution only, which is what we measure.
@@ -568,12 +569,26 @@ Observed in this file's output (5 runs per variant; 2 tasks; real omega system; 
 `:tool/after`; historian = one owner process; whole file takes ~2 min). Numbers quoted
 are from the last full run; per-run values are listed in the summary lines.
 
-**0. Setup surprise (OBSERVED).** omega's default claim policy refuses a second task's
-write to a path another live task holds. My first run had B's `a.py` edit silently fail
-(B's `a.py` write never happened), so the "both tasks touch a.py" scenario needs
-`(tr/set-claim-policy! (fn [mine theirs] false))`. With a shared working copy and
-per-task refs the claim guard must either stay (then tasks cannot co-edit one file) or
-become advisory.
+**0. Setup note — CORRECTED by the orchestrator after a re-check.** This spike's first run
+lost B's `a.py` edit and attributed it to the claim policy refusing the write. That diagnosis
+is **wrong**. Re-check (`/tmp/h/claimcheck.bl.md`, default policy, A holds a `:write` claim on
+`a.py`, then B `edit`s another line of it):
+
+```text
+a.py on disk  : "x = 10\ny = 20\n"     ← both edits landed
+B's claims    : 1  A's claims: 1
+```
+
+Claims are advisory, as the domain model's invariant 4 says. `prelude/edit` writes the file first,
+then calls `claim!`, and a conflict is returned as data that `edit` ignores. Nothing refuses the
+write.
+- The lost edit was most likely a full-file read-modify-write race between the two tasks (each
+  writes back a whole file it read earlier). That is the `rmw` variant this spike measures below.
+- INFERRED, not re-run.
+- The `set-claim-policy!` line below is therefore unnecessary. It is kept so the recorded numbers
+  stay reproducible.
+- Real finding hiding here: `edit` silently drops a claim conflict. The agent never learns another
+  task holds the path unless it calls `claim!` itself.
 
 **1. Per-task refs + per-path gate fix gate blame for DISJOINT files (OBSERVED).**
 ```text
