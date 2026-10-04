@@ -261,10 +261,17 @@
 
 ; ─── documents ──────────────────────────────────────────────────────────────
 
-(defn- save [ed]
-  (-> ed
-      (c/effect {:kind :save :path (:path ed) :text (t/to-string (:text ed)) :rev (:rev ed)})
-      (c/message (str "saving " (:path ed) "…"))))
+(defn- save
+  "Write the document. :base is the rev it was loaded at, so a write that
+   would clobber someone else's is refused; after a refusal (:stale) the next
+   C-s sends the newer rev on purpose — an explicit overwrite."
+  [ed]
+  (if (true? (get-in ed [:doc :read-only?]))
+    (c/message ed (str (:path ed) " is a read-only view"))
+    (-> ed
+        (c/effect {:kind :save :path (:path ed) :text (t/to-string (:text ed)) :rev (:rev ed)
+                   :base (or (get-in ed [:doc :stale]) (get-in ed [:doc :rev]))})
+        (c/message (str "saving " (:path ed) "…")))))
 
 (defn- fold-toggle
   "Toggle folding of the section under the cursor (a VIEW property: the text is unchanged)."

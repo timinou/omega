@@ -138,8 +138,9 @@
   (let [p (query-param conn "path") d (read-doc cfg p)]
     (if (contains? d :error)
       (w/json conn (:status d) {:ok false :message (:error d)})
-      (w/json conn 200 {:ok true :path p :text (:text d) :rev (:rev d) :readOnly (:read-only? d)
-                        :title (:title d) :objects (objects-json (:objects d))}))))
+      (w/json conn 200 (cond-> {:ok true :path p :text (:text d) :rev (:rev d) :readOnly (:read-only? d)
+                                :title (:title d) :objects (objects-json (:objects d))}
+                         (some? (:data d)) (assoc :data (:data d)))))))
 
 (def ^:private POLL-MS 250)
 (def ^:private HOLD-MS 25000)

@@ -1,0 +1,302 @@
+; ed/omega.bl — omega's console half in bl-ed (E28: lives here until omega's
+; package loads live, FUP-010).
+;
+; It adds, through bl-ed's generic seams only (commands, presentation keys,
+; effects, the :doc event):
+;   * task cells   `#+begin_task :id hex … #+end_task` — C-Enter opens a task
+;                  and writes `#+RESULTS: hex` / `: #omega/task {:id … :goal …}`;
+;                  again: focus (same body), refine (edited body), new (finished)
+;   * cards        a `#omega/task` result row is DRAWN as the task's live card
+;                  (the text on disk stays the reference)
+;   * presentations  :omega/task :omega/msg :omega/cell :omega/composer
+;                  :omega/trace :omega/expand :omega/effect — the same keys
+;                  wherever the object appears (card, overview, query table)
+;   * `space a …`  o overview · s scratch · n new task · q query
+;
+; Every write is an INTENT to the omega world (effect {:kind :intent}); the
+; console holds no authority (D1). Card data comes from the internal document
+; omega:tasks?ids=…, which the host watches by rev like any document.
+
+(ns ed.omega
+  (:require [ed.text :as t]
+            [ed.core :as c]
+            [ed.org :as org]
+            [ed.docs :as docs]
+            [bl.doc.spans :as spans]))
+
+; ─── task blocks and references ────────────────────────────────────────────
+
+(defn task-block?
+  [b]
+  (and (some? b) (= :block (:kind b)) (= "task" (lower-case (str (:lang b))))))
+
+(defn- header-id
+  "The `:id x` of a `#+begin_task` line, or nil."
+  [l]
+  (let [toks (vec (filter (fn [x] (not (blank? x))) (split (trim l) " ")))
+        i (first (filter (fn [i] (= ":id" (nth toks i))) (range (count toks))))]
+    (if (and (some? i) (< (inc i) (count toks))) (nth toks (inc i)) nil)))
+
+(defn block-body [ed b]
+  (let [lines (:lines (:text ed))]
+    (trim (join "\n" (subvec lines (inc (:from b)) (if (:open? b) (:to b) (dec (:to b))))))))
+
+(defn reference-at
+  "{:id :goal …} of a `: #omega/task {…}` line, or nil (read without a reader:
+   only the two keys the console needs)."
+  [l]
+  (let [s (trim (str l))]
+    (when (starts-with? s ": #omega/task {")
+      (let [grab (fn [k] (let [i (index-of s (str k " \""))]
+                           (when (some? i)
+                             (let [from (+ i (count (str k)) 2) j (index-of (subs s from) "\"")]
+                               (when (some? j) (subs s from (+ from j)))))))]
+        (when-let [id (grab ":id")]
+          ; :status is written as a keyword (`:status :done`)
+          (let [i (index-of s ":status :")
+                st (when (some? i)
+                     (let [from (+ i 9) rest (subs s from)
+                           j (or (some (fn [c] (index-of rest c)) [" " "}"]) (count rest))]
+                       (subs rest 0 j)))]
+            {:id id :goal (grab ":goal") :status st}))))))
+
+(defn result-of
+  "The result span right after task block `b`, if it carries a reference."
+  [ed b]
+  (let [bs (:blocks (:struct ed))
+        nxt (org/block-at bs (:to b))]
+    (when (and (some? nxt) (= :result (:kind nxt)))
+      (let [ref (reference-at (t/line (:text ed) (inc (:from nxt))))]
+        (when ref (assoc ref :row (inc (:from nxt)) :span nxt))))))
+
+(defn digest [s] (str (mod (hash (trim (str s))) 4294967296)))
+
+(defn- write-reference
+  "`ed` with `#+RESULTS: <bid>` / `: <ref>` written after block b (in place
+   if one exists), as one undoable edit."
+  [ed b bid ref-text]
+  (let [lines (:lines (:text ed))
+        bs (:blocks (:struct ed))
+        nxt (org/block-at bs (:to b))
+        new (if (and (some? nxt) (= :result (:kind nxt)))
+              (vec (concat (subvec lines 0 (:from nxt)) [(str "#+RESULTS: " bid) (str ": " ref-text) ""] (subvec lines (:to nxt))))
+              (vec (concat (subvec lines 0 (:to b)) [(str "#+RESULTS: " bid) (str ": " ref-text) ""] (subvec lines (:to b)))))]
+    (c/replace-text ed (join "\n" new))))
+
+(defn- ensure-id
+  "Block b's id: its `:id`, else one derived and written into its header once
+   (E25), so renaming the heading never breaks the link."
+  [ed b]
+  (let [l (t/line (:text ed) (:from b))
+        id (header-id l)]
+    (if (some? id)
+      [ed id]
+      (let [nid (str "task-" (mod (hash (str (:from b) (block-body ed b))) 100000))
+            ed2 (c/apply-edits ed [[[(:from b) (count l)] [(:from b) (count l)] (str " :id " nid)]]
+                               (fn [_ end] (c/primary ed)) nil)]
+        [ed2 nid]))))
+
+; ─── C-Enter on a task block: the evaluation table (bl-ed §3.3) ────────────
+
+(defn eval-task
+  "Open, focus, refine or reopen the task the block at the cursor holds."
+  [ed]
+  (let [b (c/block-at-cursor ed)
+        b (if (task-block? b) b
+              ; on the result row of a task block: act on its block
+              (let [bs (:blocks (:struct ed))
+                    prev (when (and (some? b) (= :result (:kind b)) (> (:from b) 0)) (org/block-at bs (dec (:from b))))]
+                (if (task-block? prev) prev nil)))]
+    (if (nil? b)
+      nil
+      (let [[ed bid] (ensure-id ed b)
+            b (c/block-at-cursor ed)
+            b (if (task-block? b) b (org/block-at (:blocks (:struct ed)) (:from b)))
+            goal (block-body ed b)
+            ref (result-of ed b)
+            card (when ref (get (:cards ed) (:id ref)))
+            finished? (contains? #{"done" "failed" "cancelled"} (or (:status card) (:status ref)))]
+        (cond
+          (blank? goal) (c/message ed "a task block needs a goal: write it between #+begin_task and #+end_task")
+          (and (some? ref) (not finished?) (= (:goal ref) (digest goal)))
+            (c/message ed (str (:id ref) " is " (or (:word card) "live") (if (:title card) (str " — " (:title card)) "") "   (edit the block to refine it)"))
+          (and (some? ref) (not finished?))
+            (-> (write-reference ed b bid (str "#omega/task {:id \"" (:id ref) "\" :goal \"" (digest goal) "\"}"))
+                (c/effect {:kind :intent :intent "task/say" :args {:id (:id ref) :text goal}})
+                (c/message (str "refined " (:id ref) " with the edited block")))
+          :else
+            (-> ed
+                (assoc :pending-open {:block bid :prev (:id ref)})
+                (c/effect {:kind :intent :intent "task/open" :args {:goal goal :path (:path ed) :block bid}
+                           :then :task-opened :block bid})
+                (c/message (str "opening a task" (if ref (str " (previous: " (:id ref) ")") "") "…"))))))))
+
+(defn task-opened
+  "The world answered task/open: write the reference under its block."
+  [ed ev]
+  (let [bid (:block ev)
+        bs (:blocks (:struct ed))
+        b (first (filter (fn [x] (and (task-block? x) (= bid (header-id (t/line (:text ed) (:from x)))))) bs))]
+    (if (nil? b)
+      (c/message ed (str "opened " (:id ev) " (its block is gone)"))
+      (let [prev (get-in ed [:pending-open :prev])
+            ref (str "#omega/task {:id \"" (:id ev) "\" :goal \"" (digest (block-body ed b)) "\"" (if prev (str " :prev \"" prev "\"") "") "}")]
+        (-> (write-reference ed b bid ref)
+            (dissoc :pending-open)
+            (c/message (str "opened " (:id ev) " — its card follows the task; C-s keeps the reference")))))))
+
+; ─── cards ─────────────────────────────────────────────────────────────────
+
+(defn card-ids
+  "Task ids whose references are in this document (cards to keep fresh), plus
+   the document's own task objects."
+  [ed]
+  (let [lines (:lines (:text ed))]
+    (vec (distinct (concat (keep (fn [l] (:id (reference-at l))) lines)
+                           (keep (fn [[_ o]] (when (= "omega/task" (:type o)) (:key o))) (:obj-index ed)))))))
+
+(defn card-line
+  "The text a card row draws (status, title, age, ask) for `card`."
+  [cd]
+  (cond
+    (nil? cd) nil
+    (:ask cd) (str "⚑ needs you  " (:id cd) " · asks: " (get-in cd [:ask :text]) "    y yes · n no · a answer…")
+    :else (str (:glyph cd) " " (:word cd) "  " (:id cd) " · " (:title cd) "  · " (:age cd)
+               (if (seq (:claims cd)) (str " · ✎ " (join " " (:claims cd))) "")
+               (if (and (:result cd) (contains? #{"done" "failed" "idle" "cancelled"} (:status cd))) (str " — " (:result cd)) ""))))
+
+(defn objects-from-references
+  "Presentations for reference rows in a FILE (files carry no :objects):
+   every `: #omega/task {…}` row is an :omega/task."
+  [ed]
+  (let [lines (:lines (:text ed))]
+    (reduce (fn [m r] (let [ref (reference-at (nth lines r))] (if ref (assoc m r {:row r :type "omega/task" :key (:id ref)}) m)))
+            {} (range (count lines)))))
+
+(defn object-at
+  "The object at the cursor row: a provider's object, else a reference row."
+  [ed]
+  (or (docs/object-at ed)
+      (let [r (first (c/cursor ed)) ref (reference-at (t/line (:text ed) r))]
+        (when ref {:row r :type "omega/task" :key (:id ref)}))))
+
+(defn terminal-rewrite
+  "For every reference whose task finished since it was written, rewrite it
+   ONCE with :status :summary (bl-ed §3.4, E9) — the line then reads without a
+   world. Writable documents only; a no-op when nothing finished."
+  [ed]
+  (if (docs/read-only? ed)
+    ed
+    (let [lines (:lines (:text ed))
+          edits (keep (fn [r]
+                        (let [ref (reference-at (nth lines r))
+                              cd (when ref (get (:cards ed) (:id ref)))]
+                          (when (and cd (nil? (:status ref)) (contains? #{"done" "failed" "cancelled"} (:status cd)))
+                            [r (str ": #omega/task {:id \"" (:id ref) "\" :goal \"" (:goal ref) "\" :status :" (:status cd)
+                                    (if (:result cd) (str " :summary " (pr-str (:result cd))) "") "}")])))
+                      (range (count lines)))]
+      (if (empty? edits)
+        ed
+        (c/message (c/replace-text ed (join "\n" (reduce (fn [ls [r s]] (assoc ls r s)) lines edits)))
+                   "a task finished: its reference now carries the summary (C-s to keep it)")))))
+
+(defn cards-loaded
+  "The cards arrived (event {:type :cards :data [card …]}): index them by id."
+  [ed ev]
+  (terminal-rewrite (assoc ed :cards (reduce (fn [m cd] (assoc m (:id cd) cd)) (or (:cards ed) {}) (or (:data ev) [])))))
+
+; ─── presentation commands ─────────────────────────────────────────────────
+
+(defn- with-object
+  "Run (f ed obj) on the object at the cursor if its type is in `types`."
+  [types f]
+  (fn [ed]
+    (let [o (object-at ed)]
+      (if (and (some? o) (contains? types (:type o)))
+        (f ed o)
+        (c/message ed (str "no " (join " / " (sort types)) " under the cursor"))))))
+
+(defn- intent [ed nm args msg]
+  (-> ed (c/effect {:kind :intent :intent nm :args args}) (c/message msg)))
+
+(defn- ask-of [ed o]
+  (if (= "omega/msg" (:type o))
+    {:msg (:key o) :task (:task o)}
+    (when-let [a (:ask (get (:cards ed) (:key o)))] {:msg (:msg a) :task (:key o)})))
+
+(defn- answer [text]
+  (fn [ed o]
+    (if-let [a (ask-of ed o)]
+      (intent ed "msg/answer" {:msg (:msg a) :text text} (str "answered " (:task a) ": " text))
+      (c/message ed "no open question here"))))
+
+(def ^:private TASKY #{"omega/task" "omega/msg"})
+
+(def table
+  {:omega/yes {:doc "Answer the open question with yes." :run (with-object TASKY (answer "yes"))}
+   :omega/no {:doc "Answer the open question with no." :run (with-object TASKY (answer "no"))}
+   :omega/answer {:doc "Answer the open question with free text."
+                  :run (with-object TASKY (fn [ed o] (if-let [a (ask-of ed o)]
+                                                        (docs/prompt ed (str (:task a) " ▸ ") (fn [e s] (intent e "msg/answer" {:msg (:msg a) :text s} (str "answered " (:task a)))))
+                                                        (c/message ed "no open question here"))))}
+   :omega/say {:doc "Send the task a message (a follow-up prompt)."
+               :run (with-object #{"omega/task" "omega/composer" "omega/msg"}
+                      (fn [ed o] (let [id (or (:task o) (:key o))]
+                                   (docs/prompt ed (str "say to " id " ▸ ") (fn [e s] (intent e "task/say" {:id id :text s} (str "sent to " id)))))))}
+   :omega/steer {:doc "Steer the task now (delivered at its next step)."
+                 :run (with-object #{"omega/task" "omega/composer"}
+                        (fn [ed o] (docs/prompt ed (str "steer " (:key o) " ▸ ") (fn [e s] (intent e "task/steer" {:id (:key o) :text s} (str "steered " (:key o)))))))}
+   :omega/cancel {:doc "Cancel the task (asks first)."
+                  :run (with-object #{"omega/task"}
+                         (fn [ed o] (docs/prompt ed (str "cancel " (:key o) "? type yes ▸ ")
+                                                 (fn [e s] (if (= "yes" (trim s)) (intent e "task/cancel" {:id (:key o)} (str "cancelled " (:key o))) (c/message e "kept"))))))}
+   :omega/open-task {:doc "Visit the task as a livebook (task:<id>)." :run (with-object #{"omega/task"} (fn [ed o] (docs/visit ed (str "task:" (:key o)))))}
+   :omega/effects {:doc "Visit what the task did (effects:<id>)." :run (with-object #{"omega/task" "omega/cell"} (fn [ed o] (docs/visit ed (str "effects:" (or (:task o) (:key o))))))}
+   :omega/home {:doc "Go where the object lives: a task's home cell, a path, more turns."
+                :run (fn [ed]
+                       (let [o (object-at ed)]
+                         (cond
+                           (nil? o) (c/message ed "nothing to open here")
+                           (= "omega/task" (:type o))
+                             (let [h (get-in (:cards ed) [(:key o) :home])]
+                               (if (some? h)
+                                 (docs/visit ed (:path h) {:find (str ":id " (:block h))})
+                                 (docs/visit ed (str "task:" (:key o)))))
+                           (= "omega/expand" (:type o)) (docs/visit ed (:key o))
+                           (= "omega/composer" (:type o)) ((:run (get table :omega/say)) ed)
+                           (= "omega/msg" (:type o)) ((:run (get table :omega/answer)) ed)
+                           (contains? #{"omega/trace" "omega/effect"} (:type o))
+                             (if (or (blank? (:key o)) (starts-with? (:key o) "sh ")) (c/message ed "not a document") (docs/visit ed (:key o)))
+                           :else (c/message ed "nothing to open here"))))}
+   :omega/to-scratch {:doc "Copy the cell under the cursor to omega:scratch (edit and run it there)."
+                      :run (fn [ed]
+                             (let [o (object-at ed) b (c/block-at-cursor ed)]
+                               (if (and (some? b) (= :cell (:kind b)) (or (nil? o) (= "omega/cell" (:type o))))
+                                 (let [o (or (docs/object-at (assoc-in ed [:sels 0 :head] [(:from b) 0])) o)
+                                       code (join "\n" (subvec (:lines (:text ed)) (:code-from b) (:code-to b)))]
+                                   (-> ed (c/effect {:kind :intent :intent "cell/to-scratch" :args {:task (:task o) :cell (:key o) :code code}
+                                                     :then :visit :path "omega:scratch"})
+                                       (c/message "copied to omega:scratch")))
+                                 (c/message ed "c copies a cell: put the cursor in one"))))}
+   :omega/overview {:doc "Every task, by urgency (omega:overview)." :run (fn [ed] (docs/visit ed "omega:overview"))}
+   :omega/scratch {:doc "The scratch pad: homeless tasks and notes (omega:scratch)." :run (fn [ed] (docs/visit ed "omega:scratch"))}
+   :omega/new-task {:doc "Open a task with no home (it lands in omega:scratch)."
+                    :run (fn [ed] (docs/prompt ed "new task ▸ " (fn [e s] (intent e "task/open" {:goal s} "opened a task; it is in omega:scratch (space a s)"))))}
+   :omega/query {:doc "A datalog query over the world, as a live table (q:)."
+                 :run (fn [ed] (docs/prompt ed "query ▸ " (fn [e s] (-> e (c/effect {:kind :intent :intent "q/new" :args {:text s} :then :visit-path}) (c/message "querying…")))))}})
+
+(def presentation-keys
+  "Keys per presentation type (normal mode, on that row)."
+  (let [task {"y" :omega/yes "n" :omega/no "a" :omega/answer "s" :omega/say "S" :omega/steer
+              "x" :omega/cancel "t" :omega/open-task "e" :omega/effects "Enter" :omega/home}]
+    {"omega/task" task
+     "omega/msg" {"y" :omega/yes "n" :omega/no "a" :omega/answer "Enter" :omega/answer}
+     "omega/composer" {"Enter" :omega/say "C-Enter" :omega/steer}
+     "omega/cell" {"c" :omega/to-scratch "e" :omega/effects}
+     "omega/trace" {"Enter" :omega/home}
+     "omega/effect" {"Enter" :omega/home}
+     "omega/expand" {"Enter" :omega/home}}))
+
+(def global-keys
+  {"space a o" :omega/overview "space a s" :omega/scratch "space a n" :omega/new-task "space a q" :omega/query
+   "C-o" :back})

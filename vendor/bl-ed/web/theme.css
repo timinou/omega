@@ -196,3 +196,18 @@ footer { border-top: 1px solid var(--oat); background: var(--snow-2); font-famil
 #overlay li .doc { color: var(--crema); }
 #overlay li .todo { font: 700 .7rem var(--font-code); color: var(--rose); background: var(--rose-bg); padding: .1em .35em; border-radius: 3px; }
 #overlay .close { color: var(--crema); font-size: .78rem; margin-top: 1rem; }
+
+/* ── omega: agent cells, cards, presentations (vendor delta) ───────────────
+   A card is its reference row DRAWN differently: same row height, so motion,
+   folding and the text on disk are untouched. Tones follow omega's STATUS
+   table (ui/theme.bl): running = accent, done = success, failed = danger. */
+.gnum.place-agent::before { content: "✦"; color: var(--rose); margin-right: .45rem; font-size: .72rem; }
+.line.card .seg.k-card { font-family: var(--sans, inherit); font-size: .9em; padding: 0 .55rem; border-radius: 6px;
+  background: var(--mist-bg); color: var(--mist); }
+.line.card.tone-running .seg.k-card, .line.card.tone-open .seg.k-card { background: var(--mist-bg); color: var(--mist); }
+.line.card.tone-done .seg.k-card, .line.card.tone-idle .seg.k-card { background: var(--sage-bg); color: var(--sage); }
+.line.card.tone-failed .seg.k-card, .line.card.tone-ask .seg.k-card { background: var(--rose-bg); color: var(--rose); font-weight: 600; }
+.line.card.tone-cancelled .seg.k-card, .line.card.tone-unknown .seg.k-card { background: transparent; color: var(--mocha); }
+.line.obj.cur-line { box-shadow: inset 3px 0 0 var(--rose); }
+#status .asks { color: var(--rose); font-weight: 700; }
+

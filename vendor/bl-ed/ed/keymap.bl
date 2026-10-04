@@ -54,7 +54,19 @@
 
 (defn keymap-of [ed] (merge-with merge default (:user-keys ed)))
 
-(defn- bindings [ed] (get (keymap-of ed) (:mode ed) {}))
+; Presentations: in normal mode, the row under the cursor may BE an object
+; ({:type "omega/task" …}, from the document's :objects or a reference row);
+; its type's keys win over the global ones on that row only. Packages add
+; types through :presentation-keys (a map type → {seq command}) and resolve
+; the object at the cursor through :object-at (a fn of the editor).
+(defn presentation-binds [ed]
+  (if (not= :normal (:mode ed))
+    {}
+    (let [f (:object-at ed)
+          o (if (some? f) (f ed) nil)]
+      (if (nil? o) {} (get (:presentation-keys ed) (:type o) {})))))
+
+(defn- bindings [ed] (merge (get (keymap-of ed) (:mode ed) {}) (presentation-binds ed)))
 
 (defn- prefix? [binds seq-str]
   (let [p (str seq-str " ")] (some (fn [k] (starts-with? k p)) (keys binds))))

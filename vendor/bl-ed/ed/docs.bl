@@ -1,0 +1,130 @@
+; ed/docs.bl — documents that are not (only) files: visiting, going back,
+; read-only views, presentations (a row IS an object), and minibuffer prompts.
+; Generic: nothing here knows omega. The host loads a document and answers
+;
+;   {:type :doc :path p :text s :rev r :read-only? b :title s :objects [obj …]
+;    :data any :visit? b :goto {:find s}|{:pos [r c]}}
+;
+; :visit? true = a new visit (the current document goes on the back stack);
+; false = a refresh of the document already shown (its rev moved).
+;
+; A path is a file under the server's root or `scheme:name` (a provider).
+; obj = {:row n :type "omega/task" :key "t-41" …}. The editor binds keys per
+; :type (ed.keymap/presentations), so a type means the same keys everywhere.
+
+(ns ed.docs
+  (:require [ed.text :as t]
+            [ed.core :as c]))
+
+(defn virtual?
+  "Is `path` a `scheme:name` document (not a file)?"
+  [path]
+  (let [p (str path) i (index-of p ":")]
+    (and (some? i) (> i 0) (nil? (index-of (subs p 0 i) "/")) (nil? (index-of (subs p 0 i) ".")))))
+
+(defn read-only? [ed] (true? (get-in ed [:doc :read-only?])))
+
+(defn index-objects
+  "{row obj} for a document's objects."
+  [objs]
+  (reduce (fn [m o] (assoc m (:row o) o)) {} objs))
+
+(defn object-at
+  "The object the row under the primary cursor shows, or nil."
+  [ed]
+  (get (:obj-index ed) (first (c/cursor ed))))
+
+; ─── visiting ──────────────────────────────────────────────────────────────
+
+(defn visit
+  "Ask the host to load `path` as a new visit. A dirty, writable document is
+   not left silently."
+  ([ed path] (visit ed path nil))
+  ([ed path goto]
+   (if (and (c/dirty? ed) (not (read-only? ed)))
+     (c/message ed (str "unsaved changes in " (:path ed) " — C-s first"))
+     (-> ed (c/effect {:kind :visit :path path :goto goto})
+         (c/message (str "opening " path "…"))))))
+
+(defn back
+  "Return to the previous document (re-loaded fresh, cursor restored)."
+  [ed]
+  (let [st (:back ed)]
+    (cond
+      (empty? st) (c/message ed "nothing to go back to")
+      (and (c/dirty? ed) (not (read-only? ed))) (c/message ed (str "unsaved changes in " (:path ed) " — C-s first"))
+      :else (let [prev (peek st)]
+              (-> ed (assoc :back (pop st) :going-back true)
+                  (c/effect {:kind :visit :path (:path prev) :goto {:pos (:pos prev)}}))))))
+
+(defn- goto-row [tx goto]
+  (cond
+    (nil? goto) nil
+    (some? (:pos goto)) (t/clamp tx (:pos goto))
+    (some? (:find goto))
+      (let [needle (:find goto)
+            r (first (filter (fn [r] (some? (index-of (t/line tx r) needle))) (range (t/line-count tx))))]
+        (if (nil? r) nil [r 0]))
+    :else nil))
+
+(defn- keep-session
+  "What survives a visit: registers, user commands and keys, the view height,
+   the back stack, cards and the search needle."
+  [old new]
+  (merge new (select-keys old [:registers :user-commands :user-keys :back :cards :search]
+                          )
+         {:view (assoc (:view new) :height (get-in old [:view :height] 40))}))
+
+(defn load-doc
+  "Apply a :doc event."
+  [ed ev new-editor]
+  (let [same? (= (:path ev) (:path ed))
+        meta {:rev (:rev ev) :read-only? (true? (:read-only? ev)) :title (:title ev) :data (:data ev)}]
+    (cond
+      ; a refresh of the shown document: read-only views follow the world;
+      ; a writable one follows only when the human has nothing unsaved
+      (and same? (not (:visit? ev)))
+        (cond
+          (= (:rev ev) (get-in ed [:doc :rev])) ed
+          (:read-only? meta)
+            (let [p (c/cursor ed)
+                  fresh (new-editor (:text ev) (:path ev))
+                  q (t/clamp (:text fresh) p)]
+              (-> (keep-session ed fresh)
+                  (assoc :doc meta :obj-index (index-objects (:objects ev))
+                         :sels [{:anchor q :head q}] :primary 0 :view (:view ed) :mode :normal)
+                  (c/scroll-to-cursor)))
+          (c/dirty? ed) (c/message (assoc-in ed [:doc :stale] (:rev ev)) "changed elsewhere since you loaded it — your copy is kept; C-s overwrites")
+          :else (let [ed2 (c/replace-text ed (:text ev))]
+                  (assoc ed2 :saved-text (:text ed2) :doc meta :obj-index (index-objects (:objects ev)))))
+      :else
+        (let [prev (when (and (not (:going-back ed)) (some? (:path ed)) (not same?))
+                     {:path (:path ed) :pos (c/cursor ed)})
+              fresh (keep-session ed (new-editor (:text ev) (:path ev)))
+              p (goto-row (:text fresh) (:goto ev))
+              fresh (if (some? p) (c/scroll-to-cursor (assoc fresh :sels [{:anchor p :head p}] :primary 0)) fresh)]
+          (-> fresh
+              (assoc :doc meta :obj-index (index-objects (:objects ev)) :going-back false
+                     :back (if (some? prev) (conj (or (:back ed) []) prev) (or (:back ed) [])))
+              (c/message (str (or (:title ev) (:path ev)) (if (:read-only? meta) "  (read-only view)" ""))))))))
+
+; ─── read-only ─────────────────────────────────────────────────────────────
+
+(defn guard
+  "`after` unless `before` is read-only and the command changed its text or
+   entered insert mode — then `before` with a message saying what to do."
+  [before after]
+  (if (and (read-only? before)
+           (or (not (identical? (:text before) (:text after))) (= :insert (:mode after))))
+    (c/message (assoc before :mode :normal) "read-only view — act on a row (space ? lists its keys), or c copies a cell to scratch")
+    after))
+
+; ─── prompts ───────────────────────────────────────────────────────────────
+
+(defn prompt
+  "Open the minibuffer; Enter calls (submit ed text) on the editor."
+  [ed label submit]
+  (assoc ed :mode :command :minibuf {:prompt label :text "" :kind :prompt :submit submit}))
+
+(def table
+  {:back {:doc "Go back to the previous document." :run back}})

@@ -71,6 +71,7 @@ function dispatch(event) {
   ed = ed2;
   for (const e of effects) perform(e);
   draw();
+  if (event.get(K("type"), null) !== K("key") || effects.length) { watchDoc(); watchCards(false); }
   const dt = performance.now() - t0;
   lastFrame.push(dt); if (lastFrame.length > 60) lastFrame.shift();
 }
@@ -82,14 +83,53 @@ window.blEdStats = () => {
 
 // ─── effects ───────────────────────────────────────────────────────────────
 
+// JSON ↔ Beam Lisp: maps get keyword keys, arrays become vectors.
+function toBL(x) {
+  if (Array.isArray(x)) return R.vecFromArray(x.map(toBL));
+  if (x && typeof x === "object") { let m = R.EMPTY_MAP; for (const [k, v] of Object.entries(x)) m = m.assoc(K(k), toBL(v)); return m; }
+  return x;
+}
+function toJS(x) {
+  if (x instanceof R.HMap) { const o = {}; for (const [k, v] of x.entries()) o[k instanceof R.Kw ? k.fq : String(k)] = toJS(v); return o; }
+  if (x instanceof R.Vec) return x.toArray().map(toJS);
+  if (x instanceof R.Kw) return x.fq;
+  return x;
+}
+const postJSON = (url, body) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+async function loadDoc(path, visit, goto) {
+  const r = await fetch("/api/doc?path=" + encodeURIComponent(path));
+  const j = await r.json();
+  if (!j.ok) { dispatch(ev(K("type"), K("eval-result"), K("id"), path, K("text"), j.message || "cannot open")); return; }
+  let e = ev(K("type"), K("doc"), K("path"), path, K("text"), j.text, K("rev"), j.rev, K("read-only?"), !!j.readOnly,
+             K("title"), j.title || path, K("objects"), toBL(j.objects || []), K("visit?"), !!visit);
+  if (goto) e = e.assoc(K("goto"), goto);
+  dispatch(e);
+  if (visit) history.replaceState(null, "", "?file=" + encodeURIComponent(path));
+}
+
 async function perform(e) {
   const kind = get(e, "kind").name;
-  if (kind === "save") {
-    const body = { path: get(e, "path"), text: get(e, "text") };
+  if (kind === "visit") {
+    try { await loadDoc(get(e, "path"), true, get(e, "goto")); }
+    catch (err) { dispatch(ev(K("type"), K("eval-result"), K("id"), get(e, "path"), K("text"), "no server to open documents")); }
+  } else if (kind === "intent") {
     try {
-      const r = await fetch("/api/save", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const r = await postJSON("/api/intent", { intent: get(e, "intent"), args: toJS(get(e, "args")) });
       const j = await r.json();
-      dispatch(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), r.ok && j.ok === true, K("message"), j.message || ""));
+      dispatch(ev(K("type"), K("intent-result"), K("ok?"), j.ok === true, K("message"), j.message || null,
+                  K("data"), toBL(j), K("then"), get(e, "then"), K("block"), get(e, "block"), K("path"), get(e, "path")));
+      watchCards(true);
+    } catch (err) {
+      dispatch(ev(K("type"), K("intent-result"), K("ok?"), false, K("message"), "no omega world — run bin/bl-ed"));
+    }
+  } else if (kind === "save") {
+    const body = { path: get(e, "path"), text: get(e, "text"), base: get(e, "base") };
+    try {
+      const r = await postJSON("/api/save", body);
+      const j = await r.json();
+      dispatch(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), r.ok && j.ok === true, K("message"), j.message || "",
+                  K("conflict?"), j.conflict === true, K("doc-rev"), j.rev || null));
     } catch (err) {
       // no server (opened as a static page): fall back to a download
       download(body.path.split("/").pop(), body.text);
@@ -123,6 +163,56 @@ async function perform(e) {
   }
 }
 
+// ─── watching: the shown document and the cards, by rev (long-poll) ─────────
+//
+// One parked request per watched path: /api/rev answers as soon as the rev
+// differs from `since` (or after ~25 s unchanged). Nothing renders while
+// nothing changes. A changed rev → fetch the document → one :doc / :cards event.
+
+const watchers = new Map();       // key → {path, since, alive}
+function watch(key, path, since, onChange) {
+  const cur = watchers.get(key);
+  if (cur && cur.path === path) return;
+  if (cur) cur.alive = false;
+  const w = { path, since, alive: true };
+  watchers.set(key, w);
+  (async () => {
+    while (w.alive) {
+      try {
+        const r = await fetch("/api/rev?path=" + encodeURIComponent(path) + "&since=" + encodeURIComponent(w.since || ""));
+        const j = await r.json();
+        if (!w.alive) break;
+        if (j.ok && j.rev !== w.since) { w.since = j.rev; await onChange(); }
+        else if (!j.ok) await new Promise((res) => setTimeout(res, 3000));
+      } catch (err) { await new Promise((res) => setTimeout(res, 3000)); }
+    }
+  })();
+}
+function unwatch(key) { const w = watchers.get(key); if (w) { w.alive = false; watchers.delete(key); } }
+
+function watchDoc() {
+  const v = M.d_render(ed);
+  const path = get(get(v, "status"), "path");
+  if (!path) return;
+  watch("doc", path, get(v, "doc-rev"), () => loadDoc(path, false));
+}
+
+let cardIds = "";
+async function loadCards(path) {
+  const r = await fetch("/api/doc?path=" + encodeURIComponent(path));
+  const j = await r.json();
+  if (j.ok) dispatch(ev(K("type"), K("cards"), K("data"), toBL(j.data || [])));
+}
+function watchCards(force) {
+  const ids = get(M.d_render(ed), "cards").toArray().join(",");
+  if (!ids) { unwatch("cards"); cardIds = ""; return; }
+  if (ids === cardIds && !force) return;
+  cardIds = ids;
+  const path = "omega:tasks?ids=" + ids;
+  if (force) unwatch("cards");
+  watch("cards", path, null, () => loadCards(path));
+}
+
 function download(name, text) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
@@ -149,10 +239,15 @@ function draw() {
     const band = get(ln, "band");
     const cls = "line" + (band ? " in-cell band-" + band : "") + (get(ln, "band-first?") ? " first" : "") +
       (get(ln, "band-last?") ? " last" : "") + (get(ln, "current?") ? " cur-line" : "");
-    const place = get(ln, "place"), why = get(ln, "place-why");
-    const sig = segSig(segs) + (get(ln, "folded?") ? "\u0003" : "") + "\u0004" + cls;
+    const place = get(ln, "agent?") ? "agent" : get(ln, "place"), why = get(ln, "place-why");
+    // a reference row is DRAWN as its task's card: same row, same height
+    const card = get(ln, "card");
+    const obj = get(ln, "object");
+    const cls2 = cls + (card ? " card tone-" + get(card, "tone") : "") + (obj ? " obj" : "");
+    const shown = card ? R.vec(ev(K("kind"), K("card"), K("text"), get(card, "text"))) : segs;
+    const sig = segSig(shown) + (get(ln, "folded?") ? "\u0003" : "") + "\u0004" + cls2;
     nextLines.set(row, sig);
-    frag.push([row, sig, segs, get(ln, "folded?"), cls, get(ln, "current?"), place, why]);
+    frag.push([row, sig, shown, get(ln, "folded?"), cls2, get(ln, "current?"), place, why]);
   }
   // Reconcile by SLOT: slot i shows row frag[i]. A slot is touched only when
   // its row's signature changed (a scroll shifts every slot; a keystroke
@@ -177,12 +272,13 @@ function draw() {
     }
     let g = gutter.children[i];
     // a cell's first row carries its placement: ● local (runs in the page),
-    // ◆ beam (runs on the BEAM; the title says why)
+    // ◆ beam (runs on the BEAM; the title says why), ✦ agent (a task block)
     const gcls = "gnum" + (current ? " cur" : "") + (place ? " place-" + place : ""), gtxt = String(row + 1);
     if (!g) { g = document.createElement("div"); gutter.appendChild(g); }
     if (g.className !== gcls) g.className = gcls;
     if (g.textContent !== gtxt) g.textContent = gtxt;
-    const title = place === "local" ? "runs here, in the page (pure, terminates)" : place === "beam" ? "runs on the BEAM — " + (why || "") : "";
+    const title = place === "local" ? "runs here, in the page (pure, terminates)" : place === "beam" ? "runs on the BEAM — " + (why || "")
+      : place === "agent" ? "runs as an agent in omega: C-Enter opens a task (again: refine it)" : "";
     if (g.title !== title) g.title = title;
   }
   while (view.children.length > frag.length) view.lastChild.remove();
@@ -227,7 +323,9 @@ function draw() {
   status.innerHTML = "";
   const chip = (cls, text) => { const s = document.createElement("span"); s.className = cls; s.textContent = text; status.appendChild(s); };
   chip("mode-chip m-" + m, { normal: "NOR", insert: "INS", select: "SEL", command: "CMD", palette: "M-x" }[m] || m);
-  chip("file", (get(st, "path") || "untitled") + (get(st, "dirty?") ? " ●" : ""));
+  chip("file", (get(st, "path") || "untitled") + (get(st, "dirty?") ? " ●" : "") + (get(st, "read-only?") ? " · view" : ""));
+  if (get(st, "asks") > 0) chip("asks", "⚑ " + get(st, "asks"));
+  if (get(st, "back") > 0) chip("crumb", "C-o ←");
   if (get(st, "section")) chip("crumb", "§ " + get(st, "section"));
   if (get(st, "block")) chip("crumb", get(st, "block"));
   if (get(st, "problems") > 0) chip("problems", get(st, "problems") + " unbalanced");
@@ -399,8 +497,9 @@ async function loadInitial() {
   const path = params.get("file");
   if (path) {
     try {
-      const r = await fetch("/api/file?path=" + encodeURIComponent(path));
-      if (r.ok) return { text: await r.text(), path };
+      const r = await fetch("/api/doc?path=" + encodeURIComponent(path));
+      const j = await r.json();
+      if (j.ok) return { text: j.text, path, doc: j };
     } catch (_) { /* fall through */ }
   }
   const r = await fetch("./welcome.bl.org");
@@ -409,8 +508,12 @@ async function loadInitial() {
 
 await document.fonts?.ready;
 measure();
-const { text, path } = await loadInitial();
+const { text, path, doc } = await loadInitial();
 ed = M.d_boot(text, path);
 fitHeight();
+// the document's rev / read-only flag / objects: the same event a visit uses
+if (doc) dispatch(ev(K("type"), K("doc"), K("path"), path, K("text"), doc.text, K("rev"), doc.rev, K("read-only?"), !!doc.readOnly,
+                     K("title"), doc.title || path, K("objects"), toBL(doc.objects || []), K("visit?"), false));
+watchDoc(); watchCards(true);
 sink.focus();
 window.blEd = { dispatch, state: () => ed, render: () => M.d_render(ed), R, K };

@@ -125,9 +125,14 @@
                                 (fn [] (r/overview (snapshot sys) (homes sys opts) (env/now (:env sys)))))))})
 
 (defn- tasks-provider
-  "omega:tasks?ids=a,b — the cards' rows as edn (internal; the editor polls it)."
-  [sys cache]
-  (let [render (fn [ids] (r/task-rows (snapshot sys) ids (env/now (:env sys))))
+  "omega:tasks?ids=a,b — the cards (internal; the editor watches it). :data is
+   a vector of cards, each with its :home (where its task cell lives)."
+  [sys opts cache]
+  (let [render (fn [ids]
+                 (let [hs (homes sys opts)
+                       d (r/task-rows (snapshot sys) ids (env/now (:env sys)))
+                       cards (vec (map (fn [cd] (assoc cd :home (get hs (:id cd)))) (vals (:cards d))))]
+                   (assoc d :data cards :text (pr-str (sort-by :id cards)))))
         ids-of (fn [params] (vec (remove str/blank? (str/split (str (:ids params)) ","))))]
     {:read (fn [_ params] (let [ids (ids-of params)] (cached cache (str "tasks:" ids) sys (fn [] (render ids)))))
      :rev (fn [_ params] (let [ids (ids-of params)] (:rev (cached cache (str "tasks:" ids) sys (fn [] (render ids))))))}))
@@ -192,12 +197,12 @@
      {"omega" {:read (fn [nm p] (case nm
                                   "scratch" ((:read (scratch-provider sys opts)) nm p)
                                   "overview" ((:read (overview-provider sys opts cache)) nm p)
-                                  "tasks" ((:read (tasks-provider sys cache)) nm p)
+                                  "tasks" ((:read (tasks-provider sys opts cache)) nm p)
                                   {:error (str "no document omega:" nm) :status 404}))
                :rev (fn [nm p] (case nm
                                  "scratch" ((:rev (scratch-provider sys opts)) nm p)
                                  "overview" ((:rev (overview-provider sys opts cache)) nm p)
-                                 "tasks" ((:rev (tasks-provider sys cache)) nm p)
+                                 "tasks" ((:rev (tasks-provider sys opts cache)) nm p)
                                  nil))
                :write (fn [nm p t base] (if (= nm "scratch") ((:write (scratch-provider sys opts)) nm p t base) {:conflict "read-only"}))
                :eval (fn [nm p id t] (if (= nm "scratch") ((:eval (scratch-provider sys opts)) nm p id t) {:result "cells here do not run"}))}

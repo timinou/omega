@@ -24,7 +24,27 @@
             [ed.forms :as forms]
             [ed.core :as c]
             [ed.commands :as cmds]
-            [ed.keymap :as km]))
+            [ed.keymap :as km]
+            [ed.docs :as docs]
+            [ed.omega :as omega]))
+
+; ─── packages ───
+; What omega adds goes in through the same tables a user's `ed/defcmd` and
+; `ed/bind` write (:user-commands :user-keys) plus the presentation seam
+; (:presentation-keys :object-at). FUP-010 replaces this static install with
+; a package loaded live.
+
+(defn- install [ed]
+  (let [orig (:run (get cmds/table :eval-cell))]
+    (-> ed
+        (update :user-commands (fn [m] (merge docs/table omega/table
+                                              {:eval-cell {:doc "Evaluate the cell (or open/refine the task) at the cursor."
+                                                           :run (fn [e] (or (omega/eval-task e) (orig e)))}}
+                                              m)))
+        (update-in [:user-keys :normal] (fn [m] (merge omega/global-keys m)))
+        (assoc :presentation-keys omega/presentation-keys :object-at omega/object-at))))
+
+(defn- new-doc [s path] (install (c/new-editor s path)))
 
 ; ─── the ed/ API, for the command line ──────────────────────────────────────
 
@@ -114,6 +134,8 @@
       (and (= k "ArrowUp") (= :palette (:kind mb))) (update-in ed [:minibuf :sel] (fn [i] (max 0 (dec (or i 0)))))
       (and (= k "Enter") (= :search (:kind mb)))
         (cmds/search-step (assoc ed :mode :normal :minibuf nil :search (:text mb)) 1)
+      (and (= k "Enter") (= :prompt (:kind mb)))
+        ((:submit mb) (assoc ed :mode :normal :minibuf nil) (:text mb))
       (= k "Enter")
         (if (= :palette (:kind mb))
           (let [ms (palette-matches ed) m (get ms (or (:sel mb) 0))]
@@ -130,7 +152,17 @@
   [ed]
   (c/effect ed {:kind :place :path (:path ed) :text (t/to-string (:text ed))}))
 
-(defn boot [s path] (request-placements (c/new-editor s path)))
+(defn boot [s path] (request-placements (new-doc s path)))
+
+(defn- intent-result
+  "The world answered an intent effect; `:then` says what the asker wanted next."
+  [ed ev]
+  (cond
+    (not (:ok? ev)) (c/message ed (str "error: " (or (:message ev) "the omega world refused")))
+    (= :task-opened (:then ev)) (omega/task-opened ed (assoc (:data ev) :block (:block ev)))
+    (= :visit (:then ev)) (docs/visit ed (:path ev))
+    (= :visit-path (:then ev)) (docs/visit ed (get (:data ev) :path))
+    :else ed))
 
 (defn handle
   "Apply one host event to the editor."
@@ -138,27 +170,40 @@
   (let [ty (:type ev)]
     (cond
       (= ty :key)
-        (if (contains? #{:command :palette} (:mode ed)) (minibuf-key ed (:key ev)) (km/key-event ed (:key ev)))
+        (if (contains? #{:command :palette} (:mode ed)) (minibuf-key ed (:key ev)) (docs/guard ed (km/key-event ed (:key ev))))
       (= ty :text)
         (cond
           (contains? #{:command :palette} (:mode ed)) (assoc-in ed [:minibuf :text] (str (:text (:minibuf ed)) (:text ev)))
-          (= :insert (:mode ed)) (c/insert-at-heads ed (:text ev))
+          (= :insert (:mode ed)) (docs/guard ed (c/insert-at-heads ed (:text ev)))
           ; a paste in normal mode replaces the selections (Helix R)
-          :else (c/replace-selections ed (fn [_ _] (:text ev)) nil))
+          :else (docs/guard ed (c/replace-selections ed (fn [_ _] (:text ev)) nil)))
+      ; a document arrived (a visit, or a refresh of the shown one)
+      (= ty :doc)
+        (let [ed2 (docs/load-doc ed ev new-doc)]
+          (if (or (docs/read-only? ed2) (identical? (:text ed2) (:text ed))) ed2 (request-placements ed2)))
+      (= ty :cards) (omega/cards-loaded ed ev)
+      (= ty :intent-result) (intent-result ed ev)
       (= ty :resize) (c/scroll-to-cursor (assoc-in ed [:view :height] (max 4 (:height ev))))
       (= ty :scroll) (assoc-in ed [:view :top] (max 0 (min (:top ev) (dec (t/line-count (:text ed))))))
       (= ty :click)
         (let [p (t/clamp (:text ed) (:pos ev))]
           (assoc ed :sels [{:anchor (if (:extend? ev) (:anchor (c/primary ed)) p) :head p}] :primary 0 :pending []))
       (= ty :saved)
-        (if (:ok? ev)
-          ; the saved text is the text AT THE SAVED REVISION: if more edits
-          ; landed while the save was in flight, the file is still dirty
-          (-> ed (assoc :saved-text (if (= (:rev ev) (:rev ed)) (:text ed) (:saved-text ed)))
-              (c/message (str "wrote " (:path ed)))
-              ; the saved code may have changed what can run where
-              (request-placements))
-          (c/message ed (str "save failed: " (:message ev))))
+        (cond
+          (:ok? ev)
+            ; the saved text is the text AT THE SAVED REVISION: if more edits
+            ; landed while the save was in flight, the file is still dirty
+            (-> ed (assoc :saved-text (if (= (:rev ev) (:rev ed)) (:text ed) (:saved-text ed)))
+                (assoc-in [:doc :rev] (or (:doc-rev ev) (get-in ed [:doc :rev])))
+                (update :doc dissoc :stale)
+                (c/message (str "wrote " (:path ed)))
+                ; the saved code may have changed what can run where
+                (request-placements))
+          ; someone else wrote it since we loaded: say so; a second C-s overwrites
+          (:conflict? ev)
+            (-> ed (assoc-in [:doc :stale] (:doc-rev ev))
+                (c/message (str "not saved: " (:path ed) " changed elsewhere since you loaded it — C-s again overwrites, C-o and back reloads")))
+          :else (c/message ed (str "save failed: " (:message ev))))
       (= ty :eval-result) (c/message ed (str (:id ev) " ⇒ " (:text ev)))
       ; the BEAM rewrote result spans: take the new text as ONE undoable edit
       ; that keeps the cursor, the history, the folds and the session state
@@ -329,6 +374,16 @@
                                   (when (some? p) (name (:place p)))))
                        :place-why (when (and (= :cell (:kind b)) (= r (:from b)))
                                     (:why (get (:placements ed) (:id b))))
+                       ; a task block runs as an agent (✦); a reference row
+                       ; is DRAWN as its task's live card (the text is unchanged)
+                       :agent? (and (omega/task-block? b) (= r (:from b)))
+                       :card (let [ref (when (= :result (:kind b)) (omega/reference-at l))]
+                               (when ref
+                                 (let [cd (get (:cards ed) (:id ref))]
+                                   (if (some? cd)
+                                     {:text (omega/card-line cd) :tone (if (:ask cd) "ask" (:status cd))}
+                                     {:text (str "… " (:id ref) (if (:status ref) (str " · " (:status ref)) "") " (no live world)") :tone (or (:status ref) "unknown")}))))
+                       :object (when-let [o (get (:obj-index ed) r)] (:type o))
                        :current? (= r cur-row)
                        :segments (cond
                                    (= :heading (:kind b)) (heading-segments l b)
@@ -347,7 +402,13 @@
      :sels (mapv (fn [s] (let [[a e] (c/sel-range ed s)] {:from a :to e :head (:head s) :primary? (= s prim)})) (:sels ed))
      :cursor (:head prim)
      :mode (:mode ed)
+     :cards (omega/card-ids ed)
+     :virtual? (docs/virtual? (:path ed))
+     :doc-rev (get-in ed [:doc :rev])
      :status {:path (:path ed) :dirty? (c/dirty? ed) :mode (name (:mode ed))
+              :read-only? (docs/read-only? ed)
+              :asks (count (filter (fn [cd] (some? (:ask cd))) (vals (:cards ed))))
+              :back (count (:back ed))
               :pos [(inc (first (:head prim))) (inc (second (:head prim)))]
               :sels (count (:sels ed))
               :pending (join " " (:pending ed)) :count (:count ed)
