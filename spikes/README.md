@@ -18,6 +18,7 @@ feature they de-risk lands.
 | `task-cell.bl.md` | does the `:task` cell work as a package on `bl.doc.spans`? (needs the js-actors beam-lisp, see its header) | yes, full lifecycle; it must keep its own span kind, never `:cell` |
 | `task-refs.bl.md` | do per-task history refs fix gate blame? | no; a per-path gate does, on one shared main; refs add merge and blame, not test isolation |
 | `claims-advisory.bl.md` | do claims refuse a second writer? | no (advisory, as designed), but `edit` drops the conflict instead of telling the agent |
+| `async-checkpoint.bl.md` | can step checkpoints be exact AND non-blocking (snapshot inline + cast)? | yes: 0 skew, p50 3.8 ms vs 127 ms blocking, history identical to the blocking hook's, commit order = hook arrival order; historian 27-36 commits/s |
 
 The decisions these change are recorded in `research/domain/interface/bl-ed.bl.md` §15 (spike
 results) and in the FEAT/FUP/BUG items it names.

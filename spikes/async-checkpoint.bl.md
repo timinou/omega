@@ -331,24 +331,24 @@ runs in the task process; a server needs no table ownership and its message orde
 
 (defn commit!
   "Commit one snapshot {:by :why :texts :gate} on main → the ledger row."
-  [h by why texts gate]
+  [h by why texts gate arr]
   (let [t0 (now-us)
         cid (hist/checkpoint! h "main" {:changed texts :by by :why why :gate gate})]
-    {:by by :why why :files (vec (sort (keys texts))) :texts texts :gate gate :change cid :us (- (now-us) t0)}))
+    {:by by :why why :files (vec (sort (keys texts))) :texts texts :gate gate :arr arr :change cid :us (- (now-us) t0)}))
 
 (defn qlen [] (elem (erlang/process_info (erlang/self) :message_queue_len) 1))
 
 (defserver historian
   (init [_] (ok {:h (hist/open) :rows [] :peak 0 :commit-us 0 :n 0}))
 
-  (handle-cast [:snap by why texts gate] [st]
+  (handle-cast [:snap by why texts gate arr] [st]
     (let [depth (qlen)
-          r (commit! (:h st) by why texts gate)]
+          r (commit! (:h st) by why texts gate arr)]
       (noreply (assoc st :rows (conj (:rows st) r) :peak (max (:peak st) depth)
                       :commit-us (+ (:commit-us st) (:us r)) :n (inc (:n st))))))
 
-  (handle-call [:snap by why texts gate] [_from st]
-    (let [r (commit! (:h st) by why texts gate)]
+  (handle-call [:snap by why texts gate arr] [_from st]
+    (let [r (commit! (:h st) by why texts gate arr)]
       (reply (:change r) (assoc st :rows (conj (:rows st) r) :commit-us (+ (:commit-us st) (:us r)) :n (inc (:n st))))))
 
   (handle-call [:flush] [_from st] (reply :flushed st))
@@ -359,13 +359,13 @@ runs in the task process; a server needs no table ownership and its message orde
            st)))
 
 (defserver wbuf
-  (init [_] (ok {:w {} :steps {} :cost {}}))
+  (init [_] (ok {:w {} :steps {} :cost {} :arr 0}))
   (handle-cast [:w task path] [st] (noreply (update-in st [:w task] (fnil conj []) path)))
   (handle-cast [:cost label us] [st] (noreply (update-in st [:cost label] (fnil conj []) us)))
   (handle-call [:take task] [_from st]
     (let [n (inc (get-in st [:steps task] 0))]
-      (reply {:paths (vec (distinct (get-in st [:w task] []))) :step n}
-             (-> st (assoc-in [:w task] []) (assoc-in [:steps task] n)))))
+      (reply {:paths (vec (distinct (get-in st [:w task] []))) :step n :arr (inc (:arr st))}
+             (-> st (assoc-in [:w task] []) (assoc-in [:steps task] n) (assoc :arr (inc (:arr st)))))))
   (handle-call [:costs label] [_from st] (reply (get-in st [:cost label] []) st)))
 
 ;; ── the prelude wrapper (technique of spikes/file-port.bl.md) ──────────────
@@ -374,14 +374,18 @@ runs in the task process; a server needs no table ownership and its message orde
 
 (persistent_term/put :spike/aorig {:write omega.prelude/write :edit omega.prelude/edit})
 
+;; The shadow re-implements the bodies (copied from prelude.bl) plus the record cast. Calling the saved
+;; original from the wrapper would recurse forever: OBSERVED, a saved `omega.prelude/write` resolves its
+;; var at call time (the first draft of this spike hung in `write`).
 (def WRAP-SRC
   (str "(ns omega.prelude)\n"
-       "(defn write [p s] (let [r ((:write (persistent_term/get :spike/aorig)) p s)] (GenServer/cast (persistent_term/get :spike/wbuf) [:w (task) p]) r))\n"
-       "(defn edit [p edits] (let [r ((:edit (persistent_term/get :spike/aorig)) p edits)] (GenServer/cast (persistent_term/get :spike/wbuf) [:w (task) p]) r))\n"))
+       "(defn- -rec [p] (GenServer/cast (persistent_term/get :spike/wbuf) [:w (task) p]))\n"
+       "(defn write [p s] (let [f (path p)] (File/mkdir_p! (Path/dirname f)) (File/write! f s) (tr/claim! (e) (task) p) (-rec p) (str \"wrote \" (count s) \" bytes to \" p)))\n"
+       "(defn edit [p edits] (let [r (apply-edits (read p) edits)] (if (contains? r :error) (throw (ex-info (str \"edit \" p \": \" (:error r)) {:path p})) (do (File/write! (path p) (:ok r)) (tr/claim! (e) (task) p) (-rec p) (str \"applied \" (count edits) \" edit(s) to \" p)))))\n"))
 (def RESTORE-SRC
   (str "(ns omega.prelude)\n"
-       "(def write (:write (persistent_term/get :spike/aorig)))\n"
-       "(def edit (:edit (persistent_term/get :spike/aorig)))\n"))
+       "(defn write [p s] (let [f (path p)] (File/mkdir_p! (Path/dirname f)) (File/write! f s) (tr/claim! (e) (task) p) (str \"wrote \" (count s) \" bytes to \" p)))\n"
+       "(defn edit [p edits] (let [r (apply-edits (read p) edits)] (if (contains? r :error) (throw (ex-info (str \"edit \" p \": \" (:error r)) {:path p})) (do (File/write! (path p) (:ok r)) (tr/claim! (e) (task) p) (str \"applied \" (count edits) \" edit(s) to \" p)))))\n"))
 (defn wrap! [] (ev! WRAP-SRC) :wrapped)
 (defn unwrap! [] (ev! RESTORE-SRC) :restored)
 ```
@@ -405,14 +409,22 @@ writes BROKEN, step 3 fixes); task B: 2 steps on b.py; the two run concurrently.
            (fn [r ctx]
              (let [t0 (now-us) sys (:sys ctx) id (:task ctx)
                    tk (call wb [:take id])
+                   t1 (now-us)
                    paths (:paths tk)]
                (when (seq paths)
                  (let [why (str (:goal (task/view sys id)) " · step " (:step tk))
+                       t2 (now-us)
                        texts (into {} (map (fn [p] [p (File/read! (str root "/" p))]) paths))
-                       g (gate-of texts)]
+                       g (gate-of texts)
+                       t3 (now-us)]
                    (if (= mode :block)
-                     (call hist-pid [:snap id why texts g])
-                     (cast hist-pid [:snap id why texts g]))))
+                     (call hist-pid [:snap id why texts g (:arr tk)] 60000)
+                     (cast hist-pid [:snap id why texts g (:arr tk)]))
+                   (let [t4 (now-us)]
+                     (cast wb [:cost (keyword (str (name mode) "-take")) (- t1 t0)])
+                     (cast wb [:cost (keyword (str (name mode) "-view")) (- t2 t1)])
+                     (cast wb [:cost (keyword (str (name mode) "-read")) (- t3 t2)])
+                     (cast wb [:cost (keyword (str (name mode) "-send")) (- t4 t3)]))))
                (cast wb [:cost mode (- (now-us) t0)])
                r))}})
 
@@ -431,22 +443,23 @@ writes BROKEN, step 3 fixes); task B: 2 steps on b.py; the two run concurrently.
         _ (File/mkdir_p! root)
         _ (File/write! (str root "/a.py") "x = 0\n")
         _ (File/write! (str root "/b.py") "b = 0\n")
-        e (env/open)
         hp (start historian nil {})
+        _ (call hp [:snap "human:me" "initial" {"a.py" "x = 0\n" "b.py" "b = 0\n"} :pass 0])
+        e (env/open)
         wb (start wbuf nil {})
         _ (persistent_term/put :spike/wbuf wb)
         sys (ext/install (task/start-system e {:step (loop/by-goal SCRIPTS) :tools cm/tools :root root})
                          [(make-ext hp wb root mode)])
-        _ (call hp [:snap "human:me" "initial" {"a.py" "x = 0\n" "b.py" "b = 0\n"} :pass])
         a (task/open! sys {:goal GOAL-A :scope ["a.py"]})
         b (task/open! sys {:goal GOAL-B :scope ["b.py"]})
         ra (task/await sys a 15000)
         rb (task/await sys b 15000)
         _ (call hp [:flush])
         lg (call hp [:log])
-        costs (call wb [:costs mode])]
+        costs (call wb [:costs mode])
+        parts (into {} (map (fn [k] [k (call wb [:costs (keyword (str (name mode) "-" k))])]) ["take" "view" "read" "send"]))]
     (Process/exit hp :kill) (Process/exit wb :kill)
-    {:log lg :costs costs :a a :b b :status [(:status ra) (:status rb)]}))
+    {:log lg :costs costs :parts parts :a a :b b :status [(:status ra) (:status rb)]}))
 
 (defn pct [xs q] (let [v (vec (sort xs))] (if (empty? v) 0 (nth v (min (dec (count v)) (int (* q (count v))))))))
 (defn owner-file [r id] (cond (= id (:a r)) "a.py" (= id (:b r)) "b.py"))
@@ -476,6 +489,12 @@ writes BROKEN, step 3 fixes); task B: 2 steps on b.py; the two run concurrently.
     {:changes (count rows) :skew skew :attrib-bad attrib-bad :gate-fails fails :order-bad order-bad
      :log-count (:head-log (:log r))}))
 
+(defn inversions
+  "Commits (seed excluded) whose commit position disagrees with the hook's arrival order (take order)."
+  [r]
+  (let [as (map :arr (filter (fn [x] (and (:change x) (not= "human:me" (:by x)))) (:rows (:log r))))]
+    (count (filter true? (map < (rest as) as)))))
+
 (defn per-task [h lb] (vec (filter (fn [x] (= lb (first x))) h)))
 
 (wrap!)
@@ -493,7 +512,10 @@ writes BROKEN, step 3 fixes); task B: 2 steps on b.py; the two run concurrently.
         an (map analyse rs)]
     (println (str "\n── " (name mode) " ──"))
     (println "  hook calls:" (count costs) " cost µs p50/p95/max:" (pct costs 0.5) (pct costs 0.95) (apply max costs)
-             " (steps that wrote: p50 of top-" (count (filter (fn [x] (> x 100)) costs)) " >100µs)")
+)
+    (println "  parts µs p50 (take/view/read/send):" (vec (map (fn [k] (pct (mapcat (fn [r] (get (:parts r) k)) rs) 0.5)) ["take" "view" "read" "send"]))
+             " p95:" (vec (map (fn [k] (pct (mapcat (fn [r] (get (:parts r) k)) rs) 0.95)) ["take" "view" "read" "send"])))
+    (println "  commit-order vs hook-arrival-order inversions per run:" (vec (map inversions rs)))
     (println "  changes per run:" (vec (map :changes an)) " log-count:" (vec (map :log-count an)))
     (println "  skew:" (vec (map :skew an)) " attrib-bad:" (vec (map :attrib-bad an)) " per-task order-bad:" (vec (map :order-bad an)))
     (println "  gate fails (label step):" (vec (map :gate-fails an)))
@@ -504,8 +526,7 @@ writes BROKEN, step 3 fixes); task B: 2 steps on b.py; the two run concurrently.
 (doseq [[i [b a]] (map-indexed vector RUNS)]
   (let [nb (norm b) na (norm a)]
     (println (str "  run " i ": full-seq equal=" (= nb na)
-                  " A-seq equal=" (= (per-task nb :A) (per-task na :A))
-                  " B-seq equal=" (= (per-task nb :B) (per-task na :B))
+                  " per-task seq equal(A,B)=" [(= (per-task nb :A) (per-task na :A)) (= (per-task nb :B) (per-task na :B))]
                   " n=" (count nb) "/" (count na)
                   " order(block)=" (vec (map first nb))
                   " order(async)=" (vec (map first na))))))
@@ -516,18 +537,18 @@ writes BROKEN, step 3 fixes); task B: 2 steps on b.py; the two run concurrently.
 
 ## 4. Throughput and mailbox depth under burst
 
-200 snapshots (2 paths, 20-line texts, one line edited per step) cast from the main process as fast as it can; then
+60 snapshots (2 paths, 20-line texts, one line edited per step) cast from the main process as fast as it can; then
 `flush`. Commit throughput = n / wall time to drain; peak depth is the historian's own `message_queue_len` before each commit.
 
 ```beam-lisp
 (let [hp (start historian nil {})
       body (fn [i] (clojure.string/join "\n" (map (fn [k] (if (= k (rem i 20)) (str "edit " i) (str "line " k))) (range 20))))
-      n 200
+      n 60
       t0 (now-us)
       _ (doseq [i (range n)]
-          (cast hp [:snap "bench" (str "step " i) {(if (even? i) "p.py" "q.py") (body i)} :pass]))
+          (cast hp [:snap "bench" (str "step " i) {(if (even? i) "p.py" "q.py") (body i)} :pass i]))
       t1 (now-us)
-      _ (call hp [:flush])
+      _ (call hp [:flush] 120000)
       t2 (now-us)
       lg (call hp [:log])]
   (Process/exit hp :kill)
@@ -536,9 +557,29 @@ writes BROKEN, step 3 fixes); task B: 2 steps on b.py; the two run concurrently.
            " throughput/s:" (quot (* n 1000000) (- t2 t0))
            " peak depth:" (:peak lg) " mean commit µs:" (quot (:commit-us lg) (:n lg))))
 (unwrap!)
-(println "prelude restored:" (= omega.prelude/write (:write (persistent_term/get :spike/aorig))))
+(println "prelude restored:" (unwrap!))
 ```
 
 ## Findings
 
-(filled after the run)
+Run: `bin/bl run spikes/async-checkpoint.bl.md` (exit 0, no `error:` lines). 5 runs per variant, 2 concurrent tasks, 25 hook calls per variant.
+
+**OBSERVED**
+1. **ASYNC is exact.** skew `[0 0 0 0 0]`, attrib-bad `[0 0 0 0 0]`, per-task order-bad `[0 0 0 0 0]`, 5 changes + seed per run in both variants; commit-order vs hook-arrival-order inversions `[0 0 0 0 0]` (the cast mailbox preserved the order in which hooks took their snapshot; nothing reordered across A and B).
+2. **ASYNC is cheap, p50 near the 5 ms line.** Across 3 executions of the final file: ASYNC p50 3.6 / 3.8 / 5.1 ms, BLOCK p50 69 / 127 / 114 ms. (Last execution: BLOCK `114180 / 256843 / 270980` µs, ASYNC `5106 / 36249 / 38551`.) Task-side hook cost (µs) p50/p95/max: BLOCK `127478 / 562469 / 699644`, ASYNC `3781 / 7238 / 12737`. ASYNC p50 is under 5 ms; p95 is 7.2 ms and max 12.7 ms, so the "< 5 ms" holds for the median, not the tail. Parts p50 (take/view/read/send): ASYNC `257 / 3115 / 164 / 35` µs; BLOCK send alone is `121430` µs (the commit). The 3 ms "view" is `task/view` (a datom read, used only to build the `why` string), not the snapshot: take + read + cast is ~0.5 ms. (Costs vary 2x run to run on this machine: an earlier run had BLOCK p50 69 ms/92 ms, ASYNC p50 3.6/4.7 ms.)
+3. **History identical modulo the race in 4.** Per-task sequences of (by, why, files, texts, gate) equal BLOCK vs ASYNC in 5/5 runs in every execution; the full interleaved sequence was equal 5/5 in one execution and 2/5 in the last (differences only A/B interleaving order). Per-task sequences equal. Gate verdicts identical: exactly `[:A 2]` (the BROKEN step) fails, in every run, per-path gate (b.py's changes pass while a.py is BROKEN).
+4. The cross-task commit order is the *hook arrival* order, which is a race between two scripted tasks. In two earlier runs of this same spike the order flipped between `[A B A B A]` and `[A B B A A]` in BLOCK and in ASYNC alike (OBSERVED in the last execution: BLOCK `[B A B A A]`/`[A B B A A]` vs ASYNC `[A B A B A]`). So "equal across variants" is equal modulo that scheduling race; per-task order never flipped, and commit order == arrival order always (point 1).
+5. Historian: peak mailbox depth during the scripted runs 1-2 (`[1 2 2 2 1]`); BLOCK 0 by construction. Burst benchmark (60 casts as fast as possible, 2 paths, 20-line texts): 184-690 µs per cast on the sender, drain 1.7-2.2 s, **throughput 27-36 commits/s** across executions (mean commit 27-38 ms), **peak depth 59** (unbounded, linear in burst). A real step is ~model-call latency (seconds) so the historian keeps up with ~100x margin; a burst of N pending steps waits N x ~30 ms.
+6. Attribution by writer worked: a `[:w task path]` cast from the cell process to a `wbuf` server, `[:take task]` from the hook (cells are other processes, so a process dictionary can't carry it; I chose a server over ETS: no table-owner lifetime, ordered). The hook's snapshot is exactly the files the step wrote, so a path another task wrote at the same time is never carried (attrib-bad 0 with both tasks live).
+
+**Surprises / blockers (OBSERVED)**
+- A wrapper that calls the *saved original* `omega.prelude/write` inside the redefined `write` hangs (the saved value resolves back to the redefinition; the first draft deadlocked). The wrapper must re-implement the bodies (copied from prelude.bl, as file-port did), and drifts if prelude changes. In E22 the recording belongs in `write`/`edit` themselves (they already call `tr/claim!`; the claim IS the record), with no wrapper.
+- The `historian` `defserver` had to be started and seeded before `env/open` in the run function; starting a second server after `env/open` in my first draft timed out (not diagnosed; ordering workaround kept).
+- `(call srv msg timeout)` accepts a timeout arg (used 60 s / 120 s).
+- Unrestored prelude `write` fails outside a task env with "transaction rejected by schema" (my probe misuse); `unwrap!` returns `:restored`.
+
+**INFERRED**
+- With the hook doing only snapshot+cast, nothing but the paths' texts is held per pending step, so memory is bounded by pending steps x written-file size; unbounded queue under a stuck historian needs a depth watermark (the gate could degrade to blocking when depth > N).
+- Gate verdict is computed in the hook from the snapshot; a gate that must see the whole tree (tests) cannot be this cheap: it stays in the historian, and then a failing gate arrives after the task moved on (a `:finding` trace, not a block).
+
+**Recommendation for E22:** hook = snapshot the step's written paths (claims/record) + `cast` to one historian server; keep the blocking variant only as a `:sync` option for gates that must stop the task. Add a pending-depth bound and `[:flush]` (used here) for tests and shutdown. Use the claim records (not a prelude wrapper) as the "what did this step write" source, and drop `task/view` from the hook (use the task's goal cached once).
