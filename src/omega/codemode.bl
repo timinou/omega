@@ -45,16 +45,26 @@
   "Per-eval heap cap in words (8 bytes each): 64M words ≈ 512 MB."
   67108864)
 
-(defn task-ns [task] (str "omega.task." task))
+(defn task-ns
+  "The namespace task `task` of `world` evaluates in (C2: per world, so two
+   worlds' t-1 never share definitions)."
+  [world task]
+  (str "omega.w." world "." task))
+
+(defn cell-id
+  "A cell's id names what the transcript shows (C4): <task>/<step>/<tool-use-id>.
+   Without a tool-use id (a direct run-eval), a VM-unique number stands in."
+  [task step tool-use-id]
+  (str task "/" (or step 0) "/" (or tool-use-id (str "u" (erlang/unique_integer (to-list [:positive]))))))
 
 (defn- preamble
   "Prepended to every eval: declare the namespace with the prelude referred
    (idempotent: an existing ns keeps its definitions), bind the task context
    (the cell's reap tag, its deadline), and cap the heap."
-  [task cell deadline]
-  (str "(ns " (task-ns task) " (:require [omega.prelude :refer :all] [clojure.string :as str]))\n"
+  [world task cell deadline]
+  (str "(ns " (task-ns world task) " (:require [omega.prelude :refer :all] [clojure.string :as str]))\n"
        "(erlang/process_flag :max_heap_size {:size " HEAP-WORDS " :kill true :error_logger false})\n"
-       "(omega.prelude/-bind! " (pr-str task) " " (pr-str cell) " " deadline ")\n"))
+       "(omega.prelude/-bind! " (pr-str world) " " (pr-str task) " " (pr-str cell) " " deadline ")\n"))
 
 (defn- killed?
   "Whether eval-cell's error says the cell process was killed (deadline or heap)."
@@ -62,14 +72,16 @@
   (and (string? err) (or (includes? err "the cell was killed") (includes? err "the evaluating process exited"))))
 
 (defn run-eval
-  "Evaluate `code` for `task` with system `sys`. {:ok text} | {:error text}."
-  [sys task code]
-  (let [_ (omega.prelude/-register! task sys)
+  "Evaluate `code` for `task` with system `sys`. {:ok text} | {:error text}.
+   `at` = {:step n :tool-use-id s} names the cell (C4); optional."
+  ([sys task code] (run-eval sys task code nil))
+  ([sys task code at]
+  (let [world (omega.prelude/-register! task sys)
         timeout (or (:eval-timeout-ms sys) TIMEOUT-MS)
-        cell (str task "." (erlang/unique_integer (to-list [:positive])))
+        cell (cell-id task (:step at) (:tool-use-id at))
         deadline (+ (erlang/monotonic_time :millisecond) timeout)
-        r (harness/eval-cell {:ns (task-ns task) :root (or (:root sys) (File/cwd!)) :path "eval"}
-                             (str (preamble task cell deadline) code)
+        r (harness/eval-cell {:ns (task-ns world task) :root (or (:root sys) (File/cwd!)) :path "eval"}
+                             (str (preamble world task cell deadline) code)
                              timeout)
         ;; a killed cell takes what it started with it: a backgrounded `sh`
         ;; must not outlive the program that was waiting on it
@@ -81,8 +93,8 @@
         out (if (> (count out) 20000) (str (subs out 0 20000) "\n…[stdout truncated]") out)]
     (cond
       (:error r) {:error (str (:error r) (when (seq out) (str "\nstdout:\n" out)))}
-      (omega.prelude/-done? task) {:ok (omega.prelude/-take-done! task) :done true}
-      :else {:ok (str (when (seq out) (str out "\n")) "=> " (:value r))})))
+      (omega.prelude/-done? world task) {:ok (omega.prelude/-take-done! world task) :done true}
+      :else {:ok (str (when (seq out) (str out "\n")) "=> " (:value r))}))))
 
 (def DESCRIPTION
   (str "Evaluate beam-lisp in your task's own namespace; definitions persist between calls. "
@@ -103,7 +115,8 @@
   {:name "eval"
    :description DESCRIPTION
    :input-schema {:type "object" :properties {:code {:type "string"}} :required ["code"]}
-   :run (fn [ctx {:keys [code]}] (run-eval (:sys ctx) (:task ctx) code))})
+   :run (fn [ctx {:keys [code]}]
+          (run-eval (:sys ctx) (:task ctx) code {:step (:step ctx) :tool-use-id (get-in ctx [:block :id])}))})
 
 (def tools
   "omega's default tool table: exactly one tool."

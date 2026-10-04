@@ -1,0 +1,91 @@
+; omega/edit.bl — how an agent's edit applies to a file, as rules you can read and tweak.
+;
+; ══ WHY THIS IS ITS OWN FILE ════════════════════════════════════════════════
+;
+; The edit contract decides what the model experiences on every change it makes:
+; what counts as a match, when an edit is refused, what it is told about other
+; tasks. Those choices will be tuned after real use, so they live here as ONE
+; data table (RULES) with one documented meaning per key, not as conditionals
+; spread through the prelude. Change a value here, or per system with
+; `:edit-rules` in task/start-system opts (merged over RULES); `(rules sys)` is
+; what is in force.
+;
+; ══ THE RULES ═══════════════════════════════════════════════════════════════
+;
+;   :occurrences  how many times an edit's :old may occur in the text
+;                   :unique  exactly once, else refused (default: the model
+;                            must quote enough context to be unambiguous)
+;                   :first   the first occurrence is replaced
+;   :empty-old    an edit with :old "" is   :refuse (default) | :prepend
+;   :atomic       true: one failing edit refuses the whole list, nothing is
+;                 written (default). false: edits apply up to the first failure.
+;   :claims       what an edit or write does when another task holds the path
+;                 (claims are advisory, omega.trace):
+;                   :report  write, and tell the model who else holds it (C9, default)
+;                   :refuse  do not write; the model is told who holds it
+;                   :ignore  write silently (omega before C9)
+;   :preview      how many characters of :old an error message quotes (60)
+;
+; Later rules (buffer servers, bl-ed §15.8 E24) join this table rather than
+; growing their own: an :old found only in a human's unpublished text is
+; refused :overlay; a stale read is refused :changed-since.
+
+(ns omega.edit)
+
+(def RULES
+  {:occurrences :unique
+   :empty-old :refuse
+   :atomic true
+   :claims :report
+   :preview 60})
+
+(defn rules
+  "The rules in force for system `sys`: RULES with its :edit-rules merged over."
+  [sys]
+  (merge RULES (:edit-rules sys)))
+
+(defn- show [r old]
+  (pr-str (if (> (count old) (:preview r)) (str (subs old 0 (:preview r)) "…") old)))
+
+(defn- occurrences [text old] (dec (count (String/split text old))))
+
+(defn apply-one
+  "Apply edit {:old :new} to `text` under rules `r`: {:ok text'} | {:error why}."
+  [r text ed]
+  (let [old (:old ed) new (:new ed)]
+    (cond
+      (not (string? old)) {:error "an edit needs :old as a string"}
+      (not (string? new)) {:error (str "an edit needs :new as a string (for " (show r old) ")")}
+      (= "" old) (if (= :prepend (:empty-old r))
+                   {:ok (str new text)}
+                   {:error "an edit's :old is empty"})
+      :else
+      (let [n (occurrences text old)]
+        (cond
+          (= n 0) {:error (str ":old not found: " (show r old))}
+          (and (> n 1) (= :unique (:occurrences r)))
+          {:error (str ":old occurs " n " times, make it unique: " (show r old))}
+          :else {:ok (String/replace text old new (list (tuple :global false)))})))))
+
+(defn apply-edits
+  "Apply [{:old :new}] to `text` in order under rules `r` (default RULES).
+   {:ok text} | {:error why} — with :atomic false, {:ok text :error why} when
+   some edits applied before one failed."
+  ([text edits] (apply-edits RULES text edits))
+  ([r text edits]
+   (reduce (fn [acc ed]
+             (if (contains? acc :error)
+               acc
+               (let [x (apply-one r (:ok acc) ed)]
+                 (cond
+                   (contains? x :ok) x
+                   (:atomic r) x
+                   :else (assoc acc :error (:error x))))))
+           {:ok text}
+           edits)))
+
+(defn claim-note
+  "The sentence the model reads when other tasks hold `path` (C9)."
+  [path holders]
+  (str (join ", " holders) " also hold" (if (= 1 (count holders)) "s" "") " " path
+       "; claims are advisory: coordinate with send/wait if you overlap"))

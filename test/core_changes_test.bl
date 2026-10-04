@@ -1,0 +1,185 @@
+(ns core-changes-test
+  "The PLAN-003 core changes C1, C2, C4, C5, C6, C8, C9 and omega.edit's rules."
+  (:require [omega.env :as env]
+            [omega.trace :as tr]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.ext :as ext]
+            [omega.edit :as ed]
+            [omega.stream :as stream]
+            [omega.codemode :as cm]))
+
+(defn- root! []
+  (let [r (str "/tmp/omega-core-" (erlang/unique_integer (to-list [:positive])))]
+    (File/mkdir_p! r)
+    (File/write! (str r "/a.txt") "alpha beta\n")
+    r))
+
+(defn- ev [code] (loop/call-tool "eval" {:code code}))
+(defn- last-result [req] (loop/say (get-in (last (:messages req)) [:content 0 :content])))
+
+;; ── C1: packages bring their own schema ─────────────────────────────────
+
+(deftest c1-a-package-schema-joins-omegas-in-one-store
+  (let [d (str "/tmp/omega-core-db-" (erlang/unique_integer (to-list [:positive])))
+        extra [{:db/ident :ed.op/task :db/valueType :db.type/ref}
+               {:db/ident :ed.op/path}]
+        e1 (env/open-durable! d {:schema extra})
+        s (task/start-system e1 {:step (loop/scripted [(loop/say "ok")]) :tools cm/tools :root "/tmp"})
+        id (task/open! s {:goal "the goal"})
+        _ (task/await s id 5000)
+        _ (env/tx! e1 [{:db/id -1 :ed.op/task (env/eid e1 :task/id id) :ed.op/path "a.bl"}])
+        _ (task/stop-system! s)
+        _ (env/close! e1)
+        ;; reopened WITHOUT the package: omega's facts are fine
+        e2 (env/open-durable! d)
+        _ (is (= "the goal" (:task/goal (env/entity e2 (env/eid e2 :task/id id)))))
+        _ (env/close! e2)
+        ;; and with it again: the package's facts survived, one query joins both
+        e3 (env/open-durable! d {:schema extra})]
+    (is (= #{["a.bl" "the goal"]}
+           (set (env/q e3 '[:find ?p ?g :where [?o :ed.op/path ?p] [?o :ed.op/task ?t] [?t :task/goal ?g]]))))
+    (env/close! e3)))
+
+;; ── C2: two worlds in one VM stay apart (BUG-001) ───────────────────────
+
+(deftest c2-two-worlds-in-one-vm-never-cross-write
+  (let [ra (root!) rb (root!)
+        sa (task/start-system (env/open) {:step (loop/scripted [(ev "(def secret \"from-a\") (Process/sleep 300) (write \"mine-a.txt\" \"a\")") (loop/say "a")])
+                                          :tools cm/tools :root ra})
+        sb (task/start-system (env/open) {:step (loop/scripted [(ev "(write \"mine-b.txt\" (str \"b sees \" (try secret (catch _ \"nothing\"))))") (loop/say "b")])
+                                          :tools cm/tools :root rb})
+        a (task/open! sa {:goal "a"})
+        _ (Process/sleep 100)
+        b (task/open! sb {:goal "b"})]
+    (is (= a b) "both worlds number their first task t-1")
+    (task/await sa a 10000)
+    (task/await sb b 10000)
+    (is (= ["a.txt" "mine-a.txt"] (vec (sort (File/ls! ra)))))
+    (is (= ["a.txt" "mine-b.txt"] (vec (sort (File/ls! rb)))))
+    (is (= "b sees nothing" (File/read! (str rb "/mine-b.txt"))))
+    (is (= ["mine-a.txt"] (map :subject (tr/all (:env sa) {:kind :claim}))))
+    (is (= ["mine-b.txt"] (map :subject (tr/all (:env sb) {:kind :claim}))))
+    (task/stop-system! sa)
+    (task/stop-system! sb)))
+
+(deftest c2-a-stream-watcher-sees-only-its-world
+  (let [ea (env/open) eb (env/open)
+        _ (stream/watch! (env/world ea))
+        sb (task/start-system eb {:step (loop/scripted [(loop/say "from b")]) :tools cm/tools :root "/tmp"})
+        b (task/open! sb {:goal "b"})
+        _ (task/await sb b 5000)
+        got (receive [:omega/delta _ d] d (after 300 :none))]
+    (is (= :none got))
+    (stream/unwatch! (env/world ea))
+    (task/stop-system! sb)))
+
+;; ── C4 + C5: cells are named by what the transcript shows; steps end ────
+
+(deftest c4-a-cell-id-names-task-step-and-tool-use
+  (let [s (task/start-system (env/open) {:step (loop/scripted [(loop/call-tool "eval" {:code "(erlang/get :omega/cell)"} "toolu_9") last-result])
+                                         :tools cm/tools :root (root!)})
+        id (task/open! s {:goal "cell"})
+        v (task/await s id 10000)]
+    (is (includes? (:result v) (str id "/2/toolu_9")) (:result v))
+    (task/stop-system! s)))
+
+(deftest c5-step-end-fires-once-per-tool-step-with-its-tools
+  (let [me (erlang/self)
+        x {:name :probe :on {:step/end (fn [d _] (erlang/send me [:step d]))}}
+        s (ext/install (task/start-system (env/open) {:step (loop/scripted [(ev "1") (ev "2") (loop/say "done")])
+                                                      :tools cm/tools :root (root!)})
+                       [x])
+        id (task/open! s {:goal "steps"})
+        _ (task/await s id 10000)
+        got (loop [acc []] (receive [:step d] (recur (conj acc d)) (after 300 acc)))]
+    (is (= [[id 2 ["eval"]] [id 4 ["eval"]]] (vec (sort (map (fn [d] [(:task d) (:step d) (:tools d)]) got)))))
+    (task/stop-system! s)))
+
+;; ── C6: the file port ───────────────────────────────────────────────────
+
+(deftest c6-read-write-edit-go-through-the-systems-file-port
+  (let [mem (atom {"a.txt" "one two"})
+        calls (atom [])
+        port {:read (fn [c p] (swap! calls conj [:read (:task c) (:cell c) p]) (get @mem p))
+              :write (fn [c p s] (swap! calls conj [:write p]) (swap! mem assoc p s) :ok)
+              :edit (fn [c p edits]
+                      (let [r (ed/apply-edits (:rules c) (get @mem p) edits)]
+                        (when (:ok r) (swap! mem assoc p (:ok r)))
+                        r))}
+        r (root!)
+        s (task/start-system (env/open) {:step (loop/scripted [(ev "(edit \"a.txt\" [{:old \"two\" :new \"2\"}]) (write \"b.txt\" (read \"a.txt\"))") last-result])
+                                         :tools cm/tools :root r :files port})
+        id (task/open! s {:goal "port"})
+        _ (task/await s id 10000)]
+    (is (= {"a.txt" "one 2" "b.txt" "one 2"} @mem))
+    (is (= "alpha beta\n" (File/read! (str r "/a.txt"))) "the disk was not touched")
+    (is (= [:read id] (vec (take 2 (first (filter (fn [c] (= :read (first c))) @calls))))))
+    (task/stop-system! s)))
+
+;; ── C8: the running turn threads its turns ──────────────────────────────
+
+(deftest c8-a-long-turn-records-the-same-facts-and-cost
+  (let [steps (vec (concat (map (fn [i] (assoc (ev (str i)) :usage {:input 10 :output 1})) (range 12))
+                           [(assoc (loop/say "end") :usage {:input 10 :output 1})]))
+        s (task/start-system (env/open) {:step (loop/scripted steps) :tools cm/tools :root (root!)})
+        id (task/open! s {:goal "long"})
+        v (task/await s id 20000)
+        ts (loop/turns s id)]
+    (is (= 26 (count ts)) "user + 12 × (assistant, tool) + the answer")
+    (is (= (vec (range 1 27)) (map :n ts)) "numbered without gaps or repeats")
+    (is (= {:input 130 :output 13} (:cost v)))
+    (task/stop-system! s)))
+
+(deftest c8-a-steer-mid-turn-lands-in-the-threaded-list
+  (let [s (task/start-system (env/open) {:step (loop/scripted [(ev "(Process/sleep 400) 1") (ev "2") (loop/say "end")])
+                                         :tools cm/tools :root (root!)})
+        id (task/open! s {:goal "steer me"})
+        _ (Process/sleep 150)
+        _ (task/steer! s id "go left")
+        _ (task/await s id 10000)
+        ts (loop/turns s id)]
+    (is (some (fn [t] (includes? (str (:content t)) "[steer from human:me] go left")) ts))
+    (is (= (vec (range 1 (inc (count ts)))) (map :n ts)))
+    (task/stop-system! s)))
+
+;; ── C9 + omega.edit: the rules, and what the model is told ──────────────
+
+(deftest c9-the-second-writer-is-told-who-else-holds-the-path
+  (let [r (root!)
+        s (task/start-system (env/open) {:step (loop/by-goal {"first" [(ev "(edit \"a.txt\" [{:old \"alpha\" :new \"A\"}])") (loop/say "ok")]
+                                                              "second" [(ev "(edit \"a.txt\" [{:old \"beta\" :new \"B\"}])") last-result]})
+                                         :tools cm/tools :root r})
+        a (task/open! s {:goal "first"})
+        _ (task/await s a 10000)
+        b (task/open! s {:goal "second"})
+        v (task/await s b 10000)]
+    (is (= "A B\n" (File/read! (str r "/a.txt"))) "claims are advisory: both edits land")
+    (is (includes? (:result v) (str a " also holds a.txt")))
+    (task/stop-system! s)))
+
+(deftest edit-rules-refuse-claims-when-told-to
+  (let [r (root!)
+        s (task/start-system (env/open) {:step (loop/by-goal {"first" [(ev "(write \"a.txt\" \"mine\")") (loop/say "ok")]
+                                                              "second" [(ev "(write \"a.txt\" \"theirs\")") last-result]})
+                                         :tools cm/tools :root r :edit-rules {:claims :refuse}})
+        a (task/open! s {:goal "first"})
+        _ (task/await s a 10000)
+        b (task/open! s {:goal "second"})
+        v (task/await s b 10000)]
+    (is (= "mine" (File/read! (str r "/a.txt"))))
+    (is (includes? (:result v) "not written"))
+    (task/stop-system! s)))
+
+(deftest edit-rules-are-data
+  (is (= {:error ":old occurs 2 times, make it unique: \"a\""} (ed/apply-edits "a b a" [{:old "a" :new "x"}]))
+      ":unique is the default")
+  (is (= {:ok "x b a"} (ed/apply-edits (merge ed/RULES {:occurrences :first}) "a b a" [{:old "a" :new "x"}])))
+  (is (= {:ok "hi a"} (ed/apply-edits (merge ed/RULES {:empty-old :prepend}) "a" [{:old "" :new "hi "}])))
+  (is (= {:ok "A b" :error ":old not found: \"zzz\""}
+         (ed/apply-edits (merge ed/RULES {:atomic false}) "a b" [{:old "a" :new "A"} {:old "zzz" :new "y"}])))
+  (is (= {:error ":old not found: \"zzz\""}
+         (ed/apply-edits "a b" [{:old "a" :new "A"} {:old "zzz" :new "y"}]))
+      "atomic by default: nothing applies")
+  (is (= {:claims :refuse :occurrences :unique}
+         (select-keys (ed/rules {:edit-rules {:claims :refuse}}) [:claims :occurrences]))))

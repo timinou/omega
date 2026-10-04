@@ -30,8 +30,9 @@
            (apply str (map :text (filter (fn [d] (= :text (:kind d))) deltas)))))))
 
 (deftest a-turn-broadcasts-deltas-then-done-and-records-the-fact
-  (stream/watch!)
-  (let [s (task/start-system (env/open) {:step (loop/scripted [(loop/say "three little words")]) :tools cm/tools :root "/tmp"})
+  (let [e (env/open)
+        _ (stream/watch! (env/world e))
+        s (task/start-system e {:step (loop/scripted [(loop/say "three little words")]) :tools cm/tools :root "/tmp"})
         id (task/open! s {:goal "stream"})
         got (loop [acc []]
               (receive [:omega/delta t d] (recur (conj acc d))
@@ -41,12 +42,13 @@
     (is (= #{2} (set (map :turn got))) "deltas name the turn they build")
     (task/await s id 5000)
     (is (= "three little words" (get-in (last (loop/turns s id)) [:content 0 :text])))
-    (stream/unwatch!)
+    (stream/unwatch! (env/world e))
     (task/stop-system! s)))
 
 (deftest a-tool-call-and-its-sh-publish-activity-then-clear-it
-  (stream/watch!)
-  (let [s (task/start-system (env/open) {:step (loop/scripted [(loop/call-tool "eval" {:code "(sh \"true\")\n:ok"}) (loop/say "ok")])
+  (let [e (env/open)
+        _ (stream/watch! (env/world e))
+        s (task/start-system e {:step (loop/scripted [(loop/call-tool "eval" {:code "(sh \"true\")\n:ok"}) (loop/say "ok")])
                                          :tools cm/tools :root "/tmp"})
         id (task/open! s {:goal "act"})
         _ (task/await s id 10000)
@@ -57,5 +59,5 @@
     (is (= "true" (:sh (second got))))
     (is (= {:sh nil :sh-since nil} (nth got 2)))
     (is (nil? (last got)))
-    (stream/unwatch!)
+    (stream/unwatch! (env/world e))
     (task/stop-system! s)))

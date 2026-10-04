@@ -23,6 +23,10 @@
 ;   :task/open {:task :owner}       :task/status {:task :status}
 ;   :turn/start {:task}             :turn/end {:task :status :result}
 ;   :tool/result {:task :tool :error?}   :inbox/drained {:task :count}
+;   :step/end {:task :step :tools}  after each model step that called tools (C5)
+;
+; Hook ctx is {:sys :task :step}; :tool/after also gets :block (the tool call),
+; as does a tool's :run.
 ;
 ; An event handler runs in its OWN process: a slow or crashing extension can
 ; never stall or kill a task. Hooks run inline (they must, to transform), and

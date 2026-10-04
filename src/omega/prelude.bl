@@ -14,19 +14,27 @@
             [omega.actor :as actor]
             [omega.trace :as tr]
             [omega.reap :as reap]
-            [omega.stream :as stream]))
+            [omega.stream :as stream]
+            [omega.edit :as ed]))
 
 ;; ── context ─────────────────────────────────────────────────────────────
+;
+; Keyed by [world task] (C2): task ids are unique per world (per env), not per
+; VM, so two omega worlds in one VM never see each other's systems.
 
 (def ^:private SYSTEMS (atom {}))
 (def ^:private DONE (atom {}))
 
-(defn -register! [task sys] (swap! SYSTEMS assoc task sys) task)
+(defn -register!
+  "Make `sys` the system for its world's task `task`; returns the world id."
+  [task sys]
+  (let [w (env/world (:env sys))] (swap! SYSTEMS assoc [w task] sys) w))
 (defn -bind!
-  "Bind the cell process to `task`; `cell` tags the OS processes it starts,
-   `deadline` (monotonic ms) is when the cell will be killed."
-  ([task] (-bind! task nil nil))
-  ([task cell deadline]
+  "Bind the cell process to `task` of `world`; `cell` tags the OS processes it
+   starts, `deadline` (monotonic ms) is when the cell will be killed."
+  ([world task] (-bind! world task nil nil))
+  ([world task cell deadline]
+   (erlang/put :omega/world world)
    (erlang/put :omega/task task)
    (erlang/put :omega/cell cell)
    (erlang/put :omega/deadline deadline)
@@ -40,58 +48,85 @@
   (when-let [d (erlang/get :omega/deadline)] (max 0 (- d (now-ms) margin))))
 
 (defn- task [] (or (erlang/get :omega/task) (throw (ex-info "not inside a task eval" {}))))
-(defn- sys [] (get @SYSTEMS (task)))
+(defn- world [] (erlang/get :omega/world))
+(defn- sys [] (get @SYSTEMS [(world) (task)]))
 (defn- e [] (:env (sys)))
 (defn- root [] (or (:root (sys)) (File/cwd!)))
 (defn- path [p] (Path/expand p (root)))
 
-(defn -done? [t] (contains? @DONE t))
-(defn -take-done! [t] (let [s (get @DONE t)] (swap! DONE dissoc t) s))
+(defn -done? [world t] (contains? @DONE [world t]))
+(defn -take-done! [world t] (let [s (get @DONE [world t])] (swap! DONE dissoc [world t]) s))
 
-;; ── files ───────────────────────────────────────────────────────────────
+;; ── files, through a port (C6) ──────────────────────────────────────────
+;
+; read/write/edit go through the system's file port, `(:files sys)`, a map of
+; three fns over ctx = {:task :cell :root}. The default is the disk. A buffer
+; server (bl-ed) installs its own port, so an agent's edit lands in the buffer
+; the human is looking at instead of under it. A port's :edit returns
+; {:ok text} | {:error why}; the rules it applies are omega.edit's.
+
+(def DISK
+  "The default file port: the project directory."
+  {:read (fn [c p] (let [f (Path/expand p (:root c))] (when (File/regular? f) (File/read! f))))
+   :write (fn [c p s] (let [f (Path/expand p (:root c))] (File/mkdir_p! (Path/dirname f)) (File/write! f s) :ok))
+   :edit (fn [c p edits]
+           (let [f (Path/expand p (:root c))]
+             (if (File/regular? f)
+               (let [r (ed/apply-edits (:rules c) (File/read! f) edits)]
+                 (when (contains? r :ok) (File/write! f (:ok r)))
+                 r)
+               {:error (str "no such file: " p)})))})
+
+(defn- port [] (or (:files (sys)) DISK))
+(defn- ctx [] {:task (task) :cell (erlang/get :omega/cell) :root (root) :rules (ed/rules (sys))})
+
+(defn- claim-path!
+  "Claim `p` for this task under the :claims rule. Returns the note the model
+   reads (C9), or nil. :refuse is checked before writing (see `guard!`)."
+  [p]
+  (let [mode (:claims (ed/rules (sys)))]
+    (when-not (= :ignore mode)
+      (let [r (tr/claim! (e) (task) p)]
+        (when-let [cs (seq (:conflict r))]
+          (ed/claim-note p (vec (distinct (map :task cs)))))))))
+
+(defn- guard!
+  "Under the :refuse claims rule, throw before touching `p` held by another task."
+  [p]
+  (when (= :refuse (:claims (ed/rules (sys))))
+    (when-let [cs (seq (tr/conflicts (e) (task) p))]
+      (throw (ex-info (str "not written: " (ed/claim-note p (vec (distinct (map :task cs)))))
+                      {:path p :claims (vec (map :task cs))})))))
+
+(defn- with-note [s note] (if note (str s " (" note ")") s))
 
 (defn read
   "The text of file `p` (relative to the project root)."
   [p]
-  (let [f (path p)]
-    (if (File/regular? f) (File/read! f) (throw (ex-info (str "no such file: " p) {:path p})))))
+  (let [s ((:read (port)) (ctx) p)]
+    (if (nil? s) (throw (ex-info (str "no such file: " p) {:path p})) s)))
 
 (defn write
   "Create or overwrite `p` with string `s`; claims the path for this task."
   [p s]
-  (let [f (path p)]
-    (File/mkdir_p! (Path/dirname f))
-    (File/write! f s)
-    (tr/claim! (e) (task) p)
-    (str "wrote " (count s) " bytes to " p)))
+  (guard! p)
+  ((:write (port)) (ctx) p s)
+  (with-note (str "wrote " (count s) " bytes to " p) (claim-path! p)))
 
 (defn apply-edits
-  "Apply [{:old :new}] to `text` in order; each :old must occur exactly once.
-   {:ok text} | {:error why}; nothing applies on error."
+  "Apply [{:old :new}] to `text` under omega.edit's default rules."
   [text edits]
-  (reduce (fn [acc ed]
-            (if (contains? acc :error)
-              acc
-              (let [t (:ok acc) old (:old ed)
-                    n (count (String/split t old))
-                    show (pr-str (if (> (count old) 60) (str (subs old 0 60) "…") old))]
-                (cond
-                  (= "" old) {:error "an edit's :old is empty"}
-                  (= n 1) {:error (str ":old not found: " show)}
-                  (> n 2) {:error (str ":old occurs " (dec n) " times, make it unique: " show)}
-                  :else {:ok (String/replace t old (:new ed) (list (tuple :global false)))}))))
-          {:ok text}
-          edits))
+  (ed/apply-edits text edits))
 
 (defn edit
   "Edit `p` by exact replacement: edits = [{:old \"…\" :new \"…\"} …]. All or nothing."
   [p edits]
-  (let [r (apply-edits (read p) edits)]
-    (if (contains? r :error)
+  (guard! p)
+  (let [r ((:edit (port)) (ctx) p edits)]
+    (if (and (contains? r :error) (not (contains? r :ok)))
       (throw (ex-info (str "edit " p ": " (:error r)) {:path p}))
-      (do (File/write! (path p) (:ok r))
-          (tr/claim! (e) (task) p)
-          (str "applied " (count edits) " edit(s) to " p)))))
+      (with-note (str "applied " (if (:error r) (str "some edits (stopped at: " (:error r) ")") (str (count edits) " edit(s)")) " to " p)
+                 (claim-path! p)))))
 
 (defn ls
   "Entries of directory `p` (default the root), sorted."
@@ -112,14 +147,14 @@
   [cmd]
   ;; TERM=dumb + NO_COLOR: tools think they're in a pipe, so output carries no
   ;; escape codes or terminfo warnings into the model's context
-  (stream/activity! (task) {:sh cmd :sh-since (erlang/system_time :millisecond)})
+  (stream/activity! (world) (task) {:sh cmd :sh-since (erlang/system_time :millisecond)})
   (let [r (System/cmd "sh" (list "-c" cmd) (list (tuple :stderr_to_stdout true) (tuple :cd (root))
                                                  ;; the reap tags: whatever this starts, even in the
                                                  ;; background, dies with its cell or task (omega.reap)
                                                  (tuple :env (to-list (concat [(tuple "TERM" "dumb") (tuple "NO_COLOR" "1")
                                                                                (tuple "PAGER" "cat") (tuple "GIT_PAGER" "cat")]
                                                                               (reap/env-tags (:nonce (sys)) (task) (erlang/get :omega/cell)))))))]
-    (stream/activity! (task) {:sh nil :sh-since nil})
+    (stream/activity! (world) (task) {:sh nil :sh-since nil})
     {:out (elem r 0) :exit (elem r 1)}))
 
 ;; ── tasks ───────────────────────────────────────────────────────────────
@@ -155,7 +190,7 @@
 (defn done
   "Close this task as complete with `summary`. Takes effect when the eval returns."
   [summary]
-  (swap! DONE assoc (task) summary)
+  (swap! DONE assoc [(world) (task)] summary)
   :done)
 
 ;; ── the shared environment ──────────────────────────────────────────────

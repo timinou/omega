@@ -88,9 +88,9 @@
   "Join omega's delta broadcast and mirror each task's partial turn into the
    ui conn, at most every 80 ms (≈12 renders/s however fast the model is).
    A finished turn is retracted: the recorded turn in the env replaces it."
-  [ui-conn]
+  [world ui-conn]
   (spawn (fn []
-           (stream/watch!)
+           (stream/watch! world)
            (loop [pending {} done #{} acts {} dirty #{} tick 0]
              (receive
                :stop :stopped
@@ -176,9 +176,9 @@
 
 (defn- prepare
   "The ephemeral ui conn and its stream pump, for task system `sys`."
-  []
+  [sys]
   (let [ui-conn (datom/connect ui-schema)]
-    {:ui-conn ui-conn :pump (stream-pump ui-conn)}))
+    {:ui-conn ui-conn :pump (stream-pump (env/world (:env sys)) ui-conn)}))
 
 (defn start!
   "Serve omega's UI for task system `sys` on loopback, without a window (for a
@@ -187,7 +187,7 @@
   ([sys] (start! sys {}))
   ([sys opts]
    (let [port (let [p (:port opts)] (cond (= :free p) (free-port) (nil? p) 4747 :else p))
-         {:keys [ui-conn pump]} (prepare)]
+         {:keys [ui-conn pump]} (prepare sys)]
      (app/serve (app-value sys ui-conn) {:port port :ip (tuple 127 0 0 1) :log nil})
      {:url (str "http://127.0.0.1:" port "/") :ui-conn ui-conn :pump pump :port port})))
 
@@ -199,7 +199,7 @@
   ([sys opts]
    (let [size {:width (or (:width opts) 1100) :height (or (:height opts) 760) :title "omega"}]
      (if (upstream-desktop?)
-       (let [{:keys [ui-conn pump]} (prepare)
+       (let [{:keys [ui-conn pump]} (prepare sys)
              w (loom.desktop/serve-window (app-value sys ui-conn)
                                           (merge size (when (number? (:port opts)) {:port (:port opts)})))]
          (assoc (select-keys w [:url :port :window]) :ui-conn ui-conn :pump pump))

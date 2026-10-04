@@ -15,7 +15,7 @@
 
 (ns omega.stream)
 
-(def GROUP :omega/stream)
+(defn group [world] [:omega/stream world])
 
 (defn- ensure-pg
   "Start the default pg scope once, UNLINKED (start_link would tie it to
@@ -27,31 +27,31 @@
   :ok)
 
 (defn watch!
-  "Join the stream group: this process now receives every task's deltas."
-  []
+  "Join `world`'s stream group: this process now receives its tasks' deltas."
+  [world]
   (ensure-pg)
-  (pg/join GROUP (erlang/self))
+  (pg/join (group world) (erlang/self))
   :ok)
 
-(defn unwatch! []
+(defn unwatch! [world]
   (ensure-pg)
-  (pg/leave GROUP (erlang/self))
+  (pg/leave (group world) (erlang/self))
   :ok)
 
 (defn publish!
-  "Send `msg` to every watcher."
-  [msg]
+  "Send `msg` to every watcher of `world`."
+  [world msg]
   (ensure-pg)
-  (doseq [p (pg/get_members GROUP)] (erlang/send p msg))
+  (doseq [p (pg/get_members (group world))] (erlang/send p msg))
   :ok)
 
-(defn delta! [task d] (publish! [:omega/delta task d]))
+(defn delta! [world task d] (publish! world [:omega/delta task d]))
 
 (defn activity!
   "What task `task` is doing right now, as a patch merged into its activity
    (keys with nil values are cleared); `nil` clears it all. Shapes:
    {:tool \"eval\" :code first-line :since ms} while a call runs, plus
    {:sh cmd :sh-since ms} while an (sh …) inside it runs."
-  [task patch]
-  (publish! [:omega/activity task patch]))
-(defn turn-done! [task] (publish! [:omega/turn-done task]))
+  [world task patch]
+  (publish! world [:omega/activity task patch]))
+(defn turn-done! [world task] (publish! world [:omega/turn-done task]))

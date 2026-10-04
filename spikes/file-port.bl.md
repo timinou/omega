@@ -1,5 +1,9 @@
 # Spike: file-port — is C6 small, and does an agent's `edit` through a buffer server deliver?
 
+> **Superseded by the real C6 (branch core-c1-c9, 2026-10-04).** This spike measured C6 by redefining
+> the prelude at runtime before it existed; `src/omega/prelude.bl` now has the file port (`DISK`, `:files`)
+> and `test/core_changes_test.bl` covers it. The spike is kept as the evidence the design used.
+
 Run: `bin/bl run spikes/file-port.bl.md`. Question: PLAN-003 core change C6 (`prelude` read/write/edit
 dispatch through a swappable port). Nothing under `src/` is edited: the swap is simulated at runtime.
 
@@ -190,8 +194,9 @@ dispatching through a port held in a known place. Cells are separate processes, 
   (str "(ns omega.task.early (:require [omega.prelude :refer :all]))\n"
        "(defn rd [p] (read p))\n"))
 (def sys0 {:env e :root root})
-(omega.prelude/-register! "t-probe" sys0)
-(omega.prelude/-bind! "t-probe" "t-probe.0" nil)
+(def w0 (omega.prelude/-register! "t-probe" sys0))
+;; after C2 -bind! also takes the world; before it, -register! returned the task id
+(if (= w0 "t-probe") (omega.prelude/-bind! "t-probe" "t-probe.0" nil) (omega.prelude/-bind! w0 "t-probe" "t-probe.0" nil))
 
 (println "OBSERVED before swap: early-ns read     =" (pr-str (omega.task.early/rd "r.py")))
 (call srv [:open "r.py"])
@@ -275,8 +280,8 @@ a probe task (real `-ctx`, and for edit the real `tr/claim!`), with the original
 (def sysb (task/start-system e {:step (fn [req] (loop/say "idle")) :tools cm/tools :root root}))
 (def tb (task/open! sysb {:goal "bench"}))
 (task/await sysb tb 5000)
-(omega.prelude/-register! tb sysb)
-(omega.prelude/-bind! tb (str tb ".0") nil)
+(def wb (omega.prelude/-register! tb sysb))
+(if (= wb tb) (omega.prelude/-bind! tb (str tb ".0") nil) (omega.prelude/-bind! wb tb (str tb ".0") nil))
 (restore!)
 (println "bench start")
 ;; NB prelude `edit` ends in tr/claim!, a datom update to one hot trace entity: p50 106 ms at 200 calls

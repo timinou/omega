@@ -53,30 +53,41 @@
   ((get-in sys [:hooks :emit] (fn [_ _] nil)) event data))
 
 ;; ── turns as facts ──────────────────────────────────────────────────────
-
-(defn- turn-count [e t]
-  (count (env/q e '[:find ?u :in $ ?t :where [?u :turn/task ?t]] t)))
-
-(defn record!
-  "Append a turn to task `id`. role :user|:assistant|:tool, content = [block …]."
-  ([sys id role content] (record! sys id role content nil))
-  ([sys id role content usage]
-   (let [e (:env sys)
-         t (env/eid e :task/id id)
-         n (inc (turn-count e t))]
-     (env/tx! e [(cond-> {:db/id -1 :turn/id (str id "/" n) :turn/task t :turn/n n
-                          :turn/role role :turn/content content :turn/at (env/now e)}
-                   (some? usage) (assoc :turn/usage usage))])
-     n)))
+;
+; The store is the truth for every reader (`turns`). The running turn does not
+; re-read it per step (C8): `turn!` reads the list ONCE, then threads it as a
+; loop-local value through `append!`, `drain!` and `request`, because it is the
+; only writer of its task's turns. Reading every turn back per step made long
+; tasks quadratic (spikes/hot-task.bl.md: 1.2 s → 2.7 s per trivial step by
+; step 160; spikes/c8-turn-cache.bl.md: 4.4× faster with the list threaded).
 
 (defn turns
-  "All turns of task `id`, in order: [{:n :role :content :usage}]."
+  "All turns of task `id`, in order: [{:n :role :content}]."
   [sys id]
   (let [e (:env sys)
         t (env/eid e :task/id id)
         rows (env/q e '[:find ?n ?r ?c :in $ ?t
                         :where [?u :turn/task ?t] [?u :turn/n ?n] [?u :turn/role ?r] [?u :turn/content ?c]] t)]
     (vec (map (fn [[n r c]] {:n n :role r :content c}) (sort-by first rows)))))
+
+(defn append!
+  "Append a turn after `ts` (task `id`'s turns so far, as the caller holds
+   them); returns ts with it. role :user|:assistant|:tool, content = [block …]."
+  ([sys id ts role content] (append! sys id ts role content nil))
+  ([sys id ts role content usage]
+   (let [e (:env sys)
+         n (inc (count ts))]
+     (env/tx! e [(cond-> {:db/id -1 :turn/id (str id "/" n) :turn/task (env/eid e :task/id id) :turn/n n
+                          :turn/role role :turn/content content :turn/at (env/now e)}
+                   (some? usage) (assoc :turn/usage usage))])
+     (conj ts {:n n :role role :content content}))))
+
+(defn record!
+  "Append a turn to task `id`, reading its turns from the store; returns its n.
+   For callers outside a running turn (the running turn uses `append!`)."
+  ([sys id role content] (record! sys id role content nil))
+  ([sys id role content usage]
+   (count (append! sys id (turns sys id) role content usage))))
 
 (defn messages
   "Turns → the model's message list. :tool turns travel as :user messages
@@ -95,15 +106,19 @@
     (str "[" (name (:kind m)) " from " (:from m) "] " (:text m))))
 
 (defn drain!
-  "Consume task `id`'s unread messages as one :user turn. Returns how many."
-  [sys id]
-  (let [e (:env sys)
-        box (actor/inbox e id)]
-    (when (seq box)
-      (record! sys id :user (vec (map (fn [m] {:type :text :text (msg->text m)}) box)))
-      (doseq [m box] (actor/mark-read! e (:id m)))
-      (emit sys :inbox/drained {:task id :count (count box)}))
-    (count box)))
+  "Consume task `id`'s unread messages as one :user turn appended after `ts`
+   (its turns so far; read from the store when omitted). Returns the turns with
+   it, or ts unchanged when the inbox is empty."
+  ([sys id] (drain! sys id (turns sys id)))
+  ([sys id ts]
+   (let [e (:env sys)
+         box (actor/inbox e id)]
+     (if (seq box)
+       (let [ts (append! sys id ts :user (vec (map (fn [m] {:type :text :text (msg->text m)}) box)))]
+         (doseq [m box] (actor/mark-read! e (:id m)))
+         (emit sys :inbox/drained {:task id :count (count box)})
+         ts)
+       ts))))
 
 ;; ── one step ────────────────────────────────────────────────────────────
 
@@ -111,22 +126,23 @@
 
 (defn- find-tool [sys nm] (first (filter (fn [t] (= nm (:name t))) (tool-table sys))))
 
-(defn- run-tool [sys id block]
-  (let [ctx {:sys sys :task id}
+(defn- run-tool [sys id block step]
+  (let [ctx {:sys sys :task id :step step}
+        world (env/world (:env sys))
         tool (find-tool sys (:name block))
         decision (hook sys :tool/before {:allow true :block block} ctx)
-        _ (stream/activity! id {:tool (:name block) :since (erlang/system_time :millisecond)
+        _ (stream/activity! world id {:tool (:name block) :since (erlang/system_time :millisecond)
                                 :code (first (clojure.string/split-lines (str (or (get-in block [:input :code]) (pr-str (:input block))))))})
         r (cond
             (nil? tool) {:error (str "no such tool: " (:name block))}
             (not (:allow decision)) {:error (str "denied: " (:reason decision))}
-            :else (try ((:run tool) ctx (:input block))
+            :else (try ((:run tool) (assoc ctx :block block) (:input block))
                        (catch err {:error (ex-message err)})))
-        _ (stream/activity! id nil)
+        _ (stream/activity! world id nil)
         r (hook sys :tool/after r (assoc ctx :block block))]
     ;; one trace per CALL: the subject carries the turn number, so two calls with a
     ;; reused tool-use id (scripted models, some providers) never merge
-    (tr/leave! (:env sys) id {:kind :tool :subject (str (:name block) "#" (count (turns sys id)) "/" (:id block))
+    (tr/leave! (:env sys) id {:kind :tool :subject (str (:name block) "#" step "/" (:id block))
                               :text (str (:name block) " " (if (:error r) "error" "ok"))
                               :data {:input (:input block) :error? (some? (:error r))}})
     (emit sys :tool/result {:task id :tool (:name block) :error? (some? (:error r))})
@@ -140,30 +156,48 @@
 (defn- add-usage [a b]
   (merge-with (fn [x y] (+ (or x 0) (or y 0))) (or a {}) (or b {})))
 
-(defn request [sys id]
-  (let [ts (turns sys id)
-        req {:system (or (:system-prompt sys) "You are omega, a coding agent.")
+(defn request
+  "The model request for task `id` over its turns `ts` (read from the store
+   when omitted), after the :context hooks."
+  ([sys id] (request sys id (turns sys id)))
+  ([sys id ts]
+  (let [req {:system (or (:system-prompt sys) "You are omega, a coding agent.")
              :messages (messages ts)
              :tools (vec (map (fn [t] (select-keys t [:name :description :input-schema])) (tool-table sys)))}]
-    (hook sys :context req {:sys sys :task id})))
+    (hook sys :context req {:sys sys :task id}))))
+
+(defn- add-cost!
+  "Fold one response's usage into the task's running cost. The running turn
+   owns the total (C8): it writes the sum it holds, never reads the entity back."
+  [sys id cost usage]
+  (let [cost (add-usage cost usage)]
+    (when (some? usage)
+      (env/tx! (:env sys) [[:db/add (env/eid (:env sys) :task/id id) :task/cost cost]]))
+    cost))
 
 (defn turn!
   "Run one turn of task `id` to completion. Returns the outcome for the
-   executor: {:status :idle|:done|:failed :result …}."
+   executor: {:status :idle|:done|:failed :result …}.
+
+   Events: :turn/start once per turn; :step/end after each model step that
+   called tools, {:task :step :tools [name …]} (C5) — the honest checkpoint
+   point; :turn/end when the turn answers or closes."
   [sys id]
   (let [e (:env sys)
+        world (env/world e)
         step (:step sys)
-        max-steps (or (:max-steps sys) MAX-STEPS)]
-    (drain! sys id)
+        max-steps (or (:max-steps sys) MAX-STEPS)
+        ts0 (drain! sys id (turns sys id))
+        cost0 (:task/cost (env/entity e (env/eid e :task/id id)))]
     (emit sys :turn/start {:task id})
-    (loop [n 1 usage nil]
+    (loop [n 1 ts ts0 cost cost0]
       (if (> n max-steps)
         {:status :idle :result (str "paused after " max-steps " steps")}
-        (let [turn-n (inc (count (turns sys id)))
+        (let [turn-n (inc (count ts))
               ;; deltas are broadcast, never recorded: the final content below is the fact
-              resp (step (assoc (request sys id) :on-delta
-                                (fn [d] (stream/delta! id (assoc d :turn turn-n)))))
-              _ (stream/turn-done! id)]
+              resp (step (assoc (request sys id ts) :on-delta
+                                (fn [d] (stream/delta! world id (assoc d :turn turn-n)))))
+              _ (stream/turn-done! world id)]
           (cond
             (not (map? resp))
             {:status :failed :error (str "the model step returned " (pr-str resp) ", not a response map")}
@@ -173,28 +207,26 @@
 
             :else
             (let [content (vec (:content resp))
-                  usage (add-usage usage (:usage resp))
-                  _ (record! sys id :assistant content (:usage resp))
-                  _ (env/tx! e [[:db/add (env/eid e :task/id id) :task/cost
-                                 (add-usage (:task/cost (env/entity e (env/eid e :task/id id))) (:usage resp))]])
+                  ts (append! sys id ts :assistant content (:usage resp))
+                  cost (add-cost! sys id cost (:usage resp))
                   uses (tool-uses content)]
               (if (empty? uses)
                 (let [r {:status :idle :result (text-of content)}]
                   (emit sys :turn/end (assoc r :task id))
                   r)
-                (let [results (vec (map (fn [u] (assoc (run-tool sys id u) :id (:id u))) uses))
-                      done (first (filter :done results))]
-                  (record! sys id :tool
-                           (vec (map (fn [r] {:type :tool-result :id (:id r)
-                                              :content (or (:ok r) (:error r))
-                                              :error? (some? (:error r))})
-                                     results)))
+                (let [results (vec (map (fn [u] (assoc (run-tool sys id u turn-n) :id (:id u))) uses))
+                      done (first (filter :done results))
+                      ts (append! sys id ts :tool
+                                  (vec (map (fn [r] {:type :tool-result :id (:id r)
+                                                     :content (or (:ok r) (:error r))
+                                                     :error? (some? (:error r))})
+                                            results)))]
+                  (emit sys :step/end {:task id :step turn-n :tools (vec (map :name uses))})
                   (if (some? done)
                     (let [r {:status :done :result (:ok done)}]
                       (emit sys :turn/end (assoc r :task id))
                       r)
-                    (do (drain! sys id)
-                        (recur (inc n) usage))))))))))))
+                    (recur (inc n) (drain! sys id ts) cost)))))))))))
 
 ;; ── a scripted model, for tests and offline demos ───────────────────────
 
