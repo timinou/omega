@@ -1,5 +1,5 @@
 // spikes/present/web/frame.mjs — the host for pp.frame: ONE pure BL frame
-// (rail | conversation | questions), painted pane by pane on the row grid
+// (rail | conversation | minimap), painted pane by pane on the row grid
 // (spike: spikes/scroll-and-type.bl.md).
 //
 // The host stays dumb, as bl-ed's does: events in (keys, resizes, documents
@@ -20,7 +20,7 @@ globalThis.BL_HOST = Object.assign(globalThis.BL_HOST || {}, {
 import * as R from "./out/rt.mjs";
 const P = await import("./out/pp.main.mjs");
 const F = await import("./out/pp.frame.mjs");
-const CV = await import("./out/pp.conv.mjs");
+const PR = await import("./out/pp.present.mjs");
 
 const K = R.kw;
 const get = (m, k) => (m == null ? null : m.get(K(k), null));
@@ -121,20 +121,56 @@ function paintPane(el, pv, focus) {
   return v;
 }
 
-function paintIndex(convEd) {
-  const ix = $("#questions .list"); ix.textContent = "";
-  const qs = CV.d_questions(convEd).toArray();
-  const v = P.d_render(convEd);
-  const ys = get(v, "lines").toArray().map((l) => get(l, "row") ?? get(l, "src")).filter((x) => x != null);
-  const topRow = Math.min(...ys.length ? ys : [0]);
-  let at = 0; qs.forEach((q, i) => { if (get(q, "row") <= topRow + 1) at = i; });
-  qs.forEach((q, i) => {
+// the minimap: a miniature of the pane's LAID-OUT screen (pp.present/minimap),
+// one bar per slot, the lens = the rows the pane shows. Click or drag scrolls
+// the pane (a :scroll-to-slot event); the map never switches the view.
+const MAP_ROW = 3;          // px per screen row in the map
+function paintMinimap(paneEd) {
+  const box = $("#minimap"), canvas = $("#minimap .bars"), lens = $("#minimap .lens");
+  const m = PR.d_minimap(get(paneEd, "presentation"), paneEd);
+  const bars = get(m, "bars").toArray();
+  const ys = []; let y = 0;
+  for (const b of bars) { ys.push(y); y += (get(b, "size") || 1) * MAP_ROW; }
+  const total = y || 1, H = box.clientHeight - 16;
+  const k = Math.min(1, H / total);                  // shrink to fit when long
+  box.dataset.k = k; box.dataset.ys = JSON.stringify(ys);
+  canvas.textContent = "";
+  const ch = (box.clientWidth - 24) / 84;
+  bars.forEach((b, i) => {
+    const role = get(b, "role").name, label = get(b, "label");
     const d = document.createElement("div");
-    d.className = "q" + (i === at ? " at" : "");
-    d.innerHTML = `<span class="n">${get(q, "n")}</span>`; d.append(get(q, "text"));
-    ix.appendChild(d);
+    d.className = "bar r-" + role;
+    d.style.top = ys[i] * k + "px";
+    d.style.height = Math.max(1, (get(b, "size") || 1) * MAP_ROW * k - 1) + "px";
+    d.style.width = Math.max(2, Math.min(84, get(b, "w")) * ch) + "px";
+    canvas.appendChild(d);
+    if (label) {
+      const t = document.createElement("div"); t.className = "maplabel"; t.textContent = label;
+      t.style.top = ys[i] * k + "px"; canvas.appendChild(t);
+    }
   });
+  const top = get(m, "top"), end = get(m, "end");
+  lens.style.top = (ys[top] ?? 0) * k + "px";
+  lens.style.height = Math.max(8, ((ys[end] ?? total) - (ys[top] ?? 0)) * k) + "px";
 }
+function mapSlotAt(clientY) {
+  const box = $("#minimap"), k = +box.dataset.k, ys = JSON.parse(box.dataset.ys || "[]");
+  const y = (clientY - $("#minimap .bars").getBoundingClientRect().top) / k;
+  let i = 0; while (i + 1 < ys.length && ys[i + 1] <= y) i++;
+  return i;
+}
+let dragging = false;
+$("#minimap").addEventListener("mousedown", (e) => {
+  dragging = true; e.preventDefault();
+  dispatch(ev(K("type"), K("scroll-to-slot"), K("pane"), K("pane"), K("y"), Math.max(0, mapSlotAt(e.clientY) - 6)));
+});
+window.addEventListener("mousemove", (e) => { if (dragging) dispatch(ev(K("type"), K("scroll-to-slot"), K("pane"), K("pane"), K("y"), Math.max(0, mapSlotAt(e.clientY) - 6))); });
+window.addEventListener("mouseup", () => { dragging = false; });
+// the wheel scrolls a pane by SCREEN rows (a wrapped answer is many rows of one text row)
+for (const id of ["rail", "pane"]) $("#" + id).addEventListener("wheel", (e) => {
+  e.preventDefault();
+  dispatch(ev(K("type"), K("scroll-slots"), K("pane"), K(id), K("delta"), Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / ROW))));
+}, { passive: false });
 
 function draw() {
   const rv = F.d_render(fr);
@@ -144,7 +180,7 @@ function draw() {
     paintPane($("#" + id), pv, get(pv, "focus?"));
   }
   const panes = get(fr, "panes");
-  paintIndex(panes.get(K("pane")));
+  paintMinimap(panes.get(K("pane")));
   const focusV = get(get(rv, "panes").toArray().find((p) => get(p, "focus?")), "view");
   $("#echo").textContent = get(focusV, "message") || (get(rv, "chord") ? "C-w-" : "");
   const mb = get(focusV, "minibuf");
@@ -159,7 +195,7 @@ const NAMED = new Set(["Escape", "Enter", "Backspace", "Tab", "ArrowLeft", "Arro
 function keyName(e) {
   const k = e.key; if (k === "Dead" || k === "Process" || k === "Unidentified") return null;
   const mods = (e.ctrlKey ? "C-" : "") + (e.altKey ? "M-" : "");
-  if (NAMED.has(k)) return mods + (e.shiftKey && k === "Tab" ? "S-Tab" : k);
+  if (NAMED.has(k)) return mods + (e.shiftKey && (k === "Tab" || k === "Enter") ? "S-" + k : k);
   if ([...k].length === 1) return mods + k;
   return null;
 }
@@ -182,7 +218,10 @@ document.addEventListener("click", () => sink.focus());
 // re-wraps, as Emacs' visual-line-mode does)
 function fit() {
   // the page's top padding (4px) is not a row
-  const h = Math.floor(($("#pane .page").clientHeight - 4) / ROW);
+  // rows that are VISIBLE: from the first line's top to the pane's status bar
+  // (the page box can start above the frame's clip — measure what is seen)
+  const vis = $("#pane .pane-status").getBoundingClientRect().top - Math.max($("#pane .lines").getBoundingClientRect().top, $("#frame").getBoundingClientRect().top);
+  const h = Math.floor(vis / ROW);
   const cols = (id) => Math.floor(($("#" + id + " .page").clientWidth - 24) / CH);
   dispatch(ev(K("type"), K("resize"), K("height"), h, K("cols"), ev(K("rail"), cols("rail"), K("pane"), cols("pane"))));
 }

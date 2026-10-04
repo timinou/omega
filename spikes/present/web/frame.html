@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- spikes/present/web/frame.html — pp.frame: rail | conversation | questions,
+<!-- spikes/present/web/frame.html — pp.frame: rail | conversation | minimap,
      every pane a bl-ed editor drawn through presentations. See frame.mjs. -->
 <html lang="en">
 <head>
@@ -12,12 +12,12 @@
 <body data-mode="normal">
   <header id="titlebar">
     <span class="brand">bl<span class="dot">·</span>ed</span>
-    <span class="hint"><kbd>j</kbd><kbd>k</kbd> task (rail) &nbsp; <kbd>C-w</kbd><kbd>w</kbd> pane &nbsp; <kbd>J</kbd><kbd>K</kbd> question &nbsp; <kbd>g</kbd><kbd>s</kbd> say &nbsp; <kbd>space</kbd><kbd>t</kbd><kbd>p</kbd> drawing</span>
+    <span class="hint"><kbd>j</kbd><kbd>k</kbd> task (rail) &nbsp; <kbd>C-w</kbd><kbd>w</kbd> pane &nbsp; <kbd>J</kbd><kbd>K</kbd> question &nbsp; <kbd>i</kbd> write &nbsp; <kbd>S-Enter</kbd> new line &nbsp; <kbd>space</kbd><kbd>t</kbd><kbd>p</kbd> drawing</span>
   </header>
   <main id="frame">
     <section class="pane" id="rail"><div class="page"><div class="frames"></div><div class="caret"></div><div class="lines"></div></div><div class="pane-status"></div></section>
     <section class="pane" id="pane"><div class="page"><div class="frames"></div><div class="caret"></div><div class="lines"></div></div><div class="pane-status"></div></section>
-    <aside id="questions"><div class="label">YOU ASKED</div><div class="list"></div></aside>
+    <aside id="minimap"><div class="bars"></div><div class="lens"></div></aside>
   </main>
   <footer><div id="echo"></div><div id="minibuf" hidden></div></footer>
   <textarea id="sink" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>

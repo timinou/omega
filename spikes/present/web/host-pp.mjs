@@ -458,7 +458,7 @@ function keyName(e) {
   let k = e.key;
   if (k === "Dead" || k === "Process" || k === "Unidentified") return null;
   const mods = (e.ctrlKey ? "C-" : "") + (e.altKey ? "M-" : "");
-  if (NAMED.has(k)) return mods + (e.shiftKey && k === "Tab" ? "S-Tab" : k);
+  if (NAMED.has(k)) return mods + (e.shiftKey && (k === "Tab" || k === "Enter") ? "S-" + k : k);
   if (k.length === 1 || [...k].length === 1) return mods + k;   // shift already applied by the layout
   return null;
 }

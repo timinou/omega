@@ -46,6 +46,10 @@
    while the rest of the card is on screen (a sticky section header)."
   [key tone kids] {:m :card :key key :tone tone :head? true :kids (vec kids)})
 (defn sticky [key kids] {:m :sticky :key key :kids (vec kids)})
+(defn dock
+  "Docked to the viewport's bottom edge ALWAYS (a chat composer): never part of
+   the scrolling body, whatever is shown."
+  [key kids] {:m :sticky :key key :dock? true :kids (vec kids)})
 
 ; ─── presenter lookup ──────────────────────────────────────────────────────
 
@@ -110,7 +114,7 @@
         (let [y0 (count (:slots acc))
               a (reduce (fn [a k] (flatten-mark a k (inc depth))) acc (:kids mk))
               fr {:key (:key mk) :tone (:tone mk) :y0 y0 :y1 (count (:slots a)) :depth depth :sticky? (= :sticky kind)
-                  :head? (= true (:head? mk))}]
+                  :head? (= true (:head? mk)) :dock? (= true (:dock? mk))}]
           (if (= :sticky kind) (update a :sticky conj fr) (update a :frames conj fr)))
       :else acc)))
 
@@ -153,6 +157,11 @@
 
 ; ─── the view model ────────────────────────────────────────────────────────
 
+(defn first-slot-of-row
+  "The first slot drawn for text row r (a text slot, or its first ornament)."
+  [slots r]
+  (or (first (filter (fn [i] (= r (slot-row (nth slots i)))) (range (count slots)))) 0))
+
 (defn- first-slot-at-or-after [slots index top]
   (or (get index top)
       (first (filter (fn [i] (let [r (slot-row (nth slots i))] (and (some? r) (>= r top)))) (range (count slots))))
@@ -166,11 +175,12 @@
   (loop [xs xs acc 0 out []] (if (empty? xs) out (recur (rest xs) (+ acc (first xs)) (conj out acc)))))
 
 (defn- take-rows
-  "Slot indices from y, in order, while their sizes fit in `budget` rows."
-  [slots y budget]
-  (loop [y y used 0 out []]
-    (if (or (>= y (count slots)) (> (+ used (size-of (nth slots y))) budget)) out
-      (recur (inc y) (+ used (size-of (nth slots y))) (conj out y)))))
+  "Slot indices from y, in order, below `limit`, while their sizes fit in `budget` rows."
+  ([slots y budget] (take-rows slots y budget (count slots)))
+  ([slots y budget limit]
+   (loop [y y used 0 out []]
+     (if (or (>= y limit) (> (+ used (size-of (nth slots y))) budget)) out
+       (recur (inc y) (+ used (size-of (nth slots y))) (conj out y))))))
 
 (defn- top-for-bottom
   "The first slot of a window of `budget` rows that ends with slot y."
@@ -191,29 +201,40 @@
         h (:height (:view ed))
         cur (first (:head (c/primary ed)))
         top (:top (:view ed))
-        y-top (first-slot-at-or-after slots index top)
+        ; docked frames (a chat composer) are always at the bottom, outside the body
+        docked (filter :dock? sticky)
+        dock-ys (vec (mapcat (fn [f] (range (:y0 f) (:y1 f))) docked))
+        dock-h (reduce + 0 (map (fn [y] (size-of (nth slots y))) dock-ys))
+        limit (if (empty? docked) n (apply min (map :y0 docked)))
+        anchor (:anchor (:view ed))
+        y-top (if (and (some? anchor) (= (:row anchor) top))
+                (+ (first-slot-of-row slots top) (:off anchor))
+                (first-slot-at-or-after slots index top))
+        y-top (min y-top (max 0 (dec limit)))
         ; a presenter may grow or shrink what is between :top and the cursor:
         ; if the cursor is on screen in TEXT space, keep it on screen here too
         yc (when (and (>= cur top) (< cur (+ top h))) (get index cur))
+        yc (when (and (some? yc) (< yc limit)) yc)
         y-top (cond (or (nil? yc) (zero? n)) y-top
                     (< yc y-top) yc
-                    (not (some (fn [y] (= y yc)) (take-rows slots y-top h))) (top-for-bottom slots yc h)
+                    (not (some (fn [y] (= y yc)) (take-rows slots y-top (- h dock-h) limit))) (top-for-bottom slots yc (- h dock-h))
                     :else y-top)
         ; a presentation that shrinks the document fills the screen from the end
-        y-top (if (and (:fill? p) (pos? n)) (min y-top (top-for-bottom slots (dec n) h)) y-top)
+        y-top (if (and (:fill? p) (pos? limit)) (min y-top (top-for-bottom slots (dec limit) (- h dock-h))) y-top)
         ; the heading of the section the top is inside (scrolled past) sticks
         head (when (:sticky-heads? p)
                (last (filter (fn [f] (and (:head? f) (< (:y0 f) y-top) (> (:y1 f) y-top))) frames)))
         head-ys (if (some? head) [(:y0 head)] [])
         head-h (reduce + 0 (map (fn [y] (size-of (nth slots y))) head-ys))
-        ; sticky frames below the viewport pin to its bottom edge
-        all-pin-h (reduce + 0 (map (fn [f] (reduce + 0 (map (fn [y] (size-of (nth slots y))) (range (:y0 f) (:y1 f))))) sticky))
-        probe (take-rows slots y-top (- h head-h all-pin-h))
+        ; sticky (not docked) frames below the viewport pin to its bottom edge
+        floating (filter (fn [f] (not (:dock? f))) sticky)
+        all-pin-h (+ dock-h (reduce + 0 (map (fn [f] (reduce + 0 (map (fn [y] (size-of (nth slots y))) (range (:y0 f) (:y1 f))))) floating)))
+        probe (take-rows slots y-top (- h head-h all-pin-h) limit)
         probe-end (if (empty? probe) y-top (inc (last probe)))
-        pinned (filter (fn [f] (>= (:y0 f) probe-end)) sticky)
-        pin-ys (vec (mapcat (fn [f] (range (:y0 f) (:y1 f))) pinned))
+        pinned (filter (fn [f] (>= (:y0 f) probe-end)) floating)
+        pin-ys (vec (concat (mapcat (fn [f] (range (:y0 f) (:y1 f))) pinned) dock-ys))
         pin-h (reduce + 0 (map (fn [y] (size-of (nth slots y))) pin-ys))
-        body (take-rows slots y-top (- h head-h pin-h))
+        body (take-rows slots y-top (- h head-h pin-h) (if (empty? pinned) limit (min limit (:y0 (first pinned)))))
         ys (vec (concat head-ys body pin-ys))
         vys (vec (reductions-of (map (fn [y] (size-of (nth slots y))) ys)))
         shown (vec (map (fn [i] [(nth ys i) (nth slots (nth ys i)) (nth vys i)]) (range (count ys))))
@@ -239,4 +260,27 @@
            :lines (mapv line-of shown)
            :frames (vec (keep frame-view (concat frames sticky)))
            :slot-count n
-           :slot-top y-top)))
+           :slot-top y-top
+           ; what a minimap needs: the body's slot range and the whole screen
+           :slot-end (if (empty? body) y-top (inc (last body)))
+           :screen {:slots slots :limit limit})))
+
+; ─── the minimap: the whole screen, one bar per slot ────────────────────────
+;
+; A miniature of what the presentation lays out (not of the text): each slot
+; is a bar as wide as its text, coloured by its role; headings carry their
+; words. The lens is the body the viewport shows. Generic: any presentation
+; has one.
+
+(defn minimap
+  "{:bars [{:role kw :w cells :size rows :label s?}] :top y :end y :limit n}."
+  [p ed]
+  (let [v (render p ed)
+        {:keys [slots limit]} (:screen v)
+        tx (:text ed)
+        bar (fn [s]
+              (let [txt (if (= :text (:kind s)) (t/line tx (:row s)) (join "" (map :text (:segs s))))
+                    role (or (:role s) :text)]
+                (merge {:role role :w (count (trim txt)) :size (or (:size s) 1) :row (slot-row s)}
+                       (if (contains? #{:title :question} role) {:label (trim txt)} {}))))]
+    {:bars (vec (map bar (take limit slots))) :top (:slot-top v) :end (:slot-end v) :limit limit}))

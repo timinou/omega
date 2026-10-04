@@ -167,7 +167,7 @@
   (let [code (join " · " (map (fn [r] (trim (line-of ctx r))) (range (inc (:from o)) (dec (:to o)))))
         nres (if (some? res) (count (filter (fn [r] (starts-with? (line-of ctx r) ":")) (range (:from res) (:to res)))) 0)]
     (p/line-mark (:from o)
-                 [{:text "    ⌁ " :kind :tool-glyph} {:text (clip code 84) :kind :tool}
+                 [{:text "    ⌁ " :kind :tool-glyph} {:text (clip code (- (measure-of ctx) 18)) :kind :tool}
                   {:text (if (pos? nres) (str "   ⇒ " nres " line" (if (= 1 nres) "" "s") " ▸") "") :kind :comment}]
                  (:key o) {:role :tool})))
 
@@ -229,8 +229,37 @@
                  (p/present k ctx)))
              (filter (fn [k] (>= (:from k) 4)) (:kids o)))))))
 
+; ─── the composer: docked to the bottom like a chat box; grows with the draft ─
+
+(defn drafting? [ed]
+  (let [mb (:minibuf ed)] (and (some? mb) (= :prompt (:kind mb)))))
+
+(defn present-composer
+  "Always at the bottom of the pane (a dock, not a sticky). The draft is
+   drawn in it: each line of it, wrapped to the measure, the caret at its end.
+   S-Enter starts a new line; Enter sends."
+  [o ctx]
+  (let [ed (:ed ctx)
+        to (str (:prompt (:minibuf ed)))
+        rows (if (drafting? ed)
+               (let [ls (split (str (:text (:minibuf ed)) "▏") "\n")
+                     w (- (measure-of ctx) 4)]
+                 (vec (mapcat (fn [i]
+                                (let [wr (wrap-segs [{:text (nth ls i) :kind :draft}] w)
+                                      wr (if (empty? wr) [[{:text "" :kind :draft}]] wr)]
+                                  (map (fn [j] (p/line-mark (:from o) (into [{:text (if (and (zero? i) (zero? j)) "▌ " "  ") :kind :keyword}] (nth wr j))
+                                                            (str (:key o) "/d" i "." j) {:role :draft}))
+                                       (range (count wr)))))
+                              (range (count ls)))))
+               [(p/line-mark (:from o) [{:text "▌ " :kind :keyword} {:text "i writes to the task" :kind :comment}] (str (:key o) "/hint") {:role :draft})])
+        head (p/line-mark (:from o)
+                          [{:text (if (drafting? ed) (str " " to) " say ▸") :kind :label}
+                           {:text (if (drafting? ed) "   Enter sends · S-Enter new line · Esc leaves" "") :kind :comment}]
+                          (str (:key o) "/head") {:role :label})]
+    (p/dock (:key o) [(p/card (:key o) (if (drafting? ed) "drafting" "composer") (into [head] rows))])))
+
 (def table
-  (merge om/table {:doc present-doc :conv/thread present-thread}))
+  (merge om/table {:doc present-doc :conv/thread present-thread :omega/composer present-composer}))
 
 (def isa (merge p/ISA {:conv/thread :section :omega/ask :section}))
 
@@ -246,7 +275,7 @@
 
 (defn focus-of [ed tree]
   [(:key (rd/object-at-row tree (first (c/cursor ed)))) (:cols (:view ed))
-   (when (some? (:minibuf ed)) (:text (:minibuf ed)))])
+   (when (some? (:minibuf ed)) [(:prompt (:minibuf ed)) (:text (:minibuf ed))])])
 
 (def presentation
   {:name "conversation" :fill? true :sticky-heads? true

@@ -3,12 +3,12 @@
  * weight, colour and indentation — the way Genera and a VT100 did it — not
  * from proportional faces. */
 body { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; margin: 0; }
-#frame { display: grid; overflow: hidden; grid-template-columns: 38ch minmax(0, 1fr) 30ch; min-height: 0; }
+#frame { display: grid; overflow: hidden; grid-template-columns: 38ch minmax(0, 1fr) 24ch; min-height: 0; }
 .pane { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; overflow: hidden; border-right: 1px solid var(--oat); }
 .pane .page { position: relative; overflow: hidden; padding: 4px 0 0 .5rem; }
 .pane .lines, .pane .frames { position: absolute; inset: 4px 0 0 .5rem; }
 .pane .lines { z-index: 2; }
-.pane .line { position: absolute; left: 0; right: 0; white-space: pre; overflow: hidden; line-height: var(--row); padding-right: 1rem; }
+.pane .line { position: absolute; left: 0; right: .6rem; text-overflow: clip; white-space: pre; overflow: hidden; line-height: var(--row); padding-right: 1rem; }
 .pane .frame { position: absolute; left: -.3rem; right: .6rem; border-radius: 6px; z-index: 1; }
 .pane .caret { position: absolute; left: .1rem; width: 3px; background: var(--rose); z-index: 3; border-radius: 2px; }
 .pane .pane-status { font: .74rem var(--font-code); color: var(--crema); padding: .2rem .6rem; border-top: 1px solid var(--oat); white-space: nowrap; overflow: hidden; }
@@ -43,11 +43,20 @@ body { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; margin: 
 .frame.tone-ask { background: var(--rose-bg); }
 .line.ornament { cursor: pointer; }
 
-#questions { padding: .8rem .8rem; font: .86rem/1.5 var(--font-code); overflow: hidden; }
-#questions .label { color: var(--apricot); font-weight: 700; letter-spacing: .08em; font-size: .78rem; margin-bottom: .5rem; }
-#questions .q { color: var(--crema); padding: .2rem .4rem; border-radius: 4px; display: flex; gap: .5rem; }
-#questions .q.at { color: var(--espresso); background: var(--oat); font-weight: 700; }
-#questions .n { color: var(--lavender); }
+/* the minimap: bars per screen row, coloured by role; your questions carry
+   their words; the lens is what the pane shows */
+#minimap { position: relative; overflow: hidden; padding: 8px 12px; cursor: grab; user-select: none; background: var(--snow); }
+#minimap .bars { position: absolute; inset: 8px 12px; }
+#minimap .bar { position: absolute; left: 0; border-radius: 1px; background: var(--oat); }
+#minimap .bar.r-answer { background: var(--latte); opacity: .55; }
+#minimap .bar.r-tool { background: var(--mist); opacity: .5; }
+#minimap .bar.r-label { background: var(--apricot); opacity: .6; }
+#minimap .bar.r-title, #minimap .bar.r-question { background: var(--roast); }
+#minimap .bar.r-draft, #minimap .bar.r-text { background: var(--oat); }
+#minimap .maplabel { position: absolute; left: 0; right: 0; transform: translateY(-1px); font: 700 10px/1.1 var(--font-code); color: var(--espresso);
+  background: color-mix(in srgb, var(--snow) 80%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 1px 2px; }
+#minimap .lens { position: absolute; left: 6px; right: 6px; border-radius: 4px; background: color-mix(in srgb, var(--rose) 10%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--rose); pointer-events: none; transform: translateY(8px); }
 footer { border-top: 1px solid var(--oat); background: var(--snow-2); font: .82rem var(--font-code); padding: .3rem .8rem; min-height: 1.5em; }
 #minibuf { color: var(--roast); }
 #sink { position: fixed; opacity: 0; width: 1px; height: 1px; left: 0; bottom: 0; }

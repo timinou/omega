@@ -123,6 +123,9 @@
 
 (declare handle*)
 
+(defn- presented? [ed] (contains? #{"omega" "conversation"} (:name (:presentation ed))))
+
+
 ; ─── type-to-compose: the say block is where you write ─────────────────────
 ;
 ; On the composer row of a read-only task view, a printable key does not run a
@@ -157,10 +160,47 @@
 (defn- typed-char [ev]
   (let [k (:key ev)] (when (and (= :key (:type ev)) (string? k) (= 1 (count k)) (not= k " ")) k)))
 
+
+(defn- prompting? [ed] (and (= :command (:mode ed)) (= :prompt (:kind (:minibuf ed)))))
+
+; ─── scrolling by screen rows (a slot), not by text rows ───────────────────
+;
+; A wrapped answer is ONE text row drawn as many slots, so scrolling by text
+; rows would jump over it. The view keeps an anchor {:row r :off k} (the k-th
+; slot of row r is at the top); any motion that moves :top drops it.
+
+(defn- scroll-to-slot
+  "Put slot y at the top; if the cursor leaves the body, it follows (Vim C-e)."
+  [ed y]
+  (let [pr (:presentation ed)
+        v (p/render pr ed)
+        {:keys [slots limit]} (:screen v)
+        y (max 0 (min y (dec (max 1 limit))))
+        r (p/slot-row (nth slots y))
+        base (p/first-slot-of-row slots r)
+        ed2 (assoc ed :view (assoc (:view ed) :top r :anchor {:row r :off (- y base)}))
+        v2 (p/render pr ed2)
+        body (filter (fn [l] (some? (:row l))) (:lines v2))
+        cur (first (c/cursor ed2))
+        shown (set (map :row body))]
+    (if (or (contains? shown cur) (empty? body)) ed2
+      (let [q [(if (> y (:slot-top v)) (:row (first body)) (:row (last body))) 0]]
+        (assoc ed2 :sels [{:anchor q :head q}] :primary 0)))))
+
 (defn handle [ed ev]
-  (if (and (= "omega" (:name (:presentation ed))) (some? (typed-char ev)) (on-composer? ed) (some? (task-id ed)))
-    (compose-key ed (typed-char ev))
-    (handle* ed ev)))
+  (cond
+    (= :scroll-slots (:type ev)) (scroll-to-slot ed (+ (:slot-top (p/render (:presentation ed) ed)) (:delta ev)))
+    (= :scroll-to-slot (:type ev)) (scroll-to-slot ed (:y ev))
+    ; a draft is several lines: S-Enter breaks the line (Enter still sends)
+    (and (prompting? ed) (= :key (:type ev)) (= "S-Enter" (:key ev)))
+      (update-in ed [:minibuf :text] str "\n")
+    ; `i` anywhere in a presented task writes in its composer (chat-style)
+    (and (presented? ed) (= :key (:type ev)) (= "i" (:key ev)) (= :normal (:mode ed)) (empty? (:pending ed))
+         (some? (task-id ed)) (some? (composer-row ed)))
+      (compose-key ed "")
+    (and (presented? ed) (some? (typed-char ev)) (on-composer? ed) (some? (task-id ed)))
+      (compose-key ed (typed-char ev))
+    :else (handle* ed ev)))
 
 (defn- handle* [ed ev]
   (let [new (m/handle ed ev)
@@ -175,7 +215,7 @@
   (let [v (p/render (:presentation ed) ed)
         lighters (vec (map (fn [k] (:lighter (get MODES k))) (:modes ed)))]
     (cond-> (assoc v :modes lighters :presentation (:name (:presentation ed)))
-      (and (some? (:minibuf v)) (= "omega" (:name (:presentation ed))) (om/inline-minibuf? ed))
+      (and (some? (:minibuf v)) (presented? ed) (= :prompt (:kind (:minibuf ed))))
         (assoc-in [:minibuf :inline?] true))))
 
 (defn render-text
