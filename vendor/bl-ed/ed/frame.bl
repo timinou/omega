@@ -50,7 +50,8 @@
   (:require [ed.main :as m]
             [ed.core :as c]
             [ed.docs :as docs]
-            [ed.pkg :as pkg]))
+            [ed.pkg :as pkg]
+            [ed.memo :as memo]))
 
 ; ─── panes ─────────────────────────────────────────────────────────────────
 
@@ -248,6 +249,9 @@
 
 ; ─── drawing ───────────────────────────────────────────────────────────────
 
+(def ^:private rendered-view
+  (memo/identity-pair 8 (fn [f ed] (f ed))))
+
 (defn render
   "What the host paints:
      {:layout name :focus id
@@ -263,9 +267,9 @@
                               ed (editor fr of)
                               f (some (fn [q] (get-in q [:provides :views kind])) (reverse (pkg/packages ed)))]
                           {:id (:id p) :width (:width p) :kind :view :view-kind kind :of of
-                           :view (when (some? f) (f ed))})
+                           :view (when (some? f) (rendered-view f ed))})
                         {:id (:id p) :width (:width p) :kind :editor :focus? (= (:id p) (:focus fr))
-                         :view (m/render (editor fr (:id p)))}))
+                         :view (rendered-view m/render (editor fr (:id p)))}))
                     (panes fr)))})
 
 ; ─── the layouts packages provide ──────────────────────────────────────────

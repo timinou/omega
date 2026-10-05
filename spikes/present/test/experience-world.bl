@@ -1,0 +1,38 @@
+; An isolated world for loading/scrolling measurements and controlled updates.
+; bin/bl run spikes/present/test/experience-world.bl -- 8792
+; Uses the real provider/server/page, never recovers or executes tasks.
+(ns pp.experience-world
+  (:require [omega.env :as env]
+            [omega.ed.providers :as pv]
+            [omega.loop :as loop]
+            [bl-ed.serve :as serve]))
+
+(def port (or (first (BeamLisp/argv)) "8792"))
+(def root (str "/tmp/omega-experience-" (erlang/unique_integer (list :positive))))
+(File/mkdir_p! root)
+(def e (env/open {:clock (fn [] 2000000)}))
+(def sys {:env e :root root})
+(def cache (atom {:entries {} :stats {}}))
+(env/tx! e [{:db/id -1 :task/id "t-1" :task/goal "Read the latest answer" :task/title "Fixture alpha" :task/status :done :task/at 1280000}
+            {:db/id -2 :task/id "t-2" :task/goal "Keep the reader's place" :task/title "Fixture beta" :task/status :done :task/at 1280000}])
+(doseq [id ["t-1" "t-2"]]
+  (let [t (env/eid e :task/id id)]
+    (env/tx! e
+      (vec (for [n (range 600)]
+             {:db/id (- -1 n) :turn/id (str id "/" n) :turn/task t :turn/n n
+              :turn/role (if (= 0 (mod n 10)) :user :assistant)
+              :turn/content [{:type :text :text (if (= 0 (mod n 10))
+                                                   (str "Question " n ": what changed in " id "?")
+                                                   (str "Answer " n " for " id ". A wrapped reading line keeps its source identity while the viewport moves smoothly. New content must never displace a reader who is looking at an earlier answer."))}]})))))
+(def providers
+  (assoc (pv/providers sys {:cache cache}) "proof"
+         {:read (fn [_ _] {:text (pr-str (pv/cache-stats cache)) :read-only? true :title "fixture cache statistics"})
+          :rev (fn [_ _] "fixed")}))
+(def server (serve/start! {:port (erlang/binary_to_integer port) :root root
+                          :web (str (File/cwd!) "/vendor/bl-ed/web") :providers providers
+                          :intents {"proof/append" (fn [{:keys [id text]}]
+                                                   (if (contains? #{"t-1" "t-2"} id)
+                                                     (do (loop/record! sys id :assistant [{:type :text :text text}]) {})
+                                                     {:ok false :message "unknown fixture task"}))}}))
+(println (str "experience fixture: " (:url server) "?file=omega:overview&use=present&layout=inbox"))
+(receive :never nil)

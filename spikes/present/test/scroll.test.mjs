@@ -13,6 +13,7 @@ const out = path.resolve(process.env.PP_OUT || new URL("../web/out", import.meta
 const load = (m) => import(pathToFileURL(path.join(out, m)).href);
 const P = await load("pp.main.mjs");
 const R = await load("rt.mjs");
+const V = await load("pp.present.mjs");
 const K = R.kw;
 const get = (m, k) => m.get(K(k));
 const ev = (...kv) => R.hashMap(...kv.map((x, i) => (i % 2 === 0 ? K(x) : x)));
@@ -159,5 +160,29 @@ test("fractional reading position survives repeated updates and a narrow resize"
   ed = P.d_handle(ed, ev("type", K("resize"), "height", 16, "cols", 32));
   assert.equal(get(get(get(ed, "view"), "anchor"), "row"), sourceRow);
   assert.equal(pin(ed), null);
+});
+
+
+test("frame consumers reuse one presentation model for the same immutable editor", () => {
+  const ed = open(8), p = get(ed, "presentation");
+  const rendered = V.d_render(p, ed);
+  V.d_minimap(p, ed);
+  assert.equal(V.d_render(p, ed), rendered, "a minimap shares the body's derived model");
+  const changed = ed.assoc(K("view"), get(ed, "view").assoc(K("height"), 12));
+  assert.notEqual(V.d_render(p, changed), rendered, "changed input cannot use the old view");
+  assert.equal(V.d_render(p, ed), rendered, "another pane/viewport does not evict the first view immediately");
+  for (let i = 0; i < 12; i++) {
+    V.d_render(p, ed.assoc(K("view"), get(ed, "view").assoc(K("height"), 12 + i)));
+    assert.equal(V.d_render(p, ed), rendered, "a repeatedly used pane stays hot across transient scroll states");
+  }
+});
+
+test("presentation model memo retains a bounded number of editor snapshots", () => {
+  const ed = open(8), p = get(ed, "presentation");
+  const rendered = V.d_render(p, ed);
+  for (let i = 0; i <= V.d_RENDER_CACHE_SIZE; i++) {
+    V.d_render(p, ed.assoc(K("view"), get(ed, "view").assoc(K("height"), 12 + i)));
+  }
+  assert.notEqual(V.d_render(p, ed), rendered, "old snapshots are evicted, not retained forever");
 });
 

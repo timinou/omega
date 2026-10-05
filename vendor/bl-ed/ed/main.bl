@@ -104,6 +104,24 @@
    reader, compiler and macros, running in this page (priv/lib/js/eval.bl) —
    with the `ed` namespace bound to the live editor API. Returns the editor
    with the value (or error) in the echo area.
+(declare minibuf-key)
+
+(defn- language-answer
+  "The host's answer to :await-language. Resume only if the parked ask is the
+   current one AND the user is still where they were; otherwise drop it."
+  [ed ev]
+  (let [aw (:awaiting ed)]
+    (cond
+      (or (nil? aw) (not= (:token aw) (:token ev))) ed
+      (= :language-failed (:type ev))
+        (c/message (assoc ed :awaiting nil) (str "language failed to load (" (:message ev) ") — Enter retries"))
+      (and (= :command (:kind aw)) (= :command (:mode ed)) (= (:src aw) (:text (:minibuf ed))) (= (:path aw) (:path ed)))
+        (minibuf-key (assoc ed :awaiting nil) "Enter")
+      (and (= :cell (:kind aw)) (= :normal (:mode ed)) (= (:path aw) (:path ed)) (= (:rev aw) (:rev ed))
+           (= (:id aw) (:id (c/block-at-cursor ed))))
+        (km/run-command (assoc ed :awaiting nil) :eval-cell)
+      :else (assoc ed :awaiting nil))))
+
 
    Evaluation is a host capability (`js/eval-ed`): the editor stays a pure
    function of its events, and a host without an evaluator answers with an
@@ -117,6 +135,9 @@
 
 ; ─── the palette ────────────────────────────────────────────────────────────
 
+      ; the language is still loading: keep the draft, ask the host to wait,
+      ; and retry on :language-ready (see await-language)
+      (:pending? out) (cmds/await-language ed {:kind :command :src src :path (:path ed)})
 (defn- fuzzy?
   "Are the graphemes of `q` a subsequence of `s` (case-insensitive)?"
   [q s]
@@ -143,8 +164,8 @@
 (defn- minibuf-key [ed k]
   (let [mb (:minibuf ed)]
     (cond
-      (= k "Escape") (assoc ed :mode :normal :minibuf nil)
-      (= k "Backspace") (assoc-in ed [:minibuf :text] (let [s (:text mb)] (if (empty? s) s (subs s 0 (dec (count s))))))
+      (= k "Escape") (assoc ed :mode :normal :minibuf nil :awaiting nil)
+      (= k "Backspace") (assoc-in (assoc ed :awaiting nil) [:minibuf :text] (let [s (:text mb)] (if (empty? s) s (subs s 0 (dec (count s))))))
       (and (= k "ArrowDown") (= :palette (:kind mb))) (update-in ed [:minibuf :sel] (fn [i] (min (inc (or i 0)) (max 0 (dec (count (palette-matches ed)))))))
       (and (= k "ArrowUp") (= :palette (:kind mb))) (update-in ed [:minibuf :sel] (fn [i] (max 0 (dec (or i 0)))))
       (and (= k "Enter") (= :search (:kind mb)))
@@ -157,7 +178,7 @@
             (if (nil? m) (assoc ed :mode :normal :minibuf nil)
               (km/run-command (assoc ed :mode :normal :minibuf nil) (:name m))))
           (eval-command ed (:text mb)))
-      (= 1 (count k)) (-> ed (assoc-in [:minibuf :text] (str (:text mb) k)) (assoc-in [:minibuf :sel] 0))
+      (= 1 (count k)) (-> (assoc ed :awaiting nil) (assoc-in [:minibuf :text] (str (:text mb) k)) (assoc-in [:minibuf :sel] 0))
       :else ed)))
 
 ; ─── events ─────────────────────────────────────────────────────────────────
@@ -209,10 +230,10 @@
   (let [ty (:type ev)]
     (cond
       (= ty :key)
-        (if (contains? #{:command :palette} (:mode ed)) (minibuf-key ed (:key ev)) (docs/guard ed (km/key-event ed (:key ev))))
+        (if (contains? #{:command :palette} (:mode ed)) (minibuf-key ed (:key ev)) (docs/guard (if (= "Escape" (:key ev)) (assoc ed :awaiting nil) ed) (km/key-event ed (:key ev))))
       (= ty :text)
         (cond
-          (contains? #{:command :palette} (:mode ed)) (assoc-in ed [:minibuf :text] (str (:text (:minibuf ed)) (:text ev)))
+          (contains? #{:command :palette} (:mode ed)) (assoc-in (assoc ed :awaiting nil) [:minibuf :text] (str (:text (:minibuf ed)) (:text ev)))
           (= :insert (:mode ed)) (docs/guard ed (c/insert-at-heads ed (:text ev)))
           ; a paste in normal mode replaces the selections (Helix R)
           :else (docs/guard ed (c/replace-selections ed (fn [_ _] (:text ev)) nil)))
@@ -225,6 +246,7 @@
       (= ty :resize) (c/scroll-to-cursor (assoc-in ed [:view :height] (max 4 (:height ev))))
       (= ty :scroll) (assoc-in ed [:view :top] (max 0 (min (:top ev) (dec (t/line-count (:text ed))))))
       (= ty :click)
+      (contains? #{:language-ready :language-failed} ty) (language-answer ed ev)
         (let [p (t/clamp (:text ed) (:pos ev))]
           (assoc ed :sels [{:anchor (if (:extend? ev) (:anchor (c/primary ed)) p) :head p}] :primary 0 :pending []))
       (= ty :saved)

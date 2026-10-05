@@ -28,6 +28,7 @@
   (:require [ed.main :as m]
             [ed.text :as t]
             [ed.core :as c]
+            [ed.memo :as memo]
             [pp.read :as rd]))
 
 ; ─── marks ─────────────────────────────────────────────────────────────────
@@ -211,7 +212,7 @@
     (if (or (>= y end) (>= covered frac)) out
       (recur (inc y) (+ covered (size-of (nth slots y))) (conj out y)))))
 
-(defn render
+(defn- render-model
   "ed.main/render's view model, drawn through presentation `p`. :lines are
    today's line maps for text slots; ornament slots add {:ornament? :src :key
    :role :size}. Every line carries :vy (its row offset in the viewport);
@@ -330,6 +331,13 @@
            :slot-end (if (empty? body) y-top (inc (last body)))
            :screen {:slots slots :limit limit})))
 
+; Drawing, scroll/reveal and a linked minimap ask for the same model. Keep a
+; bounded identity memo across those consumers (and the unchanged rail), not
+; just the last layout: alternating panes must not evict each other's view.
+(def RENDER-CACHE-SIZE 8)
+(def ^:private cached-render (memo/identity-pair RENDER-CACHE-SIZE render-model))
+(defn render [p ed] (cached-render p ed))
+
 ; ─── the minimap: the whole screen, one bar per slot ────────────────────────
 ;
 ; A miniature of what the presentation lays out (not of the text): each slot
@@ -348,4 +356,4 @@
                     role (or (:role s) :text)]
                 (merge {:role role :w (count (trim txt)) :size (or (:size s) 1) :row (slot-row s)}
                        (if (contains? #{:title :question} role) {:label (trim txt)} {}))))]
-    {:bars (vec (map bar (take limit slots))) :top (:slot-top v) :end (:slot-end v) :limit limit}))
+    {:bars (vec (map bar (take limit slots))) :top (:slot-top v) :end (:slot-end v) :frac (:frac v) :limit limit}))

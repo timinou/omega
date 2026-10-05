@@ -336,3 +336,95 @@ test("round trip: every repo .bl.org is reproduced byte-for-byte", () => {
     assert.equal(covered, s.split("\n").length, "partition of " + f);
   }
 });
+
+// ─── deferred language: the host answers {:pending? true} until loaded ──────
+// BL keeps the draft, emits ONE generic :await-language effect, and resumes
+// (or drops) on the host's answer. Uses the same BL_HOST hooks as the page.
+function withPending(fn) {
+  const real = globalThis.BL_HOST["eval-ed"], realC = globalThis.BL_HOST["eval-cells"];
+  const state = { ready: false };
+  globalThis.BL_HOST["eval-ed"] = (s, api) => (state.ready ? real(s, api) : R.hashMap(K("pending?"), true));
+  globalThis.BL_HOST["eval-cells"] = (c) => (state.ready ? realC(c) : R.hashMap(K("pending?"), true));
+  try { return fn(state); } finally { globalThis.BL_HOST["eval-ed"] = real; globalThis.BL_HOST["eval-cells"] = realC; }
+}
+const fxKinds = (ed) => { const [e2, fx] = M.d_take_effects(ed).toArray(); return [e2, fx.toArray().map((e) => get(e, "kind").name)]; };
+const answer = (ed, ty, token, message) => M.d_handle(ed, R.hashMap(K("type"), K(ty), K("token"), token, ...(message ? [K("message"), message] : [])));
+const tokenOf = (ed) => get(get(ed, "awaiting"), "token");
+
+test("deferred language: Enter keeps the draft, one effect, replays once on ready", () => withPending((st) => {
+  let ed = boot(SAMPLE);
+  [ed] = fxKinds(ed);
+  ed = type(key(ed, ":"), "(count (ed/outline))");
+  ed = key(ed, "Enter");
+  assert.equal(mode(ed), "command", "draft kept");
+  let kinds; [ed, kinds] = fxKinds(ed);
+  assert.deepEqual(kinds, ["await-language"]);
+  ed = key(ed, "Enter");                                   // impatient second Enter
+  [ed, kinds] = fxKinds(ed);
+  assert.deepEqual(kinds, [], "no duplicate effect");
+  const t = tokenOf(ed);
+  st.ready = true;
+  ed = answer(ed, "language-ready", t);
+  assert.equal(msg(ed), "3"); assert.equal(mode(ed), "normal");
+  ed = answer(ed, "language-ready", t);                    // a replayed answer is inert
+  assert.equal(msg(ed), "3");
+}));
+
+test("deferred language: Escape or an edit cancels the parked run", () => withPending((st) => {
+  let ed = boot(SAMPLE);
+  ed = key(type(key(ed, ":"), "(ed/goto 5)"), "Enter");
+  const t = tokenOf(ed);
+  ed = key(ed, "Escape");
+  st.ready = true;
+  ed = answer(ed, "language-ready", t);
+  assert.deepEqual(heads(ed), [[0, 0]], "cancelled run never executed");
+  st.ready = false;
+  ed = key(type(key(ed, ":"), "(ed/goto 5)"), "Enter"); const t2 = tokenOf(ed);
+  ed = type(ed, "0");                                      // edit the draft
+  st.ready = true;
+  ed = answer(ed, "language-ready", t2);
+  assert.equal(mode(ed), "command", "edited draft is not run");
+  assert.deepEqual(heads(ed), [[0, 0]]);
+}));
+
+test("deferred language: a failed load keeps the draft and says so; Enter retries", () => withPending((st) => {
+  let ed = boot(SAMPLE);
+  ed = key(type(key(ed, ":"), "(count (ed/outline))"), "Enter");
+  ed = answer(ed, "language-failed", tokenOf(ed), "net");
+  assert.equal(mode(ed), "command"); assert.match(msg(ed), /language failed to load \(net\)/);
+  let kinds; [ed, kinds] = fxKinds(M.d_handle(ed, R.hashMap(K("type"), K("key"), K("key"), "Enter")));
+  assert.deepEqual(kinds.slice(-1), ["await-language"], "Enter retries with a fresh effect");
+}));
+
+test("deferred language: a local cell keeps its text and resumes once; edits cancel stale results", () => withPending((st) => {
+  const source = "#+begin_src beam-lisp :id a\n(+ 1 2)\n#+end_src";
+  const local = (e) => M.d_handle(e, R.hashMap(K("type"), K("placements"), K("cells"),
+    R.hashMap("a", R.hashMap(K("place"), K("local")))));
+  let ed = key(local(boot(source)), "C-Enter");
+  const token = tokenOf(ed);
+  assert.equal(get(get(ed, "awaiting"), "kind"), K("cell"));
+  assert.equal(text(ed), source, "a parked cell has not written a result");
+  let effects;
+  [ed, effects] = fxKinds(ed);
+  assert.equal(effects.filter((k) => k === "await-language").length, 1);
+  [ed, effects] = fxKinds(key(ed, "C-Enter"));
+  assert.equal(effects.filter((k) => k === "await-language").length, 0);
+  st.ready = true;
+  ed = answer(ed, "language-ready", token);
+  assert.match(text(ed), /#\+RESULTS: a\n: 3/);
+  const after = text(ed);
+  assert.equal(text(answer(ed, "language-ready", token)), after);
+
+  st.ready = false;
+  ed = key(local(boot(source)), "C-Enter");
+  const obsolete = tokenOf(ed);
+  ed = keys(ed, "j A");
+  ed = type(ed, " ");
+  ed = key(ed, "Escape");
+  const changed = text(ed);
+  st.ready = true;
+  ed = answer(ed, "language-ready", obsolete);
+  assert.equal(text(ed), changed, "a late result cannot overwrite a cell edited while loading");
+  assert.ok(!text(ed).includes("#+RESULTS"));
+}));
+

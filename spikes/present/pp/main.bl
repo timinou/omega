@@ -292,6 +292,9 @@
 (defn- draw
   "The document, drawn through its presentation (nil: no presentation → text)."
   [ed]
+    ; A resize changes the available room, not what the reader chose to see.
+    (and (= :resize (:type ev)) (or (:anchor (:view ed)) (pinned? ed)))
+      (assoc-in ed [:view :height] (max 4 (:height ev)))
   (when (and (some? (:presentation ed)) (not= "text" (:name (:presentation ed))))
     (let [v (p/render (:presentation ed) ed)
           lighters (vec (map (fn [k] (:lighter (get MODES k))) (:modes ed)))]

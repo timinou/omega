@@ -18,7 +18,7 @@ case "$head" in
 esac
 out="$here/web/out"
 ${RUN:-} "$root/bin/bl" js build js.eval -p "$tree/priv/lib" -p "$tree/priv/boot" --stub lower --with reader --host run --out "$out"
-${RUN:-} "$root/bin/bl" js build ed.main -p "$here" --host eval-ed,eval-cells --out "$out"
+${RUN:-} "$root/bin/bl" js build ed.frame -p "$here" --host eval-ed,eval-cells --out "$out"
 # the language's own macros, read by the page at start (boot.mjs)
 mkdir -p "$out/src/priv/boot"
 cp "$tree/priv/boot/core.bl" "$tree/priv/boot/sugar.bl" "$out/src/priv/boot/"

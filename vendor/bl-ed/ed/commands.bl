@@ -293,6 +293,18 @@
                    {:id (:id x) :code (join "\n" (subvec lines (:code-from x) (:code-to x)))}))
                (:blocks (:struct ed))))))
 
+(defn await-language
+  "Park `what` (the draft or cell that needs the language) and emit the
+   generic :await-language effect. A second ask for the same thing while one
+   is parked is a no-op (no duplicate effect, no double run)."
+  [ed what]
+  (if (= what (dissoc (:awaiting ed) :token))
+    (c/message ed "waiting for the language…")
+    (let [t (inc (or (:await-seq ed) 0))]
+      (-> ed (assoc :await-seq t :awaiting (assoc what :token t))
+          (c/effect {:kind :await-language :token t})
+          (c/message "language loading — will run when ready (Esc cancels)")))))
+
 (defn- eval-cell-request
   "Evaluate the cell under the cursor and write its #+RESULTS.
 
@@ -309,8 +321,11 @@
       (or (nil? b) (not= :cell (:kind b))) (c/message ed "Not in a beam-lisp cell")
       (= :local (:place pl))
         (let [out (try (js/eval-cells (local-cells-upto ed b)) (catch e {:err (ex-message e)}))]
-          (if (contains? out :err)
+          (cond
+           (:pending? out) (await-language ed {:kind :cell :path (:path ed) :rev (:rev ed) :id (:id b)})
+           (contains? out :err)
             (c/message ed (str "error: " (:err out)))
+           :else
             (let [v (get (:results out) (:id b) "")
                   new-lines (spans/write-results (:lines (:text ed)) :org {(:id b) v})
                   ed2 (c/replace-text ed (join "\n" new-lines))]
@@ -462,7 +477,7 @@
    :describe-key {:doc "Show which command a key runs." :run (fn [ed] (assoc ed :describe-next true :message "Describe key: press a key…"))}
    :help {:doc "Show the keymap for the current mode." :run (fn [ed] (assoc ed :overlay :help))}
    :outline {:doc "Show the document outline." :run (fn [ed] (assoc ed :overlay (if (= :outline (:overlay ed)) nil :outline)))}
-   :close-overlay {:doc "Close the overlay / clear the message." :run (fn [ed] (assoc ed :overlay nil :message nil :pending []))}})
+   :close-overlay {:doc "Close the overlay / clear the message / cancel a parked run." :run (fn [ed] (assoc ed :overlay nil :message nil :pending [] :awaiting nil))}})
 
 (defn lookup
   "A command: the user's (ed/defcmd) over loaded packages' over the core's."

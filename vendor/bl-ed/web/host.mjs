@@ -1,4 +1,4 @@
-// apps/bl-ed/web/host.mjs — the browser host for bl-ed.
+// vendor/bl-ed/web/host.mjs — the browser host for bl-ed.
 //
 // Everything the editor DECIDES is Beam Lisp (ed.* compiled by the sync JS
 // profile). This file only:
@@ -19,24 +19,206 @@
 // pane is the bl-ed this file always drew — same DOM, same ids. A layout
 // (:(ed/layout "inbox"), ?layout=inbox) adds panes beside it.
 
-// Beam Lisp itself (reader + compiler + macros, compiled to JS) for the `:`
-// command line: started before the editor module loads, so `js/eval-ed` is
-// a host fn the editor can call (priv/lib/js/repl.mjs).
-const { start } = await import("./out/repl.mjs");
-const repl = await start(async (f) => (await fetch("./out/src/" + f)).text());
-globalThis.BL_HOST = Object.assign(globalThis.BL_HOST || {}, {
-  "eval-ed": (src, api) => repl.evalWith(src, "ed", api),
-  "eval-cells": (cells) => repl.evalCells(cells),
-});
-window.blRepl = repl;
+// The exported primitives below hold the host's ordering/timing policy
+// (latest-request-wins, language readiness, elapsed-time easing, one render per
+// frame value). They do not touch the DOM: test/host.test.mjs drives this same
+// code under Node, and the page itself boots only where a document exists.
 
 import * as R from "./out/rt.mjs";
-const M = await import("./out/ed.main.mjs");
-const F = await import("./out/ed.frame.mjs");
+
+// ─── primitives ────────────────────────────────────────────────────────────
+
+/** Latest-request-wins per key (a pane). begin() aborts the key's previous
+    request; a BACKGROUND request (a revision refresh) never supersedes an
+    in-flight foreground one (a visit): it is skipped (returns null). */
+export function latestGate() {
+  const slots = new Map();
+  return {
+    begin(key, { background = false } = {}) {
+      const cur = slots.get(key);
+      if (background && cur && cur.fg) return null;
+      cur?.ctl.abort();
+      const ctl = new AbortController();
+      const slot = { ctl, fg: !background };
+      slots.set(key, slot);
+      return {
+        signal: ctl.signal,
+        current: () => slots.get(key) === slot && !ctl.signal.aborted,
+        done: () => { if (slots.get(key) === slot) slots.delete(key); },
+      };
+    },
+    cancel(key) { const s = slots.get(key); if (s) { s.ctl.abort(); slots.delete(key); } },
+    cancelAll() { for (const k of [...slots.keys()]) this.cancel(k); },
+    busy(key) { return slots.has(key); },
+  };
+}
+
+/** Run `run(signal)` as the latest request for `key`. Only a still-current,
+    still-`valid()` outcome reaches onValue/onError; a stale one (an older
+    visit, a pane that left or changed document) is dropped silently.
+    onDone(mine) fires last; mine=false when a newer request owns the key.
+    → "applied" | "failed" | "stale" | "skipped". */
+export async function latestRequest(gate, key, { background = false, run, valid = () => true, onStart, onValue, onError, onDone }) {
+  const t = gate.begin(key, { background });
+  if (!t) return "skipped";
+  onStart?.();
+  try {
+    const v = await run(t.signal);
+    if (!t.current() || !valid()) return "stale";
+    onValue(v);
+    return "applied";
+  } catch (err) {
+    if (!t.current() || !valid()) return "stale";
+    onError?.(err);
+    return "failed";
+  } finally {
+    const mine = t.current();
+    t.done();
+    onDone?.(mine);
+  }
+}
+
+/** The command-line language, loaded off the first-display critical path.
+    BL calls its hooks SYNCHRONOUSLY, so a hook never returns a Promise: until
+    ready, call() starts (or, after a failure, retries) the load and returns
+    notReady(state, error, name): an honest, visible "still loading". */
+export function createLanguage({ load, notReady, onChange = () => {} }) {
+  let state = "idle", error = null, repl = null, p = null;
+  const set = (s, e = null) => { state = s; error = e; onChange(s, e); };
+  function start() {
+    if (state === "ready") return Promise.resolve(repl);
+    if (state === "loading") return p;
+    set("loading");
+    p = (async () => {
+      try { repl = await load(); set("ready"); return repl; }
+      catch (e) { set("failed", e && e.message ? e.message : String(e)); return null; }
+    })();
+    return p;
+  }
+  return {
+    get state() { return state; },
+    get error() { return error; },
+    start,
+    call(name, ...args) {
+      if (state === "ready") return repl[name](...args);
+      // a failed load reports its error once, THEN retries; otherwise start and report "loading"
+      if (state === "failed") { const answer = notReady(state, error, name); start(); return answer; }
+      start();
+      return notReady(state, error, name);
+    },
+  };
+}
+
+/** Perform BL's {:kind :await-language} effect: wait for the language, then
+    answer with a plain event BL interprets (it owns whether the draft/cell
+    that asked is still the thing to retry). Only a vanished pane is the
+    host's business. Never throws; never dispatches twice per call. */
+export async function awaitLanguage(lang, { alive, answer }) {
+  let ok = false;
+  try { ok = (await lang.start()) != null && lang.state === "ready"; } catch { ok = false; }
+  if (!alive()) return false;
+  answer(ok ? { ready: true } : { ready: false, message: lang.error || "language failed to load" });
+  return true;
+}
+
+/** One render per frame value: memoised on frame identity, so watchers, glide
+    and layout metadata reuse the render the dispatch just painted. */
+export function memoFrame(render) {
+  let last, out, has = false;
+  return (fr) => { if (has && fr === last) return out; const v = render(fr); last = fr; out = v; has = true; return v; };
+}
+
+/** Elapsed-time exponential easing. At 60 Hz a frame covers 32 % of what is
+    left (the former fixed step); 120/144 Hz displays settle in the same time. */
+export const GLIDE_TAU_MS = -(1000 / 60) / Math.log(1 - 0.32);
+export function easeStep(rest, dtMs, tau = GLIDE_TAU_MS) {
+  if (Math.abs(rest) < 0.02) return rest;
+  const dt = Math.min(Math.max(dtMs, 0), 250);
+  return rest * (1 - Math.exp(-dt / tau));
+}
+
+/** "wheel" (a notch: glides) or "trackpad" (continuous small deltas: passed
+    through, since easing them again double-smooths). Line/page modes, classic
+    multiples of 120 and large whole-pixel deltas are notches. */
+export function classifyWheel(e) {
+  if (e.deltaMode !== 0) return "wheel";
+  if (typeof e.wheelDeltaY === "number" && e.wheelDeltaY !== 0 && e.wheelDeltaY % 120 === 0) return "wheel";
+  return Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 50 ? "wheel" : "trackpad";
+}
+
+/** Per-pane scroll glide. apply(id, rows) returns false once the pane is gone
+    (its glide is dropped); schedule/cancel/now are rAF/cancelAF/clock. Reduced
+    motion and trackpad deltas apply directly, with no easing. */
+export function createGlide({ apply, schedule, cancel, now, reduced = () => false }) {
+  const g = new Map();
+  function tick(id) {
+    const s = g.get(id); if (!s) return;
+    s.raf = 0;
+    const t = now(), dt = t - s.t; s.t = t;
+    const eased = reduced() ? s.rest : easeStep(s.rest, dt);
+    s.rest -= eased;
+    const step = s.direct + eased; s.direct = 0;
+    if (step !== 0 && apply(id, step) === false) { g.delete(id); return; }
+    if (Math.abs(s.rest) < 0.001) { g.delete(id); return; }
+    s.raf = schedule(() => tick(id));
+  }
+  return {
+    add(id, rows, kind = "wheel") {
+      let s = g.get(id);
+      if (!s) { s = { rest: 0, direct: 0, raf: 0, t: now() }; g.set(id, s); }
+      if (kind === "trackpad" || reduced()) s.direct += rows; else s.rest += rows;
+      if (!s.raf) s.raf = schedule(() => tick(id));
+    },
+    drop(id) { const s = g.get(id); if (s) { if (s.raf) cancel(s.raf); g.delete(id); } },
+    dropAll() { for (const id of [...g.keys()]) this.drop(id); },
+    has: (id) => g.has(id),
+  };
+}
+
+/** Preserve boot options when recording a document visit for reload. */
+export function documentUrl(href, path, layout) {
+  const url = new URL(href);
+  url.searchParams.set("file", path);
+  if (layout && layout !== "single") url.searchParams.set("layout", layout);
+  else url.searchParams.delete("layout");
+  return url.pathname + url.search + url.hash;
+}
+
+/** Where a package name loads from: a bare name is ./pkg/<name>.mjs. */
+export const packageUrl = (name) => (/[/.:]/.test(name) ? name : `./pkg/${name}.mjs`);
+
+// ─── the page ──────────────────────────────────────────────────────────────
+// Runs only where there is a document (main() at the end), so the primitives
+// above import cleanly under Node. The body is not re-indented.
+
+async function main() {
+let M, F;                                   // ed.main / ed.frame, imported in parallel with the first fetches
 
 const K = R.kw;
 const get = (m, k) => (m == null ? null : m.get(K(k), null));
 const ev = (...kv) => R.hashMap(...kv);
+
+// The language (reader + compiler + macros) is NOT awaited before the editor:
+// `js/eval-ed` / `js/eval-cells` are SYNCHRONOUS host fns, so until it has
+// loaded they answer {:err "…still loading"} (the editor shows it) and kick
+// the load, which otherwise starts right after the first display.
+const lang = createLanguage({
+  load: async () => {
+    const { start } = await import("./out/repl.mjs");
+    const repl = await start(async (f) => (await fetch("./out/src/" + f)).text());
+    window.blRepl = repl;
+    return repl;
+  },
+  // the sync hooks answer {:pending? true}; BL then emits an :await-language
+  // effect (below) and resumes — it keeps the user's draft meanwhile
+  notReady: () => R.hashMap(K("pending?"), true),
+  onChange: () => refreshChrome(),
+});
+globalThis.BL_HOST = Object.assign(globalThis.BL_HOST || {}, {
+  "eval-ed": (src, api) => lang.call("evalWith", src, "ed", api),
+  "eval-cells": (cells) => lang.call("evalCells", cells),
+});
+
 
 // ─── DOM scaffold ──────────────────────────────────────────────────────────
 
@@ -78,14 +260,27 @@ function measure() {
 
 // ─── the loop ──────────────────────────────────────────────────────────────
 
-function dispatch(event) {
-  const t0 = performance.now();
-  fr = F.d_handle(fr, event);
+// ONE render per dispatch: draw(), the watchers, glide and layout metadata all
+// read the frame's render through this memo (keyed on the frame value).
+const renderFrame = memoFrame((f) => F.d_render(f));
+const paneView = (id) => { const p = get(renderFrame(fr), "panes").toArray().find((q) => get(q, "id").name === id); return p && get(p, "kind") === K("editor") ? get(p, "view") : null; };
+let bootQueue = [];                         // input typed before the first display: replayed, never dropped
+
+// run the frame's pending effects, then paint
+function settle() {
   const [fr2, effects] = F.d_take_effects(fr).toArray();
   fr = fr2;
   for (const e of effects) perform(e);
   draw();
-  if (event.get(K("type"), null) !== K("key") || effects.length) { watchDocs(); watchCards(false); }
+  return effects.length;
+}
+
+function dispatch(event) {
+  if (!fr) { bootQueue.push(event); return; }
+  const t0 = performance.now();
+  fr = F.d_handle(fr, event);
+  const n = settle();
+  if (event.get(K("type"), null) !== K("key") || n) { watchDocs(); watchCards(false); }
   const dt = performance.now() - t0;
   lastFrame.push(dt); if (lastFrame.length > 60) lastFrame.shift();
 }
@@ -114,15 +309,47 @@ const postJSON = (url, body) => fetch(url, { method: "POST", headers: { "content
 // an event for the pane that asked (a host answer carries {:pane id} back)
 const toPane = (pane, e) => (pane == null ? e : e.assoc(K("pane"), pane));
 
-async function loadDoc(path, visit, goto, pane) {
-  const r = await fetch("/api/doc?path=" + encodeURIComponent(path));
-  const j = await r.json();
+// Latest request wins per PANE. A visit (foreground) aborts whatever that pane
+// was fetching; a revision refresh (background) yields to an in-flight visit.
+// A pane keeps its last screen while a document loads; its answer is applied
+// only if it is still the newest request AND the pane still exists (and, for a
+// refresh, still shows that path), so an older slow answer or error can never
+// overwrite a newer visit. The pane's status chip says what is loading.
+const gate = latestGate();
+const loading = new Map();                  // pane id → path being visited
+const paneKey = (pane) => (pane == null ? "main" : pane.name ?? String(pane));
+const paneAlive = (pane) => !!F.d_editor(fr, K(paneKey(pane)));
+const paneShows = (pane, path) => get(get(paneView(paneKey(pane)), "status"), "path") === path;
+function setLoading(pane, path) {
+  const id = paneKey(pane);
+  if (path == null) loading.delete(id); else loading.set(id, path);
+  const dom = paneDom.get(id);
+  if (dom) { dom.root.classList.toggle("loading", path != null); if (path != null) dom.root.dataset.loading = path; else delete dom.root.dataset.loading; }
+  refreshChrome();
+}
+async function fetchDoc(path, signal) {
+  const r = await fetch("/api/doc?path=" + encodeURIComponent(path), { signal });
+  return await r.json();
+}
+function loadDoc(path, visit, goto, pane) {
+  const id = paneKey(pane);
+  return latestRequest(gate, id, {
+    background: !visit,
+    run: (signal) => fetchDoc(path, signal),
+    valid: () => paneAlive(pane) && (visit || paneShows(pane, path)),
+    onStart: () => { if (visit) setLoading(pane, path); },
+    onDone: (mine) => { if (mine && visit) setLoading(pane, null); },
+    onValue: (j) => applyDoc(j, path, visit, goto, pane),
+    onError: (err) => { if (visit) dispatch(toPane(pane, ev(K("type"), K("eval-result"), K("id"), path, K("text"), "cannot open " + path + ": " + (err && err.message ? err.message : err) + " — select it again to retry"))); },
+  });
+}
+function applyDoc(j, path, visit, goto, pane) {
   if (!j.ok) { dispatch(toPane(pane, ev(K("type"), K("eval-result"), K("id"), path, K("text"), j.message || "cannot open"))); return; }
   let e = ev(K("type"), K("doc"), K("path"), path, K("text"), j.text, K("rev"), j.rev, K("read-only?"), !!j.readOnly,
              K("title"), j.title || path, K("objects"), toBL(j.objects || []), K("visit?"), !!visit);
   if (goto) e = e.assoc(K("goto"), goto);
   dispatch(toPane(pane, e));
-  if (visit && (pane == null || pane === get(fr, "focus"))) history.replaceState(null, "", "?file=" + encodeURIComponent(path) + layoutParam());
+  if (visit && (pane == null || paneKey(pane) === get(fr, "focus").name)) history.replaceState(null, "", documentUrl(location.href, path, get(renderFrame(fr), "layout")));
 }
 
 async function perform(eff) {
@@ -131,8 +358,7 @@ async function perform(eff) {
   const dispatchP = (x) => dispatch(toPane(pane, x));
   const kind = get(e, "kind").name;
   if (kind === "visit") {
-    try { await loadDoc(get(e, "path"), true, get(e, "goto"), pane); }
-    catch (err) { dispatchP(ev(K("type"), K("eval-result"), K("id"), get(e, "path"), K("text"), "no server to open documents")); }
+    loadDoc(get(e, "path"), true, get(e, "goto"), pane);
   } else if (kind === "intent") {
     try {
       const r = await postJSON("/api/intent", { intent: get(e, "intent"), args: toJS(get(e, "args")) });
@@ -155,6 +381,14 @@ async function perform(eff) {
       download(body.path.split("/").pop(), body.text);
       dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), true, K("message"), "downloaded"));
     }
+  } else if (kind === "await-language") {
+    const token = get(e, "token");
+    awaitLanguage(lang, {
+      alive: () => paneAlive(pane),
+      answer: (r) => dispatchP(r.ready
+        ? ev(K("type"), K("language-ready"), K("token"), token)
+        : ev(K("type"), K("language-failed"), K("token"), token, K("message"), r.message)),
+    });
   } else if (kind === "eval-cell") {
     try {
       const r = await fetch("/api/eval", { method: "POST", headers: { "content-type": "application/json" },
@@ -183,9 +417,9 @@ async function perform(eff) {
     // a compiled BL namespace with a `bl-package` var (d_bl_package);
     // a bare name resolves to ./pkg/<name>.mjs next to the page
     const name = get(e, "name");
-    const url = /[/.:]/.test(name) ? name : `./pkg/${name}.mjs`;
+    const url = packageUrl(name);
     try {
-      const mod = await import(new URL(url, location.href).href);
+      const mod = await withTimeout(import(new URL(url, location.href).href), 15000, url);
       const p = mod.package ?? mod.d_bl_package;
       dispatchP(ev(K("type"), K("use"), K("package"), typeof p === "function" ? p() : p, K("message"), p ? null : url + " exports no `package`"));
     } catch (err) {
@@ -215,7 +449,13 @@ function watch(key, path, since, onChange) {
         const r = await fetch("/api/rev?path=" + encodeURIComponent(path) + "&since=" + encodeURIComponent(w.since || ""));
         const j = await r.json();
         if (!w.alive) break;
-        if (j.ok && j.rev !== w.since) { w.since = j.rev; await onChange(); }
+        // a refresh that did not land (yielded to a visit, failed) is retried:
+        // `since` goes back so the next poll answers at once, after a pause
+        if (j.ok && j.rev !== w.since) {
+          const prev = w.since; w.since = j.rev;
+          const out = await onChange();
+          if (out != null && out !== "applied" && out !== "stale") { w.since = prev; await new Promise((res) => setTimeout(res, 3000)); }
+        }
         else if (!j.ok) await new Promise((res) => setTimeout(res, 3000));
       } catch (err) { await new Promise((res) => setTimeout(res, 3000)); }
     }
@@ -226,8 +466,9 @@ function unwatch(key) { const w = watchers.get(key); if (w) { w.alive = false; w
 // one watch per editor pane's document; a pane that left drops its watch
 function watchDocs() {
   const live = new Set();
-  for (const id of F.d_editor_ids(fr).toArray()) {
-    const v = M.d_render(F.d_editor(fr, id));
+  for (const p of get(renderFrame(fr), "panes").toArray()) {
+    if (get(p, "kind") !== K("editor")) continue;
+    const id = get(p, "id"), v = get(p, "view");
     const path = get(get(v, "status"), "path");
     if (!path) continue;
     const key = "doc:" + id.name;
@@ -244,7 +485,7 @@ async function loadCards(path) {
   if (j.ok) dispatch(ev(K("type"), K("cards"), K("data"), toBL(j.data || [])));
 }
 function watchCards(force) {
-  const ids = get(M.d_render(ed$()), "cards").toArray().join(",");
+  const ids = get(paneView(get(fr, "focus").name), "cards").toArray().join(",");
   if (!ids) { unwatch("cards"); cardIds = ""; return; }
   if (ids === cardIds && !force) return;
   cardIds = ids;
@@ -266,16 +507,23 @@ function download(name, text) {
 function segSig(segs) { let s = ""; for (const g of segs) s += get(g, "kind").name + "\u0001" + get(g, "text") + "\u0002"; return s; }
 
 function draw() {
-  const rv = F.d_render(fr);
+  const rv = renderFrame(fr);
   const panes = get(rv, "panes").toArray();
   syncPanes(panes);
   let focusV = null;
   for (const p of panes) {
     const id = get(p, "id").name, dom = paneDom.get(id);
+    if (!dom) continue;
+    dom.root.classList.toggle("loading", loading.has(id));
     if (get(p, "kind") === K("view")) { paintView(dom, p); continue; }
     const v = get(p, "view");
     dom.root.classList.toggle("focus", !!get(p, "focus?"));
-    paint(dom, v, !!get(p, "focus?"));
+    const focused = !!get(p, "focus?"), editor = F.d_editor(fr, get(p, "id"));
+    const previous = dom.painted;
+    if (!previous || previous.editor !== editor || previous.focused !== focused || previous.ch !== metrics.ch || previous.line !== metrics.line) {
+      paint(dom, v, focused);
+      dom.painted = { editor, focused, ch: metrics.ch, line: metrics.line };
+    }
     if (get(p, "focus?")) focusV = v;
   }
   chrome(focusV, rv);
@@ -314,7 +562,7 @@ function syncPanes(panes) {
   // 2. panes the layout no longer has go away (the original is kept in the
   //    map under the first editor pane's id, so it is never removed here)
   const want = new Set(panes.map((p) => get(p, "id").name));
-  for (const [id, d] of [...paneDom]) if (!want.has(id)) { if (d.root.id !== "editor") d.root.remove(); paneDom.delete(id); }
+  for (const [id, d] of [...paneDom]) if (!want.has(id)) { if (d.root.id !== "editor") d.root.remove(); paneDom.delete(id); glide.drop(id); gate.cancel(id); loading.delete(id); }
   for (const n of [...panesEl.children]) if (![...paneDom.values()].some((d) => d.root === n)) n.remove();
   // 3. new panes: an editor pane clones the skeleton, a view pane is a box
   for (const p of panes) {
@@ -348,24 +596,35 @@ const MAP_ROW = 3;                          // px per screen row in a minimap
 const viewPainters = {
   minimap(dom, p) {
     const m = get(p, "view");
-    dom.body.textContent = "";
-    if (!m) return;
+    if (!m) { dom.body.replaceChildren(); dom.map = null; return; }
     const bars = get(m, "bars").toArray();
-    const ys = []; let y = 0;
-    for (const b of bars) { ys.push(y); y += (get(b, "size") || 1) * MAP_ROW; }
-    const H = dom.root.clientHeight - 16, k = Math.min(1, H / Math.max(1, y));
-    const ch = (dom.root.clientWidth - 24) / 84;
-    dom.root.dataset.k = k; dom.root.dataset.ys = JSON.stringify(ys); dom.root.dataset.of = get(p, "of").name;
-    bars.forEach((b, i) => {
-      const d = document.createElement("div");
-      d.className = "bar r-" + get(b, "role").name;
-      d.style.cssText = `top:${ys[i] * k}px;height:${Math.max(1, (get(b, "size") || 1) * MAP_ROW * k - 1)}px;width:${Math.max(2, Math.min(84, get(b, "w")) * ch)}px`;
-      dom.body.appendChild(d);
-      const label = get(b, "label");
-      if (label) { const t = document.createElement("div"); t.className = "maplabel"; t.textContent = label; t.style.top = ys[i] * k + "px"; dom.body.appendChild(t); }
-    });
-    const top = get(m, "top"), end = get(m, "end");
-    dom.lens.style.cssText = `top:${(ys[top] ?? 0) * k}px;height:${Math.max(8, ((ys[end] ?? y) - (ys[top] ?? 0)) * k)}px`;
+    const height = dom.viewportHeight ?? dom.root.clientHeight;
+    const width = dom.viewportWidth ?? dom.root.clientWidth;
+    const signature = JSON.stringify(bars.map((b) => [get(b, "role").name, get(b, "w"), get(b, "size"), get(b, "label"), get(b, "row")]));
+    if (!dom.map || dom.map.signature !== signature || dom.map.height !== height || dom.map.width !== width) {
+      const ys = []; let y = 0;
+      for (const b of bars) { ys.push(y); y += (get(b, "size") || 1) * MAP_ROW; }
+      const k = Math.min(1, Math.max(0, height - 16) / Math.max(1, y));
+      const ch = Math.max(0, width - 24) / 84;
+      const fragment = document.createDocumentFragment();
+      bars.forEach((b, i) => {
+        const d = document.createElement("div");
+        d.className = "bar r-" + get(b, "role").name;
+        d.style.cssText = `top:${ys[i] * k}px;height:${Math.max(1, (get(b, "size") || 1) * MAP_ROW * k - 1)}px;width:${Math.max(2, Math.min(84, get(b, "w")) * ch)}px`;
+        fragment.appendChild(d);
+        const label = get(b, "label");
+        if (label) { const t = document.createElement("div"); t.className = "maplabel"; t.textContent = label; t.style.top = ys[i] * k + "px"; fragment.appendChild(t); }
+      });
+      dom.body.replaceChildren(fragment);
+      dom.map = { signature, height, width, ys, y, k };
+      dom.root.dataset.k = k; dom.root.dataset.ys = JSON.stringify(ys);
+    }
+    dom.root.dataset.of = get(p, "of").name;
+    const { ys, y, k } = dom.map;
+    const top = get(m, "top"), end = get(m, "end"), fraction = get(m, "frac") || 0;
+    const offset = fraction * MAP_ROW;
+    const css = `top:${((ys[top] ?? 0) + offset) * k}px;height:${Math.max(8, ((ys[end] ?? y) - (ys[top] ?? 0)) * k)}px`;
+    if (dom.lens.style.cssText !== css) dom.lens.style.cssText = css;
   },
 };
 function paintView(dom, p) { const f = viewPainters[get(p, "view-kind").name]; if (f) f(dom, p); }
@@ -377,11 +636,11 @@ function minimapSlotAt(root, clientY) {
 }
 let mapDrag = null;
 panesEl.addEventListener("mousedown", (e) => {
-  const root = e.target.closest(".view-minimap"); if (!root) return;
+  const root = e.target.closest(".view-minimap"); if (!root || !fr) return;
   e.preventDefault(); mapDrag = root;
   dispatch(ev(K("type"), K("scroll-to-slot"), K("pane"), K(root.dataset.of), K("y"), Math.max(0, minimapSlotAt(root, e.clientY) - 6)));
 });
-window.addEventListener("mousemove", (e) => { if (mapDrag) dispatch(ev(K("type"), K("scroll-to-slot"), K("pane"), K(mapDrag.dataset.of), K("y"), Math.max(0, minimapSlotAt(mapDrag, e.clientY) - 6))); });
+window.addEventListener("mousemove", (e) => { if (mapDrag && !mapDrag.isConnected) mapDrag = null; if (mapDrag) dispatch(ev(K("type"), K("scroll-to-slot"), K("pane"), K(mapDrag.dataset.of), K("y"), Math.max(0, minimapSlotAt(mapDrag, e.clientY) - 6))); });
 window.addEventListener("mouseup", () => { mapDrag = null; });
 
 // ─── one editor pane ───────────────────────────────────────────────────────
@@ -538,7 +797,10 @@ function paint(dom, v, focused) {
 
 // ─── the chrome: status, echo, minibuffer, overlay (the focused pane's) ────
 
+let lastChrome = null;
+function refreshChrome() { if (lastChrome) chrome(...lastChrome); }
 function chrome(v, rv) {
+  lastChrome = [v, rv];
   const m = get(v, "mode").name;
   // status line
   const st = get(v, "status");
@@ -557,6 +819,9 @@ function chrome(v, rv) {
   for (const l of (get(v, "modes") ? get(v, "modes").toArray() : [])) chip("crumb mode", l);
   // the window: its layout
   if (get(rv, "layout") && get(rv, "layout") !== "single") chip("crumb pres", "⊞ " + get(rv, "layout"));
+  for (const [id, p] of loading) chip("crumb loading", "⏳ " + (loading.size > 1 ? id + ": " : "") + p);
+  if (lang.state === "loading") chip("crumb lang", "⌛ language");
+  else if (lang.state === "failed") chip("crumb lang failed", "language failed — run the command again to retry");
   const pend = get(st, "pending");
   if (pend) chip("pending", pend + (get(st, "count") ? " ×" + get(st, "count") : ""));
   else if (get(st, "count")) chip("pending", "×" + get(st, "count"));
@@ -696,13 +961,14 @@ sink.addEventListener("paste", (e) => {
 const paneOf = (node) => node.closest("[data-pane]")?.dataset.pane ?? "main";
 function focusPane(id) { if (get(fr, "focus").name !== id) fr = fr.assoc(K("focus"), K(id)); }
 panesEl.addEventListener("mousedown", (e) => {
-  if (e.target.closest(".view")) return;
+  if (!fr || e.target.closest(".view")) return;
   const lineNode = e.target.closest(".line");
   const id = paneOf(e.target);
   if (!lineNode) { focusPane(id); draw(); sink.focus(); return; }
   e.preventDefault();
   focusPane(id);
   const dom = paneDom.get(id);
+  if (!dom) return;
   if (lineNode.dataset.src != null) {        // an ornament: land on its source row
     dispatch(ev(K("type"), K("click"), K("pos"), R.vec(Number(lineNode.dataset.src), 0), K("extend?"), e.shiftKey));
     sink.focus(); return;
@@ -718,33 +984,30 @@ panesEl.addEventListener("mousedown", (e) => {
 // and sends the step as :scroll-slots (a presentation moves by screen rows and
 // by fractions of one; a plain document by whole rows). A trackpad's small
 // deltas just pass through the same easing; a mouse wheel's notch glides.
-const glide = new Map();           // pane id → { rest: rows still to go, raf }
-function glideTick(id) {
-  const g = glide.get(id); if (!g) return;
-  const step = Math.abs(g.rest) < 0.02 ? g.rest : g.rest * 0.32;
-  g.rest -= step;
-  const e = F.d_editor(fr, K(id));
-  if (e) {
-    const v = M.d_render(e);
+const reducedMotion = () => !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+const wholeRows = new Map();       // plain documents scroll by whole rows: carry the fraction
+const glide = createGlide({
+  schedule: (f) => requestAnimationFrame(f), cancel: (h) => cancelAnimationFrame(h), now: () => performance.now(), reduced: reducedMotion,
+  apply(id, step) {
+    if (!fr || !F.d_editor(fr, K(id))) { wholeRows.delete(id); return false; }   // the pane is gone
+    const v = paneView(id);
+    if (!v) return false;
     if (get(v, "slot-top") != null) dispatch(ev(K("type"), K("scroll-slots"), K("pane"), K(id), K("delta"), step));
     else {
-      g.whole = (g.whole || 0) + step;
-      const w = Math.trunc(g.whole); g.whole -= w;
+      const acc = (wholeRows.get(id) || 0) + step, w = Math.trunc(acc);
+      wholeRows.set(id, acc - w);
       if (w) dispatch(ev(K("type"), K("scroll"), K("pane"), K(id), K("top"), Math.max(0, get(v, "top") + w)));
     }
-  }
-  if (Math.abs(g.rest) < 0.001) { glide.delete(id); return; }
-  g.raf = requestAnimationFrame(() => glideTick(id));
-}
+    return true;
+  },
+});
 panesEl.addEventListener("wheel", (e) => {
   if (e.target.closest(".view")) return;
   e.preventDefault();
+  if (!fr) return;
   const id = paneOf(e.target);
   const px = e.deltaMode === 1 ? e.deltaY * metrics.line : e.deltaMode === 2 ? e.deltaY * metrics.line * 20 : e.deltaY;
-  const g = glide.get(id) || { rest: 0 };
-  g.rest += px / metrics.line;
-  glide.set(id, g);
-  if (!g.raf) g.raf = requestAnimationFrame(() => { g.raf = 0; glideTick(id); });
+  glide.add(id, px / metrics.line, classifyWheel(e));
 }, { passive: false });
 
 // every editor pane learns its height (rows) and width (cells)
@@ -753,55 +1016,106 @@ function fitHeight() {
   if (!first || !fr) return;
   // the page's top padding is not rows (the last row was clipped by a few px)
   const pad = parseFloat(getComputedStyle(first.page).paddingTop) || 0;
+  for (const dom of paneDom.values()) {
+    dom.viewportHeight = dom.root.clientHeight;
+    dom.viewportWidth = dom.root.clientWidth;
+  }
   const h = Math.floor((first.root.clientHeight - pad) / metrics.line);
   let cols = R.EMPTY_MAP;
   for (const [id, d] of paneDom) if (d.page) cols = cols.assoc(K(id), Math.floor((d.page.clientWidth - 24) / metrics.ch));
   dispatch(ev(K("type"), K("resize"), K("height"), h, K("cols"), cols));
 }
-window.addEventListener("resize", fitHeight);
+window.addEventListener("resize", () => { if (fr) fitHeight(); });
 // the boot-time fit measures before the status line lays out: refit on any change
 new ResizeObserver(() => { if (fr) fitHeight(); }).observe(panesEl);
 document.addEventListener("click", () => sink.focus());
 
-// the ?layout= of the page's URL, kept across visits
-function layoutParam() { const l = get(F.d_render(fr), "layout"); return l && l !== "single" ? "&layout=" + encodeURIComponent(l) : ""; }
-// run a `:` command as if typed (boot-time ?layout=)
-function runCommandLine(src) {
-  dispatch(ev(K("type"), K("key"), K("key"), ":"));
-  dispatch(ev(K("type"), K("text"), K("text"), src));
-  dispatch(ev(K("type"), K("key"), K("key"), "Enter"));
-}
 
 // ─── boot ──────────────────────────────────────────────────────────────────
+//
+// Everything the first display needs is fetched at once: the editor modules,
+// the document (or the welcome text) and any ?use= packages. The language is
+// not among them: it starts after the first display (see `lang`). The layout
+// is applied with the frame's own pure `arrange`, so the inbox opens without
+// evaluating a command line.
+
+const withTimeout = (p, ms, what) => {
+  let timer;
+  return Promise.race([p, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("timed out loading " + what)), ms); })])
+    .finally(() => clearTimeout(timer));
+};
 
 async function loadInitial() {
-  const params = new URLSearchParams(location.search);
-  const path = params.get("file");
+  const path = new URLSearchParams(location.search).get("file");
+  let notice = null;
   if (path) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const r = await fetch("/api/doc?path=" + encodeURIComponent(path));
-      const j = await r.json();
+      const j = await fetchDoc(path, controller.signal);
       if (j.ok) return { text: j.text, path, doc: j };
-    } catch (_) { /* fall through */ }
+      notice = "cannot open " + path + ": " + (j.message || "document unavailable");
+    } catch (error) {
+      notice = "cannot open " + path + ": " + (controller.signal.aborted ? "loading timed out" : error.message);
+    } finally { clearTimeout(timer); }
   }
-  const r = await fetch("./welcome.bl.org");
-  return { text: await r.text(), path: path || "welcome.bl.org" };
+  const r = await withTimeout(fetch("./welcome.bl.org"), 15000, "welcome");
+  return { text: await r.text(), path: "welcome.bl.org", notice };
+}
+async function loadPackage(name) {
+  const url = packageUrl(name);
+  try {
+    const mod = await withTimeout(import(new URL(url, location.href).href), 15000, url);
+    const p = mod.package ?? mod.d_bl_package;
+    return ev(K("type"), K("use"), K("package"), typeof p === "function" ? p() : p, K("message"), p ? null : url + " exports no `package`");
+  } catch (err) {
+    return ev(K("type"), K("use"), K("package"), null, K("message"), "cannot load " + url + ": " + err.message);
+  }
 }
 
-await document.fonts?.ready;
-measure();
-const { text, path, doc } = await loadInitial();
-fr = F.d_single(M.d_boot(text, path));
-fitHeight();
-// the document's rev / read-only flag / objects: the same event a visit uses
-if (doc) dispatch(ev(K("type"), K("doc"), K("path"), path, K("text"), doc.text, K("rev"), doc.rev, K("read-only?"), !!doc.readOnly,
-                     K("title"), doc.title || path, K("objects"), toBL(doc.objects || []), K("visit?"), false));
-watchDocs(); watchCards(true);
-// ?use=a,b loads packages at boot (as ~/.bl-ed/init would); ?layout=x then
-// arranges the window as a loaded package's layout says
+echo.textContent = "Loading editor…";
+panesEl.setAttribute("aria-busy", "true");
+sink.focus();                               // keys typed during boot are queued, not lost
 const params = new URLSearchParams(location.search);
 const wantLayout = params.get("layout");
-for (const name of (params.get("use") || "").split(",").filter(Boolean)) await perform(ev(K("kind"), K("load-package"), K("name"), name));
-if (wantLayout) runCommandLine(`(ed/layout "${wantLayout}")`);
+const uses = (params.get("use") || "").split(",").filter(Boolean);
+const [mods, init, useEvents] = await Promise.all([
+  Promise.all([import("./out/ed.main.mjs"), import("./out/ed.frame.mjs"), document.fonts?.ready]),
+  loadInitial(),
+  Promise.all(uses.map(loadPackage)),
+]);
+[M, F] = mods;
+measure();
+const { text, path, doc } = init;
+fr = F.d_single(M.d_boot(text, path));
+// the document's rev / read-only flag / objects: the same event a visit uses
+if (doc) fr = F.d_handle(fr, ev(K("type"), K("doc"), K("path"), path, K("text"), doc.text, K("rev"), doc.rev, K("read-only?"), !!doc.readOnly,
+                     K("title"), doc.title || path, K("objects"), toBL(doc.objects || []), K("visit?"), false));
+for (const u of useEvents) fr = F.d_handle(fr, u);
+if (wantLayout) {
+  const layout = F.d_layouts(ed$()).get(wantLayout, null);
+  if (layout) fr = F.d_arrange(fr, layout);
+  else fr = F.d_handle(fr, ev(K("type"), K("eval-result"), K("id"), "layout", K("text"), "no layout " + wantLayout));
+}
+if (init.notice) fr = F.d_handle(fr, ev(K("type"), K("eval-result"), K("id"), "load", K("text"), init.notice));
+settle();
+fitHeight();
+watchDocs(); watchCards(true);
+panesEl.removeAttribute("aria-busy");
+const queued = bootQueue; bootQueue = [];
+for (const e of queued) dispatch(e);        // keys typed during boot, in order
 sink.focus();
-window.blEd = { dispatch, state: () => ed$(), frame: () => fr, render: () => M.d_render(ed$()), R, K, F };
+window.blEd = { dispatch, state: () => ed$(), frame: () => fr, render: () => paneView(get(fr, "focus").name), R, K, F };
+window.blHost = { lang, gate, glide, loading };
+setTimeout(() => lang.start(), 0);          // the language: off the first-display path
+}
+
+if (typeof document !== "undefined") {
+  try { await main(); }
+  catch (error) {
+    const echo = document.querySelector("#echo");
+    if (echo) echo.textContent = "Cannot load editor: " + error.message + " — reload to retry";
+    document.querySelector("#panes")?.removeAttribute("aria-busy");
+    console.error("bl-ed bootstrap failed", error);
+  }
+}

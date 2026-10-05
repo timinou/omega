@@ -1,0 +1,20 @@
+; Bounded derived-value memo for immutable editor/presentation inputs.
+(ns ed.memo)
+
+(defn identity-pair
+  "Memoize f(a,b) by input identity, retaining at most `limit` entries.
+   Hits become most-recently-used so a stable pane stays hot while transient
+   scroll states cycle through the other slots. f must be pure."
+  [limit f]
+  (when (< limit 1) (throw (ex-info "memo limit must be positive" {:limit limit})))
+  (let [cache (atom [])]
+    (fn [a b]
+      (let [entries @cache
+            hit (first (filter (fn [entry] (and (identical? a (:a entry)) (identical? b (:b entry)))) entries))]
+        (if hit
+          (do (when (not (identical? hit (first entries)))
+                (reset! cache (vec (cons hit (remove (fn [entry] (identical? entry hit)) entries)))))
+              (:v hit))
+          (let [v (f a b)]
+            (reset! cache (vec (take limit (cons {:a a :b b :v v} entries))))
+            v))))))

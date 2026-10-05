@@ -157,3 +157,41 @@ test("packages are frame-wide: unuse in one pane removes it everywhere, and its 
   assert.equal(get(F.d_render(s.fr), "layout"), "single", "the layout its package provided ended");
   assert.deepEqual(get(M.d_render(F.d_focused(s.fr)), "packages").toArray(), []);
 });
+
+test("boot layout without a command line: F.arrange(fr, layouts[name]) is what ed/layout does", () => {
+  // the host (web/host.mjs) opens ?layout= this way, so the inbox needs no language
+  const viaCmd = session().cmd('(ed/layout "two")');
+  let fr = F.d_single(M.d_boot("notes\n", "x.bl.org"));
+  fr = F.d_handle(fr, ev(K("type"), K("use"), K("package"), demo));
+  const layout = F.d_layouts(F.d_focused(fr)).get("two", null);
+  assert.ok(layout, "layouts come from the loaded packages");
+  fr = F.d_arrange(fr, layout);
+  const [fr2, effects] = F.d_take_effects(fr).toArray();
+  assert.deepEqual(effects.toArray().map((e) => [get(e, "pane").name, get(e, "path")]), [["rail", "list:all"]], "the rail's document is requested");
+  assert.equal(get(F.d_render(fr2), "layout"), "two");
+  assert.equal(get(fr2, "focus"), get(viaCmd.fr, "focus"));
+  assert.deepEqual(F.d_editor_ids(fr2).toArray().map((k) => k.name), F.d_editor_ids(viaCmd.fr).toArray().map((k) => k.name));
+  assert.equal(get(F.d_editor(fr2, K("main")), "path"), "x.bl.org", "the kept editor moved into the linked pane");
+  assert.equal(F.d_layouts(F.d_focused(fr)).get("nope", null), null, "an unknown layout is detectable without evaluating");
+});
+
+test("events for a pane that left (a late host answer) leave the frame untouched", () => {
+  const s = session().cmd('(ed/layout "two")');
+  s.cmd("(ed/layout nil)");
+  const before = get(s.fr, "editors");
+  s.send(docEv("main", "item:a"));      // unarrange kept the focused :rail; :main is gone
+  assert.equal(get(s.fr, "editors"), before, "dropped: the editors are the same value");
+});
+
+test("a frame reuses unchanged pane models while another editor moves", () => {
+  const s = session("one\ntwo\nthree\n").cmd('(ed/layout "two")');
+  const models = () => new Map(get(F.d_render(s.fr), "panes").toArray().map((p) => [get(p, "id").name, get(p, "view")]));
+  const before = models();
+  assert.equal(models().get("rail"), before.get("rail"));
+  assert.equal(models().get("main"), before.get("main"));
+  s.send(ev(K("type"), K("key"), K("pane"), K("main"), K("key"), "j"));
+  const after = models();
+  assert.equal(after.get("rail"), before.get("rail"), "scrolling/moving in main does not derive the rail again");
+  assert.notEqual(after.get("main"), before.get("main"), "changed editor input invalidates its model");
+});
+
