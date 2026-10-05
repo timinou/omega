@@ -1,0 +1,22 @@
+#+TITLE: Investigate JS actors macros and editor loading latency
+#+STATE: DONE
+#+SESSION_ID: 159967db0c6fdff3
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T19-35-34-193Z_159967db0c6fdff3.jsonl]]
+#+CUSTOM_ID: PLAN-005-investigate-js-actors-macros-and-editor
+
+* Initial Message
+
+ok i would like you to look at the --js-actors branch and tell me about this macro thing, and also to look at the loading times and tell me what makes them slow. what's your plan for ensuring a smooth experience?
+
+User asks to inspect the --js-actors branch, explain the prior claim that bl js build drops defmacro, identify causes of slow loading, and propose a smooth-experience plan. Investigation only: do not change production code or switch branches; do not write to the live world at 8790. Inspect beam-lisp branches and omega's pinned compiler, trace build-time macro expansion versus JS runtime evaluation, and validate with a minimal isolated compilation if possible. Measure browser page startup, package fetch/import, document fetch and task opening separately, with multiple warm/cold-cache samples; inspect server and client paths to attribute time rather than infer from bundle size. Preserve prior completed scrolling work and reuse its tests/proof. Deliver a source-backed report with observed timings, macro support boundaries, prioritized performance plan and acceptance gates. Agents may read sources and create isolated temporary probes, not run global tests/builds concurrently. No edits under research/vendor/pi without reading its AGENTS.md.
+
+* Results and proposed implementation plan
+Full source-backed report: research/domain/interface/loading-and-macros.bl.md. No production optimization, branch switch in an existing tree, or re-pin was performed. Live-world HTTP operations were reads only.
+
+Macro finding: Omega pin 94700545 lacks compile-time macro registration in js.build. Checked-in prototype/bl-js-actors@568103c2 includes f44000f1; isolated build+Node probes verify local/imported/variadic syntax-quote templates. Nested unqualified macro references and helper-defn calls still fail. Existing actors worktree WIP was read, not changed; its compiler diff concerns registry identity/rebinding, not this macro registration. Successful self-hosted build/runtime was not independently verified. Detailed branch probe remains /tmp/omega-macro-investigation.md.
+
+Measured: fresh-page readiness 346/466/671ms; task:t-5 expired-cache reads 511/556/600ms versus immediate 4.0/4.7ms; t-1/t-17 browser fetch waits 639/783ms; scroll dispatch median12.4ms p95 16.2ms, excluding paint. Empty offline in-memory server launches 4996/5035/5050ms versus simple pinned launcher 792/816/824ms. Durable recovery and a cold clean page rebuild were not timed.
+
+Source causes: provider cache expires every1000ms even on unchanged basis; revision polling invokes the same full render; task documents build whole-world snapshots and expensive turn projections. The exact CPU contribution requires isolated phase instrumentation. Browser boot serially awaits REPL before editor, then doc, then package. Scroll dispatch and glide perform extra renders for metadata/watch bookkeeping; existing BL read/layout memoization already exists and must be extended, not duplicated.
+
+Proposed next implementation order (not started): (1) instrument and remove unnecessary server re-rendering, with correct side-file/age invalidation and indexed turn reads; (2) reuse one coherent render per dispatch, lightweight watcher metadata, refresh-rate-independent easing; (3) parallelize/lazily initialize startup, preserve last screen/loading status and latest-request-wins task visits; (4) port macro registration with tests and re-pin only after parity/performance gates. Targets: cold600-turn task API<50ms, cached<10ms, steady scroll JS p95<4ms, useful warm inbox<200ms, cheap unchanged revision checks, and low idle CPU at fixed watcher count. Preserve scrolling/follow/compose tests and equivalence; add rapid navigation, resize, long transcript and 60/120Hz tests. These are acceptance targets, not achieved claims. Human trackpad feel remains to be evaluated.

@@ -1,0 +1,17 @@
+#+TITLE: Implement smooth loading and scrolling with JS macro support
+#+STATE: DOING
+#+SESSION_ID: 159967db0c6fdff3
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T19-35-34-193Z_159967db0c6fdff3.jsonl]]
+#+CUSTOM_ID: PLAN-007-implement-smooth-loading-and-scrolling-w
+
+* Initial Message
+
+ok i would like you to look at the --js-actors branch and tell me about this macro thing, and also to look at the loading times and tell me what makes them slow. what's your plan for ensuring a smooth experience?
+
+User approved research/domain/interface/loading-and-macros.bl.md and requests commits as work progresses. Implement the proposed performance/UX changes and macro support, not merely another report. Preserve BL-maximalist architecture: editor state/policy/presentations in BL, host physical IO/clock/paint. Preserve unrelated untracked/dirty files in Omega and beam-lisp main/actors worktrees. Never write/restart the live world at8790; isolated offline memory or copied DB worlds only.
+
+Work slices: A) providers cache/revision semantics, dependency invalidation including rounded ages and sidefiles, deduplicate concurrent render work, bounded caches, timing diagnostics/tests. B) indexed turn reads and narrower task projections, parity tests and long600-turn measurements. C) one coherent render per browser dispatch/watch bookkeeping; startup parallelism and deferred language with honest synchronous host contract; latest-request-wins visits/loading UI; elapsed-time scroll easing/reduced-motion. D) port build-time macro registration from actors branch into beam-lisp main without blindly merging runtime WIP; tests local/imported/nested/helper behavior; isolated toolchain verify then commit upstream and update Omega pin only after full integration gates.
+
+Commit each verified atomic slice with exact paths, never git add -A. Orchestrator runs all global builds/tests after workers join and before relevant commits; workers may run narrow probes/tests only, no global builds. Verification: bin/bl test; vendor/bl-ed drive/frame/pkg/omega suites; presentation scroll/equivalence; fresh isolated browser readiness, stale navigation race, no dropped initial input, reduced-motion/time-based glide, reader-position/latest-follow on update. Benchmark cold/warm doc APIs and scroll JS/RAF p95. Proposed reference targets cold600-turn taskAPI<50ms, cached<10ms, steady scrollJSp95<4ms, warm useful inbox<200ms; report actual results and remaining blockers honestly, not cherry-picked wins. Preserve readtable map API; optional macro sugar is not a separate reader implementation. Full cold/durable bootstrap optimization may require profiling; instrument it and only adopt safe coherent prebuilt artifacts. Successful self-hosted runtime adoption is separate from macro registration and needs parity/perf proof; do not silently enable it.
+
+Root AGENTS.md and /home/user/.agents/AGENTS.md apply; read deeper AGENTS before changing sibling beam-lisp. Full approved rationale and baseline measurements reside in research/domain/interface/loading-and-macros.bl.md.
