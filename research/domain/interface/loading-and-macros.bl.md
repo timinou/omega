@@ -1,6 +1,6 @@
 # JS actors macros, loading latency, and a smooth-experience plan
 
-Investigation requested after the scrolling/window-key work. This is a report and proposed implementation sequence, not a performance fix. Production code, the live world and existing worktree branches were not changed.
+Sections 1–3 preserve the original investigation and approved implementation sequence. Section 4 records the shipped implementation, measured outcomes and remaining limits. The live world was not mutated or restarted.
 
 ## 1. Macro support: distinguish the pin from the actors branch
 
