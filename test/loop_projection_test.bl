@@ -1,0 +1,111 @@
+(ns loop-projection-test
+  (:require [omega.env :as env]
+            [omega.loop :as loop]
+            [omega.actor :as actor]
+            [omega.trace :as tr]
+            [omega.task :as task]
+            [omega.codemode :as cm]
+            [omega.ui.model :as model]))
+
+(defn- sys-of [] (task/start-system (env/open) {:step (loop/by-goal {}) :tools cm/tools :root "/tmp"}))
+
+(defn- tid! [sys goal] (task/open! sys {:goal goal}))
+
+(deftest turns-are-separated-per-task-and-ordered
+  (let [sys (sys-of) a (tid! sys "a") b (tid! sys "b")]
+    (task/await sys a 5000) (task/await sys b 5000)
+    (doseq [i (range 30)]
+      (loop/record! sys a :assistant [{:type :text :text (str "a" i)}])
+      (loop/record! sys b :tool [{:type :tool-result :id (str i) :content "x"}]))
+    (let [ta (loop/turns sys a) tb (loop/turns sys b)]
+      (is (= (range 1 (inc (count ta))) (map :n ta)))
+      (is (= (range 1 (inc (count tb))) (map :n tb)))
+      (is (every? (fn [t] (contains? #{:tool :user} (:role t))) tb))
+      (is (= 30 (count (filter (fn [t] (= :tool (:role t))) tb))))
+      (is (= "a29" (get-in (last ta) [:content 0 :text])))
+      (is (= #{:n :role :content} (set (keys (first ta))))))
+    (is (= [] (loop/turns sys "nope")))
+    (task/stop-system! sys)))
+
+(deftest task-detail-matches-turns
+  (let [sys (sys-of) a (tid! sys "a")]
+    (task/await sys a 5000)
+    (loop/record! sys a :user [{:type :text :text "hi"}])
+    (let [d (model/task-detail sys a)]
+      (is (= (loop/turns sys a) (:turns d)))
+      (is (vector? (:traces d))))
+    (task/stop-system! sys)))
+
+(deftest benchmark-600-turns
+  (let [sys (sys-of) a (tid! sys "a")]
+    (task/await sys a 5000)
+    (doseq [i (range 600)]
+      (loop/record! sys a :assistant [{:type :text :text (str i)}]))
+    (let [t0 (erlang/monotonic_time :microsecond)
+          ts (loop/turns sys a)
+          ms (/ (- (erlang/monotonic_time :microsecond) t0) 1000.0)]
+      (println "turns 600 ms" ms)
+      (is (= 601 (count ts)))
+      (is (< ms 5000)))
+    (task/stop-system! sys)))
+
+(defn- snap-row [e now id] (first (filter (fn [r] (= id (:id r))) (:tasks (model/snapshot e now)))))
+
+(deftest task-rows-match-snapshot-rows
+  (let [sys (sys-of) e (:env sys) a (tid! sys "a") b (tid! sys "b")]
+    (task/await sys a 5000) (task/await sys b 5000)
+    (env/tx! e [{:db/id -1 :task/id "bare"}])
+    (actor/ensure! e "human:me" :human)
+    (actor/send! e {:from a :to "human:me" :kind :ask :text "q?"})
+    (actor/send! e {:from b :to "human:me" :kind :note :text "fyi"})
+    (tr/leave! e a {:kind :claim :subject "src/x"})
+    (tr/leave! e a {:kind :finding :subject "f"})
+    (tr/leave! e b {:kind :claim :subject "src/y"})
+    (loop/record! sys a :user [{:type :text :text "hi"}])
+    (let [now (+ (env/now e) 400000)
+          rows (model/task-rows e [a b "bare" "missing" a] now)]
+      (is (= [a b "bare" a] (map :id rows)))
+      (doseq [r rows] (is (= (snap-row e now (:id r)) r)))
+      (is (= ["src/x"] (:claims (first rows))))
+      (is (= 1 (count (:asks (first rows)))))
+      (is (= [] (:asks (second rows))))
+      (is (= "bare" (:title (nth rows 2))))
+      (is (= [] (:scope (nth rows 2))))
+      (is (nil? (:goal (nth rows 2))))
+      (is (= [] (model/task-rows e [])))
+      (is (= [] (model/task-rows e ["missing"] now))))
+    (task/stop-system! sys)))
+
+(deftest benchmark-stage-costs-600-turns
+  (let [sys (sys-of) e (:env sys) a (tid! sys "a")
+        us (fn [] (erlang/monotonic_time :microsecond))]
+    (task/await sys a 5000)
+    (doseq [i (range 600)]
+      (loop/record! sys a :assistant [{:type :text :text (str i)}]))
+    (let [t0 (us) turns (loop/turns sys a)
+          now (env/now e)
+          t1 (us) rows (model/task-rows e [a] now)
+          t2 (us) d (model/task-detail sys a)
+          t3 (us) snap (model/snapshot e now)
+          t4 (us)]
+      (println "stage ms: turns" (/ (- t1 t0) 1000.0) "task-rows" (/ (- t2 t1) 1000.0)
+               "task-detail" (/ (- t3 t2) 1000.0) "snapshot" (/ (- t4 t3) 1000.0))
+      (is (= 601 (count turns)))
+      (is (= 1 (count rows)))
+      (is (= (:turns d) turns))
+      (is (= (first rows) (first (filter (fn [r] (= a (:id r))) (:tasks snap))))))
+    (task/stop-system! sys)))
+
+
+(deftest incomplete-turns-keep-the-querys-required-attribute-semantics
+  (let [sys (sys-of) e (:env sys) id (tid! sys "incomplete")]
+    (task/await sys id 5000)
+    (let [t (env/eid e :task/id id) before (loop/turns sys id)]
+      (env/tx! e [{:db/id -1 :turn/id (str id "/missing-content") :turn/task t :turn/n 90 :turn/role :assistant}
+                  {:db/id -2 :turn/id (str id "/missing-role") :turn/task t :turn/n 91 :turn/content []}
+                  {:db/id -3 :turn/id (str id "/missing-n") :turn/task t :turn/role :assistant :turn/content []}])
+      (is (= before (loop/turns sys id)))
+      (env/tx! e [{:db/id -1 :turn/id (str id "/complete") :turn/task t :turn/n 92 :turn/role :assistant :turn/content []}])
+      (is (= {:n 92 :role :assistant :content []} (last (loop/turns sys id)))))
+    (task/stop-system! sys)))
+

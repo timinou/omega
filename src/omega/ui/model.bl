@@ -47,6 +47,29 @@
      :asks (vec my-asks)
      :claims (vec (keep (fn [t] (when (and (= id (:task t)) (= :claim (:kind t))) (:subject t))) traces))}))
 
+(defn- narrow-traces
+  "The {:task :kind :subject :at} fields task-row reads, for task entity `t` only."
+  [e t id]
+  (mapv (fn [tr]
+          (let [m (env/pull e [:trace/kind :trace/subject :trace/at] tr)]
+            {:task id :kind (:trace/kind m) :subject (:trace/subject m) :at (:trace/at m)}))
+        (map first (env/q e '[:find ?tr :in $ ?t :where [?tr :trace/task ?t]] t))))
+
+(defn task-rows
+  "Overview rows for exactly the tasks `ids` (unknown ids skipped), in `ids`
+   order, same shape as snapshot's :tasks rows. Touches only the selected
+   tasks' attributes and traces; never turns or other tasks. Optional `now`."
+  ([e ids] (task-rows e ids (env/now e)))
+  ([e ids now]
+   (let [human "human:me"
+         asks (if (env/eid e :actor/id human)
+                (filter (fn [m] (= :ask (:kind m))) (actor/inbox e human))
+                [])]
+     (vec (keep (fn [id]
+                  (when-let [t (env/eid e :task/id id)]
+                    (task-row e (env/pull e TASK-PULL t) (narrow-traces e t id) asks now)))
+                ids)))))
+
 (defn group-of
   "Which overview group a task row belongs in."
   [row]

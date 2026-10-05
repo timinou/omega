@@ -164,3 +164,113 @@
     (is (str/includes? (:text d) "| ?id |"))
     (is (= 1 (count (filter (fn [o] (= "omega/task" (:type o))) (:objects d)))))
     (task/stop-system! sys)))
+
+;; ── the cache: dependency-correct, bounded, observable ────────────────────
+
+(defn- clocked-system [step dir clock]
+  (task/start-system (env/open {:clock (fn [] @clock)}) {:step step :tools cm/tools :root dir}))
+
+(deftest unchanged-revisits-and-polls-render-once-even-past-a-second
+  (let [dir (tmpdir) cache (atom {:entries {} :stats {}}) clock (atom 1000000)
+        sys (clocked-system (loop/scripted [(loop/say "ok")]) dir clock)
+        id (:id ((get (pv/intents sys) "task/open") {:goal "x"}))
+        _ (task/await sys id 5000)
+        tp (get (pv/providers sys {:cache cache}) "task")]
+    ((:read tp) id {})
+    (let [n (:render (pv/cache-stats cache))]
+      (Process/sleep 1200) ; wall time passes; the injected clock (ages) does not
+      (doseq [_ (range 20)] ((:rev tp) id {}) ((:read tp) id {}))
+      (is (= n (:render (pv/cache-stats cache))) "no re-render while nothing moved")
+      (is (>= (:hit (pv/cache-stats cache)) 40)))
+    (task/stop-system! sys)))
+
+(deftest a-world-change-rerenders-and-an-unrelated-commit-keeps-the-rev
+  (let [dir (tmpdir) cache (atom {:entries {} :stats {}})
+        sys (system (loop/scripted [(loop/say "a") (loop/say "b")]) dir)
+        id (:id ((get (pv/intents sys) "task/open") {:goal "one"}))
+        _ (task/await sys id 5000)
+        tp (get (pv/providers sys {:cache cache}) "task")
+        r1 ((:rev tp) id {})
+        n1 (:render (pv/cache-stats cache))
+        id2 (:id ((get (pv/intents sys) "task/open") {:goal "two"}))
+        _ (task/await sys id2 5000)
+        r2 ((:rev tp) id {})]
+    (is (> (:render (pv/cache-stats cache)) n1) "basis moved → re-rendered")
+    (is (= r1 r2) "…but another task's commit leaves this document's rev alone")
+    (task/stop-system! sys)))
+
+(deftest ages-follow-the-clock-at-their-rounding-boundary-only
+  (let [dir (tmpdir) cache (atom {:entries {} :stats {}}) clock (atom 1000000)
+        sys (clocked-system (loop/scripted [(loop/say "ok")]) dir clock)
+        id (:id ((get (pv/intents sys) "task/open") {:goal "x"}))
+        _ (task/await sys id 5000)
+        ov (get (pv/providers sys {:cache cache}) "omega")
+        _ (reset! clock (+ @clock 100000))
+        a ((:read ov) "overview" {})
+        n (:render (pv/cache-stats cache))]
+    (is (str/includes? (:text a) "1m") "age rendered at current clock")
+    (reset! clock (+ @clock 100))
+    (is (= (:rev a) ((:rev ov) "overview" {})))
+    (is (= n (:render (pv/cache-stats cache))) "inside the same age unit: no render")
+    (reset! clock (+ @clock 60000))
+    (is (str/includes? (:text ((:read ov) "overview" {})) "2m") "next unit → fresh age")
+    (is (= (inc n) (:render (pv/cache-stats cache))))
+    (task/stop-system! sys)))
+
+(deftest sidefile-edits-invalidate-homes-and-queries
+  (let [dir (tmpdir) cache (atom {:entries {} :stats {}})
+        sys (system (loop/scripted [(loop/say "ok")]) dir)
+        it (pv/intents sys)
+        id (:id ((get it "task/open") {:goal "home me" :path "a.org" :block "b1"}))
+        _ (task/await sys id 5000)
+        pvs (pv/providers sys {:cache cache})
+        ov (get pvs "omega")]
+    (is (str/includes? (:text ((:read ov) "overview" {})) "a.org"))
+    (File/write! (str dir "/.omega/ed/homes.edn") (pr-str {id {:path "z.org" :block "b2"}}))
+    (let [t (:text ((:read ov) "overview" {}))]
+      (is (str/includes? t "z.org"))
+      (is (not (str/includes? t "a.org"))))
+    (let [qid (subs (:path ((get it "q/new") {:text "[:find ?id :where [?t :task/id ?id]]"})) 2)
+          q (get pvs "q")
+          r1 ((:rev q) qid {})]
+      (File/write! (str dir "/.omega/ed/queries.edn") (pr-str {qid "[:find ?s :where [?t :task/status ?s]]"}))
+      (is (str/includes? (:text ((:read q) qid {})) "?s"))
+      (is (not= r1 ((:rev q) qid {}))))
+    (task/stop-system! sys)))
+
+(deftest a-query-rev-ignores-its-own-timing
+  (let [dir (tmpdir) cache (atom {:entries {} :stats {}})
+        sys (system (loop/scripted [(loop/say "ok") (loop/say "ok")]) dir)
+        id (:id ((get (pv/intents sys) "task/open") {:goal "fixed"}))
+        _ (task/await sys id 5000)
+        qid (subs (:path ((get (pv/intents sys) "q/new") {:text (str "[:find ?g :where [?t :task/id \"" id "\"] [?t :task/goal ?g]]")})) 2)
+        q (get (pv/providers sys {:cache cache}) "q")
+        r1 ((:rev q) qid {})
+        n (:render (pv/cache-stats cache))]
+    ((get (pv/intents sys) "task/open") {:goal "other"})
+    (Process/sleep 300)
+    (is (= r1 ((:rev q) qid {})) "same rows → same rev, whatever the run time")
+    (is (> (:render (pv/cache-stats cache)) n) "the world moved, so it did re-run")
+    (task/stop-system! sys)))
+
+(deftest concurrent-readers-share-one-render
+  (let [dir (tmpdir) cache (atom {:entries {} :stats {}})
+        sys (system (loop/scripted [(loop/say "ok")]) dir)
+        id (:id ((get (pv/intents sys) "task/open") {:goal "x"}))
+        _ (task/await sys id 5000)
+        tp (get (pv/providers sys {:cache cache}) "task")
+        me (erlang/self)
+        _ (doseq [_ (range 12)] (spawn (fn [] (erlang/send me [:got ((:rev tp) id {})]))))
+        revs (vec (for [_ (range 12)] (receive [:got r] r (after 10000 :timeout))))]
+    (is (= 1 (count (set revs))))
+    (is (= 1 (:render (pv/cache-stats cache))) "twelve cold callers, one render")
+    (task/stop-system! sys)))
+
+(deftest the-cache-is-bounded
+  (let [dir (tmpdir) cache (atom {:entries {} :stats {}})
+        sys (system (loop/scripted [(loop/say "ok")]) dir)
+        ef (get (pv/providers sys {:cache cache}) "effects")]
+    (doseq [i (range (+ pv/MAX-ENTRIES 20))] ((:rev ef) (str "t-" i) {}))
+    (is (<= (:entries (pv/cache-stats cache)) pv/MAX-ENTRIES))
+    (is (>= (:evict (pv/cache-stats cache)) 20))
+    (task/stop-system! sys)))

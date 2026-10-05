@@ -40,7 +40,8 @@
   (:require [omega.env :as env]
             [omega.actor :as actor]
             [omega.trace :as tr]
-            [omega.stream :as stream]))
+            [omega.stream :as stream]
+            [datom]))
 
 (def MAX-STEPS 40)
 
@@ -62,13 +63,23 @@
 ; step 160; spikes/c8-turn-cache.bl.md: 4.4× faster with the list threaded).
 
 (defn turns
-  "All turns of task `id`, in order: [{:n :role :content}]."
+  "All turns of task `id`, in order: [{:n :role :content}]. Read by index walk
+   (:avet task → :eavt per turn), not a datalog join: 600 turns 1.4 s → ~0.4 s
+   (spikes/turn-read-cost.bl.md). A turn missing n, role or content is skipped,
+   as the former join skipped it."
   [sys id]
   (let [e (:env sys)
-        t (env/eid e :task/id id)
-        rows (env/q e '[:find ?n ?r ?c :in $ ?t
-                        :where [?u :turn/task ?t] [?u :turn/n ?n] [?u :turn/role ?r] [?u :turn/content ?c]] t)]
-    (vec (map (fn [[n r c]] {:n n :role r :content c}) (sort-by first rows)))))
+        db (env/db e)
+        t (env/eid e :task/id id)]
+    (if (nil? t)
+      []
+      (->> (datom/datoms db :avet :turn/task t)
+           (keep (fn [d]
+                   (let [m (reduce (fn [m x] (assoc m (nth x 1) (nth x 2))) {} (datom/datoms db :eavt (nth d 0)))]
+                     (when (and (contains? m :turn/n) (contains? m :turn/role) (contains? m :turn/content))
+                       {:n (:turn/n m) :role (:turn/role m) :content (:turn/content m)}))))
+           (sort-by :n)
+           vec))))
 
 (defn append!
   "Append a turn after `ts` (task `id`'s turns so far, as the caller holds

@@ -16,9 +16,14 @@
 ;   homes.edn       {task-id {:path p :block id}} — where each task's cell is
 ;   queries.edn     {qid text} — the q: documents' query texts
 ;
-; Revs: omega's documents gate on the store's basis-t (one read): unchanged
-; basis → the cached rev, no rendering. A moved basis re-renders, and the rev
-; is the hash of the TEXT, so an unrelated commit never reloads the page.
+; Revs & cache. A rev is the hash of the rendered TEXT, so a re-render that
+; changes nothing never reloads the page. A rendered doc is reused while ALL of
+; its dependencies hold (see `cached`): the store's basis-t, the side files it
+; read (content hash), and the clock — each doc records the instant its coarsest
+; displayed age next ticks (`:until`), so ages are never stale and an idle poll
+; never re-renders. Concurrent callers of one cold key share one render
+; (single-flight, per key); the cache is bounded (MAX-ENTRIES, oldest out).
+; Counters: (cache-stats cache) — pass {:cache (atom {})} in opts to read them.
 
 (ns omega.ed.providers
   (:require [omega.env :as env]
@@ -29,6 +34,7 @@
             [omega.codemode :as cm]
             [omega.ui.model :as model]
             [omega.ed.render :as r]
+            [clojure.edn]
             [clojure.string :as str]))
 
 ; ─── side files ─────────────────────────────────────────────────────────────
@@ -47,31 +53,114 @@
 
 (defn- rev [s] (str (erlang/phash2 (str s) 4294967296)))
 
-; ─── the cache: rev per (path, basis) ───────────────────────────────────────
+; ─── the cache ──────────────────────────────────────────────────────────────
+; cache = (atom {:entries {key entry} :stats {counter n}})
+; entry = {:basis :sig :doc :until :stable :at :flight :owner}
+
+(def MAX-ENTRIES 64)
 
 (defn- basis [sys] (datom.db/basis-t (env/db (:env sys))))
 
+(defn- ms [] (erlang/monotonic_time :millisecond))
+
+(defn- bump! [cache k n]
+  (swap! cache update-in [:stats k] (fn [x] (+ (or x 0) n))))
+
+(defn- timed
+  "Run f, adding its wall time to the :ms/<phase> counter — the phases of a
+   render (snapshot, detail, query…) stay separable."
+  [cache phase f]
+  (let [t0 (ms) v (f)]
+    (bump! cache (keyword (str "ms/" (name phase))) (- (ms) t0))
+    v))
+
+(defn cache-stats
+  "Counters so far: :hit :miss :render :wait :evict :ms/render + :ms/<phase>,
+   and :entries (current size)."
+  [cache]
+  (assoc (:stats @cache) :entries (count (:entries @cache))))
+
+(defn- dep-sig
+  "Content hash of each side file (nil when absent): a hand edit, an intent
+   write or a sidefile appearing all change it; mtime's 1 s resolution would not."
+  [sys opts files]
+  (mapv (fn [f] (let [p (str (state-dir sys opts) "/" f)]
+                  (when (File/regular? p) (erlang/phash2 (File/read! p)))))
+        files))
+
+(defn- fresh? [e b sig now]
+  (and e (:doc e)
+       (= b (:basis e)) (= sig (:sig e))
+       (<= (:at e) now)
+       (or (nil? (:until e)) (< now (:until e)))))
+
+(defn- flying? [e] (and (:flight e) (erlang/is_process_alive (:owner e))))
+
+(defn- evict [entries keep-k]
+  (if (<= (count entries) MAX-ENTRIES)
+    entries
+    (let [victim (first (sort-by (fn [[_ e]] (or (:stored e) 0))
+                                 (filter (fn [[k e]] (and (not= k keep-k) (not (:flight e)))) entries)))]
+      (if victim (dissoc entries (first victim)) entries))))
+
 (defn- cached
-  "Memoise `render` (→ {:text …}) per key on the store's basis-t: an unchanged
-   world answers from the cache without rendering. Wall-clock ages only move
-   when the world moves; the per-unit rounding (render/age) keeps that cheap."
-  [cache k sys render]
+  "The doc for key `k`, rendered at most once per (basis, side-file sig, clock
+   tick). `deps` names the side files `render` reads. `render` → doc, optionally
+   with :until (ms: when a displayed age next changes) and :stable (a value; an
+   unchanged one keeps the previous doc, e.g. a query's timing field)."
+  [cache sys opts k deps render]
   (let [b (basis sys)
-        hit (get @cache k)]
-    (if (and hit (= b (:basis hit)) (< (- (erlang/monotonic_time :millisecond) (:at hit)) 1000))
-      (:doc hit)
-      (let [d (render)
-            d (assoc d :rev (rev (:text d)))]
-        (swap! cache assoc k {:basis b :doc d :at (erlang/monotonic_time :millisecond)})
-        d))))
+        sig (dep-sig sys opts deps)
+        now (env/now (:env sys))
+        e (get-in @cache [:entries k])]
+    (cond
+      (fresh? e b sig now) (do (bump! cache :hit 1) (:doc e))
+      (flying? e) (do (bump! cache :wait 1) (Process/sleep 5) (cached cache sys opts k deps render))
+      :else
+      (let [token (erlang/unique_integer (list :positive))]
+        (swap! cache update-in [:entries k] (fn [x] (if (flying? x) x (assoc x :flight token :owner (erlang/self)))))
+        (if (not= token (get-in @cache [:entries k :flight]))
+          (cached cache sys opts k deps render)
+          (try
+            (let [t0 (ms)
+                  d (render now)
+                  _ (bump! cache :miss 1)
+                  _ (bump! cache :render 1)
+                  _ (bump! cache :ms/render (- (ms) t0))
+                  keep? (and e (:doc e) (some? (:stable d)) (= (:stable d) (:stable e)))
+                  doc (if keep? (:doc e) (let [d (dissoc d :until :stable)] (assoc d :rev (rev (:text d)))))]
+              (swap! cache (fn [st]
+                             (let [all (assoc (:entries st) k {:basis b :sig sig :doc doc :at now :until (:until d)
+                                                              :stable (:stable d)
+                                                              :stored (erlang/monotonic_time :microsecond)})
+                                   kept (evict all k)]
+                               (-> st (assoc :entries kept)
+                                   (update-in [:stats :evict] (fn [x] (+ (or x 0) (- (count all) (count kept)))))))))
+              doc)
+            (catch err
+              (swap! cache update-in [:entries k] (fn [x] (if (= token (:flight x)) (dissoc x :flight :owner) x)))
+              (throw err))))))))
+
+(defn- ages-until
+  "The instant (ms) the first displayed age of `rows` next changes: the next
+   unit boundary of r/age, or the stale threshold. nil with no rows."
+  [now rows]
+  (when (seq rows)
+    (+ now (apply min
+                  (map (fn [row]
+                         (let [a (max 0 (or (:age-ms row) 0))
+                               unit (cond (< a 60000) 1000 (< a 3600000) 60000 :else 3600000)
+                               d (- unit (mod a unit))
+                               st (when (and (contains? #{:running :waiting} (:status row)) (<= a model/STALE-MS))
+                                    (- (inc model/STALE-MS) a))]
+                           (if st (min d st) d)))
+                       rows)))))
 
 ; ─── projections ────────────────────────────────────────────────────────────
 
-(defn- snapshot [sys] (model/snapshot (:env sys)))
+(defn- snapshot [sys now] (model/snapshot (:env sys) now))
 
 (defn- homes [sys opts] (read-edn (str (state-dir sys opts) "/homes.edn")))
-
-(defn- row-of [snap id] (first (filter (fn [x] (= id (:id x))) (:tasks snap))))
 
 (defn- effect-rows
   "v0 effects of task `id` from its turns: each eval cell's edit/write calls
@@ -119,35 +208,44 @@
                    {:result res}))))}))
 
 (defn- overview-provider [sys opts cache]
-  {:read (fn [_ _] (cached cache "overview" sys
-                           (fn [] (r/overview (snapshot sys) (homes sys opts) (env/now (:env sys))))))
-   :rev (fn [_ _] (:rev (cached cache "overview" sys
-                                (fn [] (r/overview (snapshot sys) (homes sys opts) (env/now (:env sys)))))))})
+  (let [get-doc (fn []
+                  (cached cache sys opts "overview" ["homes.edn"]
+                          (fn [now]
+                            (let [snap (timed cache :snapshot (fn [] (snapshot sys now)))]
+                              (assoc (r/overview snap (homes sys opts) now) :until (ages-until now (:tasks snap)))))))]
+    {:read (fn [_ _] (get-doc))
+     :rev (fn [_ _] (:rev (get-doc)))}))
 
 (defn- tasks-provider
   "omega:tasks?ids=a,b — the cards (internal; the editor watches it). :data is
    a vector of cards, each with its :home (where its task cell lives)."
   [sys opts cache]
-  (let [render (fn [ids]
+  (let [render (fn [ids now]
                  (let [hs (homes sys opts)
-                       d (r/task-rows (snapshot sys) ids (env/now (:env sys)))
+                       rows (timed cache :rows (fn [] (model/task-rows (:env sys) ids now)))
+                       d (r/task-rows {:tasks rows} ids now)
                        cards (vec (map (fn [cd] (assoc cd :home (get hs (:id cd)))) (vals (:cards d))))]
-                   (assoc d :data cards :text (pr-str (sort-by :id cards)))))
-        ids-of (fn [params] (vec (remove str/blank? (str/split (str (:ids params)) ","))))]
-    {:read (fn [_ params] (let [ids (ids-of params)] (cached cache (str "tasks:" ids) sys (fn [] (render ids)))))
-     :rev (fn [_ params] (let [ids (ids-of params)] (:rev (cached cache (str "tasks:" ids) sys (fn [] (render ids))))))}))
+                   (assoc d :data cards :text (pr-str (sort-by :id cards))
+                          :until (ages-until now rows))))
+        ids-of (fn [params] (vec (remove str/blank? (str/split (str (:ids params)) ","))))
+        get-doc (fn [params] (let [ids (ids-of params)]
+                               (cached cache sys opts (str "tasks:" ids) ["homes.edn"] (fn [now] (render ids now)))))]
+    {:read (fn [_ params] (get-doc params))
+     :rev (fn [_ params] (:rev (get-doc params)))}))
 
 (defn- task-provider [sys opts cache]
-  (let [render (fn [id params]
-                 (let [snap (snapshot sys)
-                       row (row-of snap id)]
+  (let [render (fn [id params now]
+                 (let [row (first (timed cache :rows (fn [] (model/task-rows (:env sys) [id] now))))]
                    (if (nil? row)
                      {:title (str "task:" id) :text (str "#+TITLE: task:" id "\n\nNo task " id " in this world.") :objects []}
-                     (r/task-doc row
-                                 (assoc (model/task-detail sys id) :asks (:asks row))
-                                 (homes sys opts) (env/now (:env sys)) (= "1" (:all params))))))]
-    {:read (fn [id params] (cached cache (str "task:" id (:all params)) sys (fn [] (render id params))))
-     :rev (fn [id params] (:rev (cached cache (str "task:" id (:all params)) sys (fn [] (render id params)))))
+                     (assoc (r/task-doc row
+                                        (assoc (timed cache :detail (fn [] (model/task-detail sys id))) :asks (:asks row))
+                                        (homes sys opts) now (= "1" (:all params)))
+                            :until (ages-until now [row])))))
+        get-doc (fn [id params]
+                  (cached cache sys opts (str "task:" id (:all params)) ["homes.edn"] (fn [now] (render id params now))))]
+    {:read (fn [id params] (get-doc id params))
+     :rev (fn [id params] (:rev (get-doc id params)))
      :eval (fn [id _ cell-id t]
              ;; re-run one of the task's cells AS the human: same namespace and
              ;; limits as the agent; the cell and its result reach the task as a steer
@@ -177,23 +275,31 @@
                  (let [text (get (read-edn (qfile)) qid)]
                    (if (nil? text)
                      {:title (str "q:" qid) :text (str "#+TITLE: q:" qid "\n\nNo such query. (omega/q '[:find …]) makes one.") :objects []}
-                     (let [[res ms] (run-query sys text)] (r/query-doc qid text res ms)))))]
-    {:read (fn [qid _] (cached cache (str "q:" qid) sys (fn [] (render qid))))
-     :rev (fn [qid _] (:rev (cached cache (str "q:" qid) sys (fn [] (render qid)))))
-     :eval (fn [qid _ _ _] (swap! cache dissoc (str "q:" qid)) {:result "re-ran"})}))
+                     (let [[res qms] (run-query sys text)
+                           _ (bump! cache :ms/query qms)]
+                       ;; :stable = what the doc says apart from run time: an
+                       ;; unchanged answer keeps its rev though `ms` jitters
+                       (assoc (r/query-doc qid text res qms) :stable [text res])))))
+        get-doc (fn [qid] (cached cache sys opts (str "q:" qid) ["queries.edn"] (fn [_] (render qid))))]
+    {:read (fn [qid _] (get-doc qid))
+     :rev (fn [qid _] (:rev (get-doc qid)))
+     :eval (fn [qid _ _ _]
+             (swap! cache update :entries dissoc (str "q:" qid))
+             {:result "re-ran"})}))
 
-(defn- effects-provider [sys cache]
+(defn- effects-provider [sys opts cache]
   (let [render (fn [nm]
                  (let [[id cell] (if (str/includes? nm "/") [(first (str/split nm "/")) nm] [nm nil])]
-                   (r/effects-doc id cell (effect-rows sys id))))]
-    {:read (fn [nm _] (cached cache (str "effects:" nm) sys (fn [] (render nm))))
-     :rev (fn [nm _] (:rev (cached cache (str "effects:" nm) sys (fn [] (render nm)))))}))
+                   (r/effects-doc id cell (effect-rows sys id))))
+        get-doc (fn [nm] (cached cache sys opts (str "effects:" nm) [] (fn [_] (render nm))))]
+    {:read (fn [nm _] (get-doc nm))
+     :rev (fn [nm _] (:rev (get-doc nm)))}))
 
 (defn providers
   "The provider map for bl-ed.serve/start!."
   ([sys] (providers sys {}))
   ([sys opts]
-   (let [cache (atom {})]
+   (let [cache (or (:cache opts) (atom {:entries {} :stats {}}))]
      {"omega" {:read (fn [nm p] (case nm
                                   "scratch" ((:read (scratch-provider sys opts)) nm p)
                                   "overview" ((:read (overview-provider sys opts cache)) nm p)
@@ -208,7 +314,7 @@
                :eval (fn [nm p id t] (if (= nm "scratch") ((:eval (scratch-provider sys opts)) nm p id t) {:result "cells here do not run"}))}
       "task" (task-provider sys opts cache)
       "q" (q-provider sys opts cache)
-      "effects" (effects-provider sys cache)})))
+      "effects" (effects-provider sys opts cache)})))
 
 ; ─── intents ────────────────────────────────────────────────────────────────
 
