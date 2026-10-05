@@ -1,0 +1,17 @@
+#+TITLE: Reduce cold long transcript reads and scope projection invalidation
+#+STATE: ITEM
+#+SESSION_ID: 159967db0c6fdff3
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T19-35-34-193Z_159967db0c6fdff3.jsonl]]
+#+CUSTOM_ID: FUP-013-reduce-cold-long-transcript-reads-and-sc
+
+* Initial Message
+
+ok i would like you to look at the --js-actors branch and tell me about this macro thing, and also to look at the loading times and tell me what makes them slow. what's your plan for ensuring a smooth experience?
+
+Follow-up to PLAN-007 smooth-loading implementation. Functional gates pass; remaining performance targets must not be claimed achieved.
+
+Isolated experience-world.bl with two600-turn tasks and compiler b4861edf: cold default task doc cache misses100.15/55.94/42.85ms, cached2.49/1.97/1.74ms. Target cold<50ms is not consistently met. loop/turns uses :avet :turn/task selection + per-turn :eavt materialization. A bulk-column prototype had parity but comparable/slower88–107ms and was not adopted. Narrow rows cost roughly3–8ms; task-detail is dominated by turns. Investigate indexed batch materialization or bounded tail retrieval preserving earlier-turn count, ordering, missing-attribute semantics, tool/result pairing and full-history :all. Keep one canonical turns API.
+
+Provider cache is bounded64, single-flight per key and correct on global basis/sidefile content hash/rounded age deadlines. It no longer rerenders unchanged transcripts everysecond. Unrelated-task commits conservatively invalidate cached entries on next read; text hashes prevent UI reloads, not the backend render. Investigate precise dependency signatures via existing datom change/index APIs, covering task attrs, turn edits, traces, human asks/replies, homes/query files, clocks/stale thresholds and retractions without O(turns) work per unchanged revision check. Test render counters for unrelated commits, not only equal revs.
+
+Proof: spikes/present/proof/loading-2026-10-05.json; rationale research/domain/interface/loading-and-macros.bl.md; tests test/loop_projection_test.bl and test/ed_test.bl. Isolated worlds only, never write/restart live8790. Record load and multiple samples; do not compare different world sizes as speedups. Bound caches/subscriptions; API cutover, no parallel turns-fast implementation. No follow-up implementation started.

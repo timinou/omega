@@ -1,0 +1,22 @@
+{
+  "fixture": "spikes/present/test/experience-world.bl: isolated memory world, two 600-turn tasks, default last-30-turn view, inbox layout",
+  "compilerCommit": "b4861edf5db1ef3c48fb9d6afb63bd088bea4db2",
+  "startupReadyMs": [124, 141, 127],
+  "languageReadyAtFirstDisplay": false,
+  "scrollProcessingMs": {"median": 2.6, "p95": 4.0, "max": 7.7},
+  "scrollRafIntervalMs": {"median": 16.7, "p95": 16.7, "max": 16.8},
+  "scrollSampleCount": 119,
+  "coldDocumentMs": [100.15, 55.94, 42.85],
+  "cachedDocumentMs": [2.49, 1.97, 1.74],
+  "runtimeContracts": {
+    "delayedOlderVisitCannotReplaceNewerTask": true,
+    "pinnedUpdateVisibleAtLatest": true,
+    "readingAnchorPreservedOnServerUpdate": true,
+    "draftPreservedOnServerUpdate": true,
+    "minimapBarsRetainedDuringFractionalScroll": true,
+    "bootRoutePreservesPackage": true,
+    "prebootCommandQueuedAndResumed": "(+ 1 2) -> 3",
+    "unuseRestoresSingleOrdinaryEditor": true
+  },
+  "limits": ["Local samples, not a startup p95 distribution", "Not the same world as the original live baseline", "Physical trackpad feel and 120-Hz end-to-end paint unverified", "Cold 600-turn document target below 50ms is not consistently achieved", "Live port8790 was neither mutated nor restarted"]
+}

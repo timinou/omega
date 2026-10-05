@@ -1,5 +1,5 @@
 #+TITLE: Implement smooth loading and scrolling with JS macro support
-#+STATE: DOING
+#+STATE: DONE
 #+SESSION_ID: 159967db0c6fdff3
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T19-35-34-193Z_159967db0c6fdff3.jsonl]]
 #+CUSTOM_ID: PLAN-007-implement-smooth-loading-and-scrolling-w
@@ -15,3 +15,14 @@ Work slices: A) providers cache/revision semantics, dependency invalidation incl
 Commit each verified atomic slice with exact paths, never git add -A. Orchestrator runs all global builds/tests after workers join and before relevant commits; workers may run narrow probes/tests only, no global builds. Verification: bin/bl test; vendor/bl-ed drive/frame/pkg/omega suites; presentation scroll/equivalence; fresh isolated browser readiness, stale navigation race, no dropped initial input, reduced-motion/time-based glide, reader-position/latest-follow on update. Benchmark cold/warm doc APIs and scroll JS/RAF p95. Proposed reference targets cold600-turn taskAPI<50ms, cached<10ms, steady scrollJSp95<4ms, warm useful inbox<200ms; report actual results and remaining blockers honestly, not cherry-picked wins. Preserve readtable map API; optional macro sugar is not a separate reader implementation. Full cold/durable bootstrap optimization may require profiling; instrument it and only adopt safe coherent prebuilt artifacts. Successful self-hosted runtime adoption is separate from macro registration and needs parity/perf proof; do not silently enable it.
 
 Root AGENTS.md and /home/user/.agents/AGENTS.md apply; read deeper AGENTS before changing sibling beam-lisp. Full approved rationale and baseline measurements reside in research/domain/interface/loading-and-macros.bl.md.
+
+* Completed implementation and evidence
+Committed Omega slices:86c9296 (baseline/approved scope),e363c46 (visible-source pinned cursor regression),e678917 (indexed turns/narrow projections/dependency-aware cache),a061844 (host parallel startup, deferred language/input, guarded visits, shared bounded BL model memo and retained minimap DOM),501cc2e (cold regex imports and validated compiler pin). Upstream beam-lisp commits54e4c613 andb4861edf. Other concurrent DWIM navigation source hunks were preserved rather than staged; VENDOR shared documentation includes its navigation notes.
+
+Final gates: normal pinned compiler fullOmega18/18 test files; UI/editor/host/frame/pkg/omega65/65; scrolling/cache12/12; defaultpresentation38/38; separatecoldprocessHTTPregression passes firstvirtualrequest anddocumentrevchange on append. Upstream macro15assertions + JSdiff11 verified. Sealed image tested aswell as source; pinb4861edf active. Selfhostcore/runtime notenabled.
+
+Real browser ownedfixture8793: delayedoldervisit loses to t2; pinnedserverupdate visible; readinganchor andcomposer draft preserved onactualappend; minimapbarDOMretained; routeuseparam retained; preboottextarea command (+1 2) parkedthenreturned3; unuse singlepane. Screenshots26/27 and proofJSON atspikes/present/proof/loading-2026-10-05.json.
+
+Final local fixturemetrics: inbox124/141/127ms; scroll2.6median/4.0p95/7.7maxms,119postwarmupsamples; RAF16.7median/p95/16.8maxms. Cold600turndoc100.15/55.94/42.85ms; cached2.49/1.97/1.74ms. Originallivebaseline usesdifferentworld, notcontrolledratio. Targetsnotallmet: FUP013tracks residualcoldread/materialization andpreciseunrelatedtaskinvalidation. Physicaltrackpad,120Hzfullpaint,durablecoldbootstrapunverified.
+
+No writes or restart to live8790. The running backend must be restarted by its owner to use backend/pin changes; no userworldcontrol taken. All ownedfixture services and temporary browserframes are cleaned afterproof. Full report research/domain/interface/loading-and-macros.bl.md has source/limits/reproduction context.

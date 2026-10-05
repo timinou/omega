@@ -143,3 +143,51 @@ Session artifacts (raw tool output):
 - Detailed branch probe: `/tmp/omega-macro-investigation.md`, `agent://2-BranchMacroProof`; temporary probe sources/worktree remain under `/tmp` for reproduction.
 
 No production optimization or re-pin was performed. Durable startup, a successful self-hosted build, Firefox-specific behavior and physical trackpad feel remain unverified.
+
+## 4. Implementation outcome (2026-10-05)
+
+The approved implementation is committed in slices. Omega commits include `e363c46` (visible-source cursor hardening), `e678917` (indexed turns/narrow projections/dependency cache), and `a061844` (parallel startup, deferred input, latest-request-wins, shared bounded model memo and retained minimap DOM). Upstream beam-lisp commits `54e4c613` and `b4861edf` register macros/helpers and harden exact source extraction/build-environment isolation. Omega now pins `b4861edf`; self-hosted core/rt was not enabled.
+
+### What is now different
+
+- No unconditional one-second projection expiry. Cache entries depend on store basis, side-file content hashes and the next rounded-age/stale boundary. Twelve simultaneous cold readers share one render; capacity is64. Query timing jitter no longer changes an otherwise identical query document/rev. Optional cache statistics separate row/snapshot/detail/query work.
+- `loop/turns` is the indexed implementation, not a parallel `turns-fast`; required-attribute and ordering semantics are retained. Task documents/cards use a narrow `model/task-rows` projection rather than materializing unrelated task rows.
+- One host frame model feeds paint, watchers and scroll dispatch. BL's bounded identity-pair LRU is shared by frame and presentation derivation. Unchanged panes retain their DOM; minimap bars remain mounted while only its fractional lens moves. Measurements identified minimap rebuilding/layout work after the first host cleanup, so that work was removed rather than assuming memoization alone met the budget.
+- Editor/document/package resources load in parallel. Initial layout uses the existing pure frame API. The language loads after first display. Preboot keystrokes are replayed; early command/local-cell evaluation parks intact input with a token and resumes exactly once after readiness. Changed input, Escape, navigation and stale answers cannot execute the old operation.
+- Per-pane visits abort superseded requests, preserve the previous picture/loading status and reject stale refreshes/errors. Reload URLs retain package/theme/layout parameters. Easing is time-based; continuous trackpad deltas and reduced-motion input bypass the tween.
+- Resize preserves an explicit reading anchor or tail pin. Tests caught both an off-screen cursor on ornament-only bodies and a resize-induced re-reveal; both now have regression coverage.
+- Cold HTTP testing found an independent dependency issue hidden by warm suites: `bl-ed.serve` resolved unqualified `re-matches` before a regex literal autoloaded `clojure.re`. An explicit require fixes the first virtual-path request. The renderer declares that dependency too. This was reproduced; a suspected callback-environment problem was ruled out.
+
+### Final proof
+
+`spikes/present/proof/loading-2026-10-05.json` records the local fixture and limits. The fixture uses two600-turn tasks and real provider/server/page code, with no task recovery/execution. Controlled append requests went only to that owned in-memory world at8793. Live8790 was not written or restarted.
+
+| final local measurement | observed |
+|---|---|
+| useful inbox, three fresh documents |124 /141 /127 ms; interpreter not yet ready |
+| steady fractional scroll,119 post-warmup samples |2.6 ms median,4.0 ms p95,7.7 ms max processing |
+| corresponding RAF interval |16.7 ms median/p95,16.8 ms max |
+| uncached600-turn task document |100.15 /55.94 /42.85 ms |
+| immediate cached document |2.49 /1.97 /1.74 ms |
+
+These final samples are not the same world as the original13-task live baseline; do not present their ratio as a controlled speedup. Earlier noisy runs during builds exceeded the frame budget. The final retained-DOM/model cutover was measured again and the measurements above are the final observed set, not a promise for every workload.
+
+Verified gates:
+
+- Omega18/18 test files, including durable tests, on both committed compiler source and the sealed compiler image.
+- Editor/host/frame/pkg/omega65/65; presentation scrolling/cache12/12; default-presentation equivalence38/38.
+- A separate cold-process HTTP regression checks the first virtual document read without retry/warmup and an appended turn changing the document rev.
+- Real browser: delayed older visit cannot replace t-2; backend updates grow a pinned viewport, preserve a reading anchor and preserve a draft; minimap bar DOM is retained; route options survive navigation.
+- Deliberately delayed boot/language with real textarea key events: `(+ 1 2)` remains parked, then displays `3`, returning to normal mode. Package removal restores one ordinary editor pane.
+- Screenshots: `proof/26-smooth-loading-fractional-scroll.png` and `proof/27-smooth-loading-unuse-restores-editor.png`.
+
+### Limits and follow-up
+
+Cold600-turn reads are not consistently below50 ms; global basis invalidation remains conservative for unrelated commits. `FUP-013-reduce-cold-long-transcript-reads-and-sc` tracks precise dependency invalidation and faster materialization/tail projection. A bulk-column prototype had parity but no useful timing win and was not adopted.
+
+Macro helpers must be statically referenced top-level `defn`/`defn-`; def-bound/computed helpers are unsupported. Imported templates must qualify inner macro names. Compile-time macros can intentionally perform IO: the build is not a sandbox. What is prevented is accidental application top-level initialization and leaking build-added definitions/loaded marks into the live VM.
+
+Physical trackpad feel,120-Hz end-to-end painting, and durable-world startup timings remain unverified. Functional easing tests cover60/120/144-Hz timing and reduced motion, but are not physical-device measurements.
+
+Packaging exposed unrelated global build/staging locks. Builds were isolated by data/cache/staging directories; a sealed b4861edf image was verified and published as a content-addressed payload/commit pointer without changing release channels. A subsequent normal pinned invocation succeeded. Full packaging time is not included in the page-startup figures.
+
