@@ -6,8 +6,11 @@ Any spike under `spikes/` that changes what bl-ed draws or does MUST be written 
 package. Contract and rationale: `research/domain/interface/packages.bl.md`.
 
 - **Export one value:** `(def bl-package {:name … :doc … :commands :keys :intercept :on-event
-  :adopt :render :provides})`, as plain maps and fns. Not `package` (a reserved word in JS). No
-  `defmacro` in code built with `bl js build`: the build drops it.
+  :adopt :render :provides})`, as plain maps and fns. Not `package` (a reserved word in JS).
+  Build-time `defmacro` is supported by the pinned compiler; macro sugar must expand to these
+  same values, not establish another package/reader implementation. Macro helpers must be
+  statically referenced top-level `defn`/`defn-`; imported templates must fully qualify inner
+  macro names. Do not rely on application top-level initialization during a JS build.
 - **Layers, never merges:** never write into `:user-commands` / `:user-keys`, never mutate shared
   tables. Per-editor state goes under `(:pkg-state ed)` by name; editor keys `:adopt` sets go in
   `:owns`. `:(ed/unuse "<name>")` must leave the editor, and every pane, exactly as before.

@@ -28,7 +28,9 @@
 ; {"name" (fn [args] result-map)}; args arrive keywordized.
 
 (ns bl-ed.serve
-  (:require [web :as w] [bl.doc :as doc] [bl.json :as json] [system.place :as pl]))
+  ; clojure.re: `re-matches` is interned into core only when it loads; the #"…" literal autoloads it
+  ; AFTER the unqualified fn symbol is resolved, so a cold request handler failed on first use.
+  (:require [clojure.re] [web :as w] [bl.doc :as doc] [bl.json :as json] [system.place :as pl]))
 
 ; ─── paths ──────────────────────────────────────────────────────────────────
 

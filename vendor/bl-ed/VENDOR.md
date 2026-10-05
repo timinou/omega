@@ -33,7 +33,9 @@ and omega's world run on one beam-lisp.
 ### DWIM navigation seam (2026-10-05)
 
 - `ed/view.bl` (new): one visible-source topology from the existing outline/fold spans,
-  shared by plain rendering and navigation; folded intervals are walked once. Package
+  shared by plain rendering and navigation; folded intervals are walked once. A bounded
+  derived memo keyed by structure/folds/row count avoids rebuilding that topology for counts
+  and reveal; source-row resolution is logarithmic. Package
   contributions `:provides {:navigation {:rows fn :reveal fn :outline? fn}}` are consulted
   latest-first, with nil declining and false explicitly disabling source-outline policy.
   Navigation rows are distinct ascending source rows; exact wrapped-column navigation is
@@ -49,7 +51,9 @@ and omega's world run on one beam-lisp.
 
 Interaction policy and its contract tests live outside the generic editor in `spikes/dwim/`.
 The present package contributes its slot/source topology, task granularity for the rail,
-projection-aware reveal, and whether its presentation uses source-heading folds. Deferred
+projection-aware reveal, and whether its presentation uses source-heading folds. It defers rail
+keys when a package advertises `:navigation-policy`, preserving counts and multi-head semantics
+in either load order; explicit omega folds outrank automatic focus detail. Deferred
 selection/search/peek/action features are documented in `spikes/dwim/vision.bl.md`.
 
 Every later change made here is listed in this table, so that it can be upstreamed.
@@ -95,4 +99,7 @@ Two ways out, whichever comes first:
 - Regression gates: editor/host/frame/pkg/omega drive tests (65), presentation scrolling/cache tests (12), and the existing default-presentation equivalence corpus. The equivalence runner now accepts `--corpus` and exits nonzero for mismatches or an empty corpus.
 
 The implementation and measured outcomes are tracked in `research/domain/interface/loading-and-macros.bl.md`; throughput targets are not implied by passing functional tests.
+
+
+Cold-image HTTP gate: `bl-ed.serve` explicitly requires `clojure.re`. Resolving an unqualified `re-matches` before its regex literal loads that library failed the first virtual-path request in a fresh packaged VM, while warm suites hid it. `test/serve-cold.test.mjs` starts a fresh ephemeral fixture, checks the first virtual HTTP read without retrying it, then verifies an appended turn changes the document rev. No live-world writes are involved.
 
