@@ -34,7 +34,7 @@ The view is a value (`ed :view`), and a presentation owns two keys in it:
   turn's last line, NOT the composer: the composer takes typed characters). `:seen` in `:pkg-state` tells them apart;
   the host's empty boot document is not "seen".
 - **A key moves from what is on screen.** `unpin` turns a pinned view into the anchored one that draws the same
-  picture, and brings an off-screen cursor onto the body first.
+  picture, and brings an off-screen cursor onto the body first. Visibility uses the source row of both text lines and ornament/wrapped lines; a presentation-only body must not leave the cursor stranded in old history.
 
 ## Smooth: the grid stays integral, only transforms move
 

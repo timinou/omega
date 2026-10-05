@@ -14,6 +14,8 @@ const R = await load("rt.mjs");
 const K = R.kw;
 const file = process.argv[2];
 const src = fs.readFileSync(file, "utf8");
+const warmup = Number(process.env.BENCH_WARMUP || 20);
+const samples = Number(process.env.BENCH_SAMPLES || 200);
 const key = (h) => (ed, k) => h(ed, R.hashMap(K("type"), K("key"), K("key"), k));
 
 function measure(label, n, step, render, ed0) {
@@ -29,12 +31,20 @@ function suite(name, boot, handle, render, scheme) {
   let ed = boot(src, scheme);
   const resize = (e) => handle(e, R.hashMap(K("type"), K("resize"), K("height"), 40));
   ed = resize(ed);
-  for (let i = 0; i < 20; i++) { ed = k(ed, "j"); render(ed); }
+  for (let i = 0; i < warmup; i++) { ed = k(ed, "j"); render(ed); }
   const lines = [];
   lines.push(measure("j", 200, (e) => k(e, "j"), render, ed));
   lines.push(measure("k", 200, (e) => k(e, "k"), render, ed));
   lines.push(measure("w", 200, (e) => k(e, "w"), render, ed));
   lines.push(measure("G/gg", 40, (e, i) => (i % 2 ? k(k(e, "g"), "g") : k(e, "G")), render, ed));
+  const scrollEd = k(ed, "G");
+  const slotScroll = render(scrollEd).get(K("slot-top")) != null;
+  lines.push(measure("scroll", samples, (e, i) => {
+    const delta = i % 40 < 20 ? -0.32 : 0.32;
+    return handle(e, slotScroll
+      ? R.hashMap(K("type"), K("scroll-slots"), K("delta"), delta)
+      : R.hashMap(K("type"), K("scroll"), K("top"), Math.max(0, render(e).get(K("top")) + Math.sign(delta))));
+  }, render, scrollEd));
   let ins = k(ed, "i");
   lines.push(measure("type", 300, (e, i) => k(e, "abcdefghij"[i % 10]), render, ins));
   console.log(`${name.padEnd(8)} ${lines.join(" | ")}`);

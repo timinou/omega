@@ -81,7 +81,7 @@
 
 (defn- adopt
   "A document arrived. A VISIT to a task opens at the latest: the cursor on the
-   composer, the view pinned to the end (a refresh of the same document is not
+   newest turn, the view pinned to the end (a refresh of the same document is not
    a visit: it keeps where the reader is)."
   [ed path]
   (let [a (auto path)
@@ -185,6 +185,11 @@
 ; A refresh that is not pinned keeps the anchor (docs/refreshed maps its row
 ; through the text change), so an update never pulls a reader back to the top.
 
+(defn- source-row [line] (or (:row line) (:src line)))
+
+(defn- body-lines [v]
+  (filter (fn [line] (and (some? (source-row line)) (not (:fixed? line)) (not (:peek? line)))) (:lines v)))
+
 (defn- size-at [slots y] (or (:size (nth slots y)) 1))
 
 (defn- walk
@@ -214,11 +219,11 @@
                                  (assoc :top r :anchor {:row r :off (- y base) :sub sub})
                                  (assoc :pin (when (and at-tail? (follow? ed)) :end))))
          v2 (p/render pr ed2)
-         body (filter (fn [l] (and (some? (:row l)) (not (:fixed? l)))) (:lines v2))
+         body (body-lines v2)
          cur (first (c/cursor ed2))
-         shown (set (map :row body))]
+         shown (set (map source-row body))]
      (if (or (contains? shown cur) (empty? body) (= :end (:pin (:view ed2)))) ed2
-       (let [q [(if (> y (:slot-top v)) (:row (first body)) (:row (last body))) 0]]
+       (let [q [(if (> y (:slot-top v)) (source-row (first body)) (source-row (last body))) 0]]
          (assoc ed2 :sels [{:anchor q :head q}] :primary 0))))))
 
 (defn- scroll-by
@@ -242,10 +247,10 @@
           y (:slot-top v)
           r (p/slot-row (nth (:slots (:screen v)) y))
           base (p/first-slot-of-row (:slots (:screen v)) r)
-          body (filter (fn [l] (and (some? (:row l)) (not (:fixed? l)))) (:lines v))
-          shown (set (map :row body))
+          body (body-lines v)
+          shown (set (map source-row body))
           ed (if (or (empty? body) (contains? shown (first (c/cursor ed)))) ed
-               (let [q [(:row (last body)) 0]] (assoc ed :sels [{:anchor q :head q}] :primary 0)))]
+               (let [q [(source-row (last body)) 0]] (assoc ed :sels [{:anchor q :head q}] :primary 0)))]
       (assoc ed :view (-> (:view ed) (dissoc :pin) (assoc :top r :anchor {:row r :off (- y base) :sub 0}))))))
 
 (defn- intercept

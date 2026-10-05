@@ -106,3 +106,58 @@ test("scrolling down to the end re-pins; a key moves from what is on screen", ()
   assert.equal(pin(ed), null, "a key unpins (it is a reader's move)");
   assert.ok(Math.abs(slotTop(ed) - before) <= 4, "and does not throw the picture away");
 });
+
+
+test("resizing a pinned conversation keeps its latest body and docked composer", () => {
+  let ed = open(12);
+  for (const [height, cols] of [[12, 36], [32, 100], [20, 48]]) {
+    ed = P.d_handle(ed, ev("type", K("resize"), "height", height, "cols", cols));
+    const v = view(ed);
+    assert.equal(pin(ed), K("end"));
+    assert.equal(get(v, "slot-top"), get(v, "tail-top"));
+    assert.ok(texts(v).join("\n").includes("say"));
+    const fixed = get(v, "lines").toArray().filter((l) => get(l, "fixed?"));
+    assert.ok(fixed.every((l) => get(l, "vy") >= 0 && get(l, "vy") < height));
+  }
+});
+
+test("a cursor left off-screen cannot make the first pinned motion jump to history", () => {
+  let ed = open(20);
+  const at = R.vec(0, 0);
+  ed = ed.assoc(K("sels"), R.vec(R.hashMap(K("anchor"), at, K("head"), at)));
+  const before = slotTop(ed);
+  ed = key(ed, "k");
+  assert.equal(pin(ed), null);
+  assert.ok(Math.abs(slotTop(ed) - before) <= 4, "motion starts from the visible body, not the stale cursor");
+});
+
+test("a multiline composer draft survives refresh and resize without losing tail-follow", () => {
+  let ed = key(open(8), "i");
+  ed = P.d_handle(ed, ev("type", K("text"), "text", "first line"));
+  ed = key(ed, "S-Enter");
+  ed = P.d_handle(ed, ev("type", K("text"), "text", "second line"));
+  const draft = get(get(ed, "minibuf"), "text");
+  assert.equal(draft, "first line\nsecond line");
+  ed = P.d_handle(ed, doc(task(8, "* model · 99\nNEW TURN WHILE DRAFTING\n"), "r2", false));
+  ed = P.d_handle(ed, ev("type", K("resize"), "height", 18, "cols", 40));
+  assert.equal(get(get(ed, "minibuf"), "text"), draft);
+  assert.ok(texts(view(ed)).join("\n").includes("second line"));
+  assert.equal(pin(ed), K("end"));
+});
+
+test("fractional reading position survives repeated updates and a narrow resize", () => {
+  let ed = scroll(open(12), -60.5);
+  const anchor = get(get(ed, "view"), "anchor");
+  const sourceRow = get(anchor, "row");
+  const sub = get(anchor, "sub");
+  for (let rev = 2; rev < 8; rev++) {
+    ed = P.d_handle(ed, doc(task(12, `* model · 99\nnew answer ${rev}\n`), "r" + rev, false));
+    assert.equal(get(get(get(ed, "view"), "anchor"), "row"), sourceRow);
+    assert.equal(get(get(get(ed, "view"), "anchor"), "sub"), sub);
+    assert.equal(pin(ed), null);
+  }
+  ed = P.d_handle(ed, ev("type", K("resize"), "height", 16, "cols", 32));
+  assert.equal(get(get(get(ed, "view"), "anchor"), "row"), sourceRow);
+  assert.equal(pin(ed), null);
+});
+
