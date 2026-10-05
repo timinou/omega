@@ -421,6 +421,28 @@ function paint(dom, v, focused) {
   // Reconcile by SLOT: slot i shows row frag[i]. A slot is touched only when
   // its row's signature changed (a scroll shifts every slot; a keystroke
   // usually touches one or two). The gutter is reconciled the same way.
+  // Smooth scrolling: a presentation reports how many rows the body is scrolled
+  // past its top slot (:frac, fractional) and, per line, whether it scrolls
+  // (:fixed? rows — a sticky headline, the docked composer — do not), how much
+  // of it the body's edges hide (:clip-top/:clip-bottom, rows) and whether it is
+  // a slot peeking in below the body (:peek?, taken out of flow). The grid
+  // stays integral; only transforms move.
+  const frac = get(v, "frac") || 0;
+  const lineArr = lines.toArray();
+  const shiftOf = (ln) => {
+    if (get(ln, "fixed?") || !frac) return { t: "", c: "", abs: null };
+    const ct = get(ln, "clip-top") || 0, cb = get(ln, "clip-bottom") || 0;
+    return { t: `translateY(${-frac * metrics.line}px)`, c: ct || cb ? `inset(${ct * metrics.line}px 0 ${cb * metrics.line}px 0)` : "", abs: null };
+  };
+  const place$ = (node, ln, sh) => {
+    const peek = !!get(ln, "peek?");
+    const css = peek ? "position:absolute;left:0;right:0;top:" + get(ln, "vy") * metrics.line + "px" : "";
+    if (node.dataset.pos !== css) { node.dataset.pos = css; node.style.position = peek ? "absolute" : ""; node.style.left = peek ? "0" : ""; node.style.right = peek ? "0" : ""; node.style.top = peek ? get(ln, "vy") * metrics.line + "px" : ""; }
+    const t = peek ? "" : sh.t;
+    if (node.style.transform !== t) node.style.transform = t;
+    const c = sh.c || (peek && (get(ln, "clip-top") || get(ln, "clip-bottom")) ? `inset(${(get(ln, "clip-top") || 0) * metrics.line}px 0 ${(get(ln, "clip-bottom") || 0) * metrics.line}px 0)` : "");
+    if (node.style.clipPath !== c) node.style.clipPath = c;
+  };
   for (let i = 0; i < frag.length; i++) {
     const [row, sig, segs, folded, cls, current, place, why, src, size, vy] = frag[i];
     let node = view.children[i];
@@ -439,7 +461,9 @@ function paint(dom, v, focused) {
       if (folded) { const f = document.createElement("span"); f.className = "fold-mark"; f.textContent = " ⋯"; fresh.appendChild(f); }
       if (segs.cnt === 0) fresh.appendChild(document.createTextNode("\u200b"));
       if (node) view.replaceChild(fresh, node); else view.appendChild(fresh);
+      node = fresh;
     }
+    place$(node, lineArr[i], shiftOf(lineArr[i]));
     let g = gutter.children[i];
     // a cell's first row carries its placement: ● local (runs in the page),
     // ◆ beam (runs on the BEAM; the title says why), ✦ agent (a task block)
@@ -449,6 +473,10 @@ function paint(dom, v, focused) {
     const gh = size > 1 ? size * metrics.line + "px" : "";
     if (g.style.height !== gh) g.style.height = gh;
     if (g.textContent !== gtxt) g.textContent = gtxt;
+    { const ln = lineArr[i], sh = shiftOf(ln), peek = !!get(ln, "peek?");
+      g.style.display = peek ? "none" : "";
+      if (g.style.transform !== sh.t) g.style.transform = sh.t;
+      if (g.style.clipPath !== sh.c) g.style.clipPath = sh.c; }
     const title = place === "local" ? "runs here, in the page (pure, terminates)" : place === "beam" ? "runs on the BEAM — " + (why || "")
       : place === "agent" ? "runs as an agent in omega: C-Enter opens a task (again: refine it)" : "";
     if (g.title !== title) g.title = title;
@@ -527,9 +555,8 @@ function chrome(v, rv) {
   // loaded packages, the document's presentation and its modes
   if (get(v, "presentation")) chip("crumb pres", "▣ " + get(v, "presentation"));
   for (const l of (get(v, "modes") ? get(v, "modes").toArray() : [])) chip("crumb mode", l);
-  // the window: its layout and the C-w chord
+  // the window: its layout
   if (get(rv, "layout") && get(rv, "layout") !== "single") chip("crumb pres", "⊞ " + get(rv, "layout"));
-  if (get(rv, "chord")) chip("pending", get(rv, "chord") + "-");
   const pend = get(st, "pending");
   if (pend) chip("pending", pend + (get(st, "count") ? " ×" + get(st, "count") : ""));
   else if (get(st, "count")) chip("pending", "×" + get(st, "count"));
@@ -687,15 +714,37 @@ panesEl.addEventListener("mousedown", (e) => {
   dispatch(ev(K("type"), K("click"), K("pos"), R.vec(row, col), K("extend?"), e.shiftKey));
   sink.focus();
 });
+// Wheel → a target in ROWS (fractional) per pane; a frame loop eases toward it
+// and sends the step as :scroll-slots (a presentation moves by screen rows and
+// by fractions of one; a plain document by whole rows). A trackpad's small
+// deltas just pass through the same easing; a mouse wheel's notch glides.
+const glide = new Map();           // pane id → { rest: rows still to go, raf }
+function glideTick(id) {
+  const g = glide.get(id); if (!g) return;
+  const step = Math.abs(g.rest) < 0.02 ? g.rest : g.rest * 0.32;
+  g.rest -= step;
+  const e = F.d_editor(fr, K(id));
+  if (e) {
+    const v = M.d_render(e);
+    if (get(v, "slot-top") != null) dispatch(ev(K("type"), K("scroll-slots"), K("pane"), K(id), K("delta"), step));
+    else {
+      g.whole = (g.whole || 0) + step;
+      const w = Math.trunc(g.whole); g.whole -= w;
+      if (w) dispatch(ev(K("type"), K("scroll"), K("pane"), K(id), K("top"), Math.max(0, get(v, "top") + w)));
+    }
+  }
+  if (Math.abs(g.rest) < 0.001) { glide.delete(id); return; }
+  g.raf = requestAnimationFrame(() => glideTick(id));
+}
 panesEl.addEventListener("wheel", (e) => {
   if (e.target.closest(".view")) return;
   e.preventDefault();
-  const id = K(paneOf(e.target));
-  const v = M.d_render(F.d_editor(fr, id));
-  const rows = Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / metrics.line));
-  // a presentation scrolls by SCREEN rows (a wrapped answer is many rows of one text row)
-  if (get(v, "slot-top") != null) { dispatch(ev(K("type"), K("scroll-slots"), K("pane"), id, K("delta"), rows)); return; }
-  dispatch(ev(K("type"), K("scroll"), K("pane"), id, K("top"), Math.max(0, get(v, "top") + rows)));
+  const id = paneOf(e.target);
+  const px = e.deltaMode === 1 ? e.deltaY * metrics.line : e.deltaMode === 2 ? e.deltaY * metrics.line * 20 : e.deltaY;
+  const g = glide.get(id) || { rest: 0 };
+  g.rest += px / metrics.line;
+  glide.set(id, g);
+  if (!g.raf) g.raf = requestAnimationFrame(() => { g.raf = 0; glideTick(id); });
 }, { passive: false });
 
 // every editor pane learns its height (rows) and width (cells)

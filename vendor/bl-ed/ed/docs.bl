@@ -77,6 +77,62 @@
                           )
          {:view (assoc (:view new) :height (get-in old [:view :height] 40))}))
 
+(defn row-map
+  "Where do rows go when text `old` becomes `new`? A function old-row → new-row.
+   Rows above the first changed line stay; rows below the last changed line
+   move by the change in line count; a row inside the change keeps its offset
+   from the change's start (clamped to the new change). The reader's place
+   survives an update by what is around it, not by a row number."
+  [old new]
+  (let [a (:lines old) b (:lines new)
+        na (count a) nb (count b)
+        lim (min na nb)
+        pre (loop [i 0] (if (and (< i lim) (= (nth a i) (nth b i))) (recur (inc i)) i))
+        suf (loop [i 0] (if (and (< i (- lim pre)) (= (nth a (- na 1 i)) (nth b (- nb 1 i)))) (recur (inc i)) i))
+        new-len (- nb suf pre)]
+    (fn [r] (cond (< r pre) r
+                  (>= r (- na suf)) (+ r (- nb na))
+                  :else (+ pre (min (- r pre) (max 0 (dec new-len))))))))
+
+(defn- row-of-object
+  "The row of the object with the same type and key as `o` in {row obj}, or nil."
+  [index o]
+  (when (some? o)
+    (first (keep (fn [[r x]] (when (and (= (:type x) (:type o)) (= (:key x) (:key o))) r)) index))))
+
+(defn- on-screen? [ed r]
+  (let [{:keys [top height]} (:view ed)] (and (>= r top) (< r (+ top height)))))
+
+(defn- refreshed
+  "The read-only view `ed` after its document changed to `ev`'s text: the same
+   place in a new text. The cursor stays on the OBJECT it was on (a row that
+   moved is followed), else maps through the text change; the viewport maps the
+   same way, and is only scrolled to the cursor if the cursor was on screen
+   (a reader who scrolled away is not pulled back)."
+  [ed ev fresh]
+  (let [rm (row-map (:text ed) (:text fresh))
+        index (index-objects (:objects ev))
+        [r c] (c/cursor ed)
+        r2 (or (row-of-object index (object-at ed)) (rm r))
+        q (t/clamp (:text fresh) [r2 c])
+        view (:view ed)
+        view (cond-> (assoc view :top (min (rm (:top view)) (max 0 (dec (t/line-count (:text fresh))))))
+               (some? (:anchor view)) (update-in [:anchor :row] rm))
+        shown? (on-screen? ed r)
+        out (-> (keep-session ed fresh)
+                (assoc :doc {:rev (:rev ev) :read-only? true :title (:title ev) :data (:data ev)}
+                       :obj-index index
+                       :sels [{:anchor q :head q}] :primary 0 :view view
+                       ; a refresh never takes what you are typing: an open
+                       ; prompt (a say draft, a query) survives the world's tick
+                       :mode (if (some? (:minibuf ed)) (:mode ed) :normal)
+                       :minibuf (:minibuf ed)
+                       ; a refresh is not news: keep what the echo area says
+                       :message (:message ed)))]
+    ; a presentation keeps the cursor in view itself (and owns :anchor/:pin);
+    ; only a plain text view needs the core's cursor margin
+    (if (and shown? (nil? (:anchor view)) (nil? (:pin view))) (c/scroll-to-cursor out) out)))
+
 (defn load-doc
   "Apply a :doc event."
   [ed ev new-editor]
@@ -88,20 +144,7 @@
       (and same? (not (:visit? ev)))
         (cond
           (= (:rev ev) (get-in ed [:doc :rev])) ed
-          (:read-only? meta)
-            (let [p (c/cursor ed)
-                  fresh (new-editor (:text ev) (:path ev))
-                  q (t/clamp (:text fresh) p)]
-              (-> (keep-session ed fresh)
-                  (assoc :doc meta :obj-index (index-objects (:objects ev))
-                         :sels [{:anchor q :head q}] :primary 0 :view (:view ed)
-                         ; a refresh never takes what you are typing: an open
-                         ; prompt (a say draft, a query) survives the world's tick
-                         :mode (if (some? (:minibuf ed)) (:mode ed) :normal)
-                         :minibuf (:minibuf ed)
-                         ; a refresh is not news: keep what the echo area says
-                         :message (:message ed))
-                  (c/scroll-to-cursor)))
+          (:read-only? meta) (refreshed ed ev (new-editor (:text ev) (:path ev)))
           (c/dirty? ed) (c/message (assoc-in ed [:doc :stale] (:rev ev)) "changed elsewhere since you loaded it — your copy is kept; C-s overwrites")
           :else (let [ed2 (c/replace-text ed (:text ev))]
                   (assoc ed2 :saved-text (:text ed2) :doc meta :obj-index (index-objects (:objects ev)))))

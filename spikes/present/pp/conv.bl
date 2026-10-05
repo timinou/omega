@@ -278,7 +278,7 @@
    (when (some? (:minibuf ed)) [(:prompt (:minibuf ed)) (:text (:minibuf ed))])])
 
 (def presentation
-  {:name "conversation" :fill? true :sticky-heads? true
+  {:name "conversation" :fill? true :sticky-heads? true :follows-tail? true
    :read read-conv :readtable readtable :table table :around [] :isa isa
    :lod-of lod-of :focus-of focus-of})
 

@@ -11,7 +11,7 @@
             [pp.omega :as om]
             [pp.main :as pm]))
 
-(defn- strip [l] (dissoc l :y :vy))
+(defn- strip [l] (dissoc l :y :vy :fixed? :peek?))
 
 (defn- scrolled [ed top] (assoc-in ed [:view :top] top))
 

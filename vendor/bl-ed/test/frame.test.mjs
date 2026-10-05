@@ -122,15 +122,15 @@ test("effects are tagged by pane; an answer for one pane changes only that pane"
   assert.equal(s.ed("rail"), before, "the rail is the same value");
 });
 
-test("C-w w cycles focus over editor panes only; C-w o keeps the focused editor", () => {
+test("space w w cycles focus over editor panes only; space w o keeps the focused editor", () => {
   const s = session().cmd('(ed/layout "two")');
   assert.equal(get(s.fr, "focus"), K("rail"));
-  s.key("C-w").key("w");
+  s.key(" ").key("w").key("w");
   assert.equal(get(s.fr, "focus"), K("main"));
-  s.key("C-w").key("w");
+  s.key(" ").key("w").key("w");
   assert.equal(get(s.fr, "focus"), K("rail"), "the view pane was skipped");
   s.key("j");                                    // select item:a → main shows it
-  s.key("C-w").key("l").key("C-w").key("o");
+  s.key(" ").key("w").key("l").key(" ").key("w").key("o");
   assert.equal(get(F.d_render(s.fr), "layout"), "single");
   assert.equal(s.path("main"), "item:a", "only the focused editor remains, intact");
 });

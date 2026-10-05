@@ -30,7 +30,7 @@
 ;
 ; ─── the rules ─────────────────────────────────────────────────────────────
 ;
-;   1. Keys go to the focused editor. C-w w / C-w h / C-w l move focus
+;   1. Keys go to the focused editor. space w w / h / l move focus
 ;      between EDITOR panes (views are never focused).
 ;   2. An event tagged {:pane id} goes to that pane: the host answering a
 ;      pane's effect, or a view acting on the pane it views.
@@ -164,15 +164,27 @@
     (assoc fr :focus (nth ids (mod (+ i dir) (count ids))))))
 
 (def WINDOW-KEYS
-  "C-w then … (Vim's window keys)."
+  "space w then … (the window keys). C-w is the browser's close-tab, so the
+   frame's prefix is the leader's `w`, as in Spacemacs."
   {"w" :next "l" :next "h" :prev "o" :only})
 
-(defn- window-key [fr k]
-  (let [cmd (get WINDOW-KEYS k)]
+(defn- window-key
+  "Run window command `k`; the focused editor's half-typed `space w` is dropped."
+  [fr k]
+  (let [fr (assoc-in fr [:editors (:focus fr)]
+                     (assoc (focused fr) :pending [] :message nil))
+        cmd (get WINDOW-KEYS k)]
     (cond (= :next cmd) (move-focus fr 1)
           (= :prev cmd) (move-focus fr -1)
-          (= :only cmd) (unarrange fr)
-          :else fr)))
+          :else (unarrange fr))))
+
+(defn- window-key? [fr ev]
+  (let [ed (focused fr)]
+    (and (= :key (:type ev)) (nil? (:pane ev))
+         (contains? WINDOW-KEYS (:key ev))
+         (= ["space" "w"] (:pending ed))
+         (contains? #{:normal :select} (:mode ed))
+         (> (count (editor-ids fr)) 1))))
 
 ; ─── packages are frame-wide (rule 4) ──────────────────────────────────────
 ;
@@ -213,14 +225,11 @@
 (defn handle
   "One host event into the frame."
   [fr ev]
-  (let [target (or (:pane ev) (:focus fr))
-        key? (and (= :key (:type ev)) (nil? (:pane ev)))]
+  (let [target (or (:pane ev) (:focus fr))]
     (cond
-      ; C-w is the frame's own prefix, in normal mode, in every layout
-      (and key? (= "C-w" (:key ev)) (= :normal (:mode (focused fr))) (empty? (:pending (focused fr))))
-        (assoc fr :chord "C-w")
-      (and key? (some? (:chord fr)))
-        (window-key (dissoc fr :chord) (:key ev))
+      ; `space w` + w/h/l/o is the frame's own chord, in every layout (the
+      ; editor still owns `space w (` etc.: only these four keys are taken)
+      (window-key? fr ev) (window-key fr (:key ev))
       ; a resize reaches every editor pane, each with its own width in cells
       (= :resize (:type ev))
         (reduce (fn [fr id]
@@ -241,14 +250,13 @@
 
 (defn render
   "What the host paints:
-     {:layout name :focus id :chord s?
+     {:layout name :focus id
       :panes [{:id :width :focus? :kind :editor :view (ed.main/render ed)}
               {:id :width :kind :view :view-kind kw :of id :view (view-fn ed)}]}
    A view's model comes from the packages: (:provides {:views {kind (fn [ed] model)}})."
   [fr]
   {:layout (:name (:layout fr))
    :focus (:focus fr)
-   :chord (:chord fr)
    :panes (vec (map (fn [p]
                       (if (view-pane? p)
                         (let [[kind of] (:view p)

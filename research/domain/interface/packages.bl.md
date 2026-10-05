@@ -171,7 +171,7 @@ pane's document up.
 ?use=omega&layout=inbox   ; at boot
 ```
 
-Keys (core, always on): `C-w w` next pane · `C-w h` / `C-w l` left/right · `C-w o` only this pane
+Keys (core, always on): `space w w` next pane · `space w h` / `space w l` left/right · `space w o` only this pane
 (Vim's window keys). `space a o` with an `inbox` layout available opens it instead of a single
 overview, so the three screens become one.
 
@@ -182,7 +182,7 @@ overview, so the three screens become one.
 frame  = {:panes {id ed} :views {id [kind of]} :layout layout :focus id :effects []}
 
 (frame/handle fr ev)          ; ev with {:pane id} goes to that pane (a host answer to its effect);
-                              ; keys go to the focused pane; C-w … moves focus;
+                              ; keys go to the focused pane; space w … moves focus;
                               ; after a pane changes, its links fire (select → visit effect …)
 (frame/take-effects fr)       ; every pane's effects, tagged {:pane id}
 (frame/render fr)             ; {:panes [{:id :width :focus? :view} …]}, :view = ed.main/render or a view's model
@@ -245,7 +245,7 @@ What changes from `spikes/present` round 2 (frame.html + frame.mjs, ~250 lines o
    through `frame/handle`).
 2. `:select` link: `j` in `:rail` over a task row → exactly one `{:kind :visit :pane :main :path "task:t-1"}`.
 3. Effects tagged by pane; an answer with `{:pane :main}` changes only `:main`.
-4. `C-w w` cycles focus over EDITOR panes only (views are skipped).
+4. `space w w` cycles focus over EDITOR panes only (views are skipped).
 5. `(ed/layout nil)` keeps the focused pane's editor (cursor, history) intact.
 6. Unusing the package that provided the active layout falls back to one pane.
 

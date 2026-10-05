@@ -33,7 +33,7 @@ layouts, and `:(ed/layout "inbox")` brings one to life.
 | `:focus` | pane id | where keys go first |
 
 Using it: `?use=present&layout=inbox`, or `:(ed/use "present")` then `:(ed/layout "inbox")`.
-`:(ed/layout nil)` / `C-w o` returns to one pane. `C-w w` / `C-w l` / `C-w h` move focus.
+`:(ed/layout nil)` / `space w o` returns to one pane. `space w w` / `space w l` / `space w h` move focus.
 `:(ed/layouts)` lists what the loaded packages provide.
 
 ## 2. Two kinds of pane, and only two
@@ -59,7 +59,7 @@ frame = {:layout  layout
          :effects [effect]}    ; every pane's effects, tagged {:pane id}
 ```
 
-1. **Keys go to the focused editor.** `C-w` is the frame's prefix in normal mode.
+1. **Keys go to the focused editor.** `space w` is the frame's prefix (normal/select mode); only `w h l o` after it are taken, `space w (` etc. stay the editor's.
 2. **An event tagged `{:pane id}` goes to that pane.** That covers a host answer to a pane's effect,
    a view acting on its pane, a wheel over a pane, and a late answer for a pane that no longer
    exists (dropped).
@@ -102,24 +102,25 @@ frame = {:layout  layout
 | F4 | packages are frame-wide | unloading stays exact; a document already picks its drawing by `:adopt` | per-pane `:use` if a real need appears |
 | F5 | one design language, theme.css only (no `:css` in packages yet) | one look while the shapes settle | `:css` per package, injected and removed with it |
 | F6 | the first editor pane reuses the original `#editor` DOM | one pane = byte-identical page; existing CSS and tests keep working | — |
+| F8 | the window prefix is `space w` (not `C-w`) | `C-w` closes the tab in Firefox; the leader is the bl-ed way. `space w (` (wrap) still works: only the 3rd key `w h l o` is taken, and only in a multi-pane frame | — |
 | F7 | `:owns` on a package: editor keys its `:adopt` sets, removed by `unuse` | `:presentation`/`:modes` would outlive the package (found live, 2026-10-04) | — |
 
 ## 6. Verified (2026-10-04)
 
 - `test/frame.test.mjs` (8): one pane ≡ ed.main (key for key); arrange keeps your editor and cursor;
   a `:select` link emits exactly one visit for the right pane and none when leaving objects;
-  answers per pane leave the others identical; `C-w w` skips views and `C-w o` keeps the editor;
+  answers per pane leave the others identical; `space w w` skips views and `space w o` keeps the editor;
   a view draws from its pane; unknown layout / `(ed/layout nil)`; unusing a package spreads and
   ends its layout. Drive tests 41/41 (19 + 11 + 3 + 8).
 - Real bl-ed on the live world (read-only; drafts cancelled):
   - `?use=present&layout=inbox` boots three panes (proof/23);
   - `j` in the rail opens the task in `:main`;
-  - `C-w w`, then `J` in `:main` jumps threads;
+  - `space w w`, then `J` in `:main` jumps threads;
   - the minimap's top maps to row 0 and its bottom to the end of the document;
   - `i` drafts in `:main`'s docked composer (proof/24);
   - `:(ed/unuse "present")` returns to one pane, plain org, no frames;
   - `use` + `layout` again rebuilds the panes;
-  - `C-w o` keeps the conversation pane.
+  - `space w o` keeps the conversation pane.
 - One pane renders as before: proof/21, compared against the session's first screenshot of `task:t-5`.
 
 ## 7. Not done

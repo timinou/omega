@@ -46,25 +46,21 @@
         last-from (if (empty? turns) 0 (:from (last turns)))]
     (>= (first (c/cursor ed)) last-from)))
 
+(defn- follow? [ed] (some (fn [m] (= m :follow)) (:modes ed)))
+
 (def follow
   {:name :follow :lighter "⇣ follow"
-   :doc "Keep the newest turn in view while you are at the tail; scrolling up lets go."
-   ; only a NEW TURN moves the cursor: a rev that changes the title's age or a
-   ; trace is not news, and the composer is never taken from under you
-   :on-event (fn [old new ev]
-               (let [turns (objects-of new :omega/turn)]
-                 (if (and (= :doc (:type ev)) (at-tail? old)
-                          (> (count turns) (count (objects-of old :omega/turn)))
-                          (not= (composer-row old) (first (c/cursor old))))
-                   (goto-row new (:from (last turns)))
-                   new)))})
+   :doc "Stay at the latest: while you are at the bottom, new turns keep the end in view; scrolling up lets go, scrolling back down (or G) picks it up again."
+   ; the pin itself is the view's :pin (set by scrolling to the tail, by the cursor
+   ; landing on the composer, and by opening a task); the render honours it
+   :on-event (fn [old new ev] new)})
 
 (def compose
   {:name :compose :lighter "✎ compose"
-   :doc "When the task hands you the turn, the cursor goes to the say block."
+   :doc "When the task hands you the turn WHILE you are reading it, the cursor goes to the say block (opening a task is not that: you land at the latest turn, ready to read)."
    :on-event (fn [old new ev]
                (let [yours? (fn [ed] (some? (index-of (t/line (:text ed) 0) "your turn")))]
-                 (if (and (= :doc (:type ev)) (yours? new) (not (yours? old)) (at-tail? old) (some? (composer-row new)))
+                 (if (and (= :doc (:type ev)) (= (:path old) (:path new)) (yours? new) (not (yours? old)) (at-tail? old) (some? (composer-row new)))
                    (goto-row new (composer-row new))
                    new)))})
 
@@ -83,9 +79,24 @@
     (= "omega:overview" (str path)) {:presentation "rail" :modes []}
     :else {:presentation "text" :modes []}))
 
-(defn- adopt [ed path]
-  (let [a (auto path)]
-    (assoc ed :presentation (get PRESENTATIONS (:presentation a)) :modes (:modes a))))
+(defn- adopt
+  "A document arrived. A VISIT to a task opens at the latest: the cursor on the
+   composer, the view pinned to the end (a refresh of the same document is not
+   a visit: it keeps where the reader is)."
+  [ed path]
+  (let [a (auto path)
+        seen (get-in ed [:pkg-state "present" :seen])
+        empty? (= "" (t/to-string (:text ed)))
+        ed (-> ed (assoc :presentation (get PRESENTATIONS (:presentation a)) :modes (:modes a))
+                  ; an empty document (the host's boot) has not been seen yet
+                  (assoc-in [:pkg-state "present" :seen] (if empty? nil path)))
+        ; the cursor rests on the newest turn's last line, NOT the composer: the
+        ; composer takes typed characters (chat), reading keys must still read
+        turns (when (and (not= seen path) (follow? ed)) (objects-of ed :omega/turn))
+        r (when (seq turns) (min (:to (last turns)) (dec (or (composer-row ed) (t/line-count (:text ed))))))]
+    (if (nil? r) ed
+      (-> ed (assoc :sels [{:anchor [r 0] :head [r 0]}] :primary 0)
+             (assoc-in [:view :pin] :end)))))
 
 (def commands
   {:pp/next-turn {:doc "Next turn." :run (block-motion :omega/turn 1)}
@@ -161,36 +172,88 @@
 
 (defn- prompting? [ed] (and (= :command (:mode ed)) (= :prompt (:kind (:minibuf ed)))))
 
-; ─── scrolling by screen rows (a slot), not by text rows ───────────────────
+; ─── scrolling: the position is a value, in rows ───────────────────────────
 ;
 ; A wrapped answer is ONE text row drawn as many slots, so scrolling by text
-; rows would jump over it. The view keeps an anchor {:row r :off k} (the k-th
-; slot of row r is at the top); any motion that moves :top drops it.
+; rows would jump over it, and a wheel that moves whole rows is jerky. The view
+; keeps an anchor {:row r :off k :sub f}: the k-th slot of text row r, f rows
+; (fractional) scrolled past its top. Any motion that moves :top drops it.
+;
+; The view may also be PINNED to the latest ({:pin :end}): the end of the
+; document stays in view while it grows (a chat's "latest shown"). Pinned means
+; at the tail AND following; scrolling up unpins, reaching the tail pins again.
+; A refresh that is not pinned keeps the anchor (docs/refreshed maps its row
+; through the text change), so an update never pulls a reader back to the top.
+
+(defn- size-at [slots y] (or (:size (nth slots y)) 1))
+
+(defn- walk
+  "Slot y, `sub` rows into it, moved by `delta` rows (either sign) → [y sub],
+   clamped to the screen [0, limit)."
+  [slots limit y sub delta]
+  (loop [y y pos (+ sub delta)]
+    (cond (< pos 0) (if (zero? y) [0 0] (recur (dec y) (+ pos (size-at slots (dec y)))))
+          (>= pos (size-at slots y)) (if (>= (inc y) limit) [y 0] (recur (inc y) (- pos (size-at slots y))))
+          :else [y pos])))
 
 (defn- scroll-to-slot
-  "Put slot y at the top; if the cursor leaves the body, it follows (Vim C-e)."
-  [ed y]
-  (let [pr (:presentation ed)
-        v (p/render pr ed)
+  "Put slot y (sub rows into it) at the top. Reaching the tail pins (when
+   following); the cursor leaves the body → it follows (Vim C-e)."
+  ([ed y] (scroll-to-slot ed y 0))
+  ([ed y sub]
+   (let [pr (:presentation ed)
+         v (p/render pr ed)
+         {:keys [slots limit]} (:screen v)
+         tail (:tail-top v)
+         at-tail? (>= y tail)
+         y (if at-tail? tail (max 0 (min y (dec (max 1 limit)))))
+         sub (if at-tail? 0 sub)
+         r (p/slot-row (nth slots y))
+         base (p/first-slot-of-row slots r)
+         ed2 (assoc ed :view (-> (:view ed)
+                                 (assoc :top r :anchor {:row r :off (- y base) :sub sub})
+                                 (assoc :pin (when (and at-tail? (follow? ed)) :end))))
+         v2 (p/render pr ed2)
+         body (filter (fn [l] (and (some? (:row l)) (not (:fixed? l)))) (:lines v2))
+         cur (first (c/cursor ed2))
+         shown (set (map :row body))]
+     (if (or (contains? shown cur) (empty? body) (= :end (:pin (:view ed2)))) ed2
+       (let [q [(if (> y (:slot-top v)) (:row (first body)) (:row (last body))) 0]]
+         (assoc ed2 :sels [{:anchor q :head q}] :primary 0))))))
+
+(defn- scroll-by
+  "Scroll by `delta` rows (fractional: a trackpad's pixels, a wheel tween's step)."
+  [ed delta]
+  (let [v (p/render (:presentation ed) ed)
         {:keys [slots limit]} (:screen v)
-        y (max 0 (min y (dec (max 1 limit))))
-        r (p/slot-row (nth slots y))
-        base (p/first-slot-of-row slots r)
-        ed2 (assoc ed :view (assoc (:view ed) :top r :anchor {:row r :off (- y base)}))
-        v2 (p/render pr ed2)
-        body (filter (fn [l] (some? (:row l))) (:lines v2))
-        cur (first (c/cursor ed2))
-        shown (set (map :row body))]
-    (if (or (contains? shown cur) (empty? body)) ed2
-      (let [q [(if (> y (:slot-top v)) (:row (first body)) (:row (last body))) 0]]
-        (assoc ed2 :sels [{:anchor q :head q}] :primary 0)))))
+        [y sub] (walk slots limit (:slot-top v) (or (:frac v) 0) delta)]
+    (scroll-to-slot ed y sub)))
+
+(defn- pinned? [ed] (= :end (:pin (:view ed))))
+
+(defn- unpin
+  "Materialise a pinned view as an ordinary anchored one (same picture), so a
+   motion the core makes starts from what is on screen, not from a stale :top.
+   A cursor that is not on screen comes to the last body row first: a key
+   never throws the picture to wherever the cursor happened to be."
+  [ed]
+  (if-not (pinned? ed) ed
+    (let [v (p/render (:presentation ed) ed)
+          y (:slot-top v)
+          r (p/slot-row (nth (:slots (:screen v)) y))
+          base (p/first-slot-of-row (:slots (:screen v)) r)
+          body (filter (fn [l] (and (some? (:row l)) (not (:fixed? l)))) (:lines v))
+          shown (set (map :row body))
+          ed (if (or (empty? body) (contains? shown (first (c/cursor ed)))) ed
+               (let [q [(:row (last body)) 0]] (assoc ed :sels [{:anchor q :head q}] :primary 0)))]
+      (assoc ed :view (-> (:view ed) (dissoc :pin) (assoc :top r :anchor {:row r :off (- y base) :sub 0}))))))
 
 (defn- intercept
   "Events the package answers instead of the core (nil: let the core run)."
   [ed ev]
   (cond
     (nil? (:presentation ed)) nil
-    (= :scroll-slots (:type ev)) (scroll-to-slot ed (+ (:slot-top (p/render (:presentation ed) ed)) (:delta ev)))
+    (= :scroll-slots (:type ev)) (scroll-by ed (:delta ev))
     (= :scroll-to-slot (:type ev)) (scroll-to-slot ed (:y ev))
     ; a draft is several lines: S-Enter breaks the line (Enter still sends)
     (and (prompting? ed) (= :key (:type ev)) (= "S-Enter" (:key ev)))
@@ -201,12 +264,25 @@
       (compose-key ed "")
     (and (presented? ed) (some? (typed-char ev)) (on-composer? ed) (some? (task-id ed)))
       (compose-key ed (typed-char ev))
+    ; a pinned view moves like any other: from what is on screen. (While a
+    ; prompt is open the keys are the draft's, nothing moves: stay pinned.)
+    (and (pinned? ed) (contains? #{:key :click} (:type ev)) (not= :command (:mode ed)))
+      (m/handle (unpin ed) ev)
     :else nil))
+
+(defn- repin
+  "Following, with the cursor on the composer after a key or click: the view is
+   at the latest (and stays there as the document grows)."
+  [new ev]
+  (if (and (contains? #{:key :click} (:type ev)) (presented? new) (follow? new)
+           (some? (composer-row new)) (>= (first (c/cursor new)) (composer-row new)))
+    (assoc-in new [:view :pin] :end)
+    new))
 
 (defn- on-event
   "After the core: the active modes react to what it did."
   [old new ev]
-  (reduce (fn [acc k] ((:on-event (get MODES k)) old acc ev)) new (or (:modes new) [])))
+  (repin (reduce (fn [acc k] ((:on-event (get MODES k)) old acc ev)) new (or (:modes new) [])) ev))
 
 (defn- draw
   "The document, drawn through its presentation (nil: no presentation → text)."

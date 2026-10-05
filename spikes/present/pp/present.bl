@@ -189,6 +189,28 @@
     (if (or (zero? t) (> (+ used (size-of (nth slots (dec t)))) budget)) t
       (recur (dec t) (+ used (size-of (nth slots (dec t))))))))
 
+(defn- tail-top
+  "The first slot of a viewport of `budget` rows that ends with the last body
+   slot (limit-1). With sticky headlines the headline over that top takes
+   rows from the body, so the top is asked for again with them subtracted."
+  [slots limit budget frames sticky-heads?]
+  (if (zero? limit) 0
+    (let [last-y (dec limit)
+          t0 (top-for-bottom slots last-y budget)
+          head-of (fn [t] (when sticky-heads?
+                            (last (filter (fn [f] (and (:head? f) (< (:y0 f) t) (> (:y1 f) t))) frames))))
+          h0 (head-of t0)
+          hh (if (some? h0) (size-of (nth slots (:y0 h0))) 0)]
+      (if (zero? hh) t0 (top-for-bottom slots last-y (- budget hh))))))
+
+(defn- peek-slots
+  "The slots from y (below `end`) that a body scrolled up by `frac` rows
+   uncovers at its bottom edge."
+  [slots y end frac]
+  (loop [y y covered 0 out []]
+    (if (or (>= y end) (>= covered frac)) out
+      (recur (inc y) (+ covered (size-of (nth slots y))) (conj out y)))))
+
 (defn render
   "ed.main/render's view model, drawn through presentation `p`. :lines are
    today's line maps for text slots; ornament slots add {:ornament? :src :key
@@ -211,16 +233,24 @@
                 (+ (first-slot-of-row slots top) (:off anchor))
                 (first-slot-at-or-after slots index top))
         y-top (min y-top (max 0 (dec limit)))
+        ; a sub-row offset (smooth scrolling): the anchor slot is `frac` rows
+        ; scrolled past its top. Only meaningful while that anchor is in use.
+        frac0 (if (and (some? anchor) (= (:row anchor) top)) (or (:sub anchor) 0) 0)
+        ; the viewport that ENDS at the last body slot (a chat's "latest"): under
+        ; the sticky headline the body is shorter, so ask for the top twice
+        pinned? (and (:follows-tail? p) (= :end (:pin (:view ed))))
+        y-tail (tail-top slots limit (- h dock-h) frames (:sticky-heads? p))
         ; a presenter may grow or shrink what is between :top and the cursor:
         ; if the cursor is on screen in TEXT space, keep it on screen here too
         yc (when (and (>= cur top) (< cur (+ top h))) (get index cur))
         yc (when (and (some? yc) (< yc limit)) yc)
-        y-top (cond (or (nil? yc) (zero? n)) y-top
+        y-top (cond pinned? y-tail
+                    (or (nil? yc) (zero? n)) y-top
                     (< yc y-top) yc
                     (not (some (fn [y] (= y yc)) (take-rows slots y-top (- h dock-h) limit))) (top-for-bottom slots yc (- h dock-h))
                     :else y-top)
         ; a presentation that shrinks the document fills the screen from the end
-        y-top (if (and (:fill? p) (pos? limit)) (min y-top (top-for-bottom slots (dec limit) (- h dock-h))) y-top)
+        y-top (if (and (:fill? p) (pos? limit)) (min y-top y-tail) y-top)
         ; the heading of the section the top is inside (scrolled past) sticks
         head (when (:sticky-heads? p)
                (last (filter (fn [f] (and (:head? f) (< (:y0 f) y-top) (> (:y1 f) y-top))) frames)))
@@ -234,25 +264,55 @@
         pinned (filter (fn [f] (>= (:y0 f) probe-end)) floating)
         pin-ys (vec (concat (mapcat (fn [f] (range (:y0 f) (:y1 f))) pinned) dock-ys))
         pin-h (reduce + 0 (map (fn [y] (size-of (nth slots y))) pin-ys))
-        body (take-rows slots y-top (- h head-h pin-h) (if (empty? pinned) limit (min limit (:y0 (first pinned)))))
+        body-end (if (empty? pinned) limit (min limit (:y0 (first pinned))))
+        body (take-rows slots y-top (- h head-h pin-h) body-end)
+        body-used (reduce + 0 (map (fn [y] (size-of (nth slots y))) body))
+        ; Smooth scrolling: the view is `frac` rows past the top slot. The body
+        ; moves up by that much (the host does it), so the slots just below it
+        ; PEEK in; they are listed last (the host takes them out of flow).
+        frac (if (or pinned? (empty? body) (>= (inc (last body)) body-end)) 0 frac0)
+        peek (if (pos? frac) (peek-slots slots (inc (last body)) body-end frac) [])
         ys (vec (concat head-ys body pin-ys))
         vys (vec (reductions-of (map (fn [y] (size-of (nth slots y))) ys)))
-        shown (vec (map (fn [i] [(nth ys i) (nth slots (nth ys i)) (nth vys i)]) (range (count ys))))
+        peek-vys (vec (reductions-of (cons (+ head-h body-used) (map (fn [y] (size-of (nth slots y))) peek))))
+        shown (vec (concat (map (fn [i] [(nth ys i) (nth slots (nth ys i)) (nth vys i)]) (range (count ys)))
+                           (map (fn [i] [(nth peek i) (nth slots (nth peek i)) (nth peek-vys i)]) (range (count peek)))))
         rows (vec (keep (fn [[_ s _]] (when (= :text (:kind s)) (:row s))) shown))
         ; ONE pass of today's line drawing, over exactly the rows on screen
         v (m/render-rows ed rows)
         by-row (reduce (fn [acc l] (assoc acc (:row l) l)) {} (:lines v))
-        line-of (fn [[y s vy]]
-                  (if (= :text (:kind s))
-                    (assoc (get by-row (:row s)) :y y :vy vy)
-                    {:row nil :src (:src s) :key (:key s) :y y :vy vy :ornament? true :segments (:segs s)
-                     :role (:role s) :size (size-of s) :current? (= cur (:src s))}))
+        ; Rows that do not scroll with the body (the sticky headline, the docked
+        ; composer) stay put; body rows move up by `frac` and are CLIPPED to the
+        ; body (the part under the headline, or past its bottom edge, is hidden).
+        fixed (set (concat head-ys pin-ys))
+        peeked? (set peek)
+        edge-top head-h
+        edge-bot (+ head-h body-used)
+        clip (fn [y s vy]
+               (if (or (zero? frac) (contains? fixed y)) {}
+                 (let [t (- vy frac) b (+ t (size-of s))
+                       ct (max 0 (- edge-top t)) cb (max 0 (- b edge-bot))]
+                   (cond-> {} (pos? ct) (assoc :clip-top ct) (pos? cb) (assoc :clip-bottom cb)))))
+        line-of (fn [[y s vy0]]
+                  (let [vy (if (contains? fixed y) vy0 (- vy0 frac))     ; the row's actual offset (may be fractional)
+                        flags (merge {:fixed? (contains? fixed y) :peek? (contains? peeked? y)} (clip y s vy0))]
+                    (if (= :text (:kind s))
+                      (merge (assoc (get by-row (:row s)) :y y :vy vy) flags)
+                      (merge {:row nil :src (:src s) :key (:key s) :y y :vy vy :ornament? true :segments (:segs s)
+                              :role (:role s) :size (size-of s) :current? (= cur (:src s))} flags))))
         body-rows (- h head-h pin-h)
+        ; a frame's box: fixed ends stay, scrolling ends move with the body and
+        ; stay inside it
         frame-view (fn [f]
                      (let [in (filter (fn [[y _ _]] (and (>= y (:y0 f)) (< y (:y1 f)))) shown)]
                        (cond
-                         (seq in) (assoc f :from (nth (first in) 2)
-                                           :to (let [[_ s vy] (last in)] (+ vy (size-of s))))
+                         (seq in)
+                           (let [[y0 s0 v0] (first in) [y1 s1 v1] (last in)
+                                 from (nth (first in) 2)
+                                 to (+ v1 (size-of s1))
+                                 from (if (contains? fixed y0) from (max edge-top (- from frac)))
+                                 to (if (contains? fixed y1) to (min edge-bot (- to frac)))]
+                             (when (> to from) (assoc f :from from :to to)))
                          (and (seq body) (< (:y0 f) (first body)) (> (:y1 f) (last body)))
                            (assoc f :from head-h :to (+ head-h body-rows))
                          :else nil)))]
@@ -261,6 +321,11 @@
            :frames (vec (keep frame-view (concat frames sticky)))
            :slot-count n
            :slot-top y-top
+           ; rows the body is scrolled past its top slot (smooth scrolling)
+           :frac frac
+           ; the top that shows the end, and whether the pane is pinned there
+           :tail-top y-tail
+           :pinned? pinned?
            ; what a minimap needs: the body's slot range and the whole screen
            :slot-end (if (empty? body) y-top (inc (last body)))
            :screen {:slots slots :limit limit})))

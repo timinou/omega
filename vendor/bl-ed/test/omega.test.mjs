@@ -232,3 +232,21 @@ test("ordinary cells still evaluate (C-Enter falls through to eval-cell)", () =>
   assert.equal(s.drain("intent").length, 0);
   assert.ok(s.drain("eval-cell").length + (/⇒ 3/.test(s.msg() || "") ? 1 : 0) >= 1, "evaluated in the page or sent to the BEAM");
 });
+
+test("a refresh of a read-only view keeps your place: text above moves the row, the cursor follows its object", () => {
+  const s = session(PLAN);
+  const body = (n) => Array.from({ length: n }, (_, i) => "row " + i).join("\n");
+  const obj = (row) => toBL([{ row, type: "t/x", key: "k1" }]);
+  s.send(ev(K("type"), K("doc"), K("path"), "omega:overview", K("text"), body(60), K("rev"), "r1", K("read-only?"), true, K("objects"), obj(40), K("visit?"), true));
+  s.send(ev(K("type"), K("resize"), K("height"), 10));
+  s.send(ev(K("type"), K("click"), K("pos"), R.vec(40, 0)));
+  s.send(ev(K("type"), K("scroll"), K("top"), 36));
+  // two lines arrive ABOVE; the object is now at row 42
+  s.send(ev(K("type"), K("doc"), K("path"), "omega:overview", K("text"), "new a\nnew b\n" + body(60), K("rev"), "r2", K("read-only?"), true, K("objects"), obj(42), K("visit?"), false));
+  assert.deepEqual(get(s.render(), "cursor").toArray(), [42, 0], "the cursor stayed on its object");
+  assert.equal(get(s.render(), "top"), 38, "and the view moved with the text");
+  // the reader scrolled away from the cursor; a refresh must not drag them back
+  s.send(ev(K("type"), K("scroll"), K("top"), 5));
+  s.send(ev(K("type"), K("doc"), K("path"), "omega:overview", K("text"), "new a\nnew b\n" + body(61), K("rev"), "r3", K("read-only?"), true, K("objects"), obj(42), K("visit?"), false));
+  assert.equal(get(s.render(), "top"), 5, "a reader who scrolled away stays where they are");
+});

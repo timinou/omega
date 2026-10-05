@@ -24,7 +24,7 @@
 | CSS `font-size: 1.9rem` headings | a **double-height row** (`:size 2`): the headline takes two grid rows, glyphs scaled into them | VT100 DECDHL. The grid, caret math and gutter stay integral |
 | browser text wrapping | **`wrap-segs`** in BL fills styled words into the pane's measure (`:cols`); a resize re-wraps | Emacs `visual-line-mode` |
 | `position: sticky` | **the layout** repeats the head row of the section the viewport is inside (`:sticky-heads?`, `head-card`) | Genera's sticky headers in Dynamic Windows; same mechanism as the bottom-pinned composer |
-| two DOM panes + JS state | **`pp.frame`**: a pure frame of panes, each a whole bl-ed editor; `C-w w/h/l` moves focus; a link `{:rail :pane}` visits the rail's selection in the pane | a Genera **program frame** (Zmail: summary pane + message pane); Vim/Emacs windows |
+| two DOM panes + JS state | **`pp.frame`**: a pure frame of panes, each a whole bl-ed editor; `space w w/h/l` moves focus; a link `{:rail :pane}` visits the rail's selection in the pane | a Genera **program frame** (Zmail: summary pane + message pane); Vim/Emacs windows |
 | JS parses the documents | **readtable + reader**: `pp.conv/read-conv` regroups turns into `:conv/thread` objects (a reader macro over the outline); `pp.read` splits provider rows into objects | CL's readtable |
 | clicking a heading | `J`/`K` from the readtable (`:conv/thread` motion); `j/k` in the rail by `:omega/task` | readtable-derived motions (spike 1) |
 
@@ -53,7 +53,7 @@
 
 1. **It works on the real world.** `/frame.html` against the live 8790 world (read-only; nothing
    was sent): the rail shows 3 tasks; `j` in the rail opens `task:t-1` in the pane through the
-   frame link, with no RET and no `C-o` (`proof/15`). `C-w w` focuses the pane. `J` jumps to "wehere did
+   frame link, with no RET and no `C-o` (`proof/15`). `space w w` focuses the pane. `J` jumps to "wehere did
    we stop then". Scrolling 30 rows into its follow-ups keeps that question at the top as a
    double-height row while the result rows scroll under it (`proof/16`). The question index
    highlights question 2.
@@ -143,10 +143,10 @@ and decisions: `research/domain/interface/frames.bl.md`). `pp/frame.bl`, `web/fr
 were deleted. One implementation.
 
 - `?use=present&layout=inbox` on the live world: rail | conversation | minimap (`proof/23`), with
-  parity to the mockup's interactions: `j` opens, `C-w w` + `J` jump threads, the minimap drags
+  parity to the mockup's interactions: `j` opens, `space w w` + `J` jump threads, the minimap drags
   end to end, `i` drafts in the docked composer (`proof/24`).
 - `:(ed/unuse "present")` → one pane, plain org, no frames (exact, via `:owns`); `use` + `layout`
-  again → three panes; `C-w o` keeps the pane you are in.
+  again → three panes; `space w o` keeps the pane you are in.
 - `proof/22` is the first boot: the host threw in `syncPanes` (the original `#editor` was keyed
   under the wrong pane) and left the `:` command on screen.
 - Tests: `vendor/bl-ed/test/frame.test.mjs` (8). Drive 41/41. One-pane parity: `proof/21`.
