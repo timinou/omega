@@ -346,7 +346,7 @@ function loadDoc(path, visit, goto, pane) {
 function applyDoc(j, path, visit, goto, pane) {
   if (!j.ok) { dispatch(toPane(pane, ev(K("type"), K("eval-result"), K("id"), path, K("text"), j.message || "cannot open"))); return; }
   let e = ev(K("type"), K("doc"), K("path"), path, K("text"), j.text, K("rev"), j.rev, K("read-only?"), !!j.readOnly,
-             K("title"), j.title || path, K("objects"), toBL(j.objects || []), K("visit?"), !!visit);
+             K("title"), j.title || path, K("objects"), toBL(j.objects || []), K("data"), toBL(j.data ?? null), K("visit?"), !!visit);
   if (goto) e = e.assoc(K("goto"), goto);
   dispatch(toPane(pane, e));
   if (visit && (pane == null || paneKey(pane) === get(fr, "focus").name)) history.replaceState(null, "", documentUrl(location.href, path, get(renderFrame(fr), "layout")));
@@ -559,6 +559,8 @@ function draw() {
 // [:ch n] → n cells, :fill / [:fr n] → a share of the rest.
 
 const editorSkeleton = $("#editor").cloneNode(true);
+// There is one input sink for the frame; clones must not contain extra textareas.
+editorSkeleton.querySelector("#input-sink")?.remove();
 function cssWidth(w) {
   if (w == null || w === K("fill")) return "minmax(0, 1fr)";
   const a = w.toArray ? w.toArray() : null;
@@ -616,6 +618,34 @@ function syncPanes(panes) {
 
 const MAP_ROW = 3;                          // px per screen row in a minimap
 const viewPainters = {
+  // Generic image view: the package supplies the model; the host paints it.
+  // Optional polling stops when the pane disappears. No domain knowledge here.
+  image(dom, p) {
+    const model = get(p, "view");
+    const src = model && get(model, "src");
+    if (!src) { dom.body.replaceChildren(); dom.imageSource = null; return; }
+    const refresh = get(model, "refresh-ms") || 0;
+    const signature = src + ":" + refresh;
+    if (dom.imageSource === signature) return;
+    dom.imageSource = signature;
+    const img = document.createElement("img");
+    img.alt = get(model, "alt") || "";
+    img.style.cssText = "width:100%;height:100%;object-fit:contain";
+    const update = () => {
+      if (!img.isConnected) return;
+      const url = new URL(src, location.href);
+      if (!["http:", "https:"].includes(url.protocol)) return;
+      if (refresh) url.searchParams.set("capture", Date.now());
+      img.src = url.href;
+    };
+    let timer;
+    const schedule = () => {
+      clearTimeout(timer);
+      if (refresh && img.isConnected) timer = setTimeout(update, Math.max(1000, refresh));
+    };
+    img.onload = schedule; img.onerror = schedule;
+    dom.body.replaceChildren(img); update();
+  },
   minimap(dom, p) {
     const m = get(p, "view");
     if (!m) { dom.body.replaceChildren(); dom.map = null; return; }

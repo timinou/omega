@@ -1,0 +1,105 @@
+(ns br.main
+  (:require [ed.core :as c] [ed.omega :as ow] [ed.text :as t] [pp.present :as p]
+            [pp.read :as rd] [pp.omega :as om] [pp.inbox :as inbox]))
+
+(defn attrs [line]
+  (loop [ts (rest (filter (fn [s] (not (blank? s))) (split line " "))) out {}]
+    (if (empty? ts) out
+      (if (and (starts-with? (first ts) ":") (some? (second ts)))
+        (recur (drop 2 ts) (assoc out (keyword (subs (first ts) 1)) (second ts)))
+        (recur (rest ts) out)))))
+
+(defn block-at [ed]
+  (let [r (first (c/cursor ed))]
+    (first (filter (fn [b] (and (<= (:from b) r) (< r (:to b))
+                              (contains? #{"browser" "task"} (:lang b)))) (:blocks (:struct ed))))))
+
+(defn session-id [ed]
+  (let [b (block-at ed) a (when b (attrs (t/line (:text ed) (:from b))))
+        obj (get (:obj-index ed) (first (c/cursor ed)))
+        path (str (:path ed))]
+    (or (:browser a) (when (= "browser" (:lang b)) (:id a))
+        (when (= "omega/browser" (:type obj)) (:key obj))
+        (when (and (starts-with? path "browser:") (not= path "browser:sessions"))
+          (first (split (subs path 8) "/"))))))
+
+(defn action [ed verb]
+  (if-let [id (session-id ed)]
+    (c/effect ed {:kind :intent :intent (str "browser/" verb) :args {:id id} :then :visit-path})
+    (c/message ed "Place the cursor in a browser block or a browser session row.")))
+
+(defn open-block [ed]
+  (if-let [b (block-at ed)]
+    (let [a (attrs (t/line (:text ed) (:from b)))
+          body (join "\n" (map (fn [r] (t/line (:text ed) r)) (range (inc (:from b)) (dec (:to b)))))]
+      (if (= "task" (:lang b))
+        (if (:browser a)
+          (update (ow/eval-task ed) :effects
+            (fn [fx] (mapv (fn [e]
+              (if (= "task/open" (:intent e))
+                (assoc e :intent "browser/task-open" :args (assoc (:args e) :id (:browser a) :mode (or (:browser-mode a) "headless")))
+                e)) fx)))
+          nil)
+        (if (:url a)
+          (c/effect ed {:kind :intent :intent "browser/open" :args {:id (:id a) :mode (or (:mode a) "headless") :url (:url a)} :then :visit-path})
+          (action ed "watch"))))
+    nil))
+
+(defn present-browser [o ctx]
+  (let [ed (:ed ctx) a (attrs (t/line (:text ed) (:from o)))
+        id (or (:id a) (:key o))]
+    (p/head-card (:key o) "focus"
+      (concat [(p/line-mark (:from o)
+                 [{:text (str "◉ browser · " id " · " (or (:mode a) "headless")) :kind :heading-1}
+                  {:text "   C-Enter open · space b w watch · h/l headful/headless" :kind :comment}] (:key o))]
+              (map p/text-mark (range (inc (:from o)) (:to o)))))))
+
+(def browser-entry {:type :omega/browser-block
+  :match (fn [b l] (= "browser" (:lang b))) :attrs (fn [b l] (attrs l))})
+
+(defn render [ed]
+  (when (some (fn [b] (= "browser" (:lang b))) (:blocks (:struct ed)))
+    (let [base (or (:presentation ed) om/default-presentation)
+          pr (assoc base :readtable (into [browser-entry] (:readtable base))
+                         :table (assoc (:table base) :omega/browser-block present-browser))]
+      (p/render pr ed))))
+
+(def browser-inbox
+  (assoc inbox/inbox :name "browser-inbox" :doc "Tasks, their livebooks, and browser sessions."
+    :panes [{:id :rail :doc "omega:overview" :width [:ch 32]}
+            {:id :main :doc :linked :width :fill}
+            {:id :browsers :doc "browser:sessions" :width [:ch 48]}]))
+
+(def browser-observe
+  {:name "browser-observe" :doc "Session facts beside the latest captured browser viewport."
+   :panes [{:id :session :doc :linked :width [:ch 64]}
+           {:id :viewport :view [:image :session] :width :fill}]
+   :links [] :focus :session})
+
+(defn image-model [ed]
+  (when-let [id (session-id ed)]
+    (let [path (str (:path ed)) artifact? (ends-with? path ".png")]
+      {:src (if artifact? (str "/browser/artifact/" (subs path 8)) (str "/browser/frame/" id))
+       :refresh-ms (if artifact? 0 5000)
+       :alt (str "Browser " id " — captured viewport; not a live video stream")})))
+
+(def bl-package
+  {:name "browser" :doc "Task-owned local browsers, browser blocks, session buffers and observation."
+   :commands {:browser/sessions {:doc "List browser sessions." :run (fn [ed] (c/effect ed {:kind :visit :path "browser:sessions"}))}
+              :browser/open {:doc "Open this browser or browser task block." :run (fn [ed] (or (open-block ed) (c/message ed "No browser block here.")))}
+              :browser/watch {:doc "Visit the browser and start viewport capture." :run (fn [ed] (action ed "watch"))}
+              :browser/headful {:doc "Restart headed with saved storage and tabs." :run (fn [ed] (action ed "headful"))}
+              :browser/headless {:doc "Restart headless with saved storage and tabs." :run (fn [ed] (action ed "headless"))}
+              :browser/pause {:doc "Yield browser control to the human." :run (fn [ed] (action ed "pause"))}
+              :browser/resume {:doc "Return control to the task." :run (fn [ed] (action ed "resume"))}
+              :browser/close {:doc "Close this session." :run (fn [ed] (action ed "close"))}
+              :browser/forget {:doc "Delete saved auth state after closing the session." :run (fn [ed] (action ed "forget"))}}
+   :keys {:normal {"space b s" :browser/sessions "space b w" :browser/watch
+                   "space b h" :browser/headful "space b l" :browser/headless
+                   "space b p" :browser/pause "space b r" :browser/resume
+                   "space b x" :browser/close "space b f" :browser/forget}}
+   :intercept (fn [ed ev] (when (and (= :key (:type ev)) (= "C-Enter" (:key ev))) (or (open-block ed) (when (and (= "browser:sessions" (:path ed)) (session-id ed)) (action ed "watch")))))
+   :render render
+   :provides {:layouts {"browser-inbox" browser-inbox "browser-observe" browser-observe}
+              :views {:image image-model}
+              :links {"omega/browser" (fn [o] (str "browser:" (:key o)))}}})

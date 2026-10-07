@@ -53,7 +53,8 @@ Interaction policy and its contract tests live outside the generic editor in `sp
 The present package contributes its slot/source topology, task granularity for the rail,
 projection-aware reveal, and whether its presentation uses source-heading folds. It defers rail
 keys when a package advertises `:navigation-policy`, preserving counts and multi-head semantics
-in either load order; explicit omega folds outrank automatic focus detail. Deferred
+in either load order. Its derived navigation rows reuse `ed.memo/identity-pair` against the read
+tree or layout slots; explicit omega folds outrank automatic focus detail. Deferred
 selection/search/peek/action features are documented in `spikes/dwim/vision.bl.md`.
 
 Every later change made here is listed in this table, so that it can be upstreamed.
@@ -103,6 +104,8 @@ The implementation and measured outcomes are tracked in `research/domain/interfa
 
 Cold-image HTTP gate: `bl-ed.serve` explicitly requires `clojure.re`. Resolving an unqualified `re-matches` before its regex literal loads that library failed the first virtual-path request in a fresh packaged VM, while warm suites hid it. `test/serve-cold.test.mjs` starts a fresh ephemeral fixture, checks the first virtual HTTP read without retrying it, then verifies an appended turn changes the document rev. No live-world writes are involved.
 
+Workspace slice (2026-10-07): `ed/frame.bl` consumes generic `:frame-focus` effects (spatial, clamped, editor panes only) and asks package `:provides :selection` callbacks for object identities when no provider object occupies the source row. `ed/docs.bl` accepts `:goto {:block id}` for exact current-source block-ID arrival. `ed/omega.bl` forwards an optional single-token `:cwd` task-header attribute through its existing task/open intent. The host preserves keyboard focus when moving the input sink between panes. The workspace package, attached-folder providers and task context remain above the generic editor. Proof and drive contract: `spikes/workspace/workspace.bl.md`.
+
 ### 2026-10-07 — clipboard image prototype support
 
 For `spikes/images` (`?use=images`): the host leaves native Ctrl/Cmd+V to the
@@ -128,13 +131,22 @@ nested heading fold/unfold, and source toggle in the real offline editor.
 The image package now keeps the standard section tree and default fold policy
 instead of flattening the document; no core BL folding changes were needed.
 
+### 2026-10-07 — browser observation prototype
+
+For `spikes/browser`: generic `:image` view painter consumes package-provided
+`{:src :alt :refresh-ms}` data. Optional image refresh stops when its pane is
+removed; the host carries no browser/session/Omega knowledge. Frame pane
+skeletons omit the single input sink before cloning, avoiding visible duplicate
+textareas after their IDs are removed. Browser lifecycle, task ownership,
+providers and intents remain in the spike. Contract and screenshots:
+`spikes/browser/browser.bl.md`. Vendor drive suite: 66/66; presentation default
+equivalence checker unchanged and green on the welcome and browser documents.
+
 Standalone image-package build gate: `ed/main.bl` moves the `eval-command`
 header back to its evaluator body, the pending-language branch into that
 body's `cond`, and the language-answer event pair before the click branch.
 These minimal repairs prevent misplaced forms in the prior committed source
 from breaking a clean build. Other workspace/editor changes are excluded.
-
-Workspace slice (2026-10-07): `ed/frame.bl` consumes generic `:frame-focus` effects (spatial, clamped, editor panes only) and asks package `:provides :selection` callbacks for object identities when no provider object occupies the source row. `ed/docs.bl` accepts `:goto {:block id}` for exact current-source block-ID arrival. `ed/omega.bl` forwards an optional single-token `:cwd` task-header attribute through its existing task/open intent. The host preserves keyboard focus when moving the input sink between panes. The workspace package, attached-folder providers and task context remain above the generic editor. Proof and drive contract: `spikes/workspace/workspace.bl.md`.
 
 The presentation package likewise moves its resize event branch from `draw`
 (where `ev` is unbound) into `intercept`, keeping the standalone build valid.

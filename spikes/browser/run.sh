@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd -P)
+export OMEGA_HOME=$(cd "$here/../.." && pwd -P)
+export BROWSER_DEMO_ROOT=${BROWSER_DEMO_ROOT:-/tmp/omega-browser-demo}
+[ -d "$here/node_modules/agent-browser" ] || npm --prefix "$here" ci
+# Fail before launching either process if a requested port is already in use.
+node --input-type=module <<'JS'
+import net from 'node:net';
+for (const port of [8796,8797]) {
+  const occupied = await new Promise(resolve => {
+    const socket = net.createConnection({host:'127.0.0.1',port});
+    socket.once('connect',()=>{socket.destroy();resolve(true);});
+    socket.once('error',()=>resolve(false));
+    socket.setTimeout(1000,()=>{socket.destroy();resolve(true);});
+  });
+  if (occupied) {console.error(`Port ${port} is occupied; stop the existing demo before starting another.`);process.exit(1);}
+}
+JS
+mkdir -p "$BROWSER_DEMO_ROOT"
+cp "$here/demo.bl.org" "$BROWSER_DEMO_ROOT/demo.bl.org"
+world_pid= proxy_pid=
+cleanup() {
+  [ -z "$proxy_pid" ] || kill -TERM "$proxy_pid" 2>/dev/null || true
+  [ -z "$world_pid" ] || kill -TERM "$world_pid" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+"$OMEGA_HOME/bin/bl" run "$here/world.bl" &
+world_pid=$!
+# Print the usable demo link only after the world can answer requests.
+node --input-type=module <<'JS'
+let ready=false;
+for(let attempt=0;attempt<100;attempt++) {
+  try {
+    const r=await fetch('http://127.0.0.1:8796/api/doc?path=omega:overview',{signal:AbortSignal.timeout(1000)});
+    if(r.ok && (await r.json()).ok){ready=true;break;}
+  }catch {}
+  await new Promise(r=>setTimeout(r,500));
+}
+if(!ready){console.error('Offline world did not become ready; inspect its startup output.');process.exit(1);}
+JS
+node "$here/serve.mjs" &
+proxy_pid=$!
+wait -n "$world_pid" "$proxy_pid"
