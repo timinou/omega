@@ -7,7 +7,7 @@ export BROWSER_DEMO_ROOT=${BROWSER_DEMO_ROOT:-/tmp/omega-browser-demo}
 # Fail before launching either process if a requested port is already in use.
 node --input-type=module <<'JS'
 import net from 'node:net';
-for (const port of [8796,8797,...(process.env.BROWSER_OPENAI==='1'?[8798]:[])]) {
+for (const port of [8796,8797,...(process.env.BROWSER_OPENAI==='1'?[8808]:[])]) {
   const occupied = await new Promise(resolve => {
     const socket = net.createConnection({host:'127.0.0.1',port});
     socket.once('connect',()=>{socket.destroy();resolve(true);});

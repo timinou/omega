@@ -14,3 +14,12 @@ test('transport preserves tool-call identity, reasoning and inclusive cached inp
  assert.equal(request.store,false);
  assert.equal(request.tools[0].strict,false);
 });
+test('chat transport preserves reasoning, tool IDs and DeepSeek cache accounting',async()=>{
+ const {toChat,fromChat}=await import('../procurement/model-adapter.mjs');
+ const result=fromChat({id:'ds1',model:'fixture',choices:[{finish_reason:'tool_calls',message:{reasoning_content:'reason',content:null,tool_calls:[{id:'ds-call',function:{name:'eval',arguments:'{"code":"(ls)"}'}}]}}],usage:{prompt_tokens:700,prompt_cache_hit_tokens:500,completion_tokens:50}});
+ assert.deepEqual(result.usage,{input_tokens:200,cache_read_input_tokens:500,output_tokens:50});
+ const request=toChat({model:'fixture',messages:[{role:'assistant',content:result.content},{role:'user',content:[{type:'tool_result',tool_use_id:'ds-call',content:'files'}]}]});
+ assert.equal(request.messages[1].reasoning_content,'reason');
+ assert.equal(request.messages[1].tool_calls[0].id,'ds-call');
+ assert.equal(request.messages[2].tool_call_id,'ds-call');
+});
