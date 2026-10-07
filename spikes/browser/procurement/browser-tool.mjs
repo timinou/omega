@@ -1,8 +1,16 @@
+import fs from 'node:fs/promises';
 // Infrastructure only; the model authors its own curated functions around this.
 const [action,...args]=process.argv.slice(2);
 try {
   const task=process.env.OMEGA_TASK_TAG?.split(':').at(-1);
   if(!task)throw Error('Run this helper inside an Omega eval shell (OMEGA_TASK_TAG).');
+  const briefExists=await fs.access('company.bl.org').then(()=>true,()=>false);
+  if(briefExists){
+    const functions=await fs.readFile('search.bl','utf8').catch(()=> '');
+    const strategy=await fs.readFile('search.bl.org','utf8').catch(()=> '');
+    if(!functions.includes('(defn ') || !strategy.includes('#+begin_src'))
+      throw Error('Research checkpoint: company brief exists. Before further browser operations, author named curated defn functions in search.bl and matching documented source blocks in search.bl.org, then execute those functions inside Omega eval.');
+  }
   const response=await fetch('http://127.0.0.1:8797/browser/tool',{
     method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task,action,args})});
   const result=await response.json();

@@ -33,7 +33,11 @@ Examples of the transport (these are infrastructure, not curated search function
 (sh "node browser-tool.mjs click '@e12'")
 (sh "node browser-tool.mjs fill '@e3' 'digital transformation'")
 Every call uses your task-owned browser, recorded in browser:sessions.
-Generate reusable functions around this transport, execute those functions, and
+This is BEAM Lisp, not JavaScript: js/JSON.parse is unavailable. You can return
+sh result maps from curated functions without parsing JSON. Persist company.bl.org
+and your named defn functions in search.bl plus documented source blocks in
+search.bl.org before additional discovery. The helper enforces this checkpoint
+once the brief exists. Generate reusable functions around this transport, execute those functions, and
 save source observations to evidence files. Shell commands return {:out :exit};
 inspect exit codes. Use browser open/links/snapshot for external discovery.
 Search engines may help discover URLs, but final tender claims need original
