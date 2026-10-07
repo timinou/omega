@@ -72,3 +72,17 @@
     (is (= :idle (:status v)) "the task survives")
     (is (includes? (:result v) "killed"))
     (task/stop-system! s)))
+
+
+(deftest configured-local-code-is-loaded-and-reloaded-in-the-task-namespace
+  (let [r (root!)
+        _ (File/write! (str r "/curated.bl") "(defn curated [x] (* 2 x))")
+        s (task/start-system (env/open)
+            {:root r :tools cm/tools :eval-preloads ["curated.bl" "missing.bl"]
+             :step (loop/scripted [(ev "(curated 21)")
+                                   (ev "(write \"curated.bl\" \"(defn curated [x] (* 3 x))\")")
+                                   (ev "(curated 14)") echo-last])})
+        id (task/open! s {:goal "reuse configured source"})]
+    (is (= "=> 42" (:result (task/await s id 10000))))
+    (is (includes? (get-in (nth (loop/turns s id) 2) [:content 0 :content]) "42"))
+    (task/stop-system! s)))

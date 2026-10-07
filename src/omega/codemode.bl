@@ -83,8 +83,11 @@
         timeout (or (:eval-timeout-ms sys) TIMEOUT-MS)
         cell (cell-id task (:step at) (:tool-use-id at))
         deadline (+ (erlang/monotonic_time :millisecond) timeout)
+        preloads (join "\n" (map (fn [file]
+                    (let [path (Path/expand file (or cwd (:root sys) (File/cwd!)))]
+                      (if (File/regular? path) (File/read! path) ""))) (:eval-preloads sys)))
         r (harness/eval-cell {:ns (task-ns world task) :root (or cwd (:root sys) (File/cwd!)) :path "eval"}
-                             (str (preamble world task cell deadline) code)
+                             (str (preamble world task cell deadline) preloads "\n" code)
                              timeout)
         ;; a killed cell takes what it started with it: a backgrounded `sh`
         ;; must not outlive the program that was waiting on it
