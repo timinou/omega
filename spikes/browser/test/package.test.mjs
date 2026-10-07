@@ -60,3 +60,12 @@ test('resource references watch the existing session; historical images keep the
  assert.equal(get(model,'src'),'/browser/artifact/ora/001-viewport.png');
  assert.equal(get(model,'refresh-ms'),0);
 });
+
+test('report directive requests a package layout without changing ordinary documents',()=>{
+ const plain=M.d_boot('Ordinary document','plain.bl.org');
+ assert.equal(P.d_adopt_report(plain),plain);
+ const report=use(M.d_boot('#+TITLE: Findings\n#+BROWSER_LAYOUT: procurement-review\n\n* Opportunities','opportunities.bl.org'));
+ assert.equal(get(report,'frame/layout'),'procurement-review');
+ const removed=G.d_unuse(report,'browser');
+ assert.equal(get(removed,'frame/layout'),null);
+});

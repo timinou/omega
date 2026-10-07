@@ -83,6 +83,18 @@
        :refresh-ms (if artifact? 0 5000)
        :alt (str "Browser " id " — captured viewport; not a live video stream")})))
 
+(def procurement-review
+  {:name "procurement-review" :doc "Opportunity report beside its company brief and executable search strategy."
+   :panes [{:id :company :doc "company.bl.org" :width [:ch 42]}
+           {:id :report :doc :linked :width :fill}
+           {:id :strategy :doc "search.bl.org" :width [:ch 44]}]
+   :links [] :focus :report})
+
+(defn adopt-report [ed]
+  (if (some (fn [line] (= "#+BROWSER_LAYOUT: procurement-review" line))
+            (take 8 (:lines (:text ed))))
+    (assoc ed :frame/layout "procurement-review") ed))
+
 (def bl-package
   {:name "browser" :doc "Task-owned local browsers, browser blocks, session buffers and observation."
    :commands {:browser/sessions {:doc "List browser sessions." :run (fn [ed] (c/effect ed {:kind :visit :path "browser:sessions"}))}
@@ -99,7 +111,8 @@
                    "space b p" :browser/pause "space b r" :browser/resume
                    "space b x" :browser/close "space b f" :browser/forget}}
    :intercept (fn [ed ev] (when (and (= :key (:type ev)) (= "C-Enter" (:key ev))) (or (open-block ed) (when (and (= "browser:sessions" (:path ed)) (session-id ed)) (action ed "watch")))))
+   :adopt adopt-report :owns [:frame/layout]
    :render render
-   :provides {:layouts {"browser-inbox" browser-inbox "browser-observe" browser-observe}
+   :provides {:layouts {"browser-inbox" browser-inbox "browser-observe" browser-observe "procurement-review" procurement-review}
               :views {:image image-model}
               :links {"omega/browser" (fn [o] (str "browser:" (:key o)))}}})
