@@ -32,8 +32,11 @@
   (fn [ed id] (intent ed "new" {:id (trim id) :title (trim id) :from (desk-id ed)}))))
 (defn decide [ed decision]
  (if-let [id (opportunity-id ed)]
-  (docs/owned-prompt ed "procurement" (str decision " — rationale: ")
-   (fn [ed reason] (intent ed "decide" {:desk (desk-id ed) :id id :decision decision :rationale reason})))
+  (if (and (= decision "pursue")
+       (not= "true" (:pursuable (br/attrs (or (some (fn [line] (when (and (starts-with? line "#+begin_decision") (some? (index-of line (str ":id " id " ")))) line)) (:lines (:text ed))) "")))))
+   (c/message ed "Resolve unknown qualification requirements before pursuing; open the qualification report.")
+   (docs/owned-prompt ed "procurement" (str decision " — rationale: ")
+    (fn [ed reason] (intent ed "decide" {:desk (desk-id ed) :id id :decision decision :rationale reason}))))
   (c/message ed "Open an opportunity first.")))
 (defn home [ed] (docs/visit ed (str "desks/" (or (desk-id ed) "ora") "/desk.bl.org")))
 (defn button [text command] {:text (str " " text " ") :kind :strong :command command})
@@ -46,7 +49,7 @@
    (concat [(p/line-mark (:from o) [{:text (str "● " (:stage a) "   /   " (:decision a)) :kind :who}] key)]
     (mapcat (fn [r] (wrapped ed r (str key r) (t/line (:text ed) r) (if (= r (inc (:from o))) :heading-1 :prose))) rows)
     [(p/line-mark (:from o) [(button "Open" :procurement/open) (button "Qualify dossier" :procurement/qualify)] (str key "/open"))
-     (p/line-mark (:from o) [(button "Needs info" :procurement/needs-information) (if (= "qualification-checked" (:stage a)) (button "Pursue" :procurement/pursue) {:text " Pursue · check first " :kind :comment}) (button "Reject" :procurement/reject)] (str key "/decide"))]))))
+     (p/line-mark (:from o) [(button "Needs info" :procurement/needs-information) (if (= "true" (:pursuable a)) (button "Pursue" :procurement/pursue) {:text (if (= "qualification-checked" (:stage a)) " Pursue · resolve unknowns " " Pursue · check first ") :kind :comment}) (button "Reject" :procurement/reject)] (str key "/decide"))]))))
 (defn measure [ed]
  (max 16 (- (or (get-in ed [:view :cols]) (when (starts-with? (str (:path ed)) "procurement:") 32) 80) 6)))
 (defn follow-link [ed]

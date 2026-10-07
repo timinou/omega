@@ -1,10 +1,12 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {Sessions,validId} from './sessions.mjs';
 import {Procurement} from '../procurement/service.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url));
+const instance=crypto.randomUUID().slice(0,8);
 const root=process.env.BROWSER_DEMO_ROOT || '/tmp/omega-browser-demo';
 const manager=new Sessions(process.env.BROWSER_STATE_ROOT || root + '.private');
 await manager.init();
@@ -76,6 +78,7 @@ const server=http.createServer(async(req,res)=>{
     if(!['127.0.0.1:8797','localhost:8797'].includes(host))return json(res,403,{ok:false,message:'Invalid host'});
     if(req.method==='POST' && req.headers.origin && ![`http://${host}`,'http://127.0.0.1:8797','http://localhost:8797'].includes(req.headers.origin))return json(res,403,{ok:false,message:'Invalid origin'});
     const u=new URL(req.url,`http://${host}`);const p=u.searchParams.get('path');
+    if(u.pathname.startsWith('/procurement/artifact/')){const [id,...parts]=decodeURIComponent(u.pathname.slice('/procurement/artifact/'.length)).split('/');const a=await procurement.artifact(id,parts.join('/'));res.writeHead(200,{'content-type':a.type,'cache-control':'no-store','content-disposition':`inline; filename*=UTF-8''${encodeURIComponent(a.name)}`});return res.end(a.data);}
     if(u.pathname==='/browser/tool' && req.method==='POST') {
       const b=await body(req);
       if(!validId(b.task))throw Error('Invalid task ID');
@@ -88,12 +91,13 @@ const server=http.createServer(async(req,res)=>{
         await fs.mkdir(path.dirname(dest),{recursive:true});b.args[1]=dest;
       }
       for(let i=0;i<40 && !manager.pending.has(b.task) && !manager.tasks.has(b.task);i++)await new Promise(r=>setTimeout(r,50));
-      const config=manager.pending.get(b.task) || {id:`model-${b.task}`,mode:'headless'};
+      const config=manager.pending.get(b.task) || {id:`model-${instance}-${b.task}`,mode:'headless'};
       let s=manager.tasks.has(b.task)?manager.get(manager.tasks.get(b.task)):null;
-      if(!s)s=await manager.open({...config,task:b.task,url:b.action==='open'?b.args[0]:'https://ora-ventures.com/en/'});
+      let created=false;
+      if(!s){if(b.action!=='open')throw Error('Open a source URL before using browser operations');s=await manager.open({...config,task:b.task,url:b.args[0]});created=true;}
       if(s.control!=='agent')throw Error('Browser is paused for human control; resume before continuing.');
       let result;
-      if(b.action==='open')result={snapshot:await manager.navigate(s,b.args[0]),url:s.url};
+      if(b.action==='open')result={snapshot:created?await fs.readFile(path.join(s.dir,s.artifacts.findLast(a=>a.kind==='snapshot').name),'utf8'):await manager.navigate(s,b.args[0]),url:s.url};
       else result=await manager.lock(s,async()=>{
         const args=b.action==='links'?['eval','JSON.stringify([...document.querySelectorAll("a[href]")].map(a=>({text:a.innerText.trim(),url:a.href})).filter(a=>a.text).slice(0,100))']:
           b.action==='snapshot'?['snapshot','-c']:[b.action,...b.args];

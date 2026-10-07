@@ -90,3 +90,7 @@ test('explicit saved storage survives restart and can be forgotten without claim
  assert.equal(fresh.get('saved').profile,'ephemeral');await assert.rejects(fs.access(path.join(s.dir,'auth-state.json')));
  }finally{await fs.rm(root,{recursive:true,force:true});}
 });
+
+test('watching a closed session does not silently start another browser',async()=>{
+ const {m,root,calls}=await fixture();try{await m.open({id:'closed'});await m.action('closed','close');const before=calls.length;await assert.rejects(m.action('closed','watch'),/closed/);assert.equal(calls.length,before);}finally{await fs.rm(root,{recursive:true,force:true});}
+});

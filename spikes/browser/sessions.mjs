@@ -162,7 +162,7 @@ export class Sessions {
       if(s.status!=='running')throw Error('Save storage from a running browser');
       await this.lock(s,async()=>{const file=path.join(s.dir,'auth-state.json');await this.run(s,['state','save',file]);await fs.chmod(file,0o600);s.profile='saved-storage';this.event(s,'profile/saved',{auth:'Storage retained; login validity remains unknown'});});
     }
-    else if(verb==='watch') {s.watching=true; await this.lock(s,() => this.refreshFrame(s));}
+    else if(verb==='watch') {if(s.status!=='running')throw Error('Session is closed; reopen its browser declaration before watching');s.watching=true; await this.lock(s,() => this.refreshFrame(s));}
     else if(verb==='pause') {s.control='human'; s.auth='needs-human'; this.event(s,'control/paused');}
     else if(verb==='resume') {s.control='agent'; s.auth='unknown'; this.event(s,'control/resumed',{auth:'User resumed; login validity is unverified'});}
     else if(verb==='close') await this.lock(s,async () => {
