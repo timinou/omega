@@ -1,0 +1,15 @@
+(ns workspace-links-test (:require [omega.env :as env] [place.model :as p] [links.model :as l] [links.server :as s]))
+(deftest references-upsert-query-remove-and-keep-anchors
+  (let [e (env/open {:schema (vec (concat p/schema l/schema))})]
+    (p/put! e {:id "a" :root "/tmp"}) (p/put! e {:id "b" :root "/tmp"})
+    (l/put! e {:id "plan" :from {:place "a"} :kind :input :to {:place "b" :path "plan.bl.org" :block "x"}})
+    (is (= "work:b/plan.bl.org" (l/target e (:to (first (l/all e {:place "a"}))))))
+    (is (= {:block "x"} (:goto (first (:objects (s/document {:env e} "place/a"))))))
+    (is (empty? (l/all e {:place "b"})))
+    (l/put! e {:id "plan" :from {:place "a"} :kind :output :to {:place "b"}})
+    (is (= 1 (count (l/all e {:place "a"}))))
+    (is (= :output (:kind (first (l/all e {:place "a"})))))
+    (is (try (l/put! e {:id "bad" :from {:place "a"} :kind :changed :to {:place "b"}}) false (catch _ true)))
+    (is (try (l/target e {:place "missing"}) false (catch _ true)))
+    (l/remove! e "plan") (is (empty? (l/all e {:place "a"})))
+    (env/close! e)))

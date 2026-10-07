@@ -1,0 +1,35 @@
+(ns links.model (:require [omega.env :as env]))
+(def schema
+  [{:db/ident :link/id :db/valueType :db.type/string :db/unique :db.unique/identity}
+   {:db/ident :link/from :db/valueType :db.type/ref :db/index true}
+   {:db/ident :link/to}
+   {:db/ident :link/kind :db/valueType :db.type/keyword :db/index true}
+   {:db/ident :link/at :db/valueType :db.type/long}])
+(defn source [e from]
+  (when-not (and (map? from) (= 1 (count from))) (throw (ex-info "Source needs exactly one :task or :place." {})))
+  (or (when (:task from) (env/eid e :task/id (:task from)))
+      (when (:place from) (env/eid e :place/id (:place from)))
+      (throw (ex-info "Link source must identify an existing task or place." {:from from}))))
+(defn target [e to]
+  (when-not (map? to) (throw (ex-info "Target must be a location or entity map." {})))
+  (when (and (:task to) (or (:place to) (:path to))) (throw (ex-info "Task target cannot also name a file or place." {})))
+  (cond
+    (:task to) (do (source e to) (str "task:" (:task to)))
+    (and (:place to) (nil? (:path to))) (do (source e to) (str "place:" (:place to)))
+    (and (string? (:path to)) (not (empty? (:path to))))
+      (do (when (:place to) (source e {:place (:place to)}))
+          (if (:place to) (str "work:" (:place to) "/" (:path to)) (:path to)))
+    :else (throw (ex-info "Link target needs :task, :place, or :path." {}))))
+(defn put! [e m]
+  (let [from (source e (:from m)) to (:to m)]
+    (when-not (contains? #{:input :output :context} (:kind m)) (throw (ex-info "Link kind must be :input, :output or :context." {})))
+    (target e to)
+    (when-not (and (string? (:id m)) (not (empty? (:id m)))) (throw (ex-info "Link needs an explicit stable :id." {})))
+    (env/tx! e [{:db/id -1 :link/id (:id m) :link/from from :link/to to :link/kind (:kind m) :link/at (env/now e)}]) m))
+(defn all [e from]
+  (let [id (source e from)]
+    (mapv (fn [[eid]] (let [m (env/pull e [:link/id :link/to :link/kind :link/at] eid)]
+                        {:id (:link/id m) :to (:link/to m) :kind (:link/kind m) :at (:link/at m)}))
+          (env/q e '[:find ?l :in $ ?from :where [?l :link/from ?from]] id))))
+(defn remove! [e id]
+  (when-let [eid (env/eid e :link/id id)] (env/tx! e [[:db/retractEntity eid]])) :ok)

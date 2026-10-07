@@ -1,0 +1,17 @@
+(ns links.main (:require [ed.core :as c] [ed.docs :as docs] [ed.omega :as omega]))
+(defn inspect [ed]
+  (let [o (or (omega/object-at ed) (first (filter (fn [o] (= "omega/task" (:type o))) (vals (:obj-index ed)))))
+        place (get-in ed [:doc :data :place])]
+    (cond (= "omega/task" (:type o)) (docs/visit ed (str "links:task/" (:key o)))
+          place (docs/visit ed (str "links:place/" place))
+          :else (c/message ed "Select a task or visit a place."))))
+(defn add [ed]
+  (docs/owned-prompt ed "references" "link map: " (fn [ed text] (c/effect ed {:kind :intent :intent "links/put" :args {:text text} :then :visit-path}))))
+(defn remove-link [ed]
+  (docs/owned-prompt ed "references" "link id: " (fn [ed id] (c/effect ed {:kind :intent :intent "links/remove" :args {:id id} :then :show-result}))))
+(def bl-package
+  {:name "references" :requires ["places"] :doc "Explicit task/place inputs, outputs and context; anchored file visits."
+   :commands {:links/inspect {:doc "Inspect references of the selected task or current place." :run inspect}
+              :links/add {:doc "Attach a reference using a plain map." :run add}
+              :links/remove {:doc "Remove a reference by stable id." :run remove-link}}
+   :keys {:normal {"g r" :links/inspect}}})
