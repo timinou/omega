@@ -590,6 +590,7 @@ function cssWidth(w) {
 }
 let layoutSig = "";
 function syncPanes(panes) {
+  const heldInput = document.activeElement === sink;
   const sig = panes.map((p) => get(p, "id").name + ":" + get(p, "kind").name).join(",");
   panesEl.style.gridTemplateColumns = panes.map((p) => cssWidth(get(p, "width"))).join(" ");
   panesEl.classList.toggle("multi", panes.length > 1);
@@ -627,6 +628,7 @@ function syncPanes(panes) {
   }
   // 4. layout order, and each root knows its pane id
   for (const p of panes) { const id = get(p, "id").name, d = paneDom.get(id); d.root.dataset.pane = id; panesEl.appendChild(d.root); }
+  if (heldInput) sink.focus({ preventScroll: true });
   requestAnimationFrame(fitHeight);
 }
 

@@ -184,3 +184,8 @@ This is domain-free; the workbench declares the layouts and transitions.
 The added frame contract test and all 67 vendor tests pass; the unchanged
 presentation checker passes 36 variants. Real-editor proof is in
 `spikes/workspace/workbench.bl.md`.
+
+2026-10-07: `web/host.mjs` preserves input focus while synchronizing pane DOM order.
+Moving a pane containing the textarea otherwise focused the body and dropped the
+next shortcut. The offline workbench artifact tour checks active input focus and
+a real paragraph edit immediately after its layout transition.
