@@ -1,5 +1,5 @@
 (ns place.server (:require [place.model :as p] [ws.server :as ws] [omega.task :as task]
-                          [bl-ed.serve :as serve] [clojure.string :as str]))
+                          [bl-ed.serve :as serve] [clojure.string :as str] [clojure.edn :as edn]))
 (defn context [sys path cwd]
   (let [places (p/all (:env sys)) roots (p/roots places)
         address (cond (and path (str/starts-with? path "work:")) (first (str/split (subs path 5) "/"))
@@ -52,6 +52,6 @@
      "work" (assoc work :write (fn [nm req text base] ((:write (get (ws/providers sys (p/roots (p/all (:env sys)))) "work")) nm req text base))
                          :eval (fn [nm req id text] ((:eval (get (ws/providers sys (p/roots (p/all (:env sys)))) "work")) nm req id text)))}))
 (defn intents [sys]
-  {"place/put" (fn [{:keys [text]}] (let [m (read-string text)]
+  {"place/put" (fn [{:keys [text]}] (let [m (edn/read-string text)]
                                      (when-not (map? m) (throw (ex-info "Expected a place map." {})))
                                      (p/put! (:env sys) m) {:path (str "place:" (:id m))}))})

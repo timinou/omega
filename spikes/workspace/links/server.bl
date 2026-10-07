@@ -1,4 +1,4 @@
-(ns links.server (:require [links.model :as link] [bl-ed.serve :as serve] [clojure.string :as str]))
+(ns links.server (:require [links.model :as link] [bl-ed.serve :as serve] [clojure.string :as str] [clojure.edn :as edn]))
 (defn document [sys nm]
   (let [[kind id] (str/split nm "/") from {(keyword kind) id} e (:env sys)
         links (sort-by :id (link/all e from))
@@ -11,6 +11,6 @@
 (defn providers [sys]
   {"links" {:read (fn [nm _] (document sys nm)) :rev (fn [nm _] (serve/text-rev (:text (document sys nm))))}})
 (defn intents [sys]
-  {"links/put" (fn [{:keys [text]}] (let [m (read-string text)] (link/put! (:env sys) m)
+  {"links/put" (fn [{:keys [text]}] (let [m (edn/read-string text)] (link/put! (:env sys) m)
                                      {:path (str "links:" (if (get-in m [:from :task]) "task/" "place/") (or (get-in m [:from :task]) (get-in m [:from :place])))}))
    "links/remove" (fn [{:keys [id]}] (link/remove! (:env sys) id) {:result (str "removed " id)})})

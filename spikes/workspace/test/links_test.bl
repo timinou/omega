@@ -13,3 +13,11 @@
     (is (try (l/target e {:place "missing"}) false (catch _ true)))
     (l/remove! e "plan") (is (empty? (l/all e {:place "a"})))
     (env/close! e)))
+
+(deftest reference-intent-reads-a-plain-data-map
+  (let [e (env/open {:schema (vec (concat p/schema l/schema))}) sys {:env e}
+        put (get (s/intents sys) "links/put")]
+    (p/put! e {:id "a" :root "/tmp"})
+    (is (= {:path "links:place/a"} (put {:text "{:id \"note\" :from {:place \"a\"} :kind :context :to {:path \"work:a/note.bl.org\"}}"})))
+    (is (= "note" (:id (first (l/all e {:place "a"})))))
+    (env/close! e)))

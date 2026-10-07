@@ -49,3 +49,10 @@
       (is (= {:cwd (str root "/a/sub") :place "a"} (s/context sys "place:a" nil)))
       (is (= {:cwd (str root "/a") :place "a"} (s/context sys "work:a/plan.bl.org" "@a"))))
     (env/close! e)))
+
+(deftest place-intent-reads-a-plain-data-map
+  (let [e (env/open {:schema p/schema}) sys {:env e}
+        put (get (s/intents sys) "place/put")]
+    (is (= {:path "place:notes"} (put {:text "{:id \"notes\" :root \"/tmp\" :config {:view :notes}}"})))
+    (is (= :notes (get-in (p/all e) ["notes" :config :view])))
+    (env/close! e)))
