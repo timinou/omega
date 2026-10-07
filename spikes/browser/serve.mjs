@@ -3,11 +3,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {Sessions,validId} from './sessions.mjs';
+import {Procurement} from '../procurement/service.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url));
 const root=process.env.BROWSER_DEMO_ROOT || '/tmp/omega-browser-demo';
 const manager=new Sessions(process.env.BROWSER_STATE_ROOT || root + '.private');
 await manager.init();
 const upstream='http://127.0.0.1:8796';
+const procurement=new Procurement(root,upstream);
 const json=(res,status,body)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(body));};
 async function body(req) {
   let value=''; for await(const chunk of req) {value+=chunk;if(value.length>65536)throw Error('Request too large');}
@@ -77,8 +79,14 @@ const server=http.createServer(async(req,res)=>{
     if(u.pathname==='/browser/tool' && req.method==='POST') {
       const b=await body(req);
       if(!validId(b.task))throw Error('Invalid task ID');
-      const verbs=new Set(['open','snapshot','links','eval','click','fill','get','scroll']);
+      await procurement.budget(b.task,b.action);
+      const verbs=new Set(['open','snapshot','links','eval','click','fill','get','scroll','download']);
       if(!verbs.has(b.action) || !Array.isArray(b.args) || !b.args.every(x=>typeof x==='string'))throw Error('Invalid browser operation');
+      if(b.action==='download'){
+        if(b.args.length!==2)throw Error('Download needs a browser target and a desk-local filename');
+        const dest=path.resolve(root,b.args[1]);if(!dest.startsWith(path.resolve(root,'desks')+path.sep))throw Error('Download must be scoped to desks/');
+        await fs.mkdir(path.dirname(dest),{recursive:true});b.args[1]=dest;
+      }
       for(let i=0;i<40 && !manager.pending.has(b.task) && !manager.tasks.has(b.task);i++)await new Promise(r=>setTimeout(r,50));
       const config=manager.pending.get(b.task) || {id:`model-${b.task}`,mode:'headless'};
       let s=manager.tasks.has(b.task)?manager.get(manager.tasks.get(b.task)):null;
@@ -101,6 +109,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(u.pathname==='/api/intent' && req.method==='POST') {
       const b=await body(req);const a=b.args || {};
+      if(b.intent?.startsWith('procurement/'))return json(res,200,await procurement.intent(b.intent.slice(12),a));
       if(b.intent?.startsWith('browser/') && b.intent!=='browser/run-proof') {
         const verb=b.intent.slice(8);
         if(verb==='task-open') {
@@ -119,6 +128,15 @@ const server=http.createServer(async(req,res)=>{
       const result=await r.text();
       if(b.intent==='task/cancel' && manager.tasks.has(a.id))await manager.action(manager.tasks.get(a.id),'close');
       res.writeHead(r.status,{'content-type':'application/json'});return res.end(result);
+    }
+    if(u.pathname==='/api/doc' && p?.startsWith('procurement:'))return json(res,200,await procurement.doc(p));
+    if(u.pathname==='/api/rev' && p?.startsWith('procurement:')) {await new Promise(r=>setTimeout(r,1500));const d=await procurement.doc(p);return json(res,200,{ok:true,path:p,rev:d.rev,changed:d.rev!==u.searchParams.get('since')});}
+    if(u.pathname==='/' && u.searchParams.get('file') && !u.searchParams.has('autoload')) {
+      const file=path.resolve(root,u.searchParams.get('file'));
+      if(file.startsWith(path.resolve(root)+path.sep)){const text=await fs.readFile(file,'utf8').catch(()=> '');
+        if(text.split('\n').slice(0,12).some(l=>l.startsWith('#+USE:') && l.includes('procurement'))){
+          u.searchParams.set('use',[...new Set(['present','browser','procurement',...(u.searchParams.get('use')||'').split(',').filter(Boolean)])].join(','));u.searchParams.set('autoload','1');res.writeHead(302,{location:u.pathname+u.search});return res.end();
+        }}
     }
     if(u.pathname==='/api/doc' && p?.startsWith('browser:'))return json(res,200,await virtualDoc(p));
     if(u.pathname==='/api/rev' && (p?.startsWith('browser:') || (p?.startsWith('task:') && manager.tasks.has(p.slice(5))))) {

@@ -1,0 +1,61 @@
+#+TITLE: Procurement desk — operational contract
+
+* Work in scoped files
+Desk ID and operation are in your task goal. Read the qualification profile.
+Keep every public output under desks/DESK/. Do not rewrite generated desk.bl.org
+or opportunity-ID.bl.org: desk-tool publishes these from durable structured facts.
+Create named reusable BEAM Lisp functions in search.bl and matching source blocks
+in search.bl.org BEFORE discovery. Reuse or repair previous functions. Execute
+those functions, save actual page text and cite original URLs. This is BEAM Lisp:
+no js/JSON.parse or Java classes. Use sh maps :out/:exit; inspect failures.
+
+* Browser
+(sh "node browser-tool.mjs open https://example.org/")
+For arbitrary JS or URLs write a literal argument file then:
+(sh "node browser-tool.mjs eval --arg-file desks/DESK/argument.txt")
+The result is readable page text. Use document.body.innerText, DOM selectors,
+links, snapshot. Do not inject giant page dumps into the model: read only the
+relevant fields/sections (about 10000 characters). Use browser-tool.mjs download
+with an element ref and a desk-local destination for dossier download. Before
+extracting archives inspect their file list. pdftotext/unzip are available if
+installed; record actual file/page references for eligibility claims.
+Page and token limits are enforced by the local browser gateway. If reached,
+save partial outputs and done. Do not loop formatting or retry WAF challenges.
+
+* Publishing structured opportunities
+Write JSON to desks/DESK/update.json then call:
+(sh "node desk-tool.mjs update --arg-file desks/DESK/update.json")
+JSON schema:
+{"desk":"DESK","opportunity":{"id":"safe-lowercase-id",
+"title":"Original title","buyer":"Buyer or unknown","country":"Morocco",
+"url":"https://official/original","deadline":"2026-10-27 11:00",
+"timezone":"unspecified","fit":"moderate","stage":"notice-checked",
+"decision":"needs-information","summary":"Evidence-backed interpretation",
+"unknowns":["Qlik references unknown"],"nextAction":"Read qualification rules",
+"evidence":["desks/DESK/evidence-name.txt"],"rationale":"Why this decision"}}
+Allowed stages: discovered, notice-checked, dossier-reviewed, qualification-checked.
+Advance only from evidence actually read. For dossier-reviewed cite a real
+consultation document with page/section references. Qualification-checked means
+requirements were compared against sourced profile facts; unknowns may remain.
+Pursue requires qualification-checked, but never pretend missing facts are met.
+Allowed decisions: needs-information, pursue, reject. Preserve existing notices
+on refresh; update fields only with evidence, including closed/deadline changes.
+
+* Document output
+Use #+USE: present,browser,procurement and #+PROCUREMENT_DESK: DESK in the
+first twelve lines of profile, search docs, qualification and run reports.
+This loads the experience when opening a file in the local demo. Keep code
+source blocks exact; do not perform complicated formatting transformations.
+The presentation wraps prose. Unknown company qualifications must remain unknown.
+Dossier report: requirements → page reference → profile fact → met/unknown/not met.
+Give a candid decision and immediate next actions. Never claim eligibility from
+marketing text. Read no more pages than the goal permits. Finish within sixteen
+model steps, preferably ten. Save the run report and call (done "summary").
+
+* Auth and actions
+Browser control belongs to the task; the user can pause/resume and switch modes.
+No credentials in public files or source. Temporary email registration is allowed
+only if needed for public consultation documents, through browser interaction.
+Do not fabricate a company's legal identity or accept contracts on its behalf.
+No buyer contact, bid submission, payment or applications. If login/identity
+requirements prevent document access, record the exact blocker and next action.

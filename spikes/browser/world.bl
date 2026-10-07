@@ -17,12 +17,12 @@
 (def live? (= "1" (System/get_env "BROWSER_LIVE")))
 (def model (when live?
   (if (= "1" (System/get_env "BROWSER_OPENAI"))
-    (llm/provider {:kind :anthropic :model (or (System/get_env "BROWSER_MODEL") (if (= "deepseek" (System/get_env "BROWSER_PROVIDER")) "deepseek-v4-pro" "gpt-5.4"))
+    (llm/provider {:kind :anthropic :model (or (System/get_env "BROWSER_MODEL") (if (= "deepseek" (System/get_env "BROWSER_PROVIDER")) "deepseek-flash" "gpt-5.4"))
                    :base-url "http://127.0.0.1:8808" :stream false :identity nil})
     (llm/from-env home))))
 (def sys (task/start-system e
   (if live?
-    {:root root :tools cm/tools :step (llm/step model) :max-steps 25
+    {:root root :tools cm/tools :step (llm/step model) :max-steps (if (= "1" (System/get_env "PROCUREMENT_DEMO")) 16 25)
      :system-prompt (str cli/SYSTEM-PROMPT
        " For this procurement run use your single eval tool. Read instructions.bl.org first. "
        "Do not spawn tasks. The browser-tool.mjs shell helper reaches the visible task-owned browser. "

@@ -23,6 +23,10 @@ if [ "${BROWSER_LIVE:-0}" = 1 ]; then
 else
   cp "$here/demo.bl.org" "$BROWSER_DEMO_ROOT/demo.bl.org"
 fi
+if [ "${PROCUREMENT_DEMO:-0}" = 1 ]; then
+  cp "$OMEGA_HOME/spikes/procurement/desk-tool.mjs" "$BROWSER_DEMO_ROOT/"
+  cp "$OMEGA_HOME/spikes/procurement/instructions.bl.org" "$BROWSER_DEMO_ROOT/procurement-instructions.bl.org"
+fi
 world_pid= proxy_pid= model_pid=
 cleanup() {
   [ -z "$model_pid" ] || kill -TERM "$model_pid" 2>/dev/null || true
