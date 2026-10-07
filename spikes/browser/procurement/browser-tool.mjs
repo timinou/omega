@@ -2,6 +2,10 @@ import fs from 'node:fs/promises';
 // Infrastructure only; the model authors its own curated functions around this.
 const [action,...args]=process.argv.slice(2);
 try {
+  if(args[0]==='--arg-file'){
+    if(args.length!==2)throw Error('Use ACTION --arg-file PATH for one literal argument.');
+    const argument=await fs.readFile(args[1],'utf8');args.splice(0,args.length,argument);
+  }
   const task=process.env.OMEGA_TASK_TAG?.split(':').at(-1);
   if(!task)throw Error('Run this helper inside an Omega eval shell (OMEGA_TASK_TAG).');
   const briefExists=await fs.access('company.bl.org').then(()=>true,()=>false);
@@ -24,5 +28,7 @@ try {
   if(output && typeof output==='object' && !Array.isArray(output)){
     output={...output};delete output.lifecycle;
   }
-  console.log(JSON.stringify(output));
+  if(action==='snapshot' && output?.snapshot)console.log(output.snapshot);
+  else if(typeof output==='string')console.log(output);
+  else console.log(JSON.stringify(output));
 }catch(error){console.error(error.message);process.exitCode=1;}
