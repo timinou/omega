@@ -183,3 +183,11 @@ test("task navigation preserves package and theme bootstrap parameters on reload
   assert.equal(single.searchParams.has("layout"), false);
 });
 
+
+
+test('presentation actions accept command names, including qualified keywords, without executable text', async () => {
+ const R=await import(pathToFileURL(path.join(web,'out/rt.mjs')).href);
+ assert.equal(H.presentationCommand(R.kw('desk/artifact')),'desk/artifact');
+ assert.equal(H.presentationCommand('buffers/undo'),'buffers/undo');
+ assert.equal(H.presentationCommand('(eval anything)'),null);assert.equal(H.presentationCommand(null),null);
+});

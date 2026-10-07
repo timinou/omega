@@ -191,6 +191,11 @@ export const packageUrl = (name) => (/[/.:]/.test(name) ? name : `./pkg/${name}.
 // Runs only where there is a document (main() at the end), so the primitives
 // above import cleanly under Node. The body is not re-indented.
 
+export function presentationCommand(value) {
+  const name = typeof value === "string" ? value : value?.fq;
+  return typeof name === "string" && /^[A-Za-z][A-Za-z0-9_.!?/-]*$/.test(name) ? name : null;
+}
+
 async function main() {
 let M, F;                                   // ed.main / ed.frame, imported in parallel with the first fetches
 
@@ -545,7 +550,7 @@ function download(name, text) {
 
 // ─── drawing ───────────────────────────────────────────────────────────────
 
-function segSig(segs) { let s = ""; for (const g of segs) s += get(g, "kind").name + "\u0001" + get(g, "text") + "\u0002"; return s; }
+function segSig(segs) { let s = ""; for (const g of segs) s += get(g, "kind").name + "\u0001" + get(g, "text") + "\u0001" + (presentationCommand(get(g, "command")) || "") + "\u0002"; return s; }
 
 function draw() {
   const rv = renderFrame(fr);
@@ -788,6 +793,14 @@ function paint(dom, v, focused) {
       for (const g of segs) {
         const s = document.createElement("span");
         s.className = "seg k-" + get(g, "kind").name;
+        const command = presentationCommand(get(g, "command"));
+        if (command) {
+          s.dataset.command = command; s.setAttribute("role", "button"); s.tabIndex = 0;
+          s.title = get(g, "doc") || command;
+          s.addEventListener("keydown", event => {
+            if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activateCommand(s, command); }
+          });
+        }
         if (get(g, "kind").name === "image") {
           const url = get(g, "text");
           if (/^\/api\/assets\/[a-f0-9]{64}\.(png|jpg|webp)$/.test(url)) {
@@ -949,7 +962,8 @@ function chrome(v, rv) {
   if (ov) {
     overlay.hidden = false;
     const kind = get(ov, "kind").name;
-    overlay.querySelector("h2").textContent = kind === "outline" ? "Outline" : "Keys";
+    overlay.dataset.kind = kind;
+    overlay.querySelector("h2").textContent = get(ov, "title") || (kind === "outline" ? "Outline" : "Keys");
     const list = overlay.querySelector("ul");
     list.textContent = "";
     for (const it of get(ov, "items")) {
@@ -960,7 +974,14 @@ function chrome(v, rv) {
         li.appendChild(document.createTextNode(get(it, "title")));
         li.onclick = () => { dispatch(ev(K("type"), K("click"), K("pos"), R.vec(get(it, "row"), 0))); dispatch(ev(K("type"), K("key"), K("key"), "Escape")); };
       } else {
-        const k = document.createElement("kbd"); k.textContent = get(it, "keys");
+        if (kind === "actions") {
+          const command = presentationCommand(get(it, "command"));
+          if (command) { li.setAttribute("role", "button"); li.tabIndex = 0;
+            const run = () => { dispatch(ev(K("type"), K("command"), K("command"), K(command))); sink.focus(); };
+            li.onclick = run; li.onkeydown = event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); run(); } else if (event.key === "Escape") { event.preventDefault(); dispatch(ev(K("type"), K("key"), K("key"), "Escape")); sink.focus(); } };
+          }
+        }
+        const k = document.createElement("kbd"); k.textContent = get(it, "keys") || get(it, "key");
         const n = document.createElement("span"); n.className = "name"; n.textContent = get(it, "name");
         const d = document.createElement("span"); d.className = "doc"; d.textContent = get(it, "doc");
         li.append(k, n, d);
@@ -1080,8 +1101,19 @@ sink.addEventListener("paste", (e) => {
 // a click focuses its pane (the frame's :focus) and lands in it
 const paneOf = (node) => node.closest("[data-pane]")?.dataset.pane ?? "main";
 function focusPane(id) { if (get(fr, "focus").name !== id) fr = fr.assoc(K("focus"), K(id)); }
+function activateCommand(node, command) {
+  const id = paneOf(node); focusPane(id);
+  const line = node.closest(".line"), mode = get(ed$(), "mode");
+  if (line && (mode === K("normal") || mode === K("select"))) {
+    const row = Number(line.dataset.src ?? line.dataset.row);
+    dispatch(ev(K("type"), K("click"), K("pos"), R.vec(row, 0)));
+  }
+  dispatch(ev(K("type"), K("command"), K("command"), K(command))); sink.focus();
+}
 panesEl.addEventListener("mousedown", (e) => {
   if (!fr || e.target.closest(".view")) return;
+  const action = e.target.closest("[data-command]");
+  if (action) { e.preventDefault(); activateCommand(action, action.dataset.command); return; }
   const lineNode = e.target.closest(".line");
   const id = paneOf(e.target);
   if (!lineNode) { focusPane(id); draw(); sink.focus(); return; }

@@ -428,3 +428,12 @@ test("deferred language: a local cell keeps its text and resumes once; edits can
   assert.ok(!text(ed).includes("#+RESULTS"));
 }));
 
+
+test('named command events use normal command lookup and retain the read-only guard', () => {
+ const event=R.hashMap(K('type'),K('command'),K('command'),K('insert'));
+ assert.equal(get(M.d_handle(boot('plain text'),event),'mode'),K('insert'));
+ const readOnly=boot('plain text').assoc(K('doc'),R.hashMap(K('read-only?'),true));
+ const guarded=M.d_handle(readOnly,event);assert.equal(get(guarded,'mode'),K('normal'));assert.match(get(guarded,'message'),/read-only/);
+ const custom=boot('text').assoc(K('user-commands'),R.hashMap(K('test/command'),R.hashMap(K('run'),ed=>ed.assoc(K('message'),'custom command'))));
+ assert.equal(get(M.d_handle(custom,R.hashMap(K('type'),K('command'),K('command'),K('test/command'))),'message'),'custom command');
+});

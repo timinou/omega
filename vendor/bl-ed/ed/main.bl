@@ -229,6 +229,7 @@
   [ed ev]
   (let [ty (:type ev)]
     (cond
+      (= ty :command) (docs/guard ed (km/run-command (assoc ed :pending []) (:command ev)))
       (= ty :key)
         (if (contains? #{:command :palette} (:mode ed)) (minibuf-key ed (:key ev)) (docs/guard (if (= "Escape" (:key ev)) (assoc ed :awaiting nil) ed) (km/key-event ed (:key ev))))
       (= ty :text)

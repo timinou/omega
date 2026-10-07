@@ -189,3 +189,13 @@ presentation checker passes 36 variants. Real-editor proof is in
 Moving a pane containing the textarea otherwise focused the body and dropped the
 next shortcut. The offline workbench artifact tour checks active input focus and
 a real paragraph edit immediately after its layout transition.
+
+2026-10-07: presentations may attach a named `:command` to a segment, or return
+an `:actions` overlay of named commands. The host paints accessible buttons and
+routes pointer/Enter activation through the generic `:command` event. Core
+command lookup and the read-only edit guard apply; it never evaluates segment
+text. Qualified keyword names retain their namespaces. Command identity enters
+the paint signature so an updated action cannot retain a stale pointer target.
+Host and drive tests verify names, user command lookup and read-only refusal.
+The action overlay uses compact key/name/help rows and remains bounded by the
+viewport. Domain menus and action composition stay in packages.
