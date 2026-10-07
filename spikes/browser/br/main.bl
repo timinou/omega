@@ -25,7 +25,8 @@
 
 (defn action [ed verb]
   (if-let [id (session-id ed)]
-    (c/effect ed {:kind :intent :intent (str "browser/" verb) :args {:id id} :then :visit-path})
+    (cond-> (c/effect ed {:kind :intent :intent (str "browser/" verb) :args {:id id} :then :visit-path})
+      (= verb "watch") (assoc-in [:pkg-state "browser" :observe?] true))
     (c/message ed "Place the cursor in a browser block or a browser session row.")))
 
 (defn open-block [ed]
@@ -41,7 +42,8 @@
                 e)) fx)))
           nil)
         (if (:url a)
-          (c/effect ed {:kind :intent :intent "browser/open" :args {:id (:id a) :mode (or (:mode a) "headless") :url (:url a)} :then :visit-path})
+          (assoc-in (c/effect ed {:kind :intent :intent "browser/open" :args {:id (:id a) :mode (or (:mode a) "headless") :url (:url a)} :then :visit-path})
+                    [:pkg-state "browser" :observe?] true)
           (action ed "watch"))))
     nil))
 
@@ -91,13 +93,35 @@
    :links [] :focus :report})
 
 (defn adopt-report [ed]
-  (if (some (fn [line] (= "#+BROWSER_LAYOUT: procurement-review" line))
-            (take 8 (:lines (:text ed))))
-    (assoc ed :frame/layout "procurement-review") ed))
+  (cond
+    (and (get-in ed [:pkg-state "browser" :observe?])
+         (starts-with? (str (:path ed)) "browser:") (not= "browser:sessions" (:path ed)))
+      (-> ed (update-in [:pkg-state "browser"] dissoc :observe?)
+             (assoc :frame/layout browser-observe))
+    (some (fn [line] (= "#+BROWSER_LAYOUT: procurement-review" line))
+          (take 8 (:lines (:text ed))))
+      (assoc ed :frame/layout procurement-review)
+    :else ed))
+
+(defn after-event [old ed ev]
+  (if (and (= :intent-result (:type ev)) (= false (:ok? ev)))
+    (update-in ed [:pkg-state "browser"] dissoc :observe?) ed))
+
+(defn run-search [ed]
+  (c/effect ed {:kind :intent :intent "task/open" :then :visit-path
+    :args {:path (:path ed)
+           :goal "Read company.bl.org, search.bl.org and search.bl. Execute the saved Omega-generated curated search functions in your task namespace to refresh external procurement findings for Morocco and Europe. Reuse the company brief; do not reopen Ora merely to establish capabilities again. Repair your own functions if needed and synchronize source blocks. Update opportunities.bl.org and run-review.bl.org with original notice evidence, verified future deadlines, fit, unknown eligibility and next actions. Keep the procurement-review layout directive. No applications, registrations, messages or payments. Call done after checking the files."}}))
+
+(defn in-search-source? [ed]
+  (let [r (first (c/cursor ed))]
+    (and (ends-with? (str (:path ed)) "search.bl.org")
+         (some (fn [b] (and (= "beam-lisp" (:lang b)) (<= (:from b) r) (< r (:to b))))
+               (:blocks (:struct ed))))))
 
 (def bl-package
   {:name "browser" :doc "Task-owned local browsers, browser blocks, session buffers and observation."
-   :commands {:browser/sessions {:doc "List browser sessions." :run (fn [ed] (c/effect ed {:kind :visit :path "browser:sessions"}))}
+   :commands {:browser/run-search {:doc "Run saved curated search through a real Omega task (live world)." :run run-search}
+              :browser/sessions {:doc "List browser sessions." :run (fn [ed] (c/effect ed {:kind :visit :path "browser:sessions"}))}
               :browser/open {:doc "Open this browser or browser task block." :run (fn [ed] (or (open-block ed) (c/message ed "No browser block here.")))}
               :browser/watch {:doc "Visit the browser and start viewport capture." :run (fn [ed] (action ed "watch"))}
               :browser/headful {:doc "Restart headed with saved storage and tabs." :run (fn [ed] (action ed "headful"))}
@@ -106,11 +130,12 @@
               :browser/resume {:doc "Return control to the task." :run (fn [ed] (action ed "resume"))}
               :browser/close {:doc "Close this session." :run (fn [ed] (action ed "close"))}
               :browser/forget {:doc "Delete saved auth state after closing the session." :run (fn [ed] (action ed "forget"))}}
-   :keys {:normal {"space b s" :browser/sessions "space b w" :browser/watch
+   :keys {:normal {"space b e" :browser/run-search "space b s" :browser/sessions "space b w" :browser/watch
                    "space b h" :browser/headful "space b l" :browser/headless
                    "space b p" :browser/pause "space b r" :browser/resume
                    "space b x" :browser/close "space b f" :browser/forget}}
-   :intercept (fn [ed ev] (when (and (= :key (:type ev)) (= "C-Enter" (:key ev))) (or (open-block ed) (when (and (= "browser:sessions" (:path ed)) (session-id ed)) (action ed "watch")))))
+   :intercept (fn [ed ev] (when (and (= :key (:type ev)) (= "C-Enter" (:key ev))) (or (when (in-search-source? ed) (run-search ed)) (open-block ed) (when (and (= "browser:sessions" (:path ed)) (session-id ed)) (action ed "watch")))))
+   :on-event after-event
    :adopt adopt-report :owns [:frame/layout]
    :render render
    :provides {:layouts {"browser-inbox" browser-inbox "browser-observe" browser-observe "procurement-review" procurement-review}

@@ -65,7 +65,37 @@ test('report directive requests a package layout without changing ordinary docum
  const plain=M.d_boot('Ordinary document','plain.bl.org');
  assert.equal(P.d_adopt_report(plain),plain);
  const report=use(M.d_boot('#+TITLE: Findings\n#+BROWSER_LAYOUT: procurement-review\n\n* Opportunities','opportunities.bl.org'));
- assert.equal(get(report,'frame/layout'),'procurement-review');
+ assert.equal(get(get(report,'frame/layout'),'name'),'procurement-review');
+ let fr=F.d_single(M.d_boot('#+TITLE: Findings\n#+BROWSER_LAYOUT: procurement-review\n\n* Opportunities','opportunities.bl.org'));
+ fr=F.d_handle(fr,ev(K('type'),K('use'),K('package'),P.d_bl_package));
+ assert.equal(get(get(fr,'layout'),'name'),'procurement-review');
+
  const removed=G.d_unuse(report,'browser');
  assert.equal(get(removed,'frame/layout'),null);
+});
+
+test('C-Enter on generated search source launches Omega without evaluating code in the editor',()=>{
+ const source='#+TITLE: Search\n\n#+begin_src beam-lisp\n(defn curated [] :example)\n#+end_src';
+ const ed=use(at(M.d_boot(source,'search.bl.org'),3));
+ const [,fx]=M.d_take_effects(M.d_handle(ed,key('C-Enter'))).toArray();
+ const intent=fx.toArray().find(e=>get(e,'intent')==='task/open');
+ assert.ok(intent);
+ assert.equal(get(intent,'then'),K('visit-path'));
+ assert.match(get(get(intent,'args'),'goal'),/saved Omega-generated curated search functions/);
+ assert.equal(awaitText(ed),source);
+});
+
+test('watching a session arranges observation on document arrival and unuse removes it',()=>{
+ const source='#+begin_browser :id ora :mode headless\nExisting browser\n#+end_browser';
+ let fr=F.d_single(use(M.d_boot(source,'browser:ora')));
+ fr=F.d_handle(fr,key('C-Enter'));
+ const [clean,fx]=F.d_take_effects(fr).toArray();
+ assert.ok(fx.toArray().some(e=>get(e,'intent')==='browser/watch'));
+ fr=F.d_handle(clean,ev(K('type'),K('doc'),K('path'),'browser:ora',K('text'),source,K('visit?'),true));
+ assert.equal(get(get(fr,'layout'),'name'),'browser-observe');
+ fr=F.d_handle(fr,key(':'));
+ for(const ch of '(ed/unuse "browser")')fr=F.d_handle(fr,ev(K('type'),K('text'),K('text'),ch));
+ fr=F.d_handle(fr,key('Enter'));
+ assert.equal(get(get(fr,'layout'),'name'),'single');
+ assert.equal(F.d_editor_ids(fr).cnt,1);
 });
