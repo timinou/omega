@@ -241,6 +241,30 @@
       (let [r (try (f (keywordize (get b "args"))) (catch e {:ok false :message (ex-message e)}))]
         (w/json conn 200 (merge {:ok true} r))))))
 
+; Clipboard assets are content addressed and scoped to this server's root.
+(def ^:private asset-types {"png" "image/png" "jpg" "image/jpeg" "webp" "image/webp"})
+(defn- asset-name? [s] (boolean (re-matches #"[a-f0-9]{64}\.(png|jpg|webp)" s)))
+(defn- api-asset-store [cfg conn]
+  (try
+    (let [[b conn] (body-json conn) data (get b "data") filename (get b "name")]
+      (if (or (not (string? data)) (> (count data) 14000000) (not (asset-name? (str filename))))
+        (w/json conn 400 {:ok false :message "Invalid image asset (maximum 10 MB)"})
+        (let [bytes (Base/decode64! data)
+              hash (lower-case (Base/encode16 (crypto/hash :sha256 bytes)))
+              abs (str (:root cfg) "/.assets/" filename)]
+          (if (not= hash (first (split filename ".")))
+            (w/json conn 400 {:ok false :message "Image digest mismatch"})
+            (do (File/mkdir_p! (Path/dirname abs))
+                (File/write! abs bytes)
+                (w/json conn 200 {:ok true}))))))
+    (catch e (w/json conn 400 {:ok false :message (ex-message e)}))))
+(defn- api-asset [cfg conn filename]
+  (let [abs (str (:root cfg) "/.assets/" filename)]
+    (if (and (asset-name? filename) (File/regular? abs))
+      (-> conn (w/resp-header "x-content-type-options" "nosniff")
+          (w/bytes (get asset-types (last (split filename "."))) (File/read! abs)))
+      (w/text conn 404 "no such image"))))
+
 (defn router
   "The plug for config `cfg` = {:root :web :providers :intents}."
   [cfg]
@@ -251,6 +275,8 @@
         (and (= m "GET") (= p "/api/file")) (api-file cfg conn)
         (and (= m "GET") (= p "/api/doc")) (api-doc cfg conn)
         (and (= m "GET") (= p "/api/rev")) (api-rev cfg conn)
+        (and (= m "POST") (= p "/api/assets")) (api-asset-store cfg conn)
+        (and (= m "GET") (starts-with? p "/api/assets/")) (api-asset cfg conn (subs p 12))
         (and (= m "POST") (= p "/api/save")) (api-save cfg conn)
         (and (= m "POST") (= p "/api/eval")) (api-eval cfg conn)
         (and (= m "POST") (= p "/api/place")) (api-place cfg conn)

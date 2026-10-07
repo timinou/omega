@@ -1,0 +1,58 @@
+; Image paste: pure editor package. Bytes cross the host as effects only.
+(ns img.main
+  (:require [ed.core :as c] [ed.text :as t] [pp.present :as p] [pp.main :as pm]))
+
+(defn image-url [s]
+  (when (and (starts-with? s "[[image:/api/assets/") (ends-with? s "]]"))
+    (subs s 8 (- (count s) 2))))
+
+(defn- present-row [r ctx]
+  (let [ed (:ed ctx) url (image-url (t/line (:text ed) r))]
+    (if (and url (not (get-in ed [:pkg-state "images" :source?])))
+      (p/line-mark r [{:kind :image :text url}] (str "image@" r) {:size 10 :role :image})
+      (p/text-mark r))))
+
+(defn- present-prose [o ctx]
+  (p/stack (mapv (fn [r] (present-row r ctx)) (range (:from o) (:to o)))))
+
+; Keep the standard section tree and fold policy. Images decorate prose inside
+; their section, so folding the section hides them with the rest of its body.
+(def presentation
+  {:name "images" :table (assoc p/default-table :prose present-prose) :isa p/ISA
+   :lod-of (fn [ed _] (p/default-lod ed))
+   :focus-of (fn [ed _] [(:text ed) (:folds ed) (get-in ed [:pkg-state "images" :source?])])})
+
+(defn- with-presentation [ed] (assoc ed :presentation presentation))
+(defn- restore-presentation [ed old]
+  (if (contains? old :presentation) (assoc ed :presentation (:presentation old)) (dissoc ed :presentation)))
+
+(defn- paste [ed ev]
+  (if (:read-only? ed) (c/message ed "This buffer is read-only")
+    (let [pos (c/cursor ed) prefix (if (zero? (second pos)) "" "\n")
+          s (str prefix "[[image:" (:url ev) "]]\n")
+          new (c/apply-edits ed [[pos pos s]] (fn [_ end] {:anchor end :head end}) nil)]
+      (-> new (assoc :mode :insert :last-edit nil)
+          (c/effect {:kind :asset-store :url (:url ev) :data (:data ev)})
+          (c/message "Image pasted")))))
+
+(defn- intercept [ed ev]
+  (cond
+    (= :paste-image (:type ev)) (paste ed ev)
+    (= :asset-error (:type ev)) (c/message ed (:message ev))
+    (contains? #{:scroll-slots :scroll-to-slot} (:type ev))
+      (restore-presentation ((:intercept pm/bl-package) (with-presentation ed) ev) ed)
+    :else nil))
+
+(defn- after [old new ev]
+  (if (contains? #{:key :text :click} (:type ev))
+    (restore-presentation (p/reveal presentation (with-presentation new)) new) new))
+
+(defn- source [ed] (update-in ed [:pkg-state "images" :source?] not))
+
+(def bl-package
+  {:name "images" :doc "Paste clipboard images into durable, undoable buffer references."
+   :commands {:images/source {:doc "Toggle image source references" :run source}}
+   :keys {:normal {"g i" :images/source}}
+   :intercept intercept :on-event after
+   :render (fn [ed] (assoc (p/render presentation (with-presentation ed)) :presentation "images"))
+   :provides {:clipboard {:images true}}})

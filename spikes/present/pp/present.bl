@@ -338,6 +338,71 @@
 (def ^:private cached-render (memo/identity-pair RENDER-CACHE-SIZE render-model))
 (defn render [p ed] (cached-render p ed))
 
+; ─── reveal: keep the cursor visible in the projection's own slots ──────────
+;
+; ed.view/reveal consults [:provides :navigation :reveal] before its plain
+; fold-aware source scroll, so a presentation lands the cursor by SLOT, not by
+; source distance: a wrapped answer is one row, a folded section is its
+; heading, a sticky card stays put. Only :view moves — the selection and
+; :folds are never touched.
+
+(defn- slot-for-row
+  "The slot index drawn for source row `r`; when `r` is hidden (folded, or
+   drawn only by ornaments) the first slot of its preceding represented source
+   row. Wrapped continuations do not move the arrival point to a paragraph's end. nil before the first drawn row."
+  [slots r]
+  (loop [i 0 ans nil source nil]
+    (if (>= i (count slots)) ans
+      (let [sr (slot-row (nth slots i))]
+        (cond
+          (= sr r) i
+          (and (some? sr) (< sr r) (or (nil? source) (> sr source)))
+            (recur (inc i) i sr)
+          :else (recur (inc i) ans source))))))
+
+(defn reveal
+  "Scroll `ed` so the primary head is visible under presentation `p` — the
+   projection-aware counterpart of ed.view/reveal-source. The target is the
+   cursor row's slot, or the last visible slot at or before a hidden cursor row
+   (never unfolding or moving the selection). A cursor already on screen, or on
+   a sticky/docked slot (the composer, always drawn), leaves the view exactly
+   as it is — anchor and fractional :sub preserved. Otherwise the top/anchor is
+   rewritten to bring the target into the body with the usual margin and the
+   pin is dropped; the new :top is the top slot's source row, so a later source
+   based scroll has no stale value. Idempotent."
+  [p ed]
+  (let [{:keys [slots frames sticky]} (screen-of p ed)
+        n (count slots)
+        v (render p ed)
+        limit (:limit (:screen v))
+        dock-ys (vec (mapcat (fn [f] (range (:y0 f) (:y1 f))) (filter :dock? sticky)))
+        dock-h (reduce + 0 (map (fn [y] (size-of (nth slots y))) dock-ys))
+        head-max (reduce max 0 (map (fn [f] (size-of (nth slots (:y0 f)))) (filter :head? frames)))
+        r (first (c/cursor ed))
+        yc (when (pos? n) (slot-for-row slots r))
+        visible? (and (some? yc)
+                      (some (fn [line]
+                              (and (= (slot-row (nth slots yc)) (or (:row line) (:src line)))
+                                   (< (+ (or (:clip-top line) 0) (or (:clip-bottom line) 0))
+                                      (or (:size line) 1))))
+                            (:lines v)))]
+    (if (or (nil? yc) visible?) ed
+      (let [h (max 1 (or (:height (:view ed)) 1))
+            margin (min 3 (quot h 4))
+            yc (max 0 (min yc (dec (max 1 limit))))
+            budget (max (size-of (nth slots yc)) (- h dock-h margin head-max))
+            yt (if (< yc (:slot-top v))
+                 ; above the body: leave `margin` rows over the target
+                 (loop [t yc used 0]
+                   (if (or (zero? t) (> (+ used (size-of (nth slots (dec t)))) margin)) t
+                     (recur (dec t) (+ used (size-of (nth slots (dec t)))))))
+                 ; below (or empty body): a window ending at the target
+                 (top-for-bottom slots yc budget))
+            yt (max 0 (min yt (dec (max 1 limit))))
+            row (slot-row (nth slots yt))
+            off (- yt (first-slot-of-row slots row))]
+        (assoc ed :view (dissoc (assoc (:view ed) :top row :anchor {:row row :off off :sub 0}) :pin))))))
+
 ; ─── the minimap: the whole screen, one bar per slot ────────────────────────
 ;
 ; A miniature of what the presentation lays out (not of the text): each slot

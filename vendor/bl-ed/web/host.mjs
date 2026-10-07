@@ -352,12 +352,28 @@ function applyDoc(j, path, visit, goto, pane) {
   if (visit && (pane == null || paneKey(pane) === get(fr, "focus").name)) history.replaceState(null, "", documentUrl(location.href, path, get(renderFrame(fr), "layout")));
 }
 
+const assetUploads = new Map();
+const assetPreviews = new Map();
+async function storeAsset(url, data) {
+  const task = (async () => {
+    const r = await postJSON("/api/assets", { name: url.split("/").pop(), data });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.message || "image save failed");
+  })();
+  assetUploads.set(url, task);
+  // Keep failures observable by save, without an unhandled rejection.
+  task.catch(() => {});
+  return task;
+}
 async function perform(eff) {
   const pane = get(eff, "pane");
   const e = eff;
   const dispatchP = (x) => dispatch(toPane(pane, x));
   const kind = get(e, "kind").name;
-  if (kind === "visit") {
+  if (kind === "asset-store") {
+    try { await storeAsset(get(e, "url"), get(e, "data")); }
+    catch (err) { dispatchP(ev(K("type"), K("asset-error"), K("message"), "Image not saved: " + err.message + " — paste again to retry")); }
+  } else if (kind === "visit") {
     loadDoc(get(e, "path"), true, get(e, "goto"), pane);
   } else if (kind === "intent") {
     try {
@@ -372,6 +388,12 @@ async function perform(eff) {
   } else if (kind === "save") {
     const body = { path: get(e, "path"), text: get(e, "text"), base: get(e, "base") };
     try {
+      try {
+        for (const [url, upload] of assetUploads) if (body.text.includes(url)) await upload;
+      } catch (err) {
+        dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), false, K("message"), "Image not saved — paste it again to retry"));
+        return;
+      }
       const r = await postJSON("/api/save", body);
       const j = await r.json();
       dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), r.ok && j.ok === true, K("message"), j.message || "",
@@ -714,7 +736,16 @@ function paint(dom, v, focused) {
       for (const g of segs) {
         const s = document.createElement("span");
         s.className = "seg k-" + get(g, "kind").name;
-        s.textContent = get(g, "text");
+        if (get(g, "kind").name === "image") {
+          const url = get(g, "text");
+          if (/^\/api\/assets\/[a-f0-9]{64}\.(png|jpg|webp)$/.test(url)) {
+            const img = document.createElement("img");
+            img.src = assetPreviews.get(url) || url;
+            img.alt = "Pasted image";
+            img.draggable = false;
+            s.appendChild(img);
+          }
+        } else s.textContent = get(g, "text");
         fresh.appendChild(s);
       }
       if (folded) { const f = document.createElement("span"); f.className = "fold-mark"; f.textContent = " ⋯"; fresh.appendChild(f); }
@@ -722,6 +753,10 @@ function paint(dom, v, focused) {
       if (node) view.replaceChild(fresh, node); else view.appendChild(fresh);
       node = fresh;
     }
+    // Equal-looking rows may belong to different source positions after a fold
+    // or scroll. Reused DOM must point at the row it now represents.
+    if (row != null) { node.dataset.row = row; delete node.dataset.src; }
+    else { node.dataset.src = src; delete node.dataset.row; }
     place$(node, lineArr[i], shiftOf(lineArr[i]));
     let g = gutter.children[i];
     // a cell's first row carries its placement: ● local (runs in the page),
@@ -937,6 +972,8 @@ sink.addEventListener("compositionend", (e) => {
 });
 sink.addEventListener("keydown", (e) => {
   if (composing || e.isComposing) return;
+  // Native paste must reach the clipboardData handler, including on Linux.
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "v") return;
   const k = keyName(e);
   if (k == null) return;
   // printable keys WITHOUT modifiers in insert/command modes arrive via `input`
@@ -956,7 +993,34 @@ sink.addEventListener("input", (e) => {
   const mode = document.body.dataset.mode;
   if (mode === "insert" || mode === "command" || mode === "palette") dispatch(ev(K("type"), K("text"), K("text"), text));
 });
+const supportsClipboardImages = ed => [...(get(ed, "packages") || [])].some(p => get(get(get(p, "provides"), "clipboard"), "images"));
 sink.addEventListener("paste", (e) => {
+  const ed = ed$();
+  const acceptsImages = supportsClipboardImages(ed);
+  const file = [...(e.clipboardData?.items || [])].find(i => ["image/png", "image/jpeg", "image/webp"].includes(i.type))?.getAsFile();
+  if (file && acceptsImages && !get(ed, "read-only?") && ["normal", "insert", "select"].includes(get(ed, "mode").name)) {
+    e.preventDefault();
+    const pane = get(fr, "focus"), originalText = get(ed, "text"), originalSels = get(ed, "sels");
+    (async () => {
+      try {
+        if (file.size > 10000000) throw new Error("Image exceeds 10 MB");
+        const bytes = await file.arrayBuffer();
+        const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(b => b.toString(16).padStart(2, "0")).join("");
+        const data = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file); });
+        const current = F.d_editor(fr, pane);
+        if (!current || !supportsClipboardImages(current)) return;
+        if (get(current, "text") !== originalText || get(current, "sels") !== originalSels) {
+          dispatch(toPane(pane, ev(K("type"), K("asset-error"), K("message"), "Buffer changed while reading the clipboard — paste again")));
+          return;
+        }
+        const ext = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[file.type];
+        const url = `/api/assets/${hash}.${ext}`;
+        assetPreviews.set(url, data);
+        dispatch(toPane(pane, ev(K("type"), K("paste-image"), K("url"), url, K("data"), data.split(",")[1])));
+      } catch (err) { dispatch(toPane(pane, ev(K("type"), K("asset-error"), K("message"), String(err.message || err)))); }
+    })();
+    return;
+  }
   const text = e.clipboardData?.getData("text/plain");
   if (text) { e.preventDefault(); dispatch(ev(K("type"), K("text"), K("text"), text)); }
 });

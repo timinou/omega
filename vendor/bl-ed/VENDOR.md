@@ -103,5 +103,38 @@ The implementation and measured outcomes are tracked in `research/domain/interfa
 
 Cold-image HTTP gate: `bl-ed.serve` explicitly requires `clojure.re`. Resolving an unqualified `re-matches` before its regex literal loads that library failed the first virtual-path request in a fresh packaged VM, while warm suites hid it. `test/serve-cold.test.mjs` starts a fresh ephemeral fixture, checks the first virtual HTTP read without retrying it, then verifies an appended turn changes the document rev. No live-world writes are involved.
 
+### 2026-10-07 — clipboard image prototype support
+
+For `spikes/images` (`?use=images`): the host leaves native Ctrl/Cmd+V to the
+browser, reads PNG/JPEG/WebP clipboard files only when a package provides
+`:clipboard {:images true}`, and emits pane-targeted `:paste-image` events.
+The package decides insertion and drawing; the host performs `:asset-store`
+effects and paints generic `:image` segments in sized presentation rows.
+Local previews are immediate after clipboard decoding; saves await referenced
+asset uploads and report a failed upload instead of saving a dangling reference.
+The server stores SHA-256-addressed bytes under the served root's `.assets/`,
+checks names and digests, and exposes POST `/api/assets` and GET
+`/api/assets/<digest>.<png|jpg|webp>`. Theme rules fit images without upscaling.
+No omega concepts were added to `ed.*`.
+
+### 2026-10-07 — source positions on reused presentation rows
+
+When folding removes one of two identical image ornaments, the remaining
+ornament can reuse its DOM slot because its visual signature is unchanged.
+The host now updates `data-row`/`data-src` even when reusing a line, so clicks
+and inspection target its current source position. Verified by
+`spikes/images/test/folding-browser.mjs`: two references to the same image,
+nested heading fold/unfold, and source toggle in the real offline editor.
+The image package now keeps the standard section tree and default fold policy
+instead of flattening the document; no core BL folding changes were needed.
+
+Standalone image-package build gate: `ed/main.bl` moves the `eval-command`
+header back to its evaluator body, the pending-language branch into that
+body's `cond`, and the language-answer event pair before the click branch.
+These minimal repairs prevent misplaced forms in the prior committed source
+from breaking a clean build. Other workspace/editor changes are excluded.
 
 Workspace slice (2026-10-07): `ed/frame.bl` consumes generic `:frame-focus` effects (spatial, clamped, editor panes only) and asks package `:provides :selection` callbacks for object identities when no provider object occupies the source row. `ed/docs.bl` accepts `:goto {:block id}` for exact current-source block-ID arrival. `ed/omega.bl` forwards an optional single-token `:cwd` task-header attribute through its existing task/open intent. The host preserves keyboard focus when moving the input sink between panes. The workspace package, attached-folder providers and task context remain above the generic editor. Proof and drive contract: `spikes/workspace/workspace.bl.md`.
+
+The presentation package likewise moves its resize event branch from `draw`
+(where `ev` is unbound) into `intercept`, keeping the standalone build valid.

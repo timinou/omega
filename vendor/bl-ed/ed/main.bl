@@ -99,11 +99,6 @@
                     (do (swap! cell assoc :frame/layout l) (str "layout " nm))))))
    "layouts" (fn [] (vec (sort (keys (reduce (fn [m p] (merge m (get-in p [:provides :layouts]))) {} (pkg/packages @cell))))))})
 
-(defn eval-command
-  "Evaluate the command-line text as REAL Beam Lisp — the self-hosted
-   reader, compiler and macros, running in this page (priv/lib/js/eval.bl) —
-   with the `ed` namespace bound to the live editor API. Returns the editor
-   with the value (or error) in the echo area.
 (declare minibuf-key)
 
 (defn- language-answer
@@ -123,6 +118,11 @@
       :else (assoc ed :awaiting nil))))
 
 
+(defn eval-command
+  "Evaluate the command-line text as REAL Beam Lisp — the self-hosted
+   reader, compiler and macros, running in this page (priv/lib/js/eval.bl) —
+   with the `ed` namespace bound to the live editor API. Returns the editor
+   with the value (or error) in the echo area.
    Evaluation is a host capability (`js/eval-ed`): the editor stays a pure
    function of its events, and a host without an evaluator answers with an
    error message instead of a crash."
@@ -130,14 +130,14 @@
   (let [cell (atom (assoc ed :mode :normal :minibuf nil))
         out (try (js/eval-ed src (api cell)) (catch e {:err (ex-message e)}))]
     (cond
+      ; the language is still loading: keep the draft, ask the host to wait,
+      ; and retry on :language-ready (see await-language)
+      (:pending? out) (cmds/await-language ed {:kind :command :src src :path (:path ed)})
       (contains? out :err) (c/message @cell (str "error: " (:err out)))
       :else (c/message @cell (let [s (:text out)] (if (> (count s) 400) (str (subs s 0 400) " …") s))))))
 
 ; ─── the palette ────────────────────────────────────────────────────────────
 
-      ; the language is still loading: keep the draft, ask the host to wait,
-      ; and retry on :language-ready (see await-language)
-      (:pending? out) (cmds/await-language ed {:kind :command :src src :path (:path ed)})
 (defn- fuzzy?
   "Are the graphemes of `q` a subsequence of `s` (case-insensitive)?"
   [q s]
@@ -241,12 +241,12 @@
       (= ty :doc)
         (let [ed2 (docs/load-doc ed ev new-doc)]
           (if (or (docs/read-only? ed2) (identical? (:text ed2) (:text ed))) ed2 (request-placements ed2)))
+      (contains? #{:language-ready :language-failed} ty) (language-answer ed ev)
       (= ty :cards) (omega/cards-loaded ed ev)
       (= ty :intent-result) (intent-result ed ev)
       (= ty :resize) (c/scroll-to-cursor (assoc-in ed [:view :height] (max 4 (:height ev))))
       (= ty :scroll) (assoc-in ed [:view :top] (max 0 (min (:top ev) (dec (t/line-count (:text ed))))))
       (= ty :click)
-      (contains? #{:language-ready :language-failed} ty) (language-answer ed ev)
         (let [p (t/clamp (:text ed) (:pos ev))]
           (assoc ed :sels [{:anchor (if (:extend? ev) (:anchor (c/primary ed)) p) :head p}] :primary 0 :pending []))
       (= ty :saved)
