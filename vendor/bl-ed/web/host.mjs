@@ -556,6 +556,7 @@ function draw() {
     const id = get(p, "id").name, dom = paneDom.get(id);
     if (!dom) continue;
     dom.root.classList.toggle("loading", loading.has(id));
+    if (loading.has(id)) dom.root.dataset.loading = loading.get(id); else delete dom.root.dataset.loading;
     if (get(p, "kind") === K("view")) { paintView(dom, p); continue; }
     const v = get(p, "view");
     dom.root.classList.toggle("focus", !!get(p, "focus?"));
@@ -1207,7 +1208,7 @@ const { text, path, doc } = init;
 fr = F.d_single(M.d_boot(text, path));
 // the document's rev / read-only flag / objects: the same event a visit uses
 if (doc) fr = F.d_handle(fr, ev(K("type"), K("doc"), K("path"), path, K("text"), doc.text, K("rev"), doc.rev, K("read-only?"), !!doc.readOnly,
-                     K("title"), doc.title || path, K("objects"), toBL(doc.objects || []), K("visit?"), false));
+                     K("title"), doc.title || path, K("objects"), toBL(doc.objects || []), K("data"), toBL(doc.data || null), K("visit?"), false));
 for (const u of useEvents) fr = F.d_handle(fr, u);
 if (wantLayout) {
   const layout = F.d_layouts(ed$()).get(wantLayout, null);

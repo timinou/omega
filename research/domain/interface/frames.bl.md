@@ -131,3 +131,15 @@ frame = {:layout  layout
 - `space a o` opening the inbox instead of a single overview (a key in the omega package, once
   `ed/omega.bl` is a package: FUP-010).
 - Pane resize by dragging the hairline.
+
+## Retaining editors across package layout transitions
+
+A package can emit `{:kind :frame-layout :layout "name" :keep {destination source}
+:visits {pane {:path address :goto optional}} :focus pane}`. Names resolve against
+installed package layouts. `:origin` as a source means the emitting pane; nil
+requests a fresh editor. Unspecified destinations retain the same pane ID when
+it exists. Retained editors keep their cursor, source, prompt and package state.
+The frame refuses to discard unsaved text or nonempty prompts, or duplicate one
+editor into two panes. Discarded clean editors receive `:session-leave` for pure
+cleanup effects. Ordinary effects may specify `:pane` explicitly; otherwise the
+frame tags them with their emitting editor. This is layout policy, not IO.

@@ -159,13 +159,48 @@
         [after effs] (m/take-effects after)
         fr (-> fr
                (assoc-in [:editors id] after)
-               (update :effects into (map (fn [e] (assoc e :pane id)) effs)))]
+               (update :effects into (map (fn [e] (assoc e :pane (or (:pane e) id))) effs)))]
     (follow-links fr id before)))
 
 (defn- move-focus [fr dir]
   (let [ids (editor-ids fr)
         i (or (first (filter (fn [i] (= (nth ids i) (:focus fr))) (range (count ids)))) 0)]
     (assoc fr :focus (nth ids (mod (+ i dir) (count ids))))))
+
+(declare layouts)
+
+(defn reconfigure
+  "A package-requested layout transition. :keep maps destination pane ids to
+   existing source ids (:origin names the sender); nil requests a fresh editor.
+   Retained editors keep exact state. Unsaved text or prompt drafts cannot be
+   discarded. :visits is {pane {:path address :goto optional}}. Pure host effects."
+  [fr request]
+  (let [layout (get (layouts (focused fr)) (:layout request))
+        origin (:pane request)
+        fail (fn [message] (assoc-in fr [:editors (:focus fr)] (c/message (focused fr) message)))]
+    (if (nil? layout) (fail (str "No layout " (:layout request)))
+      (let [ids (vec (map :id (filter editor-pane? (:panes layout))))
+            specified (or (:keep request) {})
+            source (fn [id] (let [v (if (contains? specified id) (get specified id) id)] (if (= :origin v) origin v)))
+            mapping (into {} (map (fn [id] [id (source id)]) ids))
+            sources (vec (keep (fn [[id src]] (when (editor fr src) src)) mapping))
+            draft? (fn [ed] (or (and (not (docs/read-only? ed)) (c/dirty? ed)) (seq (get-in ed [:minibuf :text]))))
+            lost (filter (fn [id] (and (not (some (fn [src] (= id src)) sources)) (draft? (editor fr id)))) (editor-ids fr))
+            replaced (filter (fn [[id visit]] (let [ed (editor fr (get mapping id))]
+                                               (and ed (not= (:path ed) (:path visit)) (draft? ed)))) (:visits request))]
+        (cond
+          (not= (count sources) (count (distinct sources))) (fail "A layout cannot duplicate one editor into two panes.")
+          (or (seq lost) (seq replaced)) (fail "This layout would discard a draft — publish or finish it first.")
+          :else
+          (let [fresh (fn [] (blank-editor (dissoc (focused fr) :pkg-state)))
+                eds (into {} (map (fn [id] [id (or (editor fr (get mapping id)) (fresh))]) ids))
+                gone (filter (fn [id] (not (some (fn [src] (= id src)) sources))) (editor-ids fr))
+                cleanup (mapcat (fn [id] (let [[ed effects] (m/take-effects (m/handle (editor fr id) {:type :session-leave}))]
+                                          (map (fn [e] (assoc e :pane (or (:pane e) id))) effects))) gone)
+                visits (map (fn [[id v]] (merge {:kind :visit :pane id} v)) (:visits request))
+                focus (or (:focus request) (when (some (fn [id] (= (:focus fr) id)) ids) (:focus fr)) (first ids))]
+            (if (not (some (fn [id] (= focus id)) ids)) (fail "The requested focus pane is not in this layout.")
+              {:layout layout :editors eds :focus focus :effects (vec (concat (:effects fr) cleanup visits))})))))))
 
 (defn- focus-effects
   "Consume generic package-requested spatial focus effects before the host.
@@ -174,12 +209,14 @@
   (let [effects (:effects fr)
         fr (assoc fr :effects [])]
     (reduce (fn [f e]
-              (if (= :frame-focus (:kind e))
+              (cond
+                (= :frame-layout (:kind e)) (reconfigure f e)
+                (= :frame-focus (:kind e))
                 (let [ids (editor-ids f)
                       i (or (first (filter (fn [i] (= (nth ids i) (:focus f))) (range (count ids)))) 0)
                       dest (max 0 (min (dec (count ids)) (+ i (:direction e))))]
                   (assoc f :focus (nth ids dest)))
-                (update f :effects conj e))) fr effects)))
+                :else (update f :effects conj e))) fr effects)))
 
 (def WINDOW-KEYS
   "space w then … (the window keys). C-w is the browser's close-tab, so the

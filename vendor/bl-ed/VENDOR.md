@@ -171,3 +171,16 @@ agent-browser drive passed on offline port 8798, including used/unloaded
 screenshots for each package. All 66 vendor tests, including cold HTTP startup,
 and the unchanged 36-variant presentation equivalence check passed. The earlier
 committed workspace screenshots remain historical proof for the earlier slice.
+
+### 2026-10-07 — workbench layout transitions and initial metadata
+
+The generic host now carries provider data on initial load, as it already did
+on visits, and clears stale loading attributes when a pane DOM node is reused.
+`ed/frame.bl` preserves explicit target panes on package effects and accepts a
+pure `:frame-layout` effect with named editor retention, optional visits and
+focus. It refuses to discard unsaved text or prompt drafts or duplicate an
+editor into two panes. New editors start without copied transient package state.
+This is domain-free; the workbench declares the layouts and transitions.
+The added frame contract test and all 67 vendor tests pass; the unchanged
+presentation checker passes 36 variants. Real-editor proof is in
+`spikes/workspace/workbench.bl.md`.

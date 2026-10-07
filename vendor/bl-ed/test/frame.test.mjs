@@ -195,3 +195,17 @@ test("a frame reuses unchanged pane models while another editor moves", () => {
   assert.notEqual(after.get("main"), before.get("main"), "changed editor input invalidates its model");
 });
 
+
+test('reconfigure retains named editors and blocks discarded text and prompt drafts', () => {
+ let ed=M.d_boot('saved','item:a');
+ const layout=ev(K('name'),'detail',K('panes'),R.vec(ev(K('id'),K('rail'),K('width'),R.vec(K('ch'),30)),ev(K('id'),K('main'),K('width'),K('fill')),ev(K('id'),K('aside'),K('width'),R.vec(K('ch'),40))),K('links'),R.vec());
+ const pkg=ev(K('name'),'reflow-test',K('provides'),ev(K('layouts'),R.hashMap('detail',layout)));
+ ed=M.d_handle(ed,ev(K('type'),K('use'),K('package'),pkg));let fr=F.d_single(ed);
+ const request=ev(K('layout'),'detail',K('pane'),K('main'),K('keep'),ev(K('aside'),K('origin'),K('main'),null),K('focus'),K('main'),K('visits'),ev(K('main'),ev(K('path'),'item:b')));
+ const next=F.d_reconfigure(fr,request);assert.strictEqual(F.d_editor(next,K('aside')),ed);assert.equal(get(F.d_editor(next,K('main')),'path'),'');
+ assert.equal(get(get(next,'effects').toArray().at(-1),'path'),'item:b');
+ fr=F.d_single(M.d_handle(M.d_handle(ed,key('i')),ev(K('type'),K('text'),K('text'),'draft')));
+ const refused=F.d_reconfigure(fr,request.assoc(K('keep'),ev(K('main'),null)));assert.equal(get(get(refused,'layout'),'name'),'single');assert.match(get(F.d_focused(refused),'message'),/discard a draft/);
+ const prompt=ed.assoc(K('mode'),K('command')).assoc(K('minibuf'),ev(K('text'),'a reply'));
+ const refusedPrompt=F.d_reconfigure(F.d_single(prompt),request.assoc(K('keep'),ev(K('main'),null)));assert.equal(get(get(refusedPrompt,'layout'),'name'),'single');
+});
