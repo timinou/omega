@@ -7,5 +7,14 @@ try {
     method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task,action,args})});
   const result=await response.json();
   if(!response.ok || !result.ok)throw Error(result.message || 'Browser operation failed');
-  console.log(JSON.stringify(result.result));
+  const value=result.result;
+  // Keep browser launch diagnostics out of model context; preserve useful page data.
+  let output=value?.result ?? value;
+  if(typeof output==='string'){
+    try {output=JSON.parse(output);}catch {}
+  }
+  if(output && typeof output==='object' && !Array.isArray(output)){
+    output={...output};delete output.lifecycle;
+  }
+  console.log(JSON.stringify(output));
 }catch(error){console.error(error.message);process.exitCode=1;}
