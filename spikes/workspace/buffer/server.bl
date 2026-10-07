@@ -1,0 +1,41 @@
+(ns buffer.server (:require [buffer.model :as b] [place.model :as place] [ws.server :as ws]
+                           [bl-ed.serve :as serve] [clojure.string :as str]))
+(defn path [sys address]
+  (when-not (str/starts-with? address "work:") (throw (ex-info "Shared buffers use work: place addresses." {})))
+  (ws/resolve-file (place/roots (place/all (:env sys))) (subs address 5)))
+(defn provider [sys server]
+  {:read (fn [nm _] (let [r (b/request! server [:read (path sys (str "work:" nm)) {}])]
+                      (if (:error r) (throw (ex-info (:error r) {}))
+                        {:text (:text r) :rev (:rev r) :read-only? false :objects [] :data {:buffer true}})))
+   :rev (fn [nm _] (:rev (b/request! server [:read (path sys (str "work:" nm)) {}])))
+   :eval (fn [nm req id text]
+           ((:eval (get (ws/providers sys (place/roots (place/all (:env sys)))) "work")) nm req id text))
+   :write (fn [nm req text base]
+            (b/request! server [:save (path sys (str "work:" nm)) {:text text :base base :client (or (:client req) "manual") :sequence (or (:client-seq req) 0)}]))})
+(defn changes-doc [sys address]
+  (let [ops (reverse (b/operations (:env sys) (path sys address)))]
+    {:text (str "#+TITLE: Changes to " address "\n\n"
+                (str/join "\n" (map (fn [op] (str "* " (:op/rev op) " · " (name (:op/kind op)) " · " (:op/actor op)
+                                                   (when (:op/cell op) (str " · cell " (:op/cell op)))
+                                                   "\nid: " (:op/id op) "\n- " (pr-str (:op/old op)) "\n+ " (pr-str (:op/new op)))) ops)) "\n")
+     :read-only? true :data {:buffer-path address}
+     :objects (vec (map-indexed (fn [i op] {:row (+ 2 (* 4 i)) :type "buffer/op" :key (:op/id op) :path address}) ops))}))
+(defn providers [sys server]
+  {"work" (provider sys server)
+   "changes" {:read (fn [nm _] (changes-doc sys nm)) :rev (fn [nm _] (serve/text-rev (:text (changes-doc sys nm))))}})
+(defn intents [sys server]
+  {"buffer/draft" (fn [{:keys [path text base client client-seq]}]
+                    (let [r (b/request! server [:draft (buffer.server/path sys path) {:text text :base base :client client :sequence client-seq}])]
+                      (when (:error r) (throw (ex-info (:error r) {}))) r))
+   "buffer/resolve" (fn [{:keys [path text base client client-seq]}]
+                      (let [r (b/request! server [:save (buffer.server/path sys path)
+                                                 {:text text :base base :client client :sequence client-seq :resolution? true}])]
+                        (cond (:conflict r) {:ok false :message (:message r) :rev (:conflict r)}
+                              (:error r) {:ok false :message (:error r)}
+                              :else (assoc r :submitted-text text))))
+   "buffer/close" (fn [{:keys [path client client-seq]}]
+                    (let [r (b/request! server [:close (buffer.server/path sys path) {:client client :sequence client-seq}])]
+                      (when (:error r) (throw (ex-info (:error r) {}))) r))
+   "buffer/undo" (fn [{:keys [path id client]}]
+                   (let [r (b/request! server [:undo (buffer.server/path sys path) {:id id :actor (str "human:" client)}])]
+                     (when (:error r) (throw (ex-info (:error r) {}))) r))})

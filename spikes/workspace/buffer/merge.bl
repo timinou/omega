@@ -1,0 +1,23 @@
+; Conservative three-way text merge. Accepted disjoint edits commute; overlap
+; is refused rather than using the non-convergent positional rebase prototype.
+(ns buffer.merge)
+(defn change [old new]
+  (let [na (count old) nb (count new) lim (min na nb)
+        pre (loop [i 0] (if (and (< i lim) (= (subs old i (inc i)) (subs new i (inc i)))) (recur (inc i)) i))
+        suf (loop [i 0] (if (and (< i (- lim pre)) (= (subs old (- na i 1) (- na i)) (subs new (- nb i 1) (- nb i)))) (recur (inc i)) i))]
+    {:from pre :to (- na suf) :old (subs old pre (- na suf)) :new (subs new pre (- nb suf))}))
+(defn apply-change [s c]
+  (str (subs s 0 (:from c)) (:new c) (subs s (:to c))))
+(defn merge-text [base local remote]
+  (cond
+    (= local remote) {:ok local}
+    (= base local) {:ok remote}
+    (= base remote) {:ok local}
+    :else
+      (let [a (change base local) b (change base remote)
+            ; Strict gaps leave same-point insertions and boundary cases explicit.
+            before? (< (:to a) (:from b)) after? (< (:to b) (:from a))]
+        (cond before? {:ok (apply-change (apply-change base b) a)}
+              after? (let [delta (- (count (:new b)) (count (:old b)))]
+                       {:ok (apply-change remote (-> a (update :from + delta) (update :to + delta)))})
+              :else {:error "Edits overlap; both versions are retained."}))))

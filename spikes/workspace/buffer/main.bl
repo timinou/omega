@@ -1,0 +1,89 @@
+; Pure cooperation with a buffer-backed provider. Draft transport is a host
+; intent; overlap keeps local text and blocks accidental overwrite.
+(ns buffer.main (:require [buffer.merge :as m] [ed.core :as c] [ed.text :as t]
+                         [ed.docs :as docs] [ed.keymap :as km]))
+(defn shared? [ed] (true? (get-in ed [:doc :data :buffer])))
+(defn draft [ed]
+  (c/effect (assoc-in ed [:pkg-state "buffers" :drafted-path] (:path ed)) {:kind :intent :intent "buffer/draft"
+                :args {:path (:path ed) :base (get-in ed [:doc :rev]) :text (t/to-string (:text ed))}}))
+(defn release [ed]
+  (if-let [path (get-in ed [:pkg-state "buffers" :drafted-path])]
+    (c/effect ed {:kind :intent :intent "buffer/close" :args {:path path}}) ed))
+(defn publish [ed]
+  (c/effect ed {:kind :save :path (:path ed) :text (t/to-string (:text ed)) :rev (:rev ed)
+                :base (get-in ed [:doc :rev])}))
+(defn accept-published [ed published submitted rev]
+  (let [r (m/merge-text submitted (t/to-string (:text ed)) published)
+        next (-> (if (:ok r) (c/replace-text ed (:ok r)) ed)
+                 (assoc :saved-text (t/from-string published))
+                 (assoc-in [:doc :rev] rev) (update :doc dissoc :stale)
+                 (update-in [:pkg-state "buffers"] dissoc :conflict-rev)
+                 (c/message (if (:error r) "Published; newer overlapping local typing is retained." "Published shared text.")))]
+    (if (c/dirty? next) (draft next) next)))
+(defn resolve-conflict [ed]
+  (if-let [rev (get-in ed [:pkg-state "buffers" :conflict-rev])]
+    (docs/owned-prompt ed "buffers" (str "Use displayed text to resolve revision " rev "? type resolved: ")
+      (fn [ed answer]
+        (if (= "resolved" (trim answer))
+          (c/effect ed {:kind :intent :intent "buffer/resolve"
+                        :args {:path (:path ed) :base rev :text (t/to-string (:text ed))} :then :buffer-resolved})
+          (c/message ed "Resolution cancelled; draft retained."))))
+    (c/message ed "No conflicting revision recorded; use C-s to publish.")))
+(defn receive-shared [ed ev]
+  (let [r (m/merge-text (t/to-string (:saved-text ed)) (t/to-string (:text ed)) (:text ev))]
+    (if (:error r)
+      (-> ed (assoc-in [:pkg-state "buffers" :conflict-rev] (:rev ev))
+          (c/message "Shared edit overlaps this draft; your text is retained. Resolve before publishing."))
+      (-> (c/replace-text ed (:ok r))
+          (assoc :saved-text (t/from-string (:text ev)))
+          (assoc-in [:doc :rev] (:rev ev))
+          (assoc-in [:doc :data] (:data ev))
+          (update :doc dissoc :stale)
+          (c/message "Shared edit received; your draft is preserved.")))))
+(defn changes [ed]
+  (let [path (or (get-in ed [:doc :data :buffer-path]) (:path ed))]
+    (if (starts-with? path "work:") (docs/visit ed (str "changes:" path)) (c/message ed "Visit a shared file first."))))
+(defn undo-operation [ed]
+  (let [o (docs/object-at ed)]
+    (if (= "buffer/op" (:type o))
+      (c/effect ed {:kind :intent :intent "buffer/undo" :args {:path (:path o) :id (:key o)} :then :show-result})
+      (c/message ed "Select an operation in its changes document."))))
+(def bl-package
+  {:name "buffers" :doc "Shared text, unpublished drafts, attributed operations and guarded undo."
+   :commands {:buffers/resolve {:doc "Explicitly publish manually resolved text against the last conflicting revision." :run resolve-conflict}
+              :buffers/publish {:doc "Publish against the recorded base; overlap never enables overwrite." :run publish}
+              :buffers/changes {:doc "Inspect this shared file's attributed changes." :run changes}
+              :buffers/undo {:doc "Revert the selected operation if later work does not overlap." :run undo-operation}}
+   :keys (fn [ed] {:normal (merge {"g c" :buffers/changes}
+                                  (when (shared? ed) {"C-s" :buffers/publish})
+                                  (when (= "buffer/op" (:type (docs/object-at ed))) {"u" :buffers/undo}))
+                   :insert (when (shared? ed) {"C-s" :buffers/publish})})
+   :intercept
+     (fn [ed ev]
+       (cond
+         (and (shared? ed) (= :key (:type ev)) (= "C-s" (:key ev)) (contains? #{:select :command :palette} (:mode ed)))
+           (publish ed)
+         (and (shared? ed) (= :doc (:type ev)) (not (:visit? ev)) (= (:path ed) (:path ev))
+              (not= (:rev ev) (get-in ed [:doc :rev])) (c/dirty? ed))
+           (if (= (:rev ev) (get-in ed [:pkg-state "buffers" :conflict-rev])) ed
+             (let [next (receive-shared ed ev)] (if (= (:rev ev) (get-in next [:doc :rev])) (draft next) next)))
+         (and (shared? ed) (= :saved (:type ev)) (:conflict? ev))
+           (-> ed (assoc-in [:pkg-state "buffers" :conflict-rev] (:doc-rev ev))
+               (c/message (str "Not published: " (:message ev) " Your draft is retained; resolve before publishing.")))
+         (and (shared? ed) (= :saved (:type ev)) (:ok? ev) (:text ev))
+           (accept-published ed (:text ev) (:submitted-text ev) (:doc-rev ev))
+         (and (shared? ed) (= :intent-result (:type ev)) (= :buffer-resolved (:then ev)))
+           (if (:ok? ev)
+             (accept-published ed (get-in ev [:data :text]) (get-in ev [:data :submitted-text]) (get-in ev [:data :rev]))
+             (-> ed (assoc-in [:pkg-state "buffers" :conflict-rev] (or (get-in ev [:data :rev]) (get-in ed [:pkg-state "buffers" :conflict-rev])))
+                 (c/message (str "Resolution not published: " (:message ev)))))
+         :else nil))
+   :on-unuse release
+   :on-event (fn [old new ev]
+               (cond
+                 (= :session-leave (:type ev)) (release new)
+                 (and (= :session-resume (:type ev)) (shared? new) (c/dirty? new)) (draft new)
+                 (and (shared? new) (= (:path old) (:path new))
+                        (not= (t/to-string (:text old)) (t/to-string (:text new)))
+                        (not (contains? #{:doc :saved} (:type ev)))) (draft new)
+                 :else new))})

@@ -1,0 +1,118 @@
+(ns workspace-buffer-test (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
+                                   [omega.codemode :as cm] [buffer.model :as b] [buffer.merge :as m] [buffer.server :as bs] [place.model :as place]
+                                   [clojure.string]))
+(defn fixture []
+  (let [root (str "/tmp/omega-buffer-test-" (erlang/unique_integer (to-list [:positive])))
+        path (str root "/board.bl.org") e (env/open {:schema (vec (concat b/schema place/schema))}) server (b/start! e)]
+    (File/mkdir_p! root) (File/write! path "TODO first\nsecond line\nthird line\n")
+    {:root root :path path :env e :server server}))
+(defn cleanup [f] (GenServer/stop (:server f)) (env/close! (:env f)))
+(deftest disjoint-merge-is-order-independent-and-overlap-refuses
+  (let [base "alpha beta gamma" a "ALPHA beta gamma" c "alpha beta GAMMA"]
+    (is (= "ALPHA beta GAMMA" (:ok (m/merge-text base a c))))
+    (is (= (:ok (m/merge-text base a c)) (:ok (m/merge-text base c a))))
+    (is (:error (m/merge-text base "ALPHA beta gamma" "Alpha beta gamma")))
+    (is (:error (m/merge-text "ab" "aXb" "aYb")))) )
+(deftest drafts-are-visible-to-agents-and-do-not-leak-to-disk
+  (let [{:keys [path env server] :as f} (fixture)
+        original (:text (b/request! server [:read path {}])) base (:rev (b/request! server [:read path {}]))
+        draft "TODO first\nsecond line\nthird line HUMAN\n"]
+    (is (:result (b/request! server [:draft path {:client "one" :sequence 1 :base base :text draft}])))
+    (is (= draft (:ok (b/request! server [:agent-read path {}]))))
+    (is (= original (File/read! path)))
+    (is (:ok (b/request! server [:edit path {:meta {:actor "agent" :cell "c1"} :edits [{:old "TODO" :new "DONE"}]}])))
+    (is (= "DONE first\nsecond line\nthird line\n" (File/read! path)))
+    (is (= "DONE first\nsecond line\nthird line HUMAN\n" (:ok (b/request! server [:agent-read path {}]))))
+    (is (:error (b/request! server [:edit path {:meta {:actor "agent"} :edits [{:old "third line" :new "THIRD"}]}])))
+    ;; A late draft cannot resurrect text superseded by a newer request.
+    (is (:result (b/request! server [:draft path {:client "one" :sequence 0 :base base :text original}])))
+    (is (= "DONE first\nsecond line\nthird line HUMAN\n" (:ok (b/request! server [:agent-read path {}]))))
+    (let [r (b/request! server [:save path {:client "one" :sequence 2 :base base :text draft}])]
+      (is (= "DONE first\nsecond line\nthird line HUMAN\n" (:text r)))
+      (is (= (:text r) (File/read! path))))
+    (is (= 2 (count (b/operations env path))))
+    (is (= "c1" (:op/cell (first (b/operations env path)))))
+    (cleanup f)))
+(deftest stale-overlapping-publish-never-overwrites-and-undo-preserves-other-work
+  (let [{:keys [path env server] :as f} (fixture)
+        original (File/read! path) base (:rev (b/request! server [:read path {}]))]
+    (b/request! server [:edit path {:meta {:actor "agent"} :edits [{:old "TODO" :new "DONE"}]}])
+    (let [r (b/request! server [:save path {:client "human" :sequence 1 :base base :text "NOPE first\nsecond line\nthird line\n"}])]
+      (is (:conflict r)) (is (= "DONE first\nsecond line\nthird line\n" (File/read! path))))
+    (b/request! server [:edit path {:meta {:actor "other"} :edits [{:old "third" :new "THIRD"}]}])
+    (let [id (:op/id (first (b/operations env path))) r (b/request! server [:undo path {:id id :actor "human"}])]
+      (is (:result r)) (is (= "TODO first\nsecond line\nTHIRD line\n" (File/read! path)))
+      (is (:error (b/request! server [:undo path {:id id :actor "human"}]))))
+    (cleanup f)))
+(deftest the-real-eval-port-records-task-and-cell-attribution
+  (let [{:keys [root path env server] :as f} (fixture)
+        sys (task/start-system env {:step (loop/scripted [(loop/say "ready")]) :root root :tools cm/tools :files (b/port server)})
+        id (task/open! sys {:goal "test"})]
+    (task/await sys id 5000)
+    (is (:ok (cm/run-eval sys id "(edit \"board.bl.org\" [{:old \"TODO\" :new \"DONE\"}])")))
+    (let [op (first (b/operations env path))]
+      (is (= id (:op/actor op))) (is (= (env/eid env :task/id id) (:op/task op)))
+      (is (string? (:op/cell op))))
+    (task/stop-system! sys) (cleanup f)))
+(deftest draft-release-and-request-ordering
+  (let [{:keys [path server] :as f} (fixture) original (File/read! path) base (:rev (b/request! server [:read path {}]))]
+    (b/request! server [:draft path {:client "one" :sequence 4 :base base :text (str original "draft")}])
+    (is (:conflict (b/request! server [:save path {:client "one" :sequence 3 :base base :text (str original "old")}])) )
+    (is (= original (File/read! path)))
+    (b/request! server [:close path {:client "one" :sequence 5}])
+    (b/request! server [:draft path {:client "one" :sequence 4 :base base :text (str original "late draft")}])
+    (is (= original (:ok (b/request! server [:agent-read path {}]))))
+    (cleanup f)))
+(deftest external-changes-are-adopted-and-published-operations-survive-reopen
+  (let [root (str "/tmp/omega-buffer-durable-" (erlang/unique_integer (to-list [:positive])))
+        path (str root "/board.bl.org") db (str root "/db")]
+    (File/mkdir_p! root) (File/write! path "alpha beta gamma")
+    (let [e (env/open {:schema b/schema :path db}) server (b/start! e)]
+      (b/request! server [:read path {}]) (File/write! path "alpha beta GAMMA")
+      (is (= "alpha beta GAMMA" (:text (b/request! server [:read path {}]))))
+      (is (= :adopt (:op/kind (first (b/operations e path)))))
+      (GenServer/stop server) (env/close! e))
+    (let [e (env/open {:schema b/schema :path db}) server (b/start! e)]
+      (is (= 1 (:number (b/request! server [:read path {}]))))
+      (is (:ok (b/request! server [:edit path {:meta {:actor "agent"} :edits [{:old "alpha" :new "ALPHA"}]}])))
+      (is (= [1 2] (mapv :op/rev (b/operations e path))))
+      (GenServer/stop server) (env/close! e))))
+(deftest explicit-resolution-uses-the-chosen-current-revision-and-refuses-a-race
+  (let [{:keys [path server env] :as f} (fixture)
+        original (File/read! path) base (:rev (b/request! server [:read path {}]))]
+    (b/request! server [:edit path {:meta {:actor "agent"} :edits [{:old "TODO" :new "DONE"}]}])
+    (is (:conflict (b/request! server [:save path {:client "one" :sequence 1 :base base :text "resolved\n" :resolution? true}])))
+    (let [current (:rev (b/request! server [:read path {}]))
+          r (b/request! server [:save path {:client "one" :sequence 2 :base current :text "resolved\n" :resolution? true}])]
+      (is (= "resolved\n" (:text r)))
+      (is (= :resolve (:op/kind (last (b/operations env path))))))
+    (cleanup f)))
+
+(deftest shared-file-provider-preserves-host-cell-evaluation
+  (let [{:keys [root env server] :as f} (fixture)]
+    (place/put! env {:id "a" :root root})
+    (let [provider (bs/provider {:env env :root root} server)
+          result ((:eval provider) "a/code.bl.org" {} "check" "#+begin_src beam-lisp :id check\n(+ 1 2)\n#+end_src\n")]
+      (is (= "3" (clojure.string/trim (:result result))))
+      (is (clojure.string/includes? (:text result) "#+RESULTS:")))
+    (cleanup f)))
+(deftest a-failed-disk-projection-survives-reopen-without-reusing-an-operation
+  (let [root (str "/tmp/omega-buffer-publish-recovery-" (erlang/unique_integer (to-list [:positive])))
+        path (str root "/collision") db (str root "/db")]
+    (File/mkdir_p! path)
+    (let [e (env/open {:path db :schema b/schema}) server (b/start! e)
+          r (b/request! server [:write path {:text "accepted" :meta {:actor "agent"}}])]
+      (is (clojure.string/includes? (:error r) "accepted into the shared buffer"))
+      (is (= 1 (count (b/operations e path))))
+      (is (:result (b/request! server [:close path {:client "one" :sequence 1}])))
+      (is (true? (:buf/publish-pending (env/pull e [:buf/publish-pending] (env/eid e :buf/path path)))))
+      (GenServer/stop server) (env/close! e))
+    (File/rmdir! path)
+    (let [e (env/open {:path db :schema b/schema}) server (b/start! e)]
+      (is (= "accepted" (:text (b/request! server [:read path {}]))))
+      (is (= "accepted" (File/read! path)))
+      (is (false? (:buf/publish-pending (env/pull e [:buf/publish-pending] (env/eid e :buf/path path)))))
+      (b/request! server [:edit path {:meta {:actor "other"} :edits [{:old "accepted" :new "next"}]}])
+      (is (= [1 2] (mapv :op/rev (b/operations e path))))
+      (is (= "accepted" (:op/after (first (b/operations e path)))))
+      (GenServer/stop server) (env/close! e))))

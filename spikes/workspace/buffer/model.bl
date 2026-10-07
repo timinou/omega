@@ -1,0 +1,153 @@
+(ns buffer.model (:require [omega.env :as env] [buffer.merge :as m]
+                          [omega.edit :as edit] [proc] [clojure.string :as str]))
+(def schema
+  [{:db/ident :buf/path :db/valueType :db.type/string :db/unique :db.unique/identity}
+   {:db/ident :buf/text :db/valueType :db.type/string}
+   {:db/ident :buf/rev :db/valueType :db.type/long}
+   {:db/ident :buf/publish-pending :db/valueType :db.type/boolean}
+   {:db/ident :op/id :db/valueType :db.type/string :db/unique :db.unique/identity}
+   {:db/ident :op/buf :db/valueType :db.type/ref :db/index true}
+   {:db/ident :op/rev :db/valueType :db.type/long}
+   {:db/ident :op/base :db/valueType :db.type/long}
+   {:db/ident :op/actor :db/valueType :db.type/string :db/index true}
+   {:db/ident :op/task :db/valueType :db.type/ref :db/index true}
+   {:db/ident :op/cell :db/valueType :db.type/string :db/index true}
+   {:db/ident :op/kind :db/valueType :db.type/keyword}
+   {:db/ident :op/span}
+   {:db/ident :op/old :db/valueType :db.type/string}
+   {:db/ident :op/new :db/valueType :db.type/string}
+   {:db/ident :op/before :db/valueType :db.type/string}
+   {:db/ident :op/after :db/valueType :db.type/string}
+   {:db/ident :op/reverts :db/valueType :db.type/ref}
+   {:db/ident :op/at :db/valueType :db.type/long}])
+(defn operations [e path]
+  (if-let [id (env/eid e :buf/path path)]
+    (vec (sort-by :op/rev (map (fn [[op]] (env/pull e [:op/id :op/rev :op/base :op/actor :op/task :op/cell :op/kind :op/span :op/old :op/new :op/before :op/after :op/reverts :op/at] op))
+                             (env/q e '[:find ?op :in $ ?buf :where [?op :op/buf ?buf]] id)))) []))
+(defn- publish! [e path b]
+  (try
+    (when-not (and (File/regular? path) (= (File/read! path) (:text b)))
+      (File/mkdir_p! (Path/dirname path)) (File/write! path (:text b)))
+    (env/tx! e [[:db/add (env/eid e :buf/path path) :buf/publish-pending false]])
+    (assoc b :publish-pending false :publication-error nil)
+    (catch err (assoc b :publish-pending true :publication-error
+                      (str "Change accepted into the shared buffer, but disk publication failed: " (ex-message err))))))
+(defn- commit! [e path b text meta]
+  (if (= text (:text b)) b
+    (let [rev (inc (:rev b)) c (m/change (:text b) text)
+          fact (cond-> {:db/id -2 :op/id (str path "@" rev) :op/buf -1 :op/rev rev :op/base (:rev b)
+                         :op/actor (or (:actor meta) "disk") :op/kind (or (:kind meta) :edit)
+                         :op/span [(:from c) (:to c)] :op/old (:old c) :op/new (:new c)
+                         :op/before (:text b) :op/after text :op/at (env/now e)}
+                 (:task meta) (assoc :op/task (env/eid e :task/id (:task meta)))
+                 (:cell meta) (assoc :op/cell (str (:cell meta)))
+                 (:reverts meta) (assoc :op/reverts (env/eid e :op/id (:reverts meta))))]
+      (env/tx! e [{:db/id -1 :buf/path path :buf/text text :buf/rev rev :buf/publish-pending true} fact])
+      (publish! e path (assoc b :text text :rev rev :publish-pending true)))))
+(defn- loaded [e path]
+  (let [id (env/eid e :buf/path path) fact (when id (env/pull e [:buf/text :buf/rev :buf/publish-pending] id))
+        text (if fact (:buf/text fact) (if (File/regular? path) (File/read! path) ""))]
+    (when-not id (env/tx! e [{:db/id -1 :buf/path path :buf/text text :buf/rev 0}]))
+    {:text text :rev (or (:buf/rev fact) 0) :publish-pending (:buf/publish-pending fact) :drafts {} :sequences {}}))
+(declare rebase-drafts)
+(defn- ensure-buffer [st path]
+  (let [st (if (get-in st [:bufs path]) st (assoc-in st [:bufs path] (loaded (:env st) path)))
+        b (get-in st [:bufs path])
+        b (if (:publish-pending b) (publish! (:env st) path b) b)
+        _ (when (:publication-error b) (throw (ex-info (:publication-error b) {})))
+        st (assoc-in st [:bufs path] b)
+        disk (when (File/regular? path) (File/read! path))]
+    (if (or (nil? disk) (= disk (:text b))) st
+      (let [drafts (rebase-drafts b disk)]
+        (when (:error drafts) (throw (ex-info (str "External file change: " (:error drafts)) {})))
+        (assoc-in st [:bufs path] (assoc (commit! (:env st) path b disk {:actor "disk" :kind :adopt}) :drafts (:ok drafts)))))))
+(defn- history-text [e path base b]
+  (if (= base (str (:rev b))) (:text b)
+    (first (keep (fn [op] (cond (= base (str (:op/base op))) (:op/before op)
+                                (= base (str (:op/rev op))) (:op/after op))) (reverse (operations e path))))))
+(defn- rebase-drafts [b text]
+  (reduce (fn [acc [client d]]
+            (if (:error acc) acc
+              (let [r (m/merge-text (:base d) (:text d) text)]
+                (if (:error r) {:error (str "Edit overlaps unpublished typing from " client "; publish or revise that draft first.")}
+                  (assoc-in acc [:ok client] (assoc d :base text :text (:ok r))))))) {:ok {}} (:drafts b)))
+(defn- view [b]
+  (reduce (fn [r [_ d]] (if (:error r) r (m/merge-text (:base d) (:text d) (:ok r))))
+          {:ok (:text b)} (sort-by first (:drafts b))))
+(defn- response [b]
+  (if (:publication-error b) {:error (:publication-error b) :rev (str (:rev b))}
+    {:text (:text b) :rev (str (:rev b)) :number (:rev b) :drafts (count (:drafts b))}))
+(defn- agent-edit [st path meta edits]
+  (let [b (get-in st [:bufs path]) r (edit/apply-edits (or (:rules meta) edit/RULES) (:text b) edits)]
+    (if (:error r) [r st]
+      (let [drafts (rebase-drafts b (:ok r))]
+        (if (:error drafts) [drafts st]
+          (let [next (assoc (commit! (:env st) path b (:ok r) meta) :drafts (:ok drafts))]
+            [(if (:publication-error next) {:error (:publication-error next)} {:ok (:text next)}) (assoc-in st [:bufs path] next)]))))))
+(defn- dispatch [st request]
+  (let [[kind path args] request
+        _ (when (and (contains? #{:read :agent-read} kind) (not (File/regular? path)) (nil? (env/eid (:env st) :buf/path path)))
+            (throw (ex-info (str "no such file: " path) {})))
+        st (if (= kind :close)
+             (if (get-in st [:bufs path]) st (assoc-in st [:bufs path] (loaded (:env st) path)))
+             (ensure-buffer st path))
+        b (get-in st [:bufs path]) e (:env st)]
+    (cond
+      (= kind :read) [(response b) st]
+      (= kind :agent-read) [(view b) st]
+      (= kind :draft)
+        (let [{:keys [client sequence base text]} args]
+          (if (<= sequence (get-in b [:sequences client] -1)) [{:result "older draft ignored"} st]
+            (if-let [old (history-text e path base b)]
+              (let [r (m/merge-text old text (:text b))]
+                (if (:error r) [r st]
+                  [{:result "draft received"} (-> st (assoc-in [:bufs path :sequences client] sequence)
+                                                (update-in [:bufs path :drafts] (fn [ds] (if (= (:ok r) (:text b)) (dissoc ds client)
+                                                                                      (assoc ds client {:base (:text b) :text (:ok r)})))))]))
+              [{:error "Unknown draft base revision."} st])))
+      (= kind :close)
+        (let [{:keys [client sequence]} args]
+          (if (< sequence (get-in b [:sequences client] -1)) [{:result "older close ignored"} st]
+            [{:result "draft released"} (-> st (update-in [:bufs path :drafts] dissoc client)
+                                              (assoc-in [:bufs path :sequences client] sequence))]))
+      (= kind :save)
+        (let [{:keys [client sequence base text]} args old (history-text e path base b)
+              r (if old (m/merge-text old text (:text b)) {:error "Unknown base revision; reload before publishing."})]
+          (if (or (:error r) (< sequence (get-in b [:sequences client] -1))
+                  (and (:resolution? args) (not= base (str (:rev b)))))
+            [{:conflict (str (:rev b)) :message (or (:error r) (if (< sequence (get-in b [:sequences client] -1)) "Newer typing arrived during publish; retry." "Shared revision changed during resolution; inspect the latest revision and retry."))} st]
+            (let [others (update b :drafts dissoc client) drafts (rebase-drafts others (:ok r))]
+              (if (:error drafts) [{:conflict (str (:rev b)) :message (:error drafts)} st]
+                (let [next (-> (commit! e path b (:ok r) {:actor (str "human:" client) :kind (if (:resolution? args) :resolve :publish)})
+                               (assoc :drafts (:ok drafts)) (assoc-in [:sequences client] sequence))]
+                  [(response next) (assoc-in st [:bufs path] next)])))))
+      (= kind :edit) (agent-edit st path (:meta args) (:edits args))
+      (= kind :write)
+        (let [drafts (rebase-drafts b (:text args))]
+          (if (:error drafts) [drafts st]
+            (let [next (assoc (commit! e path b (:text args) (:meta args)) :drafts (:ok drafts))]
+              [(if (:publication-error next) {:error (:publication-error next)} {:ok (:text next)}) (assoc-in st [:bufs path] next)])))
+      (= kind :undo)
+        (let [op (first (filter (fn [op] (= (:id args) (:op/id op))) (operations e path)))
+              already? (some (fn [x] (= (env/eid e :op/id (:id args)) (:op/reverts x))) (operations e path))]
+          (cond (nil? op) [{:error "Unknown operation."} st]
+                already? [{:error "Operation already reverted."} st]
+                :else (let [r (m/merge-text (:op/after op) (:op/before op) (:text b))]
+                        (if (:error r) [{:error "Later edits overlap this operation; undo refused."} st]
+                          (let [drafts (rebase-drafts b (:ok r))]
+                            (if (:error drafts) [drafts st]
+                              (let [next (assoc (commit! e path b (:ok r) {:actor (:actor args) :kind :undo :reverts (:id args)}) :drafts (:ok drafts))]
+                                [(if (:publication-error next) {:error (:publication-error next)} {:result (str "reverted " (:id args))}) (assoc-in st [:bufs path] next)])))))))
+      :else [{:error "Unknown buffer request."} st])))
+(proc/defserver manager
+  (init [e] (ok {:env e :bufs {}}))
+  (handle-call request [_from st]
+    (let [[r next] (try (dispatch st request) (catch err [{:error (ex-message err)} st]))] (reply r next))))
+(defn start! [e] (start manager e {}))
+(defn request! [server request] (call server request 30000))
+(defn port [server]
+  {:read (fn [c p] (let [r (request! server [:agent-read (Path/expand p (:root c)) {}])]
+                     (when (:error r) (throw (ex-info (:error r) {}))) (:ok r)))
+   :edit (fn [c p edits] (request! server [:edit (Path/expand p (:root c)) {:meta {:actor (:task c) :task (:task c) :cell (:cell c) :rules (:rules c)} :edits edits}]))
+   :write (fn [c p text] (let [r (request! server [:write (Path/expand p (:root c)) {:meta {:actor (:task c) :task (:task c) :cell (:cell c) :kind :write} :text text}])]
+                          (when (:error r) (throw (ex-info (:error r) {}))) :ok))})
