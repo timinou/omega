@@ -22,7 +22,7 @@
     (llm/from-env home))))
 (def sys (task/start-system e
   (if live?
-    {:root root :eval-preloads (when (= "1" (System/get_env "PROCUREMENT_DEMO")) ["search.bl"]) :tools cm/tools :step (llm/step model) :max-steps (if (= "1" (System/get_env "PROCUREMENT_DEMO")) 16 25)
+    {:root root :token-budget (when (= "1" (System/get_env "PROCUREMENT_DEMO")) {:input 400000 :output 12000}) :eval-preloads (when (= "1" (System/get_env "PROCUREMENT_DEMO")) ["search.bl"]) :tools cm/tools :step (llm/step model) :max-steps (if (= "1" (System/get_env "PROCUREMENT_DEMO")) 16 25)
      :system-prompt (str cli/SYSTEM-PROMPT
        " For this procurement run use your single eval tool. Read instructions.bl.org first. "
        "Do not spawn tasks. The browser-tool.mjs shell helper reaches the visible task-owned browser. "

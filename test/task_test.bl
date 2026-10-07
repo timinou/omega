@@ -145,3 +145,21 @@
         v (task/await sys id 10000)]
     (is (= :failed (:status v)))
     (task/stop-system! sys)))
+
+
+(deftest reported-token-budget-pauses-before-another-paid-request
+  (let [calls (atom 0)
+        sys (task/start-system (env/open)
+             {:root "/tmp" :tools cm/tools :token-budget {:input 100 :output 10}
+              :step (fn [req] (swap! calls inc)
+                      (assoc (loop/call-tool "eval" {:code "(+ 1 1)"})
+                             :usage {:input 20 :cache-read 80 :output 1}))})
+        id (task/open! sys {:goal "bounded"})
+        v (task/await sys id 10000)]
+    (is (= :idle (:status v)))
+    (is (includes? (:result v) "token budget"))
+    (is (= 1 @calls))
+    (task/say! sys id "continue")
+    (task/await sys id 10000)
+    (is (= 1 @calls) "continuing does not reset reported usage")
+    (task/stop-system! sys)))

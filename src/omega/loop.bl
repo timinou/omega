@@ -188,6 +188,19 @@
       (env/tx! (:env sys) [[:db/add (env/eid (:env sys) :task/id id) :task/cost cost]]))
     cost))
 
+(defn budget-exhausted?
+  "Reported usage is cumulative across continuations. Limits pause before the next request."
+  [sys cost]
+  (let [b (:token-budget sys) input (+ (or (:input cost) 0) (or (:cache-read cost) 0) (or (:cache-write cost) 0))]
+    (or (and (:input b) (>= input (:input b)))
+        (and (:output b) (>= (or (:output cost) 0) (:output b))))))
+
+(defn- budget-notice [sys cost]
+  (let [b (:token-budget sys) input (+ (or (:input cost) 0) (or (:cache-read cost) 0) (or (:cache-write cost) 0))]
+    (when (or (and (:input b) (>= input (* 0.7 (:input b))))
+              (and (:output b) (>= (or (:output cost) 0) (* 0.7 (:output b)))))
+      "\nUsage budget is nearing its limit. Finish durable partial outputs now, preserve uncertainty, and call done; avoid further discovery.")))
+
 (defn turn!
   "Run one turn of task `id` to completion. Returns the outcome for the
    executor: {:status :idle|:done|:failed :result …}.
@@ -204,11 +217,12 @@
         cost0 (:task/cost (env/entity e (env/eid e :task/id id)))]
     (emit sys :turn/start {:task id})
     (loop [n 1 ts ts0 cost cost0]
-      (if (> n max-steps)
-        {:status :idle :result (str "paused after " max-steps " steps")}
-        (let [turn-n (inc (count ts))
+      (cond
+        (> n max-steps) {:status :idle :result (str "paused after " max-steps " steps")}
+        (budget-exhausted? sys cost) {:status :idle :result "paused: reported token budget reached; durable partial outputs are retained"}
+        :else (let [turn-n (inc (count ts))
               ;; deltas are broadcast, never recorded: the final content below is the fact
-              resp (step (assoc (request sys id ts) :on-delta
+              resp (step (assoc (update (request sys id ts) :system str (budget-notice sys cost)) :on-delta
                                 (fn [d] (stream/delta! world id (assoc d :turn turn-n)))))
               _ (stream/turn-done! world id)]
           (cond

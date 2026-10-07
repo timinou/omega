@@ -362,7 +362,7 @@
                     :nonce (reap/nonce)
                     :open! (fn [s m] (open! s m)) :await (fn [s id ms] (await s id ms))
                     :status (fn [s id] (status s id))}
-                   (select-keys opts [:step :tools :hooks :system-prompt :max-steps :root :eval-timeout-ms :eval-preloads
+                   (select-keys opts [:step :tools :hooks :system-prompt :max-steps :root :eval-timeout-ms :eval-preloads :token-budget
                                      ;; :files = the file port (C6, omega.prelude/DISK by default);
                                      ;; :edit-rules merge over omega.edit/RULES
                                      :files :edit-rules]))]
