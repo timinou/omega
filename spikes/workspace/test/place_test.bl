@@ -65,3 +65,12 @@
       (is (= "a" (get-in d [:data :place])))
       (is (= (str root "/a/sub") (get-in d [:data :root]))))
     (task/stop-system! sys) (env/close! e)))
+
+(deftest explicit-logical-place-survives-a-physical-cwd-shared-with-a-subplace
+  (let [root (fixture) e (env/open {:schema p/schema}) sys {:env e :root root}]
+    (p/put! e {:id "a" :root (str root "/a")})
+    (p/put! e {:id "0-boards" :parent "a"})
+    (is (= "0-boards" (p/containing (p/all e) (str root "/a"))))
+    (is (= {:place "a" :cwd (str root "/a")}
+           (s/context sys "place:a" (str root "/a"))))
+    (env/close! e)))

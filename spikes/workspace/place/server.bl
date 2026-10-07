@@ -10,7 +10,7 @@
         wd (if (and (nil? address) (nil? cwd)) (Path/expand (:root sys))
              (ws/working-directory roots (:root sys) path effective))
         explicit (when (and cwd (str/starts-with? cwd "@")) (first (str/split (subs cwd 1) "/")))
-        id (or explicit (when (and (nil? cwd) address) address) (p/containing places wd))]
+        id (or explicit (when (and address (or (nil? cwd) (str/starts-with? path "place:"))) address) (p/containing places wd))]
     {:cwd wd :place id}))
 (defn- line
   ([d s] (update d :lines conj s))
@@ -51,7 +51,7 @@
      "folder" (let [base (dynamic "folder")]
                 (assoc base :read (fn [nm req]
                   (assoc ((:read base) nm req) :data {:place (first (str/split nm "/"))
-                    :root (ws/resolve-file (p/roots (p/all (:env sys))) nm) :folder nm}))))
+                    :root (ws/resolve-file (p/roots (p/all (:env sys))) nm) :folder (str "folder:" nm)}))))
      "work" (assoc work :write (fn [nm req text base] ((:write (get (ws/providers sys (p/roots (p/all (:env sys)))) "work")) nm req text base))
                          :eval (fn [nm req id text] ((:eval (get (ws/providers sys (p/roots (p/all (:env sys)))) "work")) nm req id text)))}))
 (defn intents [sys]
