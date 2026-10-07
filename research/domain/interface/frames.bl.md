@@ -143,3 +143,9 @@ The frame refuses to discard unsaved text or nonempty prompts, or duplicate one
 editor into two panes. Discarded clean editors receive `:session-leave` for pure
 cleanup effects. Ordinary effects may specify `:pane` explicitly; otherwise the
 frame tags them with their emitting editor. This is layout policy, not IO.
+
+A `:keep` source may also be a vector, such as `:aside [:aside :main]`.
+The first existing source editor is retained; `:origin` resolves within the vector
+as usual. This expresses an initial transition from a two-pane layout and later
+transitions within an expanded layout with the same declaration. It never
+copies an editor, and all existing draft and uniqueness checks still apply.

@@ -172,6 +172,7 @@
 (defn reconfigure
   "A package-requested layout transition. :keep maps destination pane ids to
    existing source ids (:origin names the sender); nil requests a fresh editor.
+   A vector of sources chooses its first existing editor.
    Retained editors keep exact state. Unsaved text or prompt drafts cannot be
    discarded. :visits is {pane {:path address :goto optional}}. Pure host effects."
   [fr request]
@@ -181,7 +182,11 @@
     (if (nil? layout) (fail (str "No layout " (:layout request)))
       (let [ids (vec (map :id (filter editor-pane? (:panes layout))))
             specified (or (:keep request) {})
-            source (fn [id] (let [v (if (contains? specified id) (get specified id) id)] (if (= :origin v) origin v)))
+            resolve-source (fn [v] (if (= :origin v) origin v))
+            source (fn [id] (let [v (if (contains? specified id) (get specified id) id)]
+                              (if (vector? v)
+                                (first (filter (fn [src] (some? (editor fr src))) (map resolve-source v)))
+                                (resolve-source v))))
             mapping (into {} (map (fn [id] [id (source id)]) ids))
             sources (vec (keep (fn [[id src]] (when (editor fr src) src)) mapping))
             draft? (fn [ed] (or (and (not (docs/read-only? ed)) (c/dirty? ed)) (seq (get-in ed [:minibuf :text]))))

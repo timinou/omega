@@ -550,10 +550,12 @@ let cardIds = "";
 async function loadCards(path) {
   const r = await fetch("/api/doc?path=" + encodeURIComponent(path));
   const j = await r.json();
-  if (j.ok) dispatch(ev(K("type"), K("cards"), K("data"), toBL(j.data || [])));
+  if (j.ok) for (const pane of F.d_editor_ids(fr)) dispatch(ev(K("type"), K("cards"), K("data"), toBL(j.data || []), K("pane"), pane));
 }
 function watchCards(force) {
-  const ids = get(paneView(get(fr, "focus").name), "cards").toArray().join(",");
+  const ids = [...new Set(get(renderFrame(fr), "panes").toArray()
+    .filter(p => get(p, "kind") === K("editor"))
+    .flatMap(p => (get(get(p, "view"), "cards") || R.vec()).toArray()))].sort().join(",");
   if (!ids) { unwatch("cards"); cardIds = ""; return; }
   if (ids === cardIds && !force) return;
   cardIds = ids;
@@ -1126,7 +1128,7 @@ function focusPane(id) { if (get(fr, "focus").name !== id) fr = fr.assoc(K("focu
 function activateCommand(node, command) {
   const id = paneOf(node); focusPane(id);
   const line = node.closest(".line"), mode = get(ed$(), "mode");
-  if (line && (mode === K("normal") || mode === K("select"))) {
+  if (line && (mode === K("normal") || mode === K("select") || mode === K("command"))) {
     const row = Number(line.dataset.src ?? line.dataset.row);
     dispatch(ev(K("type"), K("click"), K("pos"), R.vec(row, 0)));
   }

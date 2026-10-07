@@ -211,3 +211,18 @@ package for subsequent refreshes/visits in this browser session; explicit use
 reenables it. Domain layouts stay in their packages. `document-packages.mjs` and
 its tests pin declaration ordering, boundaries and unload suppression. Existing
 package host resource disposal remains responsible for unload cleanup.
+
+2026-10-07: layout `:keep` accepts an ordered vector of candidate source panes.
+The frame retains the first existing editor, allowing a package to keep a
+conversation across repeated file/folder transitions without copying its draft.
+The existing duplicate-editor and draft-discard guards still apply. A frame
+contract test covers both initial and subsequent transitions.
+Named command buttons position their source row while a command prompt is open,
+so a contextual answer can target its actual object without losing the draft.
+Workbench guards commands that would replace an owned prompt; the offline slice
+4 tour answers a real task while drafting, then retains that draft as a follow-up.
+
+Card watches include references from every visible editor pane and deliver card
+refreshes to each pane. A retained plan therefore updates task status while its
+conversation has focus, rather than waiting for focus to return to the plan.
+The workbench browser tour verifies the terminal reference in the unfocused plan.

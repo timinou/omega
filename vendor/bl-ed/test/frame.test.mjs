@@ -209,3 +209,17 @@ test('reconfigure retains named editors and blocks discarded text and prompt dra
  const prompt=ed.assoc(K('mode'),K('command')).assoc(K('minibuf'),ev(K('text'),'a reply'));
  const refusedPrompt=F.d_reconfigure(F.d_single(prompt),request.assoc(K('keep'),ev(K('main'),null)));assert.equal(get(get(refusedPrompt,'layout'),'name'),'single');
 });
+
+test('source candidates keep an existing context or retain main when adding the first aside', () => {
+ const panes=R.vec(ev(K('id'),K('main'),K('doc'),K('linked'),K('width'),K('fill')),ev(K('id'),K('rail'),K('doc'),K('linked'),K('width'),R.vec(K('ch'),20)));
+ const two=ev(K('name'),'two',K('panes'),panes,K('links'),R.vec());
+ const detail=ev(K('name'),'detail',K('panes'),panes.conj(ev(K('id'),K('aside'),K('doc'),K('linked'),K('width'),K('fill'))),K('links'),R.vec());
+ const pkg=ev(K('name'),'context-test',K('provides'),ev(K('layouts'),R.hashMap('two',two,'detail',detail)));
+ const original=M.d_handle(M.d_boot('task','task:a'),ev(K('type'),K('use'),K('package'),pkg)).assoc(K('mode'),K('command')).assoc(K('minibuf'),ev(K('text'),'retained reply'));
+ let fr=F.d_arrange(F.d_single(original),two);
+ const request=ev(K('layout'),'detail',K('pane'),K('main'),K('keep'),ev(K('rail'),K('rail'),K('main'),null,K('aside'),R.vec(K('aside'),K('main'))),K('focus'),K('main'));
+ fr=F.d_reconfigure(fr,request);assert.strictEqual(F.d_editor(fr,K('aside')),original);
+ fr=fr.assoc(K('editors'),get(fr,'editors').assoc(K('main'),M.d_boot('folder listing','folder:a').assoc(K('packages'),get(original,'packages'))));
+ const next=F.d_reconfigure(fr,request);assert.strictEqual(F.d_editor(next,K('aside')),original);assert.equal(get(F.d_editor(next,K('main')),'path'),'');
+ assert.equal(get(get(F.d_editor(next,K('aside')),'minibuf'),'text'),'retained reply');
+});
