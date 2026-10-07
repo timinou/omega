@@ -2,7 +2,7 @@
 (ns ws.demo
   (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
             [omega.codemode :as cm] [omega.ed.providers :as pv]
-            [bl-ed.serve :as serve] [clojure.string :as str] [ws.server :as workspace] [place.model :as place] [place.server :as places] [links.model :as link] [links.server :as links] [buffer.model :as buffer] [buffer.server :as buffers]))
+            [bl-ed.serve :as serve] [clojure.string :as str] [ws.server :as workspace] [ws.desk-server :as desk] [place.model :as place] [place.server :as places] [links.model :as link] [links.server :as links] [buffer.model :as buffer] [buffer.server :as buffers]))
 
 (defn model []
   ; Derive the stage from durable conversation, not a process-local counter.
@@ -22,7 +22,9 @@
                            "(done \"Kept the board unchanged.\")")} "demo-finish"))
         (loop/say "This offline model demonstrates the two board goals. Install your own :step function for other work.")))))
 
-(defn launch [root port home]
+(defn launch
+  ([root port home] (launch root port home {}))
+  ([root port home options]
   (let [places {"omega" (str root "/omega") "beam-lisp" (str root "/beam-lisp")}
         _ (doseq [[_ dir] places] (File/mkdir_p! dir)
             (when-not (File/regular? (str dir "/board.bl.org"))
@@ -41,7 +43,14 @@
         opts {:state (str root "/.omega/ed")
               :task-context (fn [path cwd] (places/context sys path cwd))}
         r (serve/start! {:port port :root root :web (str home "/vendor/bl-ed/web")
-                         :providers (merge (pv/providers sys opts) (places/providers sys) (links/providers sys) (buffers/providers sys server))
+                         :providers (merge (pv/providers sys opts) (places/providers sys) (links/providers sys) (buffers/providers sys server) (desk/providers sys))
                          :intents (merge (pv/intents sys opts) (places/intents sys) (links/intents sys) (buffers/intents sys server))})]
-    (println (str (:url r) "?file=places:&use=present,dwim,workspace,places,references,buffers&layout=workspace"))
-    (receive :never nil)))
+    (when (:experience options)
+      (doseq [[goal title id anchor] [["Update the omega board." "Refresh the Omega board" "omega" "omega-board"]
+                                    ["Update the beam-lisp board." "Finish the Beam Lisp checklist" "beam-lisp" "beam-board"]]]
+        (when-not (some (fn [t] (= goal (:goal t))) (task/all sys))
+          (task/open! sys {:goal goal :title title :place id :cwd (get places id) :home {:path "work:omega/plan.bl.org" :block anchor}}))))
+    (println (str (:url r) (if (:experience options)
+      "?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench&layout=desk"
+      "?file=places:&use=present,dwim,workspace,places,references,buffers&layout=workspace")))
+    (receive :never nil))))

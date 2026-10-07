@@ -1,0 +1,13 @@
+(ns workspace-desk-test (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
+                                [place.model :as place] [ws.desk-server :as desk] [clojure.string]))
+(deftest rail-scopes-descendants-and-keeps-task-objects-addressable
+  (let [e (env/open {:schema place/schema}) sys (task/start-system e {:root "/tmp" :step (loop/scripted [(loop/say "waiting")])})]
+    (place/put! e {:id "root" :root "/tmp"}) (place/put! e {:id "child" :parent "root"})
+    (place/put! e {:id "other" :root "/tmp"})
+    (let [a (task/open! sys {:goal "child work" :place "child"}) b (task/open! sys {:goal "other work" :place "other"})]
+      (task/await sys a 5000) (task/await sys b 5000)
+      (is (= #{a} (set (map :key (filter (fn [o] (= "omega/task" (:type o))) (:objects (desk/scope-doc sys "root")))))))
+      (is (= #{a b} (set (map :key (filter (fn [o] (= "omega/task" (:type o))) (:objects (desk/scope-doc sys "all")))))))
+      (is (= "root" (get-in (desk/scope-doc sys "root") [:data :scope])))
+      (is (= "No tasks here yet. Press n to start one." (some (fn [line] (when (= line "No tasks here yet. Press n to start one.") line)) (clojure.string/split (:text (desk/scope-doc sys "missing")) "\n")))))
+    (task/stop-system! sys) (env/close! e)))

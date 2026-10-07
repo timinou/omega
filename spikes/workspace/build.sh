@@ -22,3 +22,7 @@ printf '%s\n' 'export { d_bl_package as package } from "../out/links.main.mjs";'
 "$root/bin/bl" js build buffer.main -p "$root/vendor/bl-ed" -p "$here" \
   --host eval-ed,eval-cells --out "$root/vendor/bl-ed/web/out"
 printf '%s\n' 'export { d_bl_package as package } from "../out/buffer.main.mjs";' > "$root/vendor/bl-ed/web/pkg/buffers.mjs"
+
+"$root/bin/bl" js build ws.desk -p "$root/vendor/bl-ed" -p "$root/spikes/present" -p "$here" \
+  --host eval-ed,eval-cells --out "$root/vendor/bl-ed/web/out"
+printf '%s\n' 'export { d_bl_package as package } from "../out/ws.desk.mjs";' > "$root/vendor/bl-ed/web/pkg/workbench.mjs"

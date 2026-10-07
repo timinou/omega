@@ -1,0 +1,42 @@
+; Domain documents remain plain text plus typed provider objects.
+(ns ws.desk-server
+  (:require [omega.task :as task] [omega.ui.model :as model] [place.model :as place]
+            [bl-ed.serve :as serve] [clojure.string :as str]))
+(defn- emit [d text object]
+  (cond-> (update d :lines conj text) object (update :objects conj (assoc object :row (count (:lines d))))))
+(defn- finish [d data]
+  {:text (str (str/join "\n" (:lines d)) "\n") :objects (:objects d) :data data :read-only? true})
+(defn scope-doc [sys scope]
+  (let [e (:env sys) places (place/all e) all? (= scope "all")
+        ids (when-not all? (place/descendants places scope))
+        rows (filter (fn [r] (or all? (contains? ids (:place r)))) (:tasks (model/snapshot e)))
+        groups [["NEEDS YOU" (filter (fn [r] (seq (:asks r))) rows)]
+                ["IN PROGRESS" (filter (fn [r] (and (empty? (:asks r)) (not (contains? #{:done :failed :cancelled} (:status r))))) rows)]
+                ["RECENTLY FINISHED" (filter (fn [r] (contains? #{:done :failed :cancelled} (:status r))) rows)]]
+        d {:lines ["#+TITLE: Work" "Your tasks, in their places." ""] :objects []}
+        d (emit d "* Places" nil)
+        d (emit d "All places" {:type "desk/scope" :key "workspace:all" :title "All places" :active all? :depth 0})
+        d (reduce (fn [d [id p]] (emit d (:name p) {:type "desk/scope" :key (str "workspace:" id) :place id :title (:name p)
+                                                  :active (= scope id) :depth (inc (dec (count (place/ancestors places id))))}))
+                  d (sort-by (fn [[id _]] (str/join "/" (map :id (reverse (place/ancestors places id))))) places))
+        d (reduce (fn [d [label rs]]
+                    (if (empty? rs) d
+                      (reduce (fn [d r] (emit d (str (:id r) " · " (name (:status r)) " · " (:title r) " · " (or (some-> (:asks r) first :text) (:result r) (:goal r)))
+                        {:type "omega/task" :key (:id r) :title (:title r) :goal (:goal r) :status (name (:status r))
+                         :place (:place r) :home (:home r) :cwd (:cwd r)
+                         :ask (some-> (:asks r) first :text)
+                         :summary (or (some-> (:asks r) first :text) (:result r) (:goal r))}))
+                        (emit d (str "* " label " (" (count rs) ")") nil) rs))) d groups)
+        d (if (empty? rows) (emit d "No tasks here yet. Press n to start one." {:type "desk/empty" :key "empty"}) d)]
+    (finish (emit d "n new task · Enter open · g f place" {:type "desk/hint" :key "hint"})
+            {:desk :rail :scope scope :place (when-not all? scope) :count (count rows)})))
+(defn welcome [sys]
+  (finish {:lines ["#+TITLE: A place for your work" "" "Select a task on the left." ""
+                   "A task has a conversation, a working directory," "and a home in your editable plans."
+                   "" "j / k  browse tasks and places" "Enter  focus the selected conversation"
+                   "n      start a task in the selected place" "Alt+h / Alt+l  focus previous / next pane"] :objects []}
+          {:desk :welcome}))
+(defn providers [sys]
+  {"workspace" {:read (fn [nm _] (scope-doc sys (if (str/blank? nm) "all" nm)))
+                :rev (fn [nm _] (serve/text-rev (:text (scope-doc sys (if (str/blank? nm) "all" nm)))))}
+   "desk" {:read (fn [_ _] (welcome sys)) :rev (fn [_ _] "welcome-1")}})

@@ -1,0 +1,117 @@
+; Workbench policy and presentations, layered over present rather than a page.
+(ns ws.desk
+  (:require [ed.core :as c] [ed.docs :as docs] [ed.keymap :as km] [ed.text :as t]
+            [ed.omega :as omega] [pp.present :as p] [pp.read :as rd]))
+(def desk
+  {:name "desk" :doc "A scoped work rail beside the selected conversation."
+   :panes [{:id :rail :doc "workspace:all" :width [:ch 40]}
+           {:id :main :doc "desk:welcome" :width :fill}]
+   :links [{:from :rail :on :select :to :main :do :visit}] :focus :rail})
+(defn object [ed] (or (docs/object-at ed) (omega/object-at ed)))
+(defn- picked? [o ctx] (= (:from o) (first (c/cursor (:ed ctx)))))
+(defn- info [o ctx] (get (:obj-index (:ed ctx)) (:from o)))
+(defn- clip [s n] (let [s (str (or s ""))] (if (> (count s) n) (str (subs s 0 (dec n)) "…") s)))
+(defn- line [o suffix segs role] (p/line-mark (:from o) segs (str (:key o) suffix) {:role role}))
+(defn present-task [o ctx]
+  (let [i (info o ctx) status (name (or (:status i) :open))
+        attention? (some? (:ask i)) done? (contains? #{:done "done"} (:status i))]
+    (p/card (:key o) (if (picked? o ctx) "picked" (if attention? "ask" "row"))
+      [(line o "/status" [{:text (str " " (cond attention? "⚑ NEEDS YOU" done? "✓ DONE" :else (upper-case status))) :kind (if attention? :keyword :meta)}
+                         {:text (str "  " (:place i)) :kind :who}] :meta)
+       (line o "/title" [{:text (str " " (clip (:title i) 35)) :kind :rail-title}] :rail-title)
+       (line o "/summary" [{:text (str " " (clip (:summary i) 35)) :kind :aside}] :aside)
+       (line o "/gap" [{:text " " :kind :prose}] :aside)])))
+(defn present-scope [o ctx]
+  (let [i (info o ctx)]
+    (p/card (:key o) (if (picked? o ctx) "picked" "row")
+      [(line o "/place" [{:text (str " " (apply str (repeat (or (:depth i) 0) "  ")) (if (:active i) "● " "○ ")) :kind :meta}
+                         {:text (:title i) :kind (if (:active i) :strong :aside)}] :meta)])))
+(defn present-section [o ctx]
+  (p/stack (concat [(line o "/label" [{:text (str " " (:title (:span o))) :kind :label}] :label)]
+                  (map (fn [k] (p/present k ctx)) (:kids o)))))
+(defn present-rail [o ctx]
+  (p/stack (concat [(p/line-mark 0 [{:text " Work" :kind :question}] "desk/title" {:size 2 :role :question})
+                   (p/line-mark 1 [{:text " Tasks, in their places" :kind :aside}] "desk/subtitle" {:role :aside})]
+                  (map (fn [k] (p/present k ctx)) (filter (fn [k] (= :section (:type k))) (:kids o))))))
+(defn present-welcome [o ctx]
+  (p/stack [(p/line-mark 0 [{:text "A place for your work" :kind :question}] "welcome/title" {:size 2 :role :question})
+            (p/line-mark 2 [{:text "Select a task on the left. Its conversation opens here." :kind :answer}] "welcome/intro")
+            (p/line-mark 4 [{:text "CONVERSATION  ·  FILES  ·  PLANS" :kind :label}] "welcome/label")
+            (p/line-mark 5 [{:text "Work stays connected to the places and text it belongs to." :kind :aside}] "welcome/story")
+            (p/line-mark 7 [{:text "j / k" :kind :strong} {:text "  browse tasks and places" :kind :answer}] "welcome/move")
+            (p/line-mark 8 [{:text "Enter" :kind :strong} {:text "  focus a conversation or scope to a place" :kind :answer}] "welcome/open")
+            (p/line-mark 9 [{:text "n" :kind :strong} {:text "  start a task; type its goal, not a data map" :kind :answer}] "welcome/new")
+            (p/line-mark 10 [{:text "Alt+h / Alt+l" :kind :strong} {:text "  previous / next pane" :kind :answer}] "welcome/focus")]))
+(defn- presentation [table nm]
+  {:name nm :fill? false :readtable [] :table (merge p/default-table table) :around [] :isa p/ISA
+   :lod-of (fn [ed tree] (fn [o] 3)) :focus-of (fn [ed tree] (first (c/cursor ed)))})
+(def rail (presentation {:doc present-rail :section present-section :omega/task present-task :desk/scope present-scope} "work-rail"))
+(def welcome (presentation {:doc present-welcome} "work-welcome"))
+(defn active-presentation [ed]
+  (when-not (get-in ed [:pkg-state "workbench" :source?])
+    (case (get-in ed [:doc :data :desk]) "rail" rail "welcome" welcome nil)))
+(defn rows [ed]
+  (when-let [pr (active-presentation ed)]
+    (if (= pr rail)
+      (vec (sort (map first (filter (fn [[r o]] (contains? #{"omega/task" "desk/scope"} (:type o))) (:obj-index ed)))))
+      (vec (distinct (map p/slot-row (:slots (p/screen-of pr ed))))))))
+(defn reveal [ed]
+  (when-let [pr (active-presentation ed)]
+    (let [r (first (c/cursor ed)) slots (:slots (p/screen-of pr ed)) y (p/first-slot-of-row slots r)
+          top (:top (:view ed)) yt (p/first-slot-of-row slots top) h (:height (:view ed))
+          next (cond (< y yt) y (>= y (+ yt h)) (max 0 (- y h -4)) :else yt)]
+      (assoc-in ed [:view :top] (or (p/slot-row (nth slots next nil)) top)))))
+(defn focus-next [ed dir] (c/effect ed {:kind :frame-focus :direction dir}))
+(defn open-object [ed]
+  (let [o (object ed)]
+    (case (:type o)
+      "desk/scope" (docs/visit ed (:key o))
+      "omega/task" (if (= "rail" (get-in ed [:doc :data :desk])) (-> ed (c/effect {:kind :visit :pane :main :path (str "task:" (:key o))}) (focus-next 1)) (docs/visit ed (str "task:" (:key o))))
+      (c/message ed "Select a task or place."))))
+(defn new-task [ed]
+  (let [o (object ed) id (or (:place o) (get-in ed [:doc :data :place]) "omega")]
+    (docs/owned-prompt ed "workbench" (str "New task in " id " — goal: ")
+      (fn [ed goal] (if (= "" (trim goal)) (c/message ed "Task cancelled.")
+        (c/effect ed {:kind :intent :intent "task/open" :args {:goal goal :path (str "place:" id)} :then :desk-created}))))))
+(def commands
+  {:desk/open {:doc "Open the visible task, or scope to the visible place." :run open-object}
+   :desk/new {:doc "Start a task in this place; enter its goal." :run new-task}
+   :desk/source {:doc "Toggle source inspection for the current presentation."
+                 :run (fn [ed] (update-in ed [:pkg-state "workbench" :source?] not))}
+   :desk/place {:doc "Inspect the selected/current place."
+                :run (fn [ed] (let [id (or (:place (object ed)) (get-in ed [:doc :data :place]))]
+                                (if id (docs/visit ed (str "place:" id)) (docs/visit ed "places:"))))}})
+(def bl-package
+  {:name "workbench" :doc "Presented task management: scoped rail and conversations, over present."
+   :commands commands
+   :keys (fn [ed] {:normal (merge {"g v" :desk/source}
+                             (when (active-presentation ed) {"Enter" :desk/open "n" :desk/new "g f" :desk/place}))})
+   :on-event (fn [old new ev]
+               (cond
+                 (and (= :intent-result (:type ev)) (:ok? ev) (= :desk-created (:then ev)))
+                 (if (= "rail" (get-in new [:doc :data :desk]))
+                   (-> new (c/effect {:kind :visit :pane :main :path (get-in ev [:data :path])}) (focus-next 1))
+                   (docs/visit new (get-in ev [:data :path])))
+                 (and (= :doc (:type ev)) (:visit? ev) (= "rail" (get-in new [:doc :data :desk])))
+                 (let [r (or (first (sort (map first (filter (fn [[r o]] (= "omega/task" (:type o))) (:obj-index new)))))
+                             (first (rows new)) 0) q [r 0]]
+                   (assoc new :sels [{:anchor q :head q}] :primary 0))
+                 :else new))
+   :intercept (fn [ed ev]
+                (if (and (= :key (:type ev)) (= :normal (:mode ed)) (= ":" (:key ev)))
+                  (km/run-command ed :command-line)
+                (when-let [pr (active-presentation ed)]
+                  (cond
+                    (and (= :key (:type ev)) (= :normal (:mode ed)) (empty? (:pending ed)) (= "Enter" (:key ev))) (open-object ed)
+                    (and (= :key (:type ev)) (= :normal (:mode ed)) (empty? (:pending ed)) (= "n" (:key ev))) (new-task ed)
+                    (contains? #{:scroll-slots :scroll-to-slot} (:type ev))
+                    (let [slots (:slots (p/screen-of pr ed))
+                          top (p/first-slot-of-row slots (:top (:view ed)))
+                          y (max 0 (min (dec (count slots)) (if (= :scroll-to-slot (:type ev)) (:y ev) (+ top (:delta ev)))))
+                          r (or (p/slot-row (nth slots y nil)) 0)]
+                      (assoc ed :view (-> (:view ed) (dissoc :pin) (assoc :top r :anchor {:row r :off (- y (p/first-slot-of-row slots r)) :sub 0}))))
+                    :else nil))))
+   :render (fn [ed] (when-let [pr (active-presentation ed)] (assoc (p/render pr ed) :presentation (:name pr))))
+   :provides {:layouts {"desk" desk}
+              :links {"omega/task" (fn [o] (str "task:" (:key o)))}
+              :navigation {:rows rows :reveal reveal :outline? (fn [ed] (when (active-presentation ed) false))}}})
