@@ -46,7 +46,7 @@
    (concat [(p/line-mark (:from o) [{:text (str "● " (:stage a) "   /   " (:decision a)) :kind :who}] key)]
     (mapcat (fn [r] (wrapped ed r (str key r) (t/line (:text ed) r) (if (= r (inc (:from o))) :heading-1 :prose))) rows)
     [(p/line-mark (:from o) [(button "Open" :procurement/open) (button "Qualify dossier" :procurement/qualify)] (str key "/open"))
-     (p/line-mark (:from o) [(button "Needs info" :procurement/needs-information) (button "Pursue" :procurement/pursue) (button "Reject" :procurement/reject)] (str key "/decide"))]))))
+     (p/line-mark (:from o) [(button "Needs info" :procurement/needs-information) (if (= "qualification-checked" (:stage a)) (button "Pursue" :procurement/pursue) {:text " Pursue · check first " :kind :comment}) (button "Reject" :procurement/reject)] (str key "/decide"))]))))
 (defn measure [ed]
  (max 16 (- (or (get-in ed [:view :cols]) (when (starts-with? (str (:path ed)) "procurement:") 32) 80) 6)))
 (defn prose [o ctx]

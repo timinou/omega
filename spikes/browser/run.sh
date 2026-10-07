@@ -24,6 +24,7 @@ else
   cp "$here/demo.bl.org" "$BROWSER_DEMO_ROOT/demo.bl.org"
 fi
 if [ "${PROCUREMENT_DEMO:-0}" = 1 ]; then
+  cp "$OMEGA_HOME/spikes/procurement/pages.mjs" "$BROWSER_DEMO_ROOT/"
   cp "$OMEGA_HOME/spikes/procurement/desk-tool.mjs" "$BROWSER_DEMO_ROOT/"
   cp "$OMEGA_HOME/spikes/procurement/instructions.bl.org" "$BROWSER_DEMO_ROOT/procurement-instructions.bl.org"
 fi

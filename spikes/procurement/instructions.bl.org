@@ -43,6 +43,13 @@ JSON schema:
 "unknowns":["Qlik references unknown"],"nextAction":"Read qualification rules",
 "evidence":["desks/DESK/evidence-name.txt"],"rationale":"Why this decision"}}
 Allowed stages: discovered, notice-checked, dossier-reviewed, qualification-checked.
+Advanced stages require a nonempty requirements array in publishing JSON:
+"requirements":[{"requirement":"Exact qualification requirement",
+"document":"desks/DESK/dossier-pdf.txt","page":"3 / section 4",
+"fact":"Profile references unknown","verdict":"unknown"}]
+Every requirement document must appear in evidence, with actual page/section
+references. Verdicts are met, unknown or not-met. Pursue requires all requirements
+met and no remaining unknowns. Include availability: open, closed or unverified.
 Advance only from evidence actually read. For dossier-reviewed cite a real
 consultation document with page/section references. Qualification-checked means
 requirements were compared against sourced profile facts; unknowns may remain.

@@ -1,15 +1,9 @@
 import fs from 'node:fs/promises';
+import {literalArguments,normalizeTarget} from './arguments.mjs';
 // Infrastructure only; the model authors its own curated functions around this.
 const [action,...args]=process.argv.slice(2);
 try {
-  if(args[0]==='--args-file'){
-    if(args.length!==2)throw Error('Use ACTION --args-file PATH for literal argument arrays');
-    const values=JSON.parse(await fs.readFile(args[1],'utf8'));if(!Array.isArray(values)||!values.every(v=>typeof v==='string'))throw Error('Argument array must contain strings');args.splice(0,args.length,...values);
-  }
-  if(args[0]==='--arg-file'){
-    if(args.length!==2)throw Error('Use ACTION --arg-file PATH for one literal argument.');
-    const argument=await fs.readFile(args[1],'utf8');args.splice(0,args.length,argument);
-  }
+  args.splice(0,args.length,...normalizeTarget(action,await literalArguments(args)));
   const task=process.env.OMEGA_TASK_TAG?.split(':').at(-1);
   if(!task)throw Error('Run this helper inside an Omega eval shell (OMEGA_TASK_TAG).');
   const briefExists=await fs.access('company.bl.org').then(()=>true,()=>false);
