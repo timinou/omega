@@ -58,8 +58,8 @@
     (is (= ["a.txt" "mine-a.txt"] (vec (sort (File/ls! ra)))))
     (is (= ["a.txt" "mine-b.txt"] (vec (sort (File/ls! rb)))))
     (is (= "b sees nothing" (File/read! (str rb "/mine-b.txt"))))
-    (is (= ["mine-a.txt"] (map :subject (tr/all (:env sa) {:kind :claim}))))
-    (is (= ["mine-b.txt"] (map :subject (tr/all (:env sb) {:kind :claim}))))
+    (is (= [(str ra "/mine-a.txt")] (map :subject (tr/all (:env sa) {:kind :claim}))))
+    (is (= [(str rb "/mine-b.txt")] (map :subject (tr/all (:env sb) {:kind :claim}))))
     (task/stop-system! sa)
     (task/stop-system! sb)))
 

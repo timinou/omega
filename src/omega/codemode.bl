@@ -38,6 +38,7 @@
 (ns omega.codemode
   (:require [harness]
             [omega.prelude]
+            [omega.env]
             [omega.reap :as reap]))
 
 (def TIMEOUT-MS 120000)
@@ -76,11 +77,13 @@
    `at` = {:step n :tool-use-id s} names the cell (C4); optional."
   ([sys task code] (run-eval sys task code nil))
   ([sys task code at]
-  (let [world (omega.prelude/-register! task sys)
+  (let [id (omega.env/eid (:env sys) :task/id task)
+        cwd (:task/cwd (when id (omega.env/pull (:env sys) [:task/cwd] id)))
+        world (omega.prelude/-register! task sys)
         timeout (or (:eval-timeout-ms sys) TIMEOUT-MS)
         cell (cell-id task (:step at) (:tool-use-id at))
         deadline (+ (erlang/monotonic_time :millisecond) timeout)
-        r (harness/eval-cell {:ns (task-ns world task) :root (or (:root sys) (File/cwd!)) :path "eval"}
+        r (harness/eval-cell {:ns (task-ns world task) :root (or cwd (:root sys) (File/cwd!)) :path "eval"}
                              (str (preamble world task cell deadline) code)
                              timeout)
         ;; a killed cell takes what it started with it: a backgrounded `sh`

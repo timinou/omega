@@ -50,6 +50,12 @@
     :db/doc "The prompt that opened the task, verbatim. Steers refine it via :task/refined."}
    {:db/ident :task/title :db/valueType :db.type/string
     :db/doc "Short human handle."}
+   {:db/ident :task/cwd :db/valueType :db.type/string :db/index true
+    :db/doc "Absolute working directory, fixed at creation. Relative paths and shell commands resolve here; children inherit it. Legacy tasks fall back to the world's root."}
+   {:db/ident :task/home-path :db/valueType :db.type/string :db/index true
+    :db/doc "Address of the originating document, independent of cwd. A plain file path or provider address; not the task's scope or list of changed files."}
+   {:db/ident :task/home-block :db/valueType :db.type/string
+    :db/doc "Stable :id of the task block in home-path. Navigation resolves this anchor against current source."}
    {:db/ident :task/status :db/valueType :db.type/keyword :db/index true
     :db/doc "Lifecycle state; see omega.task/STATUSES. The latest value is current; history is the timeline."}
    {:db/ident :task/owner :db/valueType :db.type/ref :db/index true
@@ -84,7 +90,7 @@
    {:db/ident :trace/kind :db/valueType :db.type/keyword :db/index true
     :db/doc "Open vocabulary. Known kinds are documented in omega.trace/GLOSSARY."}
    {:db/ident :trace/subject :db/valueType :db.type/string :db/index true
-    :db/doc "What the mark is about — a path, a symbol, a topic. The key other tasks sense by."}
+    :db/doc "What the mark is about — a path, a symbol, a topic. The key other tasks sense by. File claims emitted by the prelude use absolute expanded paths so equal relative names in different working directories do not conflict."}
    {:db/ident :trace/text :db/valueType :db.type/string}
    {:db/ident :trace/data :db/doc "Structured payload, any term."}
    {:db/ident :trace/at :db/valueType :db.type/long :db/doc "When left, or last reinforced."}

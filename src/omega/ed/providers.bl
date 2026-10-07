@@ -3,7 +3,7 @@
 ; Turns a running task system into the provider map and intent map the bl-ed
 ; server takes (bl-ed.serve/start! {:providers … :intents …}). Every view is a
 ; pure renderer (omega.ed.render) over a projection omega.ui already uses; this
-; namespace only reads the world, keeps three small side files, and maps
+; namespace reads the world, maintains scratch/query side files, and maps
 ; intents onto the public task verbs. It holds NO authority of its own: writes
 ; are task/open! task/say! task/steer! task/cancel! actor/reply! (D1).
 ;
@@ -13,7 +13,7 @@
 ;
 ; opts {:state dir} — where the side files live (default <root>/.omega/ed):
 ;   scratch.bl.org  the one writable virtual document (omega:scratch)
-;   homes.edn       {task-id {:path p :block id}} — where each task's cell is
+;   homes.edn       legacy {task-id {:path p :block id}}; new homes are task facts
 ;   queries.edn     {qid text} — the q: documents' query texts
 ;
 ; Revs & cache. A rev is the hash of the rendered TEXT, so a re-render that
@@ -160,7 +160,13 @@
 
 (defn- snapshot [sys now] (model/snapshot (:env sys) now))
 
-(defn- homes [sys opts] (read-edn (str (state-dir sys opts) "/homes.edn")))
+(defn- homes [sys opts]
+  ;; New task homes are facts. Keep legacy side-file entries readable.
+  (reduce (fn [hs [id path block]] (assoc hs id {:path path :block block}))
+          (read-edn (str (state-dir sys opts) "/homes.edn"))
+          (env/q (:env sys) '[:find ?id ?path ?block :where
+                              [?t :task/id ?id] [?t :task/home-path ?path]
+                              [?t :task/home-block ?block]])))
 
 (defn- effect-rows
   "v0 effects of task `id` from its turns: each eval cell's edit/write calls
@@ -326,10 +332,6 @@
     (File/mkdir_p! (state-dir sys opts))
     (File/write! p (str cur (if (str/ends-with? cur "\n") "" "\n") text))))
 
-(defn- remember-home! [sys opts id home]
-  (let [p (str (state-dir sys opts) "/homes.edn")]
-    (write-edn! p (assoc (read-edn p) id home))))
-
 (defn reference
   "The #+RESULTS value of a task block the WORLD writes (a homeless task in
    scratch), in the shape the editor writes: `#omega/task {:id \"t-1\"}`. No
@@ -344,13 +346,20 @@
   ([sys] (intents sys {}))
   ([sys opts]
    {"task/open"
-    (fn [{:keys [goal path block scope]}]
+    (fn [{:keys [goal path block scope cwd]}]
       (let [goal (str/trim (str goal))]
         (if (str/blank? goal)
           {:ok false :message "a task needs a goal (the block's text)"}
-          (let [id (task/open! sys (cond-> {:goal goal} (seq scope) (assoc :scope (vec (str/split (str scope) " ")))))
+          (let [base (or (:root sys) (File/cwd!))
+                wd (if-let [resolve (:working-directory opts)] (resolve path cwd)
+                     (Path/expand (or cwd (when (and path (not (str/includes? path ":"))) (Path/dirname (Path/expand path base))) base) base))
+                origin (when (and path block) {:path path :block block})
+                id (task/open! sys (cond-> {:goal goal :cwd wd :home origin}
+                                    (seq scope) (assoc :scope (if (string? scope) (vec (str/split scope " ")) (vec scope)))))
                 home (if (and path block) {:path path :block block} {:path "omega:scratch" :block id})]
-            (remember-home! sys opts id home)
+            (when-not origin
+              (env/tx! (:env sys) [[:db/add (env/eid (:env sys) :task/id id) :task/home-path (:path home)]
+                                  [:db/add (env/eid (:env sys) :task/id id) :task/home-block (:block home)]]))
             (when-not (and path block)
               (scratch-append! sys opts (str "\n* " (r/one-line goal 70) "\n#+begin_task :id " id "\n" goal "\n#+end_task\n#+RESULTS: " id "\n: " (reference {:id id}) "\n")))
             {:id id}))))

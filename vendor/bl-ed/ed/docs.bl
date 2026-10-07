@@ -61,6 +61,15 @@
   (cond
     (nil? goto) nil
     (some? (:pos goto)) (t/clamp tx (:pos goto))
+    (some? (:block goto))
+      (let [wanted (:block goto)
+            r (first (filter (fn [r]
+                               (let [line (trim (t/line tx r)) words (vec (filter (fn [w] (not (blank? w))) (split line " ")))
+                                     i (first (filter (fn [i] (= ":id" (nth words i))) (range (count words))))]
+                                 (and (starts-with? (lower-case line) "#+begin_") (some? i)
+                                      (< (inc i) (count words)) (= wanted (nth words (inc i))))))
+                             (range (t/line-count tx))))]
+        (when (some? r) [r 0]))
     (some? (:find goto))
       (let [needle (:find goto)
             r (first (filter (fn [r] (some? (index-of (t/line tx r) needle))) (range (t/line-count tx))))]

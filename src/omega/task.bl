@@ -59,6 +59,7 @@
 
 (def ^:private PULL
   [:task/id :task/goal :task/title :task/status :task/scope :task/refined
+   :task/cwd :task/home-path :task/home-block
    :task/result :task/cost :task/at
    {:task/owner [:task/id]} {:task/opened-by [:actor/id]} {:task/waits-on [:task/id]}])
 
@@ -71,6 +72,8 @@
       (let [m (env/pull e PULL t)]
         {:id (:task/id m) :goal (:task/goal m) :title (:task/title m)
          :status (:task/status m) :scope (vec (or (:task/scope m) []))
+         :cwd (or (:task/cwd m) (:root sys) (File/cwd!))
+         :home (when (:task/home-path m) {:path (:task/home-path m) :block (:task/home-block m)})
          :refined (vec (or (:task/refined m) []))
          :result (:task/result m) :cost (:task/cost m) :at (:task/at m)
          :owner (get-in m [:task/owner :task/id])
@@ -216,18 +219,25 @@
      :owner      task id of the owning task, for subtasks
      :by         actor id who opened it (default \"human:me\")
      :scope      [path …] declared footprint
+     :cwd        working directory; defaults to owner's cwd, then world's root
+     :home       {:path document-address :block stable-block-id}, optional
    Returns the task id."
   [sys m]
-  (let [e (:env sys)
+  (let [cwd (Path/expand (or (:cwd m) (when (:owner m) (:cwd (view sys (:owner m))))
+                             (:root sys) (File/cwd!)) (or (:root sys) (File/cwd!)))
+        _ (when-not (File/dir? cwd) (throw (ex-info (str "not a working directory: " cwd) {:cwd cwd})))
+        e (:env sys)
         id (env/new-id e "t")
         by (or (:by m) (actor/human-id "me"))
         _ (when (nil? (env/eid e :actor/id by)) (actor/ensure! e by :human))
         owner (when-let [o (:owner m)] (env/eid e :task/id o))
         fact (cond-> {:db/id -1 :task/id id :task/goal (:goal m)
                       :task/title (or (:title m) (slug (:goal m)))
-                      :task/status :open :task/at (now sys)
+                      :task/status :open :task/at (now sys) :task/cwd cwd
                       :task/opened-by (env/eid e :actor/id by)}
                (some? owner) (assoc :task/owner owner)
+               (get-in m [:home :path]) (assoc :task/home-path (get-in m [:home :path]))
+               (get-in m [:home :block]) (assoc :task/home-block (get-in m [:home :block]))
                (seq (:scope m)) (assoc :task/scope (vec (:scope m))))]
     (env/tx! e [fact])
     (actor/ensure! e id :task (:task/title fact))

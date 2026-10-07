@@ -787,7 +787,11 @@ function paint(dom, v, focused) {
       (m === "insert" ? "width:2px" : `width:${Math.max(metrics.ch, xOf(cur[0], cur[1] + 1) - xOf(cur[0], cur[1]))}px`);
     caret.hidden = false;
     // keep the hidden input under the caret so the IME popup appears there
-    if (focused && sink.parentElement !== dom.page) dom.page.appendChild(sink);
+    if (focused && sink.parentElement !== dom.page) {
+      const heldFocus = document.activeElement === sink;
+      dom.page.appendChild(sink);
+      if (heldFocus) sink.focus({ preventScroll: true });
+    }
     if (focused) { sink.style.top = cy + "px"; sink.style.left = xOf(cur[0], cur[1]) + "px"; }
   } else caret.hidden = true;
 

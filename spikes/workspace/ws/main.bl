@@ -1,0 +1,68 @@
+; Workspace navigation policy. IO is expressed only as editor effects.
+(ns ws.main
+  (:require [ed.core :as c] [ed.docs :as docs] [ed.keymap :as km]
+            [ed.omega :as omega]))
+
+(def workspace
+  {:name "workspace" :doc "Places and files | editable plan | linked task."
+   :panes [{:id :places :doc "places:" :width [:ch 30]}
+           {:id :document :doc :linked :width [:fr 3]}
+           {:id :task :doc :linked :width [:fr 2]}]
+   :links [{:from :places :on :select :to :document :do :visit}
+           {:from :document :on :select :to :task :do :visit}]
+   :focus :places})
+
+(defn- target [ed]
+  (let [o (or (omega/object-at ed)
+              (first (filter (fn [o] (and (= "omega/task" (:type o)) (:home o))) (vals (:obj-index ed)))))]
+    (if (and o (= "omega/task" (:type o)) (nil? (:home o)))
+      (assoc o :home (get-in ed [:cards (:key o) :home])) o)))
+
+(defn go-home [ed]
+  (if-let [home (:home (target ed))]
+    (docs/visit ed (:path home) (when (:block home) {:block (:block home)}))
+    (c/message ed "No task home here; select a task or open its conversation.")))
+
+(defn go-folder [ed]
+  (let [p (:path ed)]
+    (if (starts-with? p "work:")
+      (let [s (subs p 5) parts (split s "/")]
+        (docs/visit ed (str "folder:" (join "/" (drop-last parts)))))
+      (docs/visit ed "places:"))))
+
+(def commands
+  {:workspace/left {:doc "Focus the editor pane to the left; clamp at the edge."
+                    :run (fn [ed] (c/effect ed {:kind :frame-focus :direction -1}))}
+   :workspace/right {:doc "Focus the editor pane to the right; clamp at the edge."
+                     :run (fn [ed] (c/effect ed {:kind :frame-focus :direction 1}))}
+   :workspace/home {:doc "Visit the selected task's home at its block anchor." :run go-home}
+   :workspace/folder {:doc "Visit the document's containing folder, or all places." :run go-folder}
+   :workspace/task {:doc "Visit the task reference under the cursor."
+                    :run (fn [ed] (if-let [o (omega/object-at ed)]
+                                    (if (= "omega/task" (:type o)) (docs/visit ed (str "task:" (:key o)))
+                                      (c/message ed "No task here.")) (c/message ed "No task here.")))}
+   :workspace/open {:doc "Open the selected file or folder."
+                    :run (fn [ed] (if-let [o (docs/object-at ed)] (docs/visit ed (:key o))
+                                    (c/message ed "No file or folder here.")))}})
+
+(def nav-keys {"M-h" :workspace/left "M-l" :workspace/right
+               "g H" :workspace/home "g f" :workspace/folder "g t" :workspace/task})
+
+(def bl-package
+  {:name "workspace" :doc "Task homes and several working places in the real editor."
+   :commands commands
+   :keys (fn [ed]
+           (let [o (docs/object-at ed)
+                 files? (contains? #{"workspace/file" "workspace/folder"} (:type o))]
+             {:normal (merge nav-keys (if files? {"Enter" :workspace/open} {}))
+              :select nav-keys :insert {"M-h" :workspace/left "M-l" :workspace/right}}))
+   ; Command/palette modes use minibuffer dispatch. Route the same named pane
+   ; commands there too, so navigation never consumes or submits a draft.
+   :intercept (fn [ed ev]
+                (when (and (= :key (:type ev)) (contains? #{:command :palette} (:mode ed))
+                           (contains? #{"M-h" "M-l"} (:key ev)))
+                  (km/run-command ed (get nav-keys (:key ev)))))
+   :provides {:layouts {"workspace" workspace}
+              :selection omega/object-at
+              :links {"workspace/file" (fn [o] (:key o))
+                      "omega/task" (fn [o] (str "task:" (:key o)))}}})

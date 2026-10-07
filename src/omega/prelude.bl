@@ -28,7 +28,11 @@
 (defn -register!
   "Make `sys` the system for its world's task `task`; returns the world id."
   [task sys]
-  (let [w (env/world (:env sys))] (swap! SYSTEMS assoc [w task] sys) w))
+  (let [w (env/world (:env sys))
+        id (env/eid (:env sys) :task/id task)
+        cwd (:task/cwd (when id (env/pull (:env sys) [:task/cwd] id)))
+        context (if cwd (assoc sys :root cwd) sys)]
+    (swap! SYSTEMS assoc [w task] context) w))
 (defn -bind!
   "Bind the cell process to `task` of `world`; `cell` tags the OS processes it
    starts, `deadline` (monotonic ms) is when the cell will be killed."
@@ -86,7 +90,7 @@
   [p]
   (let [mode (:claims (ed/rules (sys)))]
     (when-not (= :ignore mode)
-      (let [r (tr/claim! (e) (task) p)]
+      (let [r (tr/claim! (e) (task) (path p))]
         (when-let [cs (seq (:conflict r))]
           (ed/claim-note p (vec (distinct (map :task cs)))))))))
 
@@ -94,7 +98,7 @@
   "Under the :refuse claims rule, throw before touching `p` held by another task."
   [p]
   (when (= :refuse (:claims (ed/rules (sys))))
-    (when-let [cs (seq (tr/conflicts (e) (task) p))]
+    (when-let [cs (seq (tr/conflicts (e) (task) (path p)))]
       (throw (ex-info (str "not written: " (ed/claim-note p (vec (distinct (map :task cs)))))
                       {:path p :claims (vec (map :task cs))})))))
 

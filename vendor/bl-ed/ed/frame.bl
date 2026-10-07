@@ -121,7 +121,10 @@
 (defn selection
   "What a pane's cursor is on: the provider object's [type key], or nil."
   [ed]
-  (let [o (docs/object-at ed)] (when (some? o) [(:type o) (:key o)])))
+  (let [o (or (docs/object-at ed)
+              (some (fn [p] (when-let [f (get-in p [:provides :selection])] (f ed)))
+                    (reverse (pkg/packages ed))))]
+    (when (some? o) [(:type o) (:key o)])))
 
 (defn link-path
   "Where an object leads: asked of the packages that provide links for its
@@ -163,6 +166,20 @@
   (let [ids (editor-ids fr)
         i (or (first (filter (fn [i] (= (nth ids i) (:focus fr))) (range (count ids)))) 0)]
     (assoc fr :focus (nth ids (mod (+ i dir) (count ids))))))
+
+(defn- focus-effects
+  "Consume generic package-requested spatial focus effects before the host.
+   Clamps at edges and skips view panes. Editors, drafts and pending keys stay intact."
+  [fr]
+  (let [effects (:effects fr)
+        fr (assoc fr :effects [])]
+    (reduce (fn [f e]
+              (if (= :frame-focus (:kind e))
+                (let [ids (editor-ids f)
+                      i (or (first (filter (fn [i] (= (nth ids i) (:focus f))) (range (count ids)))) 0)
+                      dest (max 0 (min (dec (count ids)) (+ i (:direction e))))]
+                  (assoc f :focus (nth ids dest)))
+                (update f :effects conj e))) fr effects)))
 
 (def WINDOW-KEYS
   "space w then … (the window keys). C-w is the browser's close-tab, so the
@@ -243,7 +260,7 @@
       :else
         (let [before (editor fr target)
               fr (step-editor fr target (dissoc ev :pane))]
-          (layout-request (spread-packages fr target before) target)))))
+          (focus-effects (layout-request (spread-packages fr target before) target))))))
 
 (defn take-effects [fr] [(assoc fr :effects []) (:effects fr)])
 

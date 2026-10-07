@@ -1,0 +1,67 @@
+(ns workspace-backend-test
+  (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
+            [omega.codemode :as cm] [omega.ed.providers :as pv]
+            [ws.server :as ws] [clojure.string :as str]))
+
+(defn- fixture []
+  (let [root (str "/tmp/omega-workspace-test-" (erlang/unique_integer (to-list [:positive])))
+        places {"a" (str root "/a") "b" (str root "/b")}]
+    (doseq [[alias dir] places] (File/mkdir_p! dir) (File/write! (str dir "/board.bl.org") alias))
+    {:root root :places places}))
+
+(deftest cwd-is-durable-task-context-for-eval-shell-and-children
+  (let [{:keys [root places]} (fixture)
+        sys (task/start-system (env/open) {:step (loop/by-goal {"a" [(loop/say "ok")] "b" [(loop/say "ok")] "child" [(loop/say "ok")]})
+                                           :tools cm/tools :root root})
+        a (task/open! sys {:goal "a" :cwd (get places "a") :home {:path "work:b/plan.bl.org" :block "a"}})
+        b (task/open! sys {:goal "b" :cwd (get places "b")})]
+    (task/await sys a 5000) (task/await sys b 5000)
+    (is (= (get places "a") (:cwd (task/view sys a))))
+    (is (= {:path "work:b/plan.bl.org" :block "a"} (:home (task/view sys a))))
+    (is (str/includes? (:ok (cm/run-eval sys a "(read \"board.bl.org\")")) "a"))
+    (is (str/includes? (:ok (cm/run-eval sys b "(read \"board.bl.org\")")) "b"))
+    (is (str/includes? (:ok (cm/run-eval sys a "(sh \"pwd\")")) (get places "a")))
+    (cm/run-eval sys a "(write \"board.bl.org\" \"changed a\")")
+    (is (= "changed a" (File/read! (str (get places "a") "/board.bl.org"))))
+    (is (= "b" (File/read! (str (get places "b") "/board.bl.org"))))
+    (let [child (task/open! sys {:goal "child" :owner a})]
+      (task/await sys child 5000)
+      (is (= (get places "a") (:cwd (task/view sys child)))))
+    ;; Reconstruct execution context from facts, even with a different system root.
+    (is (str/includes? (:ok (cm/run-eval (assoc sys :root (get places "b")) a "(read \"board.bl.org\")")) "changed a"))
+    (is (str/includes? (:system (loop/request sys a)) (get places "a")))
+    (task/stop-system! sys)))
+
+(deftest invalid-cwd-does-not-create-a-task
+  (let [sys (task/start-system (env/open) {:step (loop/scripted []) :root "/tmp"})]
+    (is (try (task/open! sys {:goal "bad" :cwd "/nonexistent/omega-workspace"}) false (catch _ true)))
+    (is (empty? (task/all sys)))
+    (task/stop-system! sys)))
+
+(deftest mounted-documents-have-distinct-identities-and-revision-checked-writes
+  (let [{:keys [root places]} (fixture)
+        sys (task/start-system (env/open) {:step (loop/scripted [(loop/say "ok")]) :root root})
+        provider (get (ws/providers sys places) "work")
+        a ((:read provider) "a/board.bl.org" {})
+        b ((:read provider) "b/board.bl.org" {})]
+    (is (= "a" (:text a))) (is (= "b" (:text b)))
+    (is (= {:conflict (:rev a)} ((:write provider) "a/board.bl.org" {} "wrong" "stale")))
+    (is (:rev ((:write provider) "a/board.bl.org" {} "new a" (:rev a))))
+    (is (= "b" (:text ((:read provider) "b/board.bl.org" {}))))
+    (is (= (get places "b") (ws/working-directory places root "work:a/board.bl.org" "@b")))
+    (is (= (get places "a") (ws/working-directory places root "work:a/board.bl.org" nil)))
+    (is (try (ws/resolve-file places "a/../b/board.bl.org") false (catch _ true)))
+    (task/stop-system! sys)))
+
+(deftest task-block-intent-records-home-and-cwd-in-facts
+  (let [{:keys [root places]} (fixture)
+        sys (task/start-system (env/open) {:step (loop/scripted [(loop/say "ok")]) :root root})
+        opts {:state (str root "/state") :working-directory (fn [path cwd] (ws/working-directory places root path cwd))}
+        result ((get (pv/intents sys opts) "task/open") {:goal "test" :path "work:a/plan.bl.org" :block "start" :cwd "@b"})
+        id (:id result)]
+    (task/await sys id 5000)
+    (is (= (get places "b") (:cwd (task/view sys id))))
+    (is (= {:path "work:a/plan.bl.org" :block "start"} (:home (task/view sys id))))
+    (is (not (File/regular? (str root "/state/homes.edn"))))
+    (is (str/includes? (:text ((:read (get (pv/providers sys opts) "task")) id {})) (get places "b")))
+    (task/stop-system! sys)))

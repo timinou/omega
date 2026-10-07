@@ -172,7 +172,9 @@
    when omitted), after the :context hooks."
   ([sys id] (request sys id (turns sys id)))
   ([sys id ts]
-  (let [req {:system (or (:system-prompt sys) "You are omega, a coding agent.")
+  (let [cwd (:task/cwd (env/pull (:env sys) [:task/cwd] (env/eid (:env sys) :task/id id)))
+        req {:system (str (or (:system-prompt sys) "You are omega, a coding agent.")
+                          (when cwd (str "\nTask working directory: " cwd ". Relative file paths and shell commands resolve here.")))
              :messages (messages ts)
              :tools (vec (map (fn [t] (select-keys t [:name :description :input-schema])) (tool-table sys)))}]
     (hook sys :context req {:sys sys :task id}))))

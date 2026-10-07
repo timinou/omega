@@ -1,0 +1,85 @@
+; BEAM providers for attached directories. The editor package does no IO.
+(ns ws.server
+  (:require [omega.task :as task] [bl-ed.serve :as serve] [bl.doc :as doc]
+            [clojure.string :as str]))
+
+(defn resolve-file
+  "Resolve a mounted address suffix (place/relative-path)."
+  [places name]
+  (let [parts (str/split name "/") alias (first parts) root (get places alias)]
+    (when-not root (throw (ex-info (str "Unknown place: " alias) {})))
+    (let [root (Path/expand root) path (Path/expand (str/join "/" (rest parts)) root)]
+      (when-not (or (= path root) (str/starts-with? path (str root "/")))
+        (throw (ex-info "Path leaves its attached directory." {:path path})))
+      path)))
+
+(defn working-directory
+  "A document's directory, an explicit relative directory, or @place."
+  [places world-root path cwd]
+  (let [base (if (and path (str/starts-with? path "work:"))
+               (Path/dirname (resolve-file places (subs path 5))) world-root)
+        result (if (and cwd (str/starts-with? cwd "@"))
+                 (resolve-file places (subs cwd 1)) (Path/expand (or cwd base) base))]
+    (when-not (some (fn [[_ p]] (let [p (Path/expand p)]
+                                (or (= p result) (str/starts-with? result (str p "/"))))) places)
+      (throw (ex-info "Working directory is outside attached places." {:cwd result})))
+    result))
+
+(defn- emit
+  ([acc line] (update acc :lines conj line))
+  ([acc line object] (-> acc (update :objects conj (assoc object :row (count (:lines acc)))) (emit line))))
+(def empty-doc {:lines [] :objects []})
+(defn- finish [acc] {:text (str/join "\n" (:lines acc)) :objects (:objects acc) :read-only? true})
+
+(defn- children [places prefix acc]
+  (let [dir (resolve-file places prefix)]
+    (reduce (fn [a name]
+              (if (str/starts-with? name ".") a
+                (let [p (str prefix "/" name) abs (resolve-file places p)
+                      directory? (File/dir? abs)]
+                  (emit a (str "  " (if directory? "▸ " "  ") name (if directory? "/" ""))
+                        {:type (if directory? "workspace/folder" "workspace/file")
+                         :key (str (if directory? "folder:" "work:") p)}))))
+            acc (sort (File/ls! dir)))))
+
+(defn places-doc [places]
+  (finish
+    (reduce (fn [a [alias path]]
+              (children places alias
+                (-> a (emit (str "* " alias) {:type "workspace/folder" :key (str "folder:" alias)})
+                      (emit (str "  " (Path/expand path))))))
+            (-> empty-doc (emit "#+TITLE: Working places") (emit "")
+                (emit "j/k move · RET open · Alt+h/l focus") (emit ""))
+            (sort-by first places))))
+
+(defn folder-doc [sys places nm]
+  (let [dir (resolve-file places nm)
+        tasks (filter (fn [t] (= dir (:cwd t))) (task/all sys))]
+    (finish
+      (reduce (fn [a t] (emit a (str (:id t) " · " (name (:status t)) " · " (:title t))
+                             {:type "omega/task" :key (:id t) :home (:home t) :cwd (:cwd t)}))
+              (-> (children places nm (-> empty-doc (emit (str "#+TITLE: " nm)) (emit (str "cwd: " dir))
+                                             (emit "") (emit "* Files")))
+                  (emit "") (emit "* Tasks working here")) tasks))))
+
+(defn providers [sys places]
+  (let [read-file (fn [name]
+                    (let [p (resolve-file places name) text (File/read! p)]
+                      ;; Task references are resolved from current source by
+                      ;; the package, not a provider row index that edits can stale.
+                      {:text text :read-only? false :title name :objects []
+                       :rev (serve/text-rev text)}))]
+    {"places" {:read (fn [_ _] (places-doc places)) :rev (fn [_ _] (serve/text-rev (:text (places-doc places))))}
+     "folder" {:read (fn [nm _] (folder-doc sys places nm))
+                :rev (fn [nm _] (serve/text-rev (:text (folder-doc sys places nm))))}
+     "work" {:read (fn [nm _] (read-file nm)) :rev (fn [nm _] (:rev (read-file nm)))
+              :write (fn [nm _ text base]
+                       (let [p (resolve-file places nm) current (:rev (read-file nm))]
+                         (if (not= base current) {:conflict current}
+                           (do (File/write! p text) {:rev (serve/text-rev text)}))))
+              :eval (fn [nm _ id text]
+                      (let [slice (doc/slice-text text (doc/format-of nm))]
+                        (if (:error slice) {:result (pr-str (:error slice))}
+                          (let [d (assoc (:ok slice) :path (resolve-file places nm)) r (doc/run-doc d)]
+                            {:result (get (:results r) id "")
+                             :text (doc/write-results d (select-keys (:results r) [id]))}))))}}))

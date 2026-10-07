@@ -30,12 +30,14 @@
   [b]
   (and (some? b) (= :block (:kind b)) (= "task" (lower-case (str (:lang b))))))
 
-(defn- header-id
-  "The `:id x` of a `#+begin_task` line, or nil."
-  [l]
+(defn- header-value
+  "An unquoted single-token attribute in a task header."
+  [l attr]
   (let [toks (vec (filter (fn [x] (not (blank? x))) (split (trim l) " ")))
-        i (first (filter (fn [i] (= ":id" (nth toks i))) (range (count toks))))]
+        i (first (filter (fn [i] (= attr (nth toks i))) (range (count toks))))]
     (if (and (some? i) (< (inc i) (count toks))) (nth toks (inc i)) nil)))
+
+(defn- header-id [l] (header-value l ":id"))
 
 (defn block-body [ed b]
   (let [lines (:lines (:text ed))]
@@ -132,7 +134,9 @@
           :else
             (-> ed
                 (assoc :pending-open {:block bid :prev (:id ref)})
-                (c/effect {:kind :intent :intent "task/open" :args {:goal goal :path (:path ed) :block bid}
+                (c/effect {:kind :intent :intent "task/open" :args (cond-> {:goal goal :path (:path ed) :block bid}
+                                                                  (header-value (t/line (:text ed) (:from b)) ":cwd")
+                                                                  (assoc :cwd (header-value (t/line (:text ed) (:from b)) ":cwd")))
                            :then :task-opened :block bid})
                 (c/message (str "opening a task" (if ref (str " (previous: " (:id ref) ")") "") "…"))))))))
 

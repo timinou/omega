@@ -221,8 +221,11 @@
   (let [dir (tmpdir) cache (atom {:entries {} :stats {}})
         sys (system (loop/scripted [(loop/say "ok")]) dir)
         it (pv/intents sys)
-        id (:id ((get it "task/open") {:goal "home me" :path "a.org" :block "b1"}))
+        ;; Legacy worlds have side-file homes and no :task/home-path fact.
+        id (task/open! sys {:goal "home me"})
         _ (task/await sys id 5000)
+        _ (File/mkdir_p! (str dir "/.omega/ed"))
+        _ (File/write! (str dir "/.omega/ed/homes.edn") (pr-str {id {:path "a.org" :block "b1"}}))
         pvs (pv/providers sys {:cache cache})
         ov (get pvs "omega")]
     (is (str/includes? (:text ((:read ov) "overview" {})) "a.org"))
