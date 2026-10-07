@@ -15,8 +15,14 @@ try {
     if(!functions.includes('(defn ') || !strategy.includes('#+begin_src'))
       throw Error('Research checkpoint: company brief exists. Before further browser operations, author named curated defn functions in search.bl and matching documented source blocks in search.bl.org, then execute those functions inside Omega eval.');
   }
+  let operation=action,operationArgs=args;
+  if(action==='wait'){
+    const ms=Number(args[0]);
+    if(args.length!==1 || !Number.isInteger(ms) || ms<0 || ms>10000)throw Error('Wait duration must be 0..10000 ms');
+    operation='eval';operationArgs=[`new Promise(resolve=>setTimeout(()=>resolve("page wait complete"),${ms}))`];
+  }
   const response=await fetch('http://127.0.0.1:8797/browser/tool',{
-    method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task,action,args})});
+    method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task,action:operation,args:operationArgs})});
   const result=await response.json();
   if(!response.ok || !result.ok)throw Error(result.message || 'Browser operation failed');
   const value=result.result;
