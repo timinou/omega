@@ -50,7 +50,17 @@
     (is (str/includes? text "#+RESULTS: t-1/1\n: => 3"))
     (is (not (str/includes? text "* result · 2")) "a turn of only results is folded into its call")
     (is (some (fn [o] (= "omega/msg" (:type o))) (:objects d)) "the open ask is answerable in place")
+    (is (= "Ship?" (:message (first (filter (fn [o] (= "omega/msg" (:type o))) (:objects d))))))
     (is (some (fn [o] (= "omega/composer" (:type o))) (:objects d)))))
+
+(deftest terminal-outcomes-have-real-source-objects
+  (let [detail {:turns [] :traces [] :asks []}
+        outcome (r/task-doc (assoc ROW :status :done :result "Updated the board.") detail {} 0 false)
+        obj (first (filter (fn [o] (= "omega/outcome" (:type o))) (:objects outcome)))]
+    (is (= "Updated the board." (:result obj)))
+    (is (= "* Outcome · done" (nth (str/split-lines (:text outcome)) (:row obj))))
+    (is (nil? (first (filter (fn [o] (= "omega/outcome" (:type o)))
+      (:objects (r/task-doc (assoc ROW :status :idle :result "Still working.") detail {} 0 false))))))))
 
 (deftest a-long-task-shows-its-last-turns-and-offers-the-rest
   (let [turns (vec (for [n (range 45)] {:n n :role :assistant :content [{:type :text :text (str "turn " n)}]}))

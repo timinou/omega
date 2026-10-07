@@ -183,7 +183,7 @@
               acc shown)
         asks (filter (fn [m] (and (= :ask (:kind m)) (not (:answered? m)))) (:asks detail))
         acc (if (seq asks)
-              (reduce (fn [acc m] (emit acc (str "⚑ " (one-line (:text m) 100) "   y yes · n no · a answer…") {:type "omega/msg" :key (:id m) :task id}))
+              (reduce (fn [acc m] (emit acc (str "⚑ " (one-line (:text m) 100) "   y yes · n no · a answer…") {:type "omega/msg" :key (:id m) :task id :message (:text m)}))
                       (emit acc "* ⚑ asks you") asks)
               acc)
         traces (:traces detail)
@@ -191,6 +191,12 @@
               (reduce (fn [acc t] (emit acc (str "- " (name (:kind t)) " · " (:subject t) (when (seq (:text t)) (str " — " (one-line (:text t) 80))))
                                         {:type "omega/trace" :key (str (:subject t))}))
                       (emit acc "* traces") (take 20 traces))
+              acc)
+        acc (if (and (contains? #{:done :failed :cancelled} (:status row)) (:result row))
+              (reduce emit
+                (emit acc (str "* Outcome · " (name (:status row)))
+                  {:type "omega/outcome" :key id :task id :status (name (:status row)) :result (:result row)})
+                (str/split-lines (:result row)))
               acc)
         acc (-> acc (emit "") (emit "* say ▸  (RET to message the task, C-Enter to steer it)" {:type "omega/composer" :key id}))]
     (doc (str "task:" id) acc)))
