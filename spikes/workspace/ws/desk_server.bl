@@ -1,11 +1,12 @@
 ; Domain documents remain plain text plus typed provider objects.
 (ns ws.desk-server
-  (:require [omega.task :as task] [omega.ui.model :as model] [place.model :as place]
+  (:require [omega.task :as task] [omega.ui.model :as model] [place.model :as place] [links.model :as link]
             [bl-ed.serve :as serve] [clojure.string :as str]))
 (defn- emit [d text object]
   (cond-> (update d :lines conj text) object (update :objects conj (assoc object :row (count (:lines d))))))
 (defn- finish [d data]
   {:text (str (str/join "\n" (:lines d)) "\n") :objects (:objects d) :data data :read-only? true})
+(declare task-context)
 (defn scope-doc [sys scope]
   (let [e (:env sys) places (place/all e) all? (= scope "all")
         ids (when-not all? (place/descendants places scope))
@@ -23,7 +24,7 @@
                     (if (empty? rs) d
                       (reduce (fn [d r] (emit d (str (:id r) " · " (name (:status r)) " · " (:title r) " · " (or (some-> (:asks r) first :text) (:result r) (:goal r)))
                         {:type "omega/task" :key (:id r) :title (:title r) :goal (:goal r) :status (name (:status r))
-                         :place (:place r) :home (:home r) :cwd (:cwd r)
+                         :place (:place r) :home (:home r) :cwd (:cwd r) :artifacts (:artifacts (task-context sys (:id r)))
                          :ask (some-> (:asks r) first :text)
                          :summary (or (some-> (:asks r) first :text) (:result r) (:goal r))}))
                         (emit d (str "* " label " (" (count rs) ")") nil) rs))) d groups)
@@ -36,7 +37,25 @@
                    "" "j / k  browse tasks and places" "Enter  focus the selected conversation"
                    "n      start a task in the selected place" "Alt+h / Alt+l  focus previous / next pane"] :objects []}
           {:desk :welcome}))
-(defn providers [sys]
-  {"workspace" {:read (fn [nm _] (scope-doc sys (if (str/blank? nm) "all" nm)))
+(defn task-context [sys id]
+  (let [t (task/view sys id) e (:env sys)
+        refs (filter (fn [m] (:path (:to m))) (link/all e {:task id}))
+        artifacts (map (fn [m] {:path (link/target e (:to m)) :block (:block (:to m))
+                                :label (Path/basename (:path (:to m))) :kind (name (:kind m))})
+                       (sort-by (fn [m] [(if (= :output (:kind m)) 0 1) (:id m)]) refs))
+        home (:home t)]
+    {:desk "task" :task-id id :task-title (:title t) :task-status (name (:status t))
+     :ask (some-> (model/task-rows e [id]) first :asks first :text)
+     :place (:place t) :cwd (:cwd t) :home home
+     :artifacts (vec (concat artifacts (when home [(assoc home :label "Plan / home" :kind "home")])))}))
+(defn task-provider [sys base]
+  (let [read (fn [id params] (let [d ((:read base) id params) context (task-context sys id)]
+                             (assoc d :data context :rev (serve/text-rev (str (:text d) (pr-str context))))))]
+    {:read read :rev (fn [id params] (:rev (read id params)))}))
+(defn providers
+  ([sys] (providers sys nil))
+  ([sys base-task]
+  (cond-> {"workspace" {:read (fn [nm _] (scope-doc sys (if (str/blank? nm) "all" nm)))
                 :rev (fn [nm _] (serve/text-rev (:text (scope-doc sys (if (str/blank? nm) "all" nm)))))}
-   "desk" {:read (fn [_ _] (welcome sys)) :rev (fn [_ _] "welcome-1")}})
+   "desk" {:read (fn [_ _] (welcome sys)) :rev (fn [_ _] "welcome-1")}}
+    base-task (assoc "task" (task-provider sys base-task)))))

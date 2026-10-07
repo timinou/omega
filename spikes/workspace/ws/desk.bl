@@ -1,7 +1,7 @@
 ; Workbench policy and presentations, layered over present rather than a page.
 (ns ws.desk
   (:require [ed.core :as c] [ed.docs :as docs] [ed.keymap :as km] [ed.text :as t]
-            [ed.omega :as omega] [pp.present :as p] [pp.read :as rd]))
+            [ed.omega :as omega] [pp.present :as p] [pp.read :as rd] [ws.views :as views] [ed.org :as org] [clojure.string :as str]))
 (def desk
   {:name "desk" :doc "A scoped work rail beside the selected conversation."
    :panes [{:id :rail :doc "workspace:all" :width [:ch 40]}
@@ -49,7 +49,30 @@
 (def welcome (presentation {:doc present-welcome} "work-welcome"))
 (defn active-presentation [ed]
   (when-not (get-in ed [:pkg-state "workbench" :source?])
-    (case (get-in ed [:doc :data :desk]) "rail" rail "welcome" welcome nil)))
+    (case (get-in ed [:doc :data :desk]) "rail" rail "welcome" welcome (views/choose ed))))
+(def artifact-layout
+  {:name "desk-artifact" :doc "Work rail, editable artifact, retained task conversation."
+   :panes [{:id :rail :doc "workspace:all" :width [:ch 36]}
+           {:id :main :doc :linked :width [:fr 3]}
+           {:id :aside :doc :linked :width [:fr 2]}]
+   :links [{:from :rail :on :select :to :aside :do :visit}] :focus :main})
+(defn artifact-target [ed home?]
+  (let [d (if (= "rail" (get-in ed [:doc :data :desk])) (object ed) (get-in ed [:doc :data]))]
+    (if home? (:home d) (or (first (:artifacts d)) (:home d)))))
+(defn show-artifact [ed home?]
+  (if-let [target (artifact-target ed home?)]
+    (c/effect ed {:kind :frame-layout :layout "desk-artifact"
+                  :keep {:rail :rail :aside (if (= "rail" (get-in ed [:doc :data :desk])) :main :origin) :main nil} :focus :main
+                  :visits {:main {:path (:path target) :goto (when (:block target) {:block (:block target)})}}})
+    (c/message ed "No working file here; open a task first.")))
+(defn conversation-only [ed]
+  (c/effect ed {:kind :frame-layout :layout "desk" :keep {:rail :rail :main :aside} :focus :main}))
+(defn toggle-todo [ed]
+  (let [r (first (c/cursor ed)) line (t/line (:text ed) r)]
+    (cond
+      (some? (index-of line "TODO ")) (c/replace-text ed (join "\n" (assoc (:lines (:text ed)) r (str/replace line "TODO " "DONE "))))
+      (some? (index-of line "DONE ")) (c/replace-text ed (join "\n" (assoc (:lines (:text ed)) r (str/replace line "DONE " "TODO "))))
+      :else (c/message ed "Select a checklist heading."))))
 (defn rows [ed]
   (when-let [pr (active-presentation ed)]
     (if (= pr rail)
@@ -66,15 +89,23 @@
   (let [o (object ed)]
     (case (:type o)
       "desk/scope" (docs/visit ed (:key o))
-      "omega/task" (if (= "rail" (get-in ed [:doc :data :desk])) (-> ed (c/effect {:kind :visit :pane :main :path (str "task:" (:key o))}) (focus-next 1)) (docs/visit ed (str "task:" (:key o))))
-      (c/message ed "Select a task or place."))))
+      "omega/task" (cond (= "rail" (get-in ed [:doc :data :desk])) (-> ed (c/effect {:kind :visit :pane :main :path (str "task:" (:key o))}) (focus-next 1))
+                         (= views/artifact (active-presentation ed)) (-> ed (c/effect {:kind :visit :pane :aside :path (str "task:" (:key o))}) (focus-next 1))
+                         :else (docs/visit ed (str "task:" (:key o))))
+      (if (= views/artifact (active-presentation ed)) (toggle-todo ed)
+        (if (contains? #{"workspace/file" "workspace/folder" "workspace/place"} (:type o)) (docs/visit ed (:key o) (:goto o))
+          (c/message ed "Select a task or place."))))))
 (defn new-task [ed]
   (let [o (object ed) id (or (:place o) (get-in ed [:doc :data :place]) "omega")]
     (docs/owned-prompt ed "workbench" (str "New task in " id " — goal: ")
       (fn [ed goal] (if (= "" (trim goal)) (c/message ed "Task cancelled.")
-        (c/effect ed {:kind :intent :intent "task/open" :args {:goal goal :path (str "place:" id)} :then :desk-created}))))))
+        (c/effect ed {:kind :intent :intent "task/open" :args {:goal goal :title (first (split goal "\n")) :path (str "place:" id)} :then :desk-created}))))))
 (def commands
-  {:desk/open {:doc "Open the visible task, or scope to the visible place." :run open-object}
+  {:desk/artifact {:doc "Open the task's primary working file beside its conversation." :run (fn [ed] (show-artifact ed false))}
+   :desk/home {:doc "Open the task's anchored plan beside its conversation." :run (fn [ed] (show-artifact ed true))}
+   :desk/conversation {:doc "Return to the conversation; refuse to discard artifact drafts." :run conversation-only}
+   :desk/toggle {:doc "Toggle the checklist item here, as an ordinary text edit." :run toggle-todo}
+   :desk/open {:doc "Open the visible task, or scope to the visible place." :run open-object}
    :desk/new {:doc "Start a task in this place; enter its goal." :run new-task}
    :desk/source {:doc "Toggle source inspection for the current presentation."
                  :run (fn [ed] (update-in ed [:pkg-state "workbench" :source?] not))}
@@ -85,7 +116,9 @@
   {:name "workbench" :doc "Presented task management: scoped rail and conversations, over present."
    :commands commands
    :keys (fn [ed] {:normal (merge {"g v" :desk/source}
-                             (when (active-presentation ed) {"Enter" :desk/open "n" :desk/new "g f" :desk/place}))})
+                             (when (or (= "task" (get-in ed [:doc :data :desk])) (= "omega/task" (:type (object ed)))) {"g b" :desk/artifact "g H" :desk/home})
+                             (when (= views/artifact (active-presentation ed)) {"g t" :desk/conversation})
+                             (when (and (active-presentation ed) (not= views/conversation (active-presentation ed))) {"Enter" :desk/open "n" :desk/new "g f" :desk/place}))})
    :on-event (fn [old new ev]
                (cond
                  (and (= :intent-result (:type ev)) (:ok? ev) (= :desk-created (:then ev)))
@@ -98,12 +131,13 @@
                    (assoc new :sels [{:anchor q :head q}] :primary 0))
                  :else new))
    :intercept (fn [ed ev]
-                (if (and (= :key (:type ev)) (= :normal (:mode ed)) (= ":" (:key ev)))
-                  (km/run-command ed :command-line)
-                (when-let [pr (active-presentation ed)]
+                (cond
+                  (and (= :key (:type ev)) (= :normal (:mode ed)) (= ":" (:key ev))) (km/run-command ed :command-line)
+                  (and (= :key (:type ev)) (= :normal (:mode ed)) (or (= "g" (:key ev)) (= "g" (first (:pending ed))))) (km/key-event ed (:key ev))
+                  :else (when-let [pr (active-presentation ed)]
                   (cond
-                    (and (= :key (:type ev)) (= :normal (:mode ed)) (empty? (:pending ed)) (= "Enter" (:key ev))) (open-object ed)
-                    (and (= :key (:type ev)) (= :normal (:mode ed)) (empty? (:pending ed)) (= "n" (:key ev))) (new-task ed)
+                    (and (not= pr views/conversation) (= :key (:type ev)) (= :normal (:mode ed)) (empty? (:pending ed)) (= "Enter" (:key ev))) (open-object ed)
+                    (and (not= pr views/conversation) (not= pr views/artifact) (= :key (:type ev)) (= :normal (:mode ed)) (empty? (:pending ed)) (= "n" (:key ev))) (new-task ed)
                     (contains? #{:scroll-slots :scroll-to-slot} (:type ev))
                     (let [slots (:slots (p/screen-of pr ed))
                           top (p/first-slot-of-row slots (:top (:view ed)))
@@ -112,6 +146,6 @@
                       (assoc ed :view (-> (:view ed) (dissoc :pin) (assoc :top r :anchor {:row r :off (- y (p/first-slot-of-row slots r)) :sub 0}))))
                     :else nil))))
    :render (fn [ed] (when-let [pr (active-presentation ed)] (assoc (p/render pr ed) :presentation (:name pr))))
-   :provides {:layouts {"desk" desk}
+   :provides {:layouts {"desk" desk "desk-artifact" artifact-layout}
               :links {"omega/task" (fn [o] (str "task:" (:key o)))}
               :navigation {:rows rows :reveal reveal :outline? (fn [ed] (when (active-presentation ed) false))}}})

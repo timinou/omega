@@ -346,7 +346,7 @@
   ([sys] (intents sys {}))
   ([sys opts]
    {"task/open"
-    (fn [{:keys [goal path block scope cwd]}]
+    (fn [{:keys [goal title path block scope cwd]}]
       (let [goal (str/trim (str goal))]
         (if (str/blank? goal)
           {:ok false :message "a task needs a goal (the block's text)"}
@@ -355,7 +355,7 @@
                 wd (or (:cwd context) (if-let [resolve (:working-directory opts)] (resolve path cwd)
                      (Path/expand (or cwd (when (and path (not (str/includes? path ":"))) (Path/dirname (Path/expand path base))) base) base)))
                 origin (when (and path block) {:path path :block block})
-                id (task/open! sys (cond-> {:goal goal :cwd wd :home origin :place (:place context)}
+                id (task/open! sys (cond-> {:goal goal :title title :cwd wd :home origin :place (:place context)}
                                     (seq scope) (assoc :scope (if (string? scope) (vec (str/split scope " ")) (vec scope)))))
                 home (if (and path block) {:path path :block block} {:path "omega:scratch" :block id})]
             (when-not origin

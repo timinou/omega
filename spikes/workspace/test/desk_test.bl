@@ -1,5 +1,5 @@
 (ns workspace-desk-test (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
-                                [place.model :as place] [ws.desk-server :as desk] [clojure.string]))
+                                [place.model :as place] [ws.desk-server :as desk] [clojure.string] [links.model]))
 (deftest rail-scopes-descendants-and-keeps-task-objects-addressable
   (let [e (env/open {:schema place/schema}) sys (task/start-system e {:root "/tmp" :step (loop/scripted [(loop/say "waiting")])})]
     (place/put! e {:id "root" :root "/tmp"}) (place/put! e {:id "child" :parent "root"})
@@ -10,4 +10,18 @@
       (is (= #{a b} (set (map :key (filter (fn [o] (= "omega/task" (:type o))) (:objects (desk/scope-doc sys "all")))))))
       (is (= "root" (get-in (desk/scope-doc sys "root") [:data :scope])))
       (is (= "No tasks here yet. Press n to start one." (some (fn [line] (when (= line "No tasks here yet. Press n to start one.") line)) (clojure.string/split (:text (desk/scope-doc sys "missing")) "\n")))))
+    (task/stop-system! sys) (env/close! e)))
+
+(deftest task-context-addresses-working-files-and-home-independently
+  (let [e (env/open {:schema (vec (concat place/schema links.model/schema))})
+        sys (task/start-system e {:root "/tmp" :step (loop/scripted [(loop/say "waiting")])})]
+    (place/put! e {:id "a" :root "/tmp"})
+    (let [id (task/open! sys {:goal "work" :title "A readable task" :place "a" :home {:path "work:a/plan.bl.org" :block "stable"}})]
+      (task/await sys id 5000)
+      (links.model/put! e {:id "out" :from {:task id} :kind :output :to {:place "a" :path "board.bl.org"}})
+      (let [ctx (desk/task-context sys id)]
+        (is (= "A readable task" (:task-title ctx)))
+        (is (= "work:a/board.bl.org" (:path (first (:artifacts ctx)))))
+        (is (= "stable" (:block (last (:artifacts ctx)))))
+        (is (= "a" (:place ctx)))))
     (task/stop-system! sys) (env/close! e)))

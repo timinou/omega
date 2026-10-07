@@ -44,3 +44,20 @@ test('new-task result targets main without replacing the scoped rail',()=>{
  assert.equal(g(F.d_editor(fr,K('rail')),'path'),'workspace:all');assert.equal(g(fr,'focus'),K('main'));
  const fx=F.d_take_effects(fr).toArray()[1].toArray().find(e=>g(e,'path')==='task:t-new');assert.equal(g(fx,'pane'),K('main'));
 });
+test('a checklist is presented but toggles its actual editable source',()=>{
+ let ed=P.d_use(M.d_boot('#+TITLE: Checklist\n\n* TODO Ship the board\nKeep this note.\n','work:omega/board.bl.org'),W.d_bl_package);
+ ed=ed.assoc(K('sels'),R.vec(ev(K('anchor'),R.vec(2,0),K('head'),R.vec(2,0))));
+ assert.equal(g(M.d_render(ed),'presentation'),'work-artifact');
+ ed=M.d_handle(ed,key('Enter'));assert.match(R.printStr(g(ed,'text')),/DONE Ship the board/);assert.match(R.printStr(g(ed,'text')),/Keep this note/);
+});
+test('artifact expansion retains the rail and task; closing refuses a local draft',()=>{
+ let fr=F.d_arrange(F.d_single(boot()),W.d_desk);fr=F.d_take_effects(fr).toArray()[0];
+ fr=F.d_handle(fr,ev(K('type'),K('doc'),K('pane'),K('main'),K('path'),'task:t-1',K('text'),'#+TITLE: Task\n\n\n\n* you · 1\nWork\n',K('rev'),'1',K('read-only?'),true,K('data'),ev(K('desk'),'task',K('home'),ev(K('path'),'work:omega/plan.bl.org',K('block'),'anchor'),K('artifacts'),R.vec(ev(K('path'),'work:omega/board.bl.org'))),K('visit?'),true));
+ fr=fr.assoc(K('focus'),K('main'));const rail=F.d_editor(fr,K('rail'));
+ fr=F.d_handle(F.d_handle(fr,key('g')),key('b'));assert.equal(g(g(fr,'layout'),'name'),'desk-artifact');
+ assert.strictEqual(F.d_editor(fr,K('rail')),rail);assert.equal(g(F.d_editor(fr,K('aside')),'path'),'task:t-1');
+ fr=F.d_handle(fr,ev(K('type'),K('doc'),K('pane'),K('main'),K('path'),'work:omega/board.bl.org',K('text'),'#+TITLE: Board\n\n* TODO Ship\n',K('rev'),'1',K('read-only?'),false,K('visit?'),true));
+ fr=F.d_handle(F.d_handle(fr,key('i')),ev(K('type'),K('text'),K('text'),'draft'));
+ fr=F.d_handle(fr,key('Escape'));fr=F.d_handle(F.d_handle(fr,key('g')),key('t'));
+ assert.equal(g(g(fr,'layout'),'name'),'desk-artifact');assert.match(g(F.d_focused(fr),'message'),/discard a draft/);
+});

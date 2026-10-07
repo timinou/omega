@@ -23,7 +23,8 @@ def wait(js):
  raise AssertionError(js+'\n'+ab('eval','document.body.innerText'))
 def contains(s):wait('document.body.innerText.includes('+json.dumps(s)+')')
 def key(k):ab('press',k)
-def cmd(s):key(':');ab('type','#input-sink',s);key('Enter')
+def cmd(s):
+ key(':');wait('blEd.state().get(blEd.K("mode")).name === "command" && blEd.state().get(blEd.K("minibuf")).get(blEd.K("kind")).name === "eval"');ab('type','#input-sink',s);key('Enter');wait('blEd.state().get(blEd.K("mode")).name !== "command" && !blEd.state().get(blEd.K("awaiting"))')
 def photo(name):ab('screenshot',str(proof/name))
 def open():
  ab('open',f'http://127.0.0.1:{a.port}/?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench&layout=desk');ab('set','viewport','1500','950')
@@ -46,5 +47,32 @@ def one():
  contains('Review the release notes');wait('blEd.frame().get(blEd.K("focus")).name === "main"');photo('19-new-task-goal.png')
  cmd('(ed/unuse "workbench")');contains('removed workbench');wait('document.querySelectorAll(".pane.editor").length === 1');photo('20-workbench-unloaded.png')
  print('slice 1: presented rail, preview, focus, scoped tasks, goal-only creation, unload passed',flush=True)
+def document(path):return ev('fetch("/api/doc?path="+encodeURIComponent('+json.dumps(path)+')).then(r=>r.json())')
+def task_title(title):
+ r=ev('(()=>{const {K}=blEd;return [...blEd.state().get(K("obj-index"))].find(([r,o])=>o.get(K("title"))==='+json.dumps(title)+')?.[0]})()')
+ assert isinstance(r,int),r;cmd('(ed/goto '+str(r+1)+')')
+def two():
+ open();task_title('Finish the Beam Lisp checklist');contains('Waiting for your answer');key('Enter')
+ wait('blEd.frame().get(blEd.K("focus")).name === "main"');contains('g b  board.bl.org')
+ key('i');ab('type','#input-sink','Keep this reply draft');key('Alt+h');key('g');key('b')
+ wait('document.querySelectorAll(".pane.editor").length === 3');contains('beam-lisp board')
+ assert ev('blEd.R.printStr(blEd.F.d_editor(blEd.frame(),blEd.K("aside")).get(blEd.K("minibuf"))).includes("Keep this reply draft")')
+ photo('21-working-file-and-retained-reply.png');assert ev('document.activeElement.id')=='input-sink'
+ cmd('(ed/goto 4)');assert ev('blEd.state().get(blEd.K("sels")).nth(0).get(blEd.K("head")).nth(0)')==3;key('A');wait('blEd.state().get(blEd.K("mode")).name === "insert"');ab('type','#input-sink',' HUMAN DRAFT');key('Escape');contains('HUMAN DRAFT')
+ assert 'HUMAN DRAFT' not in document('work:beam-lisp/board.bl.org')['text']
+ key('g');key('t');contains('discard a draft');assert ev('blEd.frame().get(blEd.K("layout")).get(blEd.K("name"))')=='desk-artifact'
+ key('Alt+l');key('Escape');cmd('(ed/goto 1)');key('y');contains('answered');contains('✓ DONE')
+ key('Alt+h');contains('HUMAN DRAFT');wait('document.body.innerText.includes("✓ Check this folder") || document.body.innerText.includes("DONE Check this folder")')
+ photo('22-presented-shared-edit.png');key('Control+s');contains('Published shared text')
+ assert 'TODO Check this folder' in document('work:omega/board.bl.org')['text']
+ key('g');key('c');contains('Changes');contains('revision 2');photo('23-presented-changes.png')
+ row('buffer/op','@1');key('u');contains('reverted');key('Control+o');contains('HUMAN DRAFT');photo('24-presented-selective-undo.png')
+ key('g');key('t');wait('document.querySelectorAll(".pane.editor").length === 2');contains('g H  Plan')
+ key('g');key('H');contains('Two working directories');wait('document.querySelectorAll(".pane.editor").length === 3');contains('TASK');photo('25-plan-task-presentation.png')
+ assert ev('blEd.state().get(blEd.K("sels")).nth(0).get(blEd.K("head")).nth(0)')==8
+ key('g');key('v');contains('#+begin_task');photo('26-plan-source-inspection.png');key('g');key('v')
+ cmd('(ed/unuse "workbench")');contains('removed workbench');wait('document.querySelectorAll(".pane.editor").length === 1');photo('27-artifact-package-unloaded.png')
+ print('slice 2: retained composer, artifact draft protection, shared agent edit, attribution, selective undo, anchored presented plan, source toggle and unload passed',flush=True)
 if a.slice==1:one()
+if a.slice==2:two()
 assert not ab('errors'),ab('errors')

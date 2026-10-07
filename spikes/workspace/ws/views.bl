@@ -1,0 +1,104 @@
+; Domain presenters reuse present's readtable, marks, method advice and source mapping.
+(ns ws.views
+  (:require [ed.core :as c] [ed.text :as t] [ed.omega :as omega]
+            [pp.present :as p] [pp.read :as rd] [pp.conv :as conv]))
+(defn- text [ctx r] (t/line (:text (:ed ctx)) r))
+(defn- info [o ctx] (get (:obj-index (:ed ctx)) (:from o)))
+(defn- mark [r key segs role] (p/line-mark r segs key {:role role}))
+(defn- title [ed] (let [s (t/line (:text ed) 0)] (if (starts-with? s "#+TITLE: ") (subs s 9) s)))
+(defn- clipped [s n] (let [s (str (or s ""))] (if (> (count s) n) (str (subs s 0 (dec n)) "…") s)))
+(defn task-header
+  "Around advice: change the header, retaining conversation's threads and dock."
+  [o ctx next]
+  (let [ed (:ed ctx) d (get-in ed [:doc :data]) artifacts (:artifacts d)
+        content (next o ctx)]
+    (p/stack (concat
+      [(p/line-mark 0 [{:text (or (:task-title d) (title ed)) :kind :question}] "desk/task/title" {:size 2 :role :question})
+       (mark 1 "desk/task/context" [{:text (str (if (:ask d) "⚑ Needs you" (or (:task-status d) "Task")) "  ·  " (:place d)) :kind :who}
+                                   {:text (str "  ·  " (:task-id d)) :kind :meta}] :meta)
+       (mark 2 "desk/task/artifacts" [{:text (str "g b  " (or (:label (first artifacts)) "Working file")) :kind :strong}
+                                      {:text "    g H  Plan / home    g r  References" :kind :aside}] :meta)
+       (mark 3 "desk/task/actions" [{:text "? actions    Alt+h/l panes    i reply" :kind :aside}] :aside)]
+      (rest (:kids content))))))
+(def conversation
+  (update conv/presentation :around conj {:type :doc :fn task-header}))
+(defn present-task-block [o ctx]
+  (let [ed (:ed ctx) b (:span o) editing? (and (= :insert (:mode ed)) (<= (:from o) (first (c/cursor ed))) (< (first (c/cursor ed)) (:to o)))]
+    (if editing? (p/stack (map p/text-mark (range (:from o) (:to o))))
+      (p/card (:key o) "focus"
+        (concat [(mark (:from o) (str (:key o) "/label") [{:text "TASK" :kind :label}
+                                                       {:text "    C-Enter start / open" :kind :aside}] :label)]
+                (map p/text-mark (range (inc (:from o)) (dec (:to o))))
+                [(mark (dec (:to o)) (str (:key o) "/gap") [{:text " " :kind :prose}] :aside)])))))
+(defn present-heading [o ctx]
+  (let [ed (:ed ctx) b (:span o) todo (:todo b) r (:from o)
+        editing? (and (= :insert (:mode ed)) (= r (first (c/cursor ed))))
+        head (if editing? (p/text-mark r)
+               (mark r (str (:key o) "/head")
+                 [{:text (str (cond (contains? #{:todo "TODO"} todo) "○ " (contains? #{:done "DONE"} todo) "✓ " :else "") (:title b))
+                   :kind (if todo (if (contains? #{:done "DONE"} todo) :done :strong) :rail-title)}] :rail-title))]
+    (p/head-card (:key o) (if (contains? #{:done "DONE"} todo) "you" "thread")
+      (concat [head] (when (not= 0 ((:lod ctx) o)) (map (fn [k] (p/present k ctx)) (:kids o)))))))
+(defn present-task-result [o ctx]
+  (let [ed (:ed ctx) ref (first (keep (fn [r] (when-let [m (omega/reference-at (text ctx r))] (assoc m :row r))) (range (:from o) (:to o))))
+        card (when ref (get (:cards ed) (:id ref)))]
+    (if (nil? ref) (p/stack (p/rows-with-kids o ctx))
+      (p/card (:key o) "row" [(mark (:row ref) (str (:key o) "/task")
+                               [{:text (str "↗ " (or (:title card) (:goal ref) (:id ref))) :kind :strong}
+                                {:text (str "  ·  " (or (:word card) (:status card) "task") "  · Enter conversation") :kind :aside}] :rail-title)]))))
+(defn artifact-doc [o ctx]
+  (let [ed (:ed ctx) path (:path ed) outline (get-in ed [:struct :outline])
+        todo (count (filter (fn [h] (contains? #{:todo "TODO"} (:todo h))) outline)) done (count (filter (fn [h] (contains? #{:done "DONE"} (:todo h))) outline))]
+    (p/stack (concat [(p/line-mark 0 [{:text (title ed) :kind :question}] "artifact/title" {:size 2 :role :question})
+                     (mark 1 "artifact/path" [{:text (str path "  ·  " (if (c/dirty? ed) "unpublished edits" "saved")) :kind :meta}] :meta)
+                     (mark 1 "artifact/actions" [{:text (if (pos? (+ todo done)) (str todo " open · " done " complete    ") "") :kind :who}
+                                                 {:text "Enter toggle · i edit · C-s publish · g t conversation · g v source" :kind :aside}] :aside)]
+                    (map (fn [k] (p/present (if (< (:from k) 2) (assoc k :from 2) k) ctx))
+                         (filter (fn [k] (> (:to k) 2)) (:kids o)))))))
+(def task-readtable [{:type :desk/task-block :match (fn [b l] (omega/task-block? b)) :attrs (fn [b l] {:key (:id b)})}])
+(def artifact
+  {:name "work-artifact" :fill? false :sticky-heads? true :readtable task-readtable
+   :table (merge p/default-table {:doc artifact-doc :section present-heading :desk/task-block present-task-block :result present-task-result})
+   :around [] :isa (assoc p/ISA :desk/task-block :block)
+   :lod-of (fn [ed tree] (p/default-lod ed)) :focus-of (fn [ed tree] (first (c/cursor ed)))})
+(defn present-target [o ctx]
+  (let [i (info o ctx) s (text ctx (:from o))]
+    (p/card (:key o) "row" [(mark (:from o) (str (:key o) "/target")
+      [{:text (str (case (:type i) "workspace/folder" "▸ " "workspace/place" "◈ " "omega/task" "↗ " "↗ ") (trim s)) :kind :strong}] :rail-title)])))
+(defn place-doc [o ctx]
+  (let [ed (:ed ctx) d (get-in ed [:doc :data])]
+    (p/stack (concat [(p/line-mark 0 [{:text (title ed) :kind :question}] "place/title" {:size 2 :role :question})
+                     (mark 1 "place/identity" [{:text (str "PLACE  " (:place d)) :kind :label}
+                                              {:text "    n new task · g p parent · g r references" :kind :aside}] :meta)]
+                    (map (fn [k] (p/present k ctx)) (filter (fn [k] (>= (:from k) 4)) (:kids o)))))))
+(defn section [o ctx]
+  (p/stack (concat [(mark (:from o) (str (:key o) "/section") [{:text (:title (:span o)) :kind :label}] :label)]
+                  (map (fn [k] (p/present k ctx)) (:kids o)))))
+(def place-view
+  (assoc artifact :name "work-place" :readtable [] :sticky-heads? false
+    :table (merge p/default-table {:doc place-doc :section section :workspace/file present-target :workspace/folder present-target
+                                  :workspace/place present-target :omega/task present-target})))
+(defn changes-doc [o ctx]
+  (let [ed (:ed ctx) path (get-in ed [:doc :data :buffer-path])]
+    (p/stack (concat [(p/line-mark 0 [{:text "Changes" :kind :question}] "changes/title" {:size 2 :role :question})
+                     (mark 1 "changes/context" [{:text (str path "    u undo selected change · C-o back") :kind :aside}] :meta)]
+                    (map (fn [k] (p/present k ctx)) (filter (fn [k] (= :buffer/op (:type k))) (:kids o)))))))
+(defn change-card [o ctx]
+  (let [r (:from o) head (subs (text ctx r) 2) parts (split head " · ") actor (nth parts 2 "")
+        human? (starts-with? actor "human:") old (text ctx (+ r 2)) new (text ctx (+ r 3))]
+    (p/head-card (:key o) "focus"
+      [(mark r (str (:key o) "/who") [{:text (str (if human? "You" actor) " · " (nth parts 1 "change")) :kind :strong}
+                                      {:text (str "    revision " (first parts) "    u undo") :kind :meta}] :rail-title)
+       (mark r (str (:key o) "/old") [{:text old :kind :aside}] :aside)
+       (mark r (str (:key o) "/new") [{:text new :kind :answer}] :answer)
+       (mark r (str (:key o) "/gap") [{:text " " :kind :prose}] :aside)])))
+(def changes
+  (assoc place-view :name "work-changes" :table (merge p/default-table {:doc changes-doc :buffer/op change-card})))
+(defn choose [ed]
+  (let [path (str (:path ed))]
+    (cond
+      (= "task" (get-in ed [:doc :data :desk])) conversation
+      (and (starts-with? path "work:") (ends-with? path ".bl.org")) artifact
+      (starts-with? path "place:") place-view
+      (starts-with? path "changes:") changes
+      :else nil)))

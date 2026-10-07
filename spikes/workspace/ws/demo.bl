@@ -43,13 +43,20 @@
         opts {:state (str root "/.omega/ed")
               :task-context (fn [path cwd] (places/context sys path cwd))}
         r (serve/start! {:port port :root root :web (str home "/vendor/bl-ed/web")
-                         :providers (merge (pv/providers sys opts) (places/providers sys) (links/providers sys) (buffers/providers sys server) (desk/providers sys))
+                         :providers (merge (pv/providers sys opts) (places/providers sys) (links/providers sys) (buffers/providers sys server) (desk/providers sys (get (pv/providers sys opts) "task")))
                          :intents (merge (pv/intents sys opts) (places/intents sys) (links/intents sys) (buffers/intents sys server))})]
     (when (:experience options)
       (doseq [[goal title id anchor] [["Update the omega board." "Refresh the Omega board" "omega" "omega-board"]
                                     ["Update the beam-lisp board." "Finish the Beam Lisp checklist" "beam-lisp" "beam-board"]]]
         (when-not (some (fn [t] (= goal (:goal t))) (task/all sys))
           (task/open! sys {:goal goal :title title :place id :cwd (get places id) :home {:path "work:omega/plan.bl.org" :block anchor}}))))
+    (when (:experience options)
+      (doseq [t (task/all sys)]
+        (when (contains? #{"Update the omega board." "Update the beam-lisp board."} (:goal t))
+          (let [id (str (:id t) "-board")]
+            (when-not (some (fn [m] (= id (:id m))) (link/all e {:task (:id t)}))
+              (link/put! e {:id id :from {:task (:id t)} :kind :output
+                           :to {:place (:place t) :path "board.bl.org"}}))))))
     (println (str (:url r) (if (:experience options)
       "?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench&layout=desk"
       "?file=places:&use=present,dwim,workspace,places,references,buffers&layout=workspace")))
