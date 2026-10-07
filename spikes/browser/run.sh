@@ -18,7 +18,11 @@ for (const port of [8796,8797]) {
 }
 JS
 mkdir -p "$BROWSER_DEMO_ROOT"
-cp "$here/demo.bl.org" "$BROWSER_DEMO_ROOT/demo.bl.org"
+if [ "${BROWSER_LIVE:-0}" = 1 ]; then
+  cp "$here/procurement/"* "$BROWSER_DEMO_ROOT/"
+else
+  cp "$here/demo.bl.org" "$BROWSER_DEMO_ROOT/demo.bl.org"
+fi
 world_pid= proxy_pid=
 cleanup() {
   [ -z "$proxy_pid" ] || kill -TERM "$proxy_pid" 2>/dev/null || true

@@ -1,7 +1,8 @@
 ; Isolated, in-memory Omega world. Scripted model, real browser tool and task facts.
 (ns browser.world
   (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
-            [omega.ed.providers :as pv] [bl-ed.serve :as serve]))
+            [omega.ed.providers :as pv] [omega.llm :as llm]
+            [omega.codemode :as cm] [omega.cli :as cli] [bl-ed.serve :as serve]))
 (def home (System/get_env "OMEGA_HOME"))
 (def root (System/get_env "BROWSER_DEMO_ROOT"))
 (def browser-tool
@@ -13,13 +14,24 @@
            out (elem r 0) exit (elem r 1)]
        (if (= 0 exit) {:ok out :done true} {:error out})))})
 (def e (env/open))
+(def live? (= "1" (System/get_env "BROWSER_LIVE")))
+(def model (when live? (llm/from-env home)))
 (def sys (task/start-system e
-  {:root root :tools [browser-tool]
-   :step (fn [req]
-     (if (some (fn [b] (= :tool-result (:type b))) (:content (last (:messages req))))
-       (loop/say "Browser research stopped with an error; inspect browser:sessions and its event log.")
-       (loop/call-tool "browser/research" {} "local-browser")))}))
+  (if live?
+    {:root root :tools cm/tools :step (llm/step model) :max-steps 25
+     :system-prompt (str cli/SYSTEM-PROMPT
+       " For this procurement run use your single eval tool. Read instructions.bl.org first. "
+       "Do not spawn tasks. The browser-tool.mjs shell helper reaches the visible task-owned browser. "
+       "Generate reusable curated beam-lisp functions and execute them; write the requested files.")}
+    {:root root :tools [browser-tool]
+     :step (fn [req]
+       (if (some (fn [b] (= :tool-result (:type b))) (:content (last (:messages req))))
+         (loop/say "Browser research stopped with an error; inspect browser:sessions and its event log.")
+         (loop/call-tool "browser/research" {} "local-browser")))})))
+(def intents (assoc (pv/intents sys) "browser/run-proof"
+  (fn [a] {:task (task/view sys (:id a)) :turns (loop/turns sys (:id a))
+           :model (when live? (:model model)) :live live?})))
 (def server (serve/start! {:port 8796 :root root :web (str home "/vendor/bl-ed/web")
-                          :providers (pv/providers sys) :intents (pv/intents sys)}))
+                          :providers (pv/providers sys) :intents intents}))
 (println (str "Isolated browser demo world: " (:url server)))
 (receive :never nil)

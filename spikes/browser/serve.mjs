@@ -74,6 +74,27 @@ const server=http.createServer(async(req,res)=>{
     if(!['127.0.0.1:8797','localhost:8797'].includes(host))return json(res,403,{ok:false,message:'Invalid host'});
     if(req.method==='POST' && req.headers.origin && ![`http://${host}`,'http://127.0.0.1:8797','http://localhost:8797'].includes(req.headers.origin))return json(res,403,{ok:false,message:'Invalid origin'});
     const u=new URL(req.url,`http://${host}`);const p=u.searchParams.get('path');
+    if(u.pathname==='/browser/tool' && req.method==='POST') {
+      const b=await body(req);
+      if(!validId(b.task))throw Error('Invalid task ID');
+      const verbs=new Set(['open','snapshot','links','eval','click','fill','get','scroll']);
+      if(!verbs.has(b.action) || !Array.isArray(b.args) || !b.args.every(x=>typeof x==='string'))throw Error('Invalid browser operation');
+      for(let i=0;i<40 && !manager.pending.has(b.task) && !manager.tasks.has(b.task);i++)await new Promise(r=>setTimeout(r,50));
+      const config=manager.pending.get(b.task) || {id:`model-${b.task}`,mode:'headless'};
+      let s=manager.tasks.has(b.task)?manager.get(manager.tasks.get(b.task)):null;
+      if(!s)s=await manager.open({...config,task:b.task,url:b.action==='open'?b.args[0]:'https://ora-ventures.com/en/'});
+      if(s.control!=='agent')throw Error('Browser is paused for human control; resume before continuing.');
+      let result;
+      if(b.action==='open')result={snapshot:await manager.navigate(s,b.args[0]),url:s.url};
+      else result=await manager.lock(s,async()=>{
+        const args=b.action==='links'?['eval','JSON.stringify([...document.querySelectorAll("a[href]")].map(a=>({text:a.innerText.trim(),url:a.href})).filter(a=>a.text).slice(0,100))']:
+          b.action==='snapshot'?['snapshot','-c']:[b.action,...b.args];
+        const result=await manager.run(s,args);
+        if(['click','fill','scroll'].includes(b.action))await manager.capture(s);
+        manager.event(s,'model/browser-operation',{action:b.action});return result;
+      });
+      return json(res,200,{ok:true,result});
+    }
     if(u.pathname==='/browser/research' && req.method==='POST') {
       const b=await body(req);if(!validId(b.task))throw Error('Invalid task ID');
       return json(res,200,{ok:true,result:await manager.research(b.task)});
