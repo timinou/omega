@@ -1,0 +1,97 @@
+; Contextual actions are ordinary named commands and owned prompts.
+(ns ws.actions (:require [ed.core :as c] [ed.docs :as docs] [ed.omega :as omega]
+                        [ed.org :as org] [ed.keymap :as km] [ed.pkg :as pkg]))
+(defn here [ed] (or (docs/object-at ed) (omega/object-at ed)))
+(defn context [ed]
+  (let [o (here ed) d (get-in ed [:doc :data])]
+    {:task (or (:task-id d) (get-in d [:link-source :task]) (when (= "omega/task" (:type o)) (:key o)))
+     :place (or (:place o) (:place d) (get-in d [:link-source :place])
+                (when (starts-with? (str (:path ed)) "work:") (first (split (subs (:path ed) 5) "/"))))
+     :link-id (:link-id o) :operation (when (= "buffer/op" (:type o)) (:key o))}))
+(defn local-actions [ed]
+  (let [ctx (context ed) o (here ed) task? (:task ctx) place? (:place ctx)
+        artifact? (starts-with? (str (:path ed)) "work:")
+        block (org/block-at (get-in ed [:struct :blocks]) (first (c/cursor ed)))]
+    (vec (concat
+      (when (and task? (or (get-in ed [:doc :data :artifacts]) (:artifacts o) (:home o))) [{:key "b" :name "Working file" :command :desk/artifact :doc "Keep the conversation beside its primary file"}
+                   {:key "h" :name "Plan / home" :command :desk/home :doc "Return to the exact task block"}
+                    ])
+      (when task? [{:key "r" :name "References" :command :desk/references :doc "Inspect inputs, outputs and context"}
+                   {:key "a" :name "Attach reference" :command :desk/link :doc "Choose a relationship and a file"}
+                   {:key "c" :name "Cancel task" :command :desk/cancel :doc "Confirm cancellation explicitly"}])
+      (when place? [{:key "p" :name "Inspect place" :command :desk/place :doc "Files, subplaces and inherited settings"}
+                    {:key "n" :name "New task" :command :desk/new :doc "Enter a goal in this place"}
+                    {:key "f" :name "New subplace / attach folder" :command :desk/subplace :doc "Name it; inherit or attach a directory"}])
+      (when (:link-id ctx) [{:key "d" :name "Remove reference" :command :desk/unlink :doc "Confirm removal of this relationship"}])
+      (when (:operation ctx) [{:key "u" :name "Undo this change" :command :buffers/undo :doc "Preserve independent later edits"}])
+      (when artifact? [{:key "t" :name "Conversation" :command :desk/conversation :doc "Close the artifact only if its draft is published"}
+                       {:key "e" :name "Edit source here" :command :insert :doc "This view is still the same editable document"}
+                       {:key "s" :name "Publish" :command :buffers/publish :doc "Save against this buffer revision"}
+                       {:key "v" :name "Inspect source" :command :desk/source :doc "Toggle the underlying org text"}])
+      (when (omega/task-block? block) [{:key "o" :name "Start / open task" :command :eval-cell :doc "Run the task block at the cursor"}])))))
+(defn available
+  "Loaded packages contribute action values; later command definitions win."
+  [ed]
+  (reduce (fn [out p]
+    (if-let [f (get-in p [:provides :actions])]
+      (reduce (fn [out a] (conj (vec (remove (fn [q] (= (:command q) (:command a))) out)) a)) out (f ed)) out))
+    [] (pkg/packages ed)))
+(defn menu [ed] (assoc-in ed [:pkg-state "workbench" :menu?] true))
+(defn dismiss [ed] (update-in ed [:pkg-state "workbench"] dissoc :menu?))
+(defn menu-key [ed ev]
+  (when (and (get-in ed [:pkg-state "workbench" :menu?]) (contains? #{:key :text} (:type ev)))
+    (if (= "Escape" (:key ev)) (dismiss ed)
+      (if-let [action (first (filter (fn [a] (= (:key a) (or (:key ev) (:text ev)))) (available ed)))]
+        (docs/guard ed (km/run-command (dismiss ed) (:command action)))
+        (c/message ed "Choose an action's letter, or Escape to close.")))))
+(defn busy? [ed] (some? (:minibuf ed)))
+(defn attach-reference [ed]
+  (let [{:keys [task place]} (context ed) from (cond task {:task task} place {:place place})]
+    (cond (busy? ed) (c/message ed "Finish or cancel the current prompt first.")
+          (nil? from) (c/message ed "Open a task or place before attaching a reference.")
+          :else
+          (docs/owned-prompt ed "workbench" "Reference — i input / o output / c context: "
+            (fn [ed choice]
+              (let [kind (get {"i" :input "input" :input "o" :output "output" :output "c" :context "context" :context} (trim choice))]
+                (if (nil? kind) (c/message ed "Use i, o or c; no reference was added.")
+                  (docs/owned-prompt ed "workbench" "File or document — e.g. board.bl.org or task:t-1: "
+                    (fn [ed address]
+                      (let [address (trim address)
+                            to (cond (starts-with? address "task:") {:task (subs address 5)}
+                                     (starts-with? address "place:") {:place (subs address 6)}
+                                     (starts-with? address "@") {:path (str "work:" (subs address 1))}
+                                     (some? (index-of address ":")) {:path address}
+                                     place {:place place :path address}
+                                     :else {:path address})
+                            id (str (or task place) "-" (name kind) "-" (mod (hash (pr-str to)) 100000000))]
+                        (if (= "" address) (c/message ed "Reference cancelled.")
+                          (c/effect ed {:kind :intent :intent "links/put"
+                                        :args {:text (pr-str {:id id :from from :kind kind :to to})} :then :desk-linked}))))))))))))
+(defn remove-reference [ed]
+  (if-let [id (:link-id (context ed))]
+    (docs/owned-prompt ed "workbench" "Remove this reference? type remove: "
+      (fn [ed answer] (if (= "remove" (trim answer))
+        (c/effect ed {:kind :intent :intent "links/remove" :args {:id id} :then :show-result})
+        (c/message ed "Reference kept."))))
+    (c/message ed "Select a reference first.")))
+(defn cancel-task [ed]
+  (if-let [id (:task (context ed))]
+    (if (busy? ed) (c/message ed "Finish or cancel the current prompt first.")
+      (docs/owned-prompt ed "workbench" (str "Cancel " id "? type cancel: ")
+        (fn [ed answer] (if (= "cancel" (trim answer))
+          (c/effect ed {:kind :intent :intent "task/cancel" :args {:id id} :then :desk-cancelled})
+          (c/message ed "Task kept.")))))
+    (c/message ed "Select a task first.")))
+(defn subplace [ed]
+  (let [parent (:place (context ed))]
+    (if (busy? ed) (c/message ed "Finish or cancel the current prompt first.")
+      (docs/owned-prompt ed "workbench" "New place — name: "
+        (fn [ed label]
+          (if (= "" (trim label)) (c/message ed "Place cancelled.")
+            (docs/owned-prompt ed "workbench"
+              (if parent "Directory — blank inherits this place; or an existing path: " "Directory — existing path; blank creates a logical place: ")
+              (fn [ed root]
+                (let [slug (join "-" (filter (fn [s] (not= s "")) (split (lower-case (trim label)) " ")))
+                      id (str (when parent (str parent "-")) slug)
+                      m (cond-> {:id id :name (trim label)} parent (assoc :parent parent) (not= "" (trim root)) (assoc :root (trim root)))]
+                  (c/effect ed {:kind :intent :intent "place/put" :args {:text (pr-str m)} :then :visit-path}))))))))))

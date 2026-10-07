@@ -61,3 +61,54 @@ test('artifact expansion retains the rail and task; closing refuses a local draf
  fr=F.d_handle(fr,key('Escape'));fr=F.d_handle(F.d_handle(fr,key('g')),key('t'));
  assert.equal(g(g(fr,'layout'),'name'),'desk-artifact');assert.match(g(F.d_focused(fr),'message'),/discard a draft/);
 });
+
+test('context actions are package contributions; a later definition overrides and unload is exact',async()=>{
+ const A=await load('ws.actions');const ed=boot().assoc(K('sels'),R.vec(ev(K('anchor'),R.vec(7,0),K('head'),R.vec(7,0))));
+ assert.ok(A.d_available(ed).toArray().some(a=>g(a,'command')===K('desk/link')));
+ const extra=ev(K('name'),'my-actions',K('provides'),ev(K('actions'),()=>R.vec(ev(K('name'),'My references',K('key'),'r',K('command'),K('desk/references')))));
+ const next=P.d_use(ed,extra);assert.equal(A.d_available(next).toArray().filter(a=>g(a,'command')===K('desk/references')).length,1);
+ assert.equal(g(A.d_available(next).toArray().find(a=>g(a,'command')===K('desk/references')),'name'),'My references');
+ assert.equal(R.printStr(A.d_available(P.d_unuse(next,'my-actions'))),R.printStr(A.d_available(ed)));
+});
+test('menu dispatches named commands and reference prompts produce data without replacing a draft',async()=>{
+ const A=await load('ws.actions');let ed=boot().assoc(K('sels'),R.vec(ev(K('anchor'),R.vec(7,0),K('head'),R.vec(7,0))));
+ ed=M.d_handle(ed,ev(K('type'),K('command'),K('command'),K('desk/actions')));assert.equal(g(g(M.d_render(ed),'overlay'),'kind'),K('actions'));
+ ed=M.d_handle(ed,key('a'));assert.match(g(g(ed,'minibuf'),'prompt'),/input/);
+ ed=M.d_handle(ed,ev(K('type'),K('text'),K('text'),'c'));ed=M.d_handle(ed,key('Enter'));
+ assert.match(g(g(ed,'minibuf'),'prompt'),/File or document/);
+ ed=M.d_handle(ed,ev(K('type'),K('text'),K('text'),'board.bl.org'));ed=M.d_handle(ed,key('Enter'));
+ const fx=M.d_take_effects(ed).toArray()[1].toArray().find(e=>g(e,'intent')==='links/put');
+ assert.match(g(g(fx,'args'),'text'),/:task "t-1"/);assert.match(g(g(fx,'args'),'text'),/:kind :context/);assert.match(g(g(fx,'args'),'text'),/:place "omega"/);
+ const pending=W.d_new_task(boot());const retained=A.d_attach_reference(pending);assert.strictEqual(g(retained,'minibuf'),g(pending,'minibuf'));assert.match(g(retained,'message'),/current prompt/);
+});
+test('guided subplace creation inherits its parent and removal cancels an owned prompt',async()=>{
+ let ed=boot().assoc(K('sels'),R.vec(ev(K('anchor'),R.vec(5,0),K('head'),R.vec(5,0))));
+ ed=M.d_handle(M.d_handle(ed,key('?')),key('f'));
+ ed=M.d_handle(ed,ev(K('type'),K('text'),K('text'),'Release notes'));ed=M.d_handle(ed,key('Enter'));
+ assert.match(g(g(ed,'minibuf'),'prompt'),/blank inherits/);ed=M.d_handle(ed,key('Enter'));
+ const fx=M.d_take_effects(ed).toArray()[1].toArray().find(e=>g(e,'intent')==='place/put');
+ assert.match(g(g(fx,'args'),'text'),/:parent "omega"/);assert.doesNotMatch(g(g(fx,'args'),'text'),/:root/);
+ ed=M.d_handle(M.d_handle(boot().assoc(K('sels'),R.vec(ev(K('anchor'),R.vec(5,0),K('head'),R.vec(5,0)))),key('?')),key('n'));assert.equal(g(g(ed,'minibuf'),'package'),'workbench');
+ const removed=P.d_unuse(ed,'workbench');assert.equal(g(removed,'minibuf'),null);assert.equal(g(removed,'mode'),K('normal'));
+});
+test('folder task creation carries the actual directory and headings wrap without modifying source',async()=>{
+ let ed=P.d_use(M.d_boot('#+TITLE: Directory\ncwd: /tmp/beam/sub\n\n* Files\nboard.bl.org\n','folder:beam/sub'),W.d_bl_package)
+ .assoc(K('doc'),ev(K('read-only?'),true,K('data'),ev(K('place'),'beam',K('root'),'/tmp/beam/sub')))
+ .assoc(K('obj-index'),R.hashMap(4,ev(K('type'),'workspace/file',K('key'),'work:beam/sub/board.bl.org')));
+ assert.match(R.printStr(M.d_render(ed)),/board.bl.org/);
+ ed=W.d_new_task(ed);ed=M.d_handle(ed,ev(K('type'),K('text'),K('text'),'Work here'));ed=M.d_handle(ed,key('Enter'));
+ const fx=M.d_take_effects(ed).toArray()[1].toArray().find(e=>g(e,'intent')==='task/open');assert.equal(g(g(fx,'args'),'cwd'),'/tmp/beam/sub');
+ const V=await load('ws.views');const original=P.d_use(M.d_boot('#+TITLE: This is a long title for an editable board\n\n* TODO Ship\n','work:omega/board.bl.org'),W.d_bl_package);
+ const wide=original.assoc(K('view'),g(original,'view').assoc(K('cols'),100));const narrow=original.assoc(K('view'),g(original,'view').assoc(K('cols'),35));
+ const ws=g(V.d_artifact,'focus-of')(wide,null),ns=g(V.d_artifact,'focus-of')(narrow,null);assert.notEqual(R.printStr(ws),R.printStr(ns));
+ assert.ok(g((await load('pp.present')).d_screen_of(V.d_artifact,narrow),'slots').toArray().length>g((await load('pp.present')).d_screen_of(V.d_artifact,wide),'slots').toArray().length);
+ assert.equal(R.printStr(g(narrow,'text')),R.printStr(g(wide,'text')));
+});
+
+test('a keyboard checklist toggle participates in the shared-buffer draft protocol',async()=>{
+ const B=await load('buffer.main');let ed=P.d_use(P.d_use(M.d_boot('#+TITLE: Board\n\n** TODO Nested item\n','work:omega/board.bl.org'),B.d_bl_package),W.d_bl_package);
+ ed=ed.assoc(K('doc'),ev(K('rev'),'0',K('read-only?'),false,K('data'),ev(K('buffer'),true)))
+ .assoc(K('sels'),R.vec(ev(K('anchor'),R.vec(2,0),K('head'),R.vec(2,0))));
+ ed=M.d_handle(ed,key('Enter'));assert.match(R.printStr(g(ed,'text')),/DONE Nested item/);
+ const fx=M.d_take_effects(ed).toArray()[1].toArray().find(e=>g(e,'intent')==='buffer/draft');assert.ok(fx);assert.match(g(g(fx,'args'),'text'),/DONE Nested item/);
+});

@@ -48,7 +48,10 @@
         work (dynamic "work")]
     {"places" {:read (fn [_ _] (tree-doc sys)) :rev (fn [_ _] (serve/text-rev (:text (tree-doc sys))))}
      "place" {:read (fn [id _] (place-doc sys id)) :rev (fn [id _] (serve/text-rev (:text (place-doc sys id))))}
-     "folder" (dynamic "folder")
+     "folder" (let [base (dynamic "folder")]
+                (assoc base :read (fn [nm req]
+                  (assoc ((:read base) nm req) :data {:place (first (str/split nm "/"))
+                    :root (ws/resolve-file (p/roots (p/all (:env sys))) nm) :folder nm}))))
      "work" (assoc work :write (fn [nm req text base] ((:write (get (ws/providers sys (p/roots (p/all (:env sys)))) "work")) nm req text base))
                          :eval (fn [nm req id text] ((:eval (get (ws/providers sys (p/roots (p/all (:env sys)))) "work")) nm req id text)))}))
 (defn intents [sys]

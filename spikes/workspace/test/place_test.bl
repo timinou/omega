@@ -56,3 +56,12 @@
     (is (= {:path "place:notes"} (put {:text "{:id \"notes\" :root \"/tmp\" :config {:view :notes}}"})))
     (is (= :notes (get-in (p/all e) ["notes" :config :view])))
     (env/close! e)))
+
+(deftest folder-provider-identifies-the-mounted-place-and-actual-directory
+  (let [root (fixture) e (env/open {:schema p/schema})
+        sys (task/start-system e {:step (loop/scripted [(loop/say "ok")]) :root root})]
+    (p/put! e {:id "a" :root (str root "/a")})
+    (let [d ((:read (get (s/providers sys) "folder")) "a/sub" {})]
+      (is (= "a" (get-in d [:data :place])))
+      (is (= (str root "/a/sub") (get-in d [:data :root]))))
+    (task/stop-system! sys) (env/close! e)))
