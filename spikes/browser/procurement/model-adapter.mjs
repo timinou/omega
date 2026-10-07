@@ -3,6 +3,10 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 const remembered=new Map();
+function toolContent(content,id,name,args) {
+  try {content.push({type:'tool_use',id,name,input:JSON.parse(args)});}
+  catch {content.push({type:'text',text:`Provider returned an incomplete or invalid ${name} tool argument. No tool was executed. Save a smaller complete call or report a partial result.`});}
+}
 export function toResponses(b) {
   const input=[];
   for(const m of b.messages || [])for(const c of m.content || []){
@@ -25,7 +29,7 @@ export function fromResponses(j) {
     if(o.type==='message')for(const c of o.content || [])if(c.type==='output_text')content.push({type:'text',text:c.text});
     if(o.type==='function_call'){
       remembered.set(o.call_id,[...reasoning,o]);reasoning=[];
-      content.push({type:'tool_use',id:o.call_id,name:o.name,input:JSON.parse(o.arguments)});
+      toolContent(content,o.call_id,o.name,o.arguments);
     }
   }
   const cached=j.usage?.input_tokens_details?.cached_tokens || 0;
@@ -52,9 +56,10 @@ export function fromChat(j) {
   if(m.content)content.push({type:'text',text:m.content});
   for(const c of m.tool_calls || []){
     chatReasoning.set(c.id,m.reasoning_content || '');
-    content.push({type:'tool_use',id:c.id,name:c.function.name,input:JSON.parse(c.function.arguments)});
+    toolContent(content,c.id,c.function.name,c.function.arguments);
   }
   const cached=j.usage?.prompt_cache_hit_tokens ?? j.usage?.prompt_tokens_details?.cached_tokens ?? 0;
+  if(!content.length)content.push({type:'text',text:'Provider returned no executable content. This response consumed tokens; preserve partial work and use a smaller follow-up.'});
   return {id:j.id,type:'message',role:'assistant',model:j.model,content,
     stop_reason:j.choices[0].finish_reason==='length'?'max_tokens':content.some(c=>c.type==='tool_use')?'tool_use':'end_turn',
     usage:j.usage?{input_tokens:j.usage.prompt_tokens-cached,cache_read_input_tokens:cached,output_tokens:j.usage.completion_tokens}:undefined};
@@ -73,8 +78,9 @@ if(process.argv[1]?.endsWith('model-adapter.mjs')){
       const j=await r.json();
       const record={at:new Date().toISOString(),status:r.status,id:j.id,model:j.model,usage:j.usage,error:j.error};
       await fs.appendFile(process.env.BROWSER_DEMO_ROOT+'/provider-usage.jsonl',JSON.stringify(record)+'\n',{mode:0o600});
-      res.writeHead(r.status,{'content-type':'application/json'});res.end(JSON.stringify(r.ok?(deepseek?fromChat(j):fromResponses(j)):j));
-    }catch(error){res.writeHead(500,{'content-type':'application/json'});res.end(JSON.stringify({error:{message:error.message}}));}
+      const body=JSON.stringify(r.ok?(deepseek?fromChat(j):fromResponses(j)):j);
+      res.writeHead(r.status,{'content-type':'application/json'});res.end(body);
+    }catch(error){if(res.headersSent){res.end();return;}res.writeHead(500,{'content-type':'application/json'});res.end(JSON.stringify({error:{message:error.message}}));}
   });
   server.listen(8808,'127.0.0.1',()=>console.log('Spike model transport: localhost:8808 -> '+(process.env.BROWSER_PROVIDER || 'openai')+' (usage recorded)'));
 }

@@ -23,3 +23,11 @@ test('chat transport preserves reasoning, tool IDs and DeepSeek cache accounting
  assert.equal(request.messages[1].tool_calls[0].id,'ds-call');
  assert.equal(request.messages[2].tool_call_id,'ds-call');
 });
+test('truncated provider tool arguments retain usage without executing a malformed call',async()=>{
+ const {fromChat}=await import('../procurement/model-adapter.mjs');
+ const result=fromChat({id:'partial',model:'fixture',choices:[{finish_reason:'length',message:{tool_calls:[{id:'partial-call',function:{name:'eval',arguments:'{"code":"unfinished'}}]}}],usage:{prompt_tokens:500,prompt_cache_hit_tokens:300,completion_tokens:8000}});
+ assert.equal(result.stop_reason,'max_tokens');
+ assert.equal(result.content.some(c=>c.type==='tool_use'),false);
+ assert.match(result.content[0].text,/No tool was executed/);
+ assert.deepEqual(result.usage,{input_tokens:200,cache_read_input_tokens:300,output_tokens:8000});
+});
