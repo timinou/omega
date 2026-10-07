@@ -207,6 +207,11 @@
             (if (not (some (fn [id] (= focus id)) ids)) (fail "The requested focus pane is not in this layout.")
               {:layout layout :editors eds :focus focus :effects (vec (concat (:effects fr) cleanup visits))})))))))
 
+(defn- candidate-pane [fr target]
+  (if (vector? target)
+    (first (filter (fn [id] (some? (editor fr id))) target))
+    (when (editor fr target) target)))
+
 (defn- focus-effects
   "Consume generic package-requested spatial focus effects before the host.
    Clamps at edges and skips view panes. Editors, drafts and pending keys stay intact."
@@ -219,8 +224,17 @@
                 (= :frame-focus (:kind e))
                 (let [ids (editor-ids f)
                       i (or (first (filter (fn [i] (= (nth ids i) (:focus f))) (range (count ids)))) 0)
-                      dest (max 0 (min (dec (count ids)) (+ i (:direction e))))]
-                  (assoc f :focus (nth ids dest)))
+                      dest (if (:target e) (candidate-pane f (:target e))
+                             (nth ids (max 0 (min (dec (count ids)) (+ i (:direction e))))))]
+                  (if dest (assoc f :focus dest) f))
+                (= :visit (:kind e))
+                (if-let [target (candidate-pane f (:pane e))]
+                  (let [ed (editor f target) draft? (or (and (not (docs/read-only? ed)) (c/dirty? ed)) (seq (get-in ed [:minibuf :text])))]
+                    (if draft?
+                      (if (= (:path ed) (:path e)) f
+                        (let [message "Publish the file or finish/cancel its prompt before opening another document."]
+                          (-> f (assoc-in [:editors target :message] message) (assoc-in [:editors (:focus f) :message] message))))
+                      (update f :effects conj (assoc e :pane target)))) f)
                 :else (update f :effects conj e))) fr effects)))
 
 (def WINDOW-KEYS

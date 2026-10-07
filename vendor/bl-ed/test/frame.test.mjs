@@ -223,3 +223,23 @@ test('source candidates keep an existing context or retain main when adding the 
  const next=F.d_reconfigure(fr,request);assert.strictEqual(F.d_editor(next,K('aside')),original);assert.equal(get(F.d_editor(next,K('main')),'path'),'');
  assert.equal(get(get(F.d_editor(next,K('aside')),'minibuf'),'text'),'retained reply');
 });
+
+test('visit and focus candidates choose the existing pane and protect its file and prompt drafts',()=>{
+ const visit=ev(K('kind'),K('visit'),K('pane'),R.vec(K('aside'),K('main')),K('path'),'task:new');
+ const focus=ev(K('kind'),K('frame-focus'),K('target'),R.vec(K('aside'),K('main')));
+ const pkg=ev(K('name'),'candidate-test',K('commands'),ev(K('jump'),ev(K('run'),ed=>ed.assoc(K('effects'),(get(ed,'effects')||R.vec()).conj(visit).conj(focus)))));
+ const rail=M.d_take_effects(M.d_handle(M.d_boot('rail','workspace:all'),ev(K('type'),K('use'),K('package'),pkg))).toArray()[0];
+ const layout=extra=>ev(K('name'),'candidate',K('panes'),R.vec(ev(K('id'),K('rail'),K('doc'),K('linked'),K('width'),K('fill')),ev(K('id'),K('main'),K('doc'),K('linked'),K('width'),K('fill')),...extra),K('links'),R.vec());
+ let two=F.d_arrange(F.d_single(rail),layout([]));two=F.d_take_effects(two).toArray()[0];two=two.assoc(K('focus'),K('rail'));
+ let next=F.d_handle(two,ev(K('type'),K('command'),K('command'),K('jump')));
+ assert.equal(get(next,'focus'),K('main'));assert.equal(get(F.d_take_effects(next).toArray()[1].toArray()[0],'pane'),K('main'));
+ let three=F.d_arrange(two,layout([ev(K('id'),K('aside'),K('doc'),K('linked'),K('width'),K('fill'))]));three=F.d_take_effects(three).toArray()[0];three=three.assoc(K('focus'),K('rail'));
+ const file=F.d_editor(three,K('main'));next=F.d_handle(three,ev(K('type'),K('command'),K('command'),K('jump')));
+ assert.equal(get(next,'focus'),K('aside'));assert.strictEqual(F.d_editor(next,K('main')),file);assert.equal(get(F.d_take_effects(next).toArray()[1].toArray()[0],'pane'),K('aside'));
+ const prompt=F.d_editor(three,K('aside')).assoc(K('mode'),K('command')).assoc(K('minibuf'),ev(K('kind'),K('prompt'),K('text'),'keep reply'));
+ const protectedFrame=three.assoc(K('editors'),get(three,'editors').assoc(K('aside'),prompt));next=F.d_handle(protectedFrame,ev(K('type'),K('command'),K('command'),K('jump')));
+ assert.equal(get(get(F.d_editor(next,K('aside')),'minibuf'),'text'),'keep reply');assert.match(get(F.d_focused(next),'message'),/finish\/cancel/);assert.equal(F.d_take_effects(next).toArray()[1].toArray().length,0);
+ const dirty=M.d_handle(M.d_handle(file,ev(K('type'),K('key'),K('key'),'i')),ev(K('type'),K('text'),K('text'),'unsaved'));
+ next=F.d_handle(two.assoc(K('editors'),get(two,'editors').assoc(K('main'),dirty)),ev(K('type'),K('command'),K('command'),K('jump')));
+ assert.strictEqual(get(F.d_editor(next,K('main')),'text'),get(dirty,'text'));assert.equal(F.d_take_effects(next).toArray()[1].toArray().length,0);
+});

@@ -226,3 +226,12 @@ Card watches include references from every visible editor pane and deliver card
 refreshes to each pane. A retained plan therefore updates task status while its
 conversation has focus, rather than waiting for focus to return to the plan.
 The workbench browser tour verifies the terminal reference in the unfocused plan.
+
+2026-10-07: ordinary visits and named focus effects accept ordered pane candidates.
+The frame resolves them before host IO; visit effects refuse to replace an
+unsaved target file or nonempty prompt. Same-address visits preserve that draft
+without resetting it. The generic frame test covers two/three-pane resolution,
+untouched working text, prompt retention and file-draft refusal. Workbench's
+final navigation tour switches tasks while retaining a plan, then proves a
+second task switch preserves a pending reply. Domain policy remains in the
+package; frame decisions use only editor state and effect values.

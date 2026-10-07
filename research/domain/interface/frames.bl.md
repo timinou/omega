@@ -149,3 +149,12 @@ The first existing source editor is retained; `:origin` resolves within the vect
 as usual. This expresses an initial transition from a two-pane layout and later
 transitions within an expanded layout with the same declaration. It never
 copies an editor, and all existing draft and uniqueness checks still apply.
+
+Ordinary `:visit` effects may use an ordered vector for `:pane`, for example
+`[:aside :main]`. The frame resolves the first existing editor before passing
+it to the host. `{:kind :frame-focus :target [:aside :main]}` uses the same
+selection; directional focus remains available. Visits refuse to replace an
+unsaved file or nonempty prompt in the target editor. Revisiting the same
+address while it has a draft is a no-op, retaining the draft. This also applies
+to visits emitted by selection links, so browsing cannot silently erase a
+conversation draft.
