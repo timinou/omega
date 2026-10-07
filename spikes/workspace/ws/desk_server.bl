@@ -1,12 +1,12 @@
 ; Domain documents remain plain text plus typed provider objects.
 (ns ws.desk-server
-  (:require [omega.task :as task] [omega.ui.model :as model] [place.model :as place] [links.model :as link]
+  (:require [omega.task :as task] [omega.env :as env] [omega.ui.model :as model] [place.model :as place] [links.model :as link]
             [bl-ed.serve :as serve] [clojure.string :as str]))
 (defn- emit [d text object]
   (cond-> (update d :lines conj text) object (update :objects conj (assoc object :row (count (:lines d))))))
 (defn- finish [d data]
   {:text (str (str/join "\n" (:lines d)) "\n") :objects (:objects d) :data data :read-only? true})
-(declare task-context)
+(declare task-context folder-address)
 (defn scope-doc [sys scope]
   (let [e (:env sys) places (place/all e) all? (= scope "all")
         ids (when-not all? (place/descendants places scope))
@@ -24,19 +24,28 @@
                     (if (empty? rs) d
                       (reduce (fn [d r] (emit d (str (:id r) " · " (name (:status r)) " · " (:title r) " · " (or (some-> (:asks r) first :text) (:result r) (:goal r)))
                         {:type "omega/task" :key (:id r) :title (:title r) :goal (:goal r) :status (name (:status r))
-                         :place (:place r) :home (:home r) :cwd (:cwd r) :artifacts (:artifacts (task-context sys (:id r)))
+                         :place (:place r) :home (:home r) :cwd (:cwd r) :folder (folder-address sys r) :artifacts (:artifacts (task-context sys (:id r)))
                          :ask (some-> (:asks r) first :text)
                          :summary (or (some-> (:asks r) first :text) (:result r) (:goal r))}))
                         (emit d (str "* " label " (" (count rs) ")") nil) rs))) d groups)
         d (if (empty? rows) (emit d "No tasks here yet. Press n to start one." {:type "desk/empty" :key "empty"}) d)]
     (finish (emit d "n new task · Enter open · g f place" {:type "desk/hint" :key "hint"})
             {:desk :rail :scope scope :place (when-not all? scope) :count (count rows)})))
+(defn place-choices [sys]
+  (vec (map (fn [[id p]] {:id id :name (:name p)}) (sort-by first (place/all (:env sys))))))
+(defn folder-address [sys t]
+  (when-let [address (place/mounted-path (place/all (:env sys)) (:cwd t) (:place t))] (str "folder:" address)))
+(defn changed-files [sys t]
+  (let [e (:env sys) paths (env/q e '[:find ?path :in $ ?task :where [?op :op/task ?task] [?op :op/buf ?buf] [?buf :buf/path ?path]]
+                                (env/eid e :task/id (:id t)))]
+    (vec (keep (fn [[path]] (when-let [address (folder-address sys (assoc t :cwd path))]
+                             {:path (str "work:" (subs address 7)) :label (Path/basename path) :kind "changed"})) (sort-by first paths)))))
 (defn welcome [sys]
   (finish {:lines ["#+TITLE: A place for your work" "" "Select a task on the left." ""
                    "A task has a conversation, a working directory," "and a home in your editable plans."
                    "" "j / k  browse tasks and places" "Enter  focus the selected conversation"
                    "n      start a task in the selected place" "Alt+h / Alt+l  focus previous / next pane"] :objects []}
-          {:desk :welcome}))
+          {:desk :welcome :places (place-choices sys)}))
 (defn task-context [sys id]
   (let [t (task/view sys id) e (:env sys)
         refs (filter (fn [m] (:path (:to m))) (link/all e {:task id}))
@@ -44,10 +53,12 @@
                                 :label (Path/basename (:path (:to m))) :kind (name (:kind m))})
                        (sort-by (fn [m] [(if (= :output (:kind m)) 0 1) (:id m)]) refs))
         home (:home t)]
-    {:desk "task" :task-id id :task-title (:title t) :task-status (name (:status t))
+    {:desk "task" :task-id id :task-title (:title t) :task-status (name (:status t)) :task-result (:result t)
      :ask (some-> (model/task-rows e [id]) first :asks first :text)
-     :place (:place t) :cwd (:cwd t) :home home
-     :artifacts (vec (concat artifacts (when home [(assoc home :label "Plan / home" :kind "home")])))}))
+     :place (:place t) :cwd (:cwd t) :folder (folder-address sys t) :home home
+     :artifacts (reduce (fn [out a] (if (some (fn [old] (and (= (:path old) (:path a)) (= (:block old) (:block a)))) out)
+                                   out (conj out a))) []
+                       (concat artifacts (changed-files sys t) (when home [(assoc home :label "Plan / home" :kind "home")])))}))
 (defn task-provider [sys base]
   (let [read (fn [id params] (let [d ((:read base) id params) context (task-context sys id)]
                              (assoc d :data context :rev (serve/text-rev (str (:text d) (pr-str context))))))]
@@ -56,6 +67,6 @@
   ([sys] (providers sys nil))
   ([sys base-task]
   (cond-> {"workspace" {:read (fn [nm _] (scope-doc sys (if (str/blank? nm) "all" nm)))
-                :rev (fn [nm _] (serve/text-rev (:text (scope-doc sys (if (str/blank? nm) "all" nm)))))}
-   "desk" {:read (fn [_ _] (welcome sys)) :rev (fn [_ _] "welcome-1")}}
+                :rev (fn [nm _] (serve/text-rev (pr-str (scope-doc sys (if (str/blank? nm) "all" nm)))))}
+   "desk" {:read (fn [_ _] (welcome sys)) :rev (fn [_ _] (serve/text-rev (pr-str (:data (welcome sys)))))}}
     base-task (assoc "task" (task-provider sys base-task)))))

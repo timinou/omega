@@ -11,58 +11,103 @@
 (defn measure [ed] (max 12 (- (or (get-in ed [:view :cols]) 80) 7)))
 (defn wrapped [ed r key words kind size]
   (let [width (if (= 2 size) (max 12 (quot (measure ed) 2)) (measure ed))
-        lines (conv/wrap words width)]
+        lines (vec (mapcat (fn [s] (conv/wrap s width)) (split (str words) "\n")))]
     (map-indexed (fn [i words] (p/line-mark r [{:text words :kind kind}] (str key "/" i) {:size size :role kind})) lines)))
+(defn finished? [ed] (contains? #{"done" "failed" "cancelled"} (get-in ed [:doc :data :task-status])))
 (defn task-header
   "Around advice retains conversation threads and its docked composer."
   [o ctx next]
-  (let [ed (:ed ctx) d (get-in ed [:doc :data]) artifacts (:artifacts d) content (next o ctx)]
+  (let [ed (:ed ctx) d (get-in ed [:doc :data]) artifacts (remove (fn [a] (= "home" (:kind a))) (:artifacts d)) content (next o ctx)
+        home (button "g H  Plan / home" :desk/home "Open the anchored plan")
+        refs (button "g r  References" :desk/references "Inspect this task's inputs, outputs and context")]
     (p/stack (concat
       (wrapped ed 0 "desk/task/title" (or (:task-title d) (title ed)) :question 2)
       [(mark 1 "desk/task/context" [{:text (str (if (:ask d) "⚑ Needs you" (or (:task-status d) "Task")) "  ·  " (:place d)) :kind :who}
                                    {:text (str "  ·  " (:task-id d)) :kind :meta}] :meta)
-       (mark 2 "desk/task/artifact" [(button (str "g b  " (or (:label (first artifacts)) "Working file")) :desk/artifact "Open the primary working file") ] :meta)
-       (mark 2 "desk/task/home" [(button "g H  Plan / home" :desk/home "Open the anchored plan")
-                               (button "g r  References" :desk/references "Inspect this task's inputs, outputs and context")] :meta)
-       (mark 3 "desk/task/actions" [(button "? Actions" :desk/actions "Actions for this task")
-                                   (button "i Reply" :desk/reply "Write to this task")] :aside)]
+       (mark 1 "desk/task/folder" (if (:folder d)
+         [(button (clipped (str "g d  Folder · " (last (split (:cwd d) "/"))) (- (measure ed) 2)) :desk/folder (:cwd d))]
+         [{:text (clipped (str "cwd · " (:cwd d)) (measure ed)) :kind :meta}]) :meta)
+       (mark 2 "desk/task/artifact" [(if (seq artifacts)
+         (button (str "g b  " (:label (first artifacts))) :desk/artifact "Open the primary working file")
+         (button "a Attach a file" :desk/link "Choose an output, input or context file"))] :meta)]
+      (if (< (measure ed) 40)
+        [(mark 2 "desk/task/home" [home] :meta) (mark 2 "desk/task/refs" [refs] :meta)]
+        [(mark 2 "desk/task/home" [home refs] :meta)])
+      [(mark 3 "desk/task/actions" [(button "? Actions" :desk/actions "Actions for this task")
+                                   (if (finished? ed) (button "i Follow-up" :desk/new "Start another task with this place and cwd")
+                                     (button "i Reply" :desk/reply "Write to this task"))] :aside)]
       (rest (:kids content))))))
+(defn question-card [ctx card]
+  (let [ed (:ed ctx) messages (filter (fn [mk] (= "omega/msg" (:type (get (:obj-index ed) (:row mk))))) (:kids card))
+        r (:row (first (:kids card)))]
+    (if (empty? messages) card
+      (assoc card :kids (vec (concat
+        [(mark r (str (:key card) "/label") [{:text "NEEDS YOUR ANSWER" :kind :label}] :label)]
+        (mapcat (fn [mk] (let [r (:row mk) raw (t/line (:text ed) r)
+                               cut (index-of raw "   y yes · n no · a answer")
+                               words (or (get-in ed [:obj-index r :message]) (subs raw (if (starts-with? raw "⚑ ") 2 0) (or cut (count raw))))]
+                           (concat (wrapped ed r (str (:key card) "/ask" r) words :answer 1)
+                             [(mark r (str (:key card) "/reply" r)
+                                [(button "y Yes" :omega/yes "Answer this question yes")
+                                 (button "n No" :omega/no "Answer this question no")
+                                 (button "a Answer" :omega/answer "Give an explicit answer")] :aside)]))) messages)))))))
 (defn thread-heading [o ctx next]
   (let [content (next o ctx) head (first (:kids content))
-        words (join "" (map :text (:segs head)))]
-    (assoc content :kids (vec (concat (wrapped (:ed ctx) (:src head) (:key head) words :question (or (:size head) 1)) (rest (:kids content)))))))
+        words (trim (join "" (map :text (remove (fn [s] (= :who (:kind s))) (:segs head)))))
+        who (trim (join "" (map :text (filter (fn [s] (= :who (:kind s))) (:segs head)))))
+        rest-kids (map (fn [mk] (if (= "ask" (:tone mk)) (question-card ctx mk) mk)) (rest (:kids content)))]
+    (assoc content :kids (vec (concat
+      (wrapped (:ed ctx) (:src head) (:key head) words :question (or (:size head) 1))
+      [(mark (:src head) (str (:key head) "/who") [{:text who :kind :who}] :meta)] rest-kids)))))
 (defn composer-head [o ctx next]
-  (let [dock (next o ctx) card (first (:kids dock)) head (first (:kids card))
-        words (join "" (map :text (:segs head)))
-        heads (wrapped (:ed ctx) (:src head) (:key head) words :label 1)]
-    (assoc dock :kids [(assoc card :kids (vec (concat heads (rest (:kids card)))))])))
+  (let [ed (:ed ctx) dock (next o ctx) card (first (:kids dock)) head (first (:kids card))
+        words (if (and (finished? ed) (not (conv/drafting? ed))) "Follow-up · i starts a task in this place"
+                (join "" (map :text (:segs head))))
+        heads (wrapped ed (:src head) (:key head) words :label 1)
+        body (if (and (finished? ed) (not (conv/drafting? ed)))
+               [(mark (:src head) (str (:key head) "/hint") [{:text "The working directory stays with the task." :kind :aside}] :aside)]
+               (rest (:kids card)))]
+    (assoc dock :kids [(assoc card :kids (vec (concat heads body)))])))
+(defn present-outcome [o ctx]
+  (let [data (info o ctx) r (:from o)]
+    (p/card (:key o) "you"
+      (concat [(mark r (str (:key o) "/label") [{:text (upper-case (:status data)) :kind :label}] :label)]
+        (wrapped (:ed ctx) (inc r) (str (:key o) "/text") (:result data) :answer 1)))))
 (def conversation
-  (update conv/presentation :around into [{:type :doc :fn task-header} {:type :conv/thread :fn thread-heading}
-                                           {:type :omega/composer :fn composer-head}]))
+  (-> conv/presentation
+    (update :table assoc :omega/outcome present-outcome)
+    (update :around into [{:type :doc :fn task-header} {:type :conv/thread :fn thread-heading}
+                         {:type :omega/composer :fn composer-head}])))
 (defn present-task-block [o ctx]
   (let [ed (:ed ctx) b (:span o) editing? (and (= :insert (:mode ed)) (<= (:from o) (first (c/cursor ed))) (< (first (c/cursor ed)) (:to o)))]
     (if editing? (p/stack (map p/text-mark (range (:from o) (:to o))))
       (p/card (:key o) "focus"
         (concat [(mark (:from o) (str (:key o) "/label") [{:text "TASK" :kind :label}
-                                                       {:text "    C-Enter start / open" :kind :aside}] :label)]
+                                                       (button "C-Enter Start / open" :eval-cell "Start or open the task represented by this block")] :label)]
                 (map p/text-mark (range (inc (:from o)) (dec (:to o))))
                 [(mark (dec (:to o)) (str (:key o) "/gap") [{:text " " :kind :prose}] :aside)])))))
 (defn present-heading [o ctx]
   (let [ed (:ed ctx) b (:span o) todo (:todo b) r (:from o)
+        done? (contains? #{:done "DONE"} todo)
         editing? (and (= :insert (:mode ed)) (= r (first (c/cursor ed))))
         head (if editing? (p/text-mark r)
                (mark r (str (:key o) "/head")
-                 [{:text (str (cond (contains? #{:todo "TODO"} todo) "○ " (contains? #{:done "DONE"} todo) "✓ " :else "") (:title b))
-                   :kind (if todo (if (contains? #{:done "DONE"} todo) :done :strong) :rail-title)}] :rail-title))]
-    (p/head-card (:key o) (if (contains? #{:done "DONE"} todo) "you" "thread")
+                 (vec (concat
+                   (when todo [(button (if done? "✓" "○") :desk/toggle (if done? "Reopen this item" "Complete this item"))])
+                   [{:text (:title b) :kind (if todo (if done? :done :strong) :rail-title)}])) :rail-title))]
+    (p/head-card (:key o) (if done? "you" "thread")
       (concat [head] (when (not= 0 ((:lod ctx) o)) (map (fn [k] (p/present k ctx)) (:kids o)))))))
 (defn present-task-result [o ctx]
   (let [ed (:ed ctx) ref (first (keep (fn [r] (when-let [m (omega/reference-at (text ctx r))] (assoc m :row r))) (range (:from o) (:to o))))
         card (when ref (get (:cards ed) (:id ref)))]
     (if (nil? ref) (p/stack (p/rows-with-kids o ctx))
       (p/card (:key o) "row" [(mark (:row ref) (str (:key o) "/task")
-                               [{:text (str "↗ " (or (:title card) (:goal ref) (:id ref))) :kind :strong}
+                               [{:text (str "↗ " (or (:title card) (:goal ref) (:id ref))) :kind :strong :command :desk/open :doc "Open this task conversation"}
                                 {:text (str "  ·  " (or (:word card) (:status card) "task") "  · Enter conversation") :kind :aside}] :rail-title)]))))
+(defn present-prose [o ctx]
+  (let [ed (:ed ctx) editing? (and (= :insert (:mode ed)) (<= (:from o) (first (c/cursor ed))) (< (first (c/cursor ed)) (:to o)))]
+    (if editing? (p/present-node o ctx)
+      (p/stack (mapcat (fn [r] (wrapped ed r (str (:key o) "/row" r) (text ctx r) :prose 1)) (range (:from o) (:to o)))))))
 (defn artifact-doc [o ctx]
   (let [ed (:ed ctx) path (:path ed) outline (get-in ed [:struct :outline])
         todo (count (filter (fn [h] (contains? #{:todo "TODO"} (:todo h))) outline))
@@ -80,7 +125,7 @@
 (def task-readtable [{:type :desk/task-block :match (fn [b l] (omega/task-block? b)) :attrs (fn [b l] {:key (:id b)})}])
 (def artifact
   {:name "work-artifact" :fill? false :sticky-heads? true :readtable task-readtable
-   :table (merge p/default-table {:doc artifact-doc :section present-heading :desk/task-block present-task-block :result present-task-result})
+   :table (merge p/default-table {:doc artifact-doc :section present-heading :prose present-prose :desk/task-block present-task-block :result present-task-result})
    :around [] :isa (assoc p/ISA :desk/task-block :block)
    :lod-of (fn [ed tree] (p/default-lod ed)) :focus-of (fn [ed tree] [(first (c/cursor ed)) (get-in ed [:view :cols]) (c/dirty? ed)])})
 (defn present-target [o ctx]
@@ -140,6 +185,8 @@
 (def references
   (assoc place-view :name "work-references" :table (merge p/default-table {:doc reference-doc :workspace/file reference-target
                                                                        :workspace/place reference-target :omega/task reference-target})))
+(def source
+  (assoc artifact :name "source" :table p/default-table :readtable [] :around [] :sticky-heads? false))
 (defn choose [ed]
   (let [path (str (:path ed))]
     (cond

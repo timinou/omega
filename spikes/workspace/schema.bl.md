@@ -153,3 +153,10 @@ entity family is added.
 
 Packages own schema definitions and host verbs; generic bl-ed only knows
 layouts, document events, effects and optional cleanup hooks.
+
+The workbench adds no persisted families. Its task provider projects the saved
+cwd as a mounted `folder:` address, explicit references and task-attributed
+changed files as artifacts, and the terminal result. A changed artifact is
+resolved from existing `op/task → op/buf → buf/path` facts. Place choices and
+full question/outcome text are provider object metadata, not new database
+attributes. Subplaces remain ordinary `place` entities with a parent.

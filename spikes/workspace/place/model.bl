@@ -28,6 +28,16 @@
                           (throw (ex-info "Top-level place root must be absolute." {:id (:id p)}))
                           (Path/expand r (or base "/"))) base)) nil (reverse (ancestors places id))))
 (defn roots [places] (into {} (keep (fn [[id _]] (when-let [r (root places id)] [id r])) places)))
+(defn mounted-path
+  "A saved physical path as place/relative-path. Prefer its owning place if it
+   still contains it; otherwise use the deepest current mount. No match is nil."
+  [places path preferred]
+  (let [rs (roots places)
+        contains-path? (fn [[id root]] (and path (or (= path root) (str/starts-with? path (str root "/")))))
+        own (when-let [root (get rs preferred)] [preferred root])
+        chosen (if (and own (contains-path? own)) own
+                   (first (sort-by (fn [[id root]] [(- (count root)) id]) (filter contains-path? rs))))]
+    (when chosen (let [[id root] chosen] (str id (when-not (= path root) (str "/" (subs path (inc (count root))))))))))
 (defn descendants [places id]
   (set (keep (fn [[key _]] (when (some (fn [p] (= id (:id p))) (ancestors places key)) key)) places)))
 (defn settings

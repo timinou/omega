@@ -1,17 +1,20 @@
-(ns links.server (:require [links.model :as link] [omega.task :as task] [bl-ed.serve :as serve] [clojure.string :as str] [clojure.edn :as edn]))
+(ns links.server (:require [links.model :as link] [omega.task :as task] [place.model :as place] [bl-ed.serve :as serve] [clojure.string :as str] [clojure.edn :as edn]))
 (defn document [sys nm]
   (let [[kind id] (str/split nm "/") from {(keyword kind) id} e (:env sys)
+        owner (when (:task from) (task/view sys (:task from)))
+        owner-place (or (:place from) (:place owner))
+        directory (if owner (place/mounted-path (place/all e) (:cwd owner) owner-place) owner-place)
         links (sort-by :id (link/all e from))
         rows (map-indexed (fn [i m] (let [to (:to m) path (link/target e to)]
                                      {:row (+ 3 i) :type (cond (:task to) "omega/task" (and (:place to) (nil? (:path to))) "workspace/place" :else "workspace/file")
-                                      :link-id (:id m) :relationship (name (:kind m)) :target path :anchor (:block to) :label (or (:path to) (:task to) (:place to))
+                                      :link-id (:id m) :relationship (name (:kind m)) :target path :anchor (:block to) :label (if (:path to) (Path/basename (:path to)) (or (:task to) (:place to)))
                                       :place (:place to)
                                       :key (if (:task to) (:task to) path) :goto (when (:block to) {:block (:block to)})})) links)]
     {:text (str "#+TITLE: References for " kind " " id "\n\nRET visits · links/add attaches · links/remove removes by id\n"
                 (str/join "\n" (map (fn [m] (str (name (:kind m)) " · " (:id m) " · " (pr-str (:to m)))) links)) "\n")
-     :read-only? true :objects (vec rows) :data {:link-source from :place (or (:place from) (when (:task from) (:place (task/view sys (:task from))))) }}))
+     :read-only? true :objects (vec rows) :data {:link-source from :place owner-place :folder (when directory (str "folder:" directory))}}))
 (defn providers [sys]
-  {"links" {:read (fn [nm _] (document sys nm)) :rev (fn [nm _] (serve/text-rev (:text (document sys nm))))}})
+  {"links" {:read (fn [nm _] (document sys nm)) :rev (fn [nm _] (serve/text-rev (pr-str (document sys nm))))}})
 (defn intents [sys]
   {"links/put" (fn [{:keys [text]}] (let [m (edn/read-string text)] (link/put! (:env sys) m)
                                      {:path (str "links:" (if (get-in m [:from :task]) "task/" "place/") (or (get-in m [:from :task]) (get-in m [:from :place])))}))

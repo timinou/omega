@@ -1,0 +1,21 @@
+Workbench slice 4 — 2026-10-07
+
+Backend: full test/ plus workspace backend/place/link/buffer/demo/desk tests:
+25 files passed; zero failed or incoherent. Editor backend: 71 assertions;
+workbench backend: 16; buffer: 48; workspace: 24; links: 10.
+Updated overlapping-root regression: workspace-place-test 26 assertions passed.
+
+Drive: BLED_OUT=vendor/bl-ed/web/out BLED_ROOT=<pinned beam-lisp checkout>
+node --test vendor/bl-ed/test/*.test.mjs spikes/workspace/test/*drive.test.mjs
+spikes/dwim/test/drive.test.mjs spikes/present/test/scroll.test.mjs
+170 tests passed, zero failed.
+
+Default-presentation checker, unchanged: 36 variants, :bad [].
+
+Browser: python3 spikes/workspace/test/desk-browser.py --port 8801 --slice 4
+Root: /tmp/omega-workbench-slice4f (offline)
+Passed: explicit place choice, real cwd, output attachment, folder/file
+transitions retain drafts, real publication, task source, plan task launch,
+answer while drafting, terminal draft conversion, same-place/cwd follow-up,
+live terminal status in the unfocused plan, compact plan, unuse, no browser errors.
+Screenshots 38–49 were recorded by this final run.

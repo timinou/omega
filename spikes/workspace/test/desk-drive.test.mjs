@@ -112,3 +112,57 @@ test('a keyboard checklist toggle participates in the shared-buffer draft protoc
  ed=M.d_handle(ed,key('Enter'));assert.match(R.printStr(g(ed,'text')),/DONE Nested item/);
  const fx=M.d_take_effects(ed).toArray()[1].toArray().find(e=>g(e,'intent')==='buffer/draft');assert.ok(fx);assert.match(g(g(fx,'args'),'text'),/DONE Nested item/);
 });
+
+test('starting without a place asks for a valid place before the goal, with no hard-coded default',()=>{
+ let ed=W.d_new_task(boot());assert.match(g(g(ed,'minibuf'),'prompt'),/Place/);
+ ed=M.d_handle(ed,ev(K('type'),K('text'),K('text'),'unknown'));ed=M.d_handle(ed,key('Enter'));assert.match(g(g(ed,'minibuf'),'prompt'),/Place/);
+ assert.ok(!M.d_take_effects(ed).toArray()[1].toArray().some(f=>g(f,'intent')==='task/open'));
+ ed=M.d_handle(ed,ev(K('type'),K('text'),K('text'),'omega'));ed=M.d_handle(ed,key('Enter'));assert.match(g(g(ed,'minibuf'),'prompt'),/New task in omega/);
+ ed=M.d_handle(ed,ev(K('type'),K('text'),K('text'),'Chosen place'));ed=M.d_handle(ed,key('Enter'));
+ const fx=M.d_take_effects(ed).toArray()[1].toArray().find(f=>g(f,'intent')==='task/open');assert.equal(g(g(fx,'args'),'path'),'place:omega');
+});
+test('checkbox edits only the heading state and leaves TODO words in its title and prose intact',()=>{
+ let ed=P.d_use(M.d_boot('#+TITLE: Board\n\n** TODO Write a TODO parser\nTODO stays in prose.\n','work:omega/board.bl.org'),W.d_bl_package)
+ .assoc(K('sels'),R.vec(ev(K('anchor'),R.vec(2,0),K('head'),R.vec(2,0))));
+ ed=M.d_handle(ed,ev(K('type'),K('command'),K('command'),K('desk/toggle')));
+ assert.match(R.printStr(g(ed,'text')),/DONE Write a TODO parser/);assert.match(R.printStr(g(ed,'text')),/TODO stays in prose/);
+});
+
+test('a reply draft becomes a scoped follow-up when its task finishes',()=>{
+ let ed=P.d_use(M.d_boot('#+TITLE: t-5 task\n\n\n\n* you · 1\nA goal\n','task:t-5'),W.d_bl_package)
+ .assoc(K('doc'),ev(K('rev'),'1',K('read-only?'),true,K('data'),ev(K('desk'),'task',K('task-id'),'t-5',K('task-status'),'idle',K('place'),'beam',K('cwd'),'/tmp/beam')))
+ .assoc(K('mode'),K('command')).assoc(K('minibuf'),ev(K('kind'),K('prompt'),K('text'),'Keep this follow-up',K('submit'),e=>e));
+ ed=M.d_handle(ed,ev(K('type'),K('doc'),K('path'),'task:t-5',K('text'),'#+TITLE: t-5 ✓ done\n\n\n\n* you · 1\nA goal\n',K('rev'),'2',K('read-only?'),true,K('data'),ev(K('desk'),'task',K('task-id'),'t-5',K('task-status'),'done',K('place'),'beam',K('cwd'),'/tmp/beam')));
+ assert.equal(g(g(ed,'minibuf'),'text'),'Keep this follow-up');assert.equal(g(g(ed,'minibuf'),'package'),'workbench');
+ ed=M.d_handle(ed,key('Enter'));const fx=M.d_take_effects(ed).toArray()[1].toArray().find(f=>g(f,'intent')==='task/open');
+ assert.equal(g(g(fx,'args'),'cwd'),'/tmp/beam');assert.equal(g(g(fx,'args'),'path'),'place:beam');assert.equal(g(g(fx,'args'),'goal'),'Keep this follow-up');
+});
+test('source inspection renders the task org text and a busy command prompt blocks pointer edits',()=>{
+ let ed=P.d_use(M.d_boot('#+TITLE: Task\n#+begin_task :cwd @beam\nA goal\n#+end_task\n','task:t-5'),W.d_bl_package)
+ .assoc(K('doc'),ev(K('read-only?'),true,K('data'),ev(K('desk'),'task',K('task-title'),'Readable task')));
+ assert.equal(g(M.d_render(ed),'presentation'),'conversation');
+ ed=M.d_handle(M.d_handle(ed,key('g')),key('v'));assert.equal(g(M.d_render(ed),'presentation'),'source');assert.match(R.printStr(M.d_render(ed)),/begin_task/);
+ let file=P.d_use(M.d_boot('#+TITLE: Board\n\n* TODO Item\n','work:omega/board.bl.org'),W.d_bl_package)
+ .assoc(K('mode'),K('command')).assoc(K('minibuf'),ev(K('kind'),K('eval'),K('text'),'(unfinished'));
+ const original=g(file,'text');file=M.d_handle(file,ev(K('type'),K('command'),K('command'),K('insert')));
+ assert.equal(g(file,'mode'),K('command'));assert.strictEqual(g(file,'text'),original);assert.equal(g(g(file,'minibuf'),'text'),'(unfinished');
+});
+
+test('relative task references resolve in the actual nested working folder',async()=>{
+ const A=await load('ws.actions');
+ let ed=boot().assoc(K('path'),'task:t-9').assoc(K('doc'),ev(K('data'),ev(K('task-id'),'t-9',K('place'),'beam',K('folder'),'folder:beam/sub')));
+ ed=A.d_attach_reference(ed);
+ for(const value of ['o','board.bl.org']){ed=M.d_handle(ed,ev(K('type'),K('text'),K('text'),value));ed=M.d_handle(ed,key('Enter'));}
+ const fx=M.d_take_effects(ed).toArray()[1].toArray().find(e=>g(e,'intent')==='links/put');
+ assert.match(g(g(fx,'args'),'text'),/:path "work:beam\/sub\/board.bl.org"/);
+});
+
+test('long artifact prose wraps by pane width and remains raw while editing',async()=>{
+ const V=await load('ws.views'),PP=await load('pp.present');
+ const original=P.d_use(M.d_boot('#+TITLE: Plan\n\n* Notes\nThis editable plan has enough words to require several wrapped lines in a narrow pane.\n','work:omega/plan.bl.org'),W.d_bl_package);
+ const narrow=original.assoc(K('view'),g(original,'view').assoc(K('cols'),32));
+ const rows=ed=>g(PP.d_screen_of(V.d_artifact,ed),'slots').toArray().filter(s=>PP.d_slot_row(s)===3);
+ assert.ok(rows(narrow).length>rows(original).length);
+ const editing=narrow.assoc(K('mode'),K('insert')).assoc(K('sels'),R.vec(ev(K('anchor'),R.vec(3,0),K('head'),R.vec(3,0))));
+ assert.equal(rows(editing).length,1);assert.equal(R.printStr(g(narrow,'text')),R.printStr(g(original,'text')));
+});

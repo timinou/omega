@@ -3,38 +3,49 @@
                         [ed.org :as org] [ed.keymap :as km] [ed.pkg :as pkg]))
 (defn here [ed] (or (docs/object-at ed) (omega/object-at ed)))
 (defn context [ed]
-  (let [o (here ed) d (get-in ed [:doc :data])]
+  (let [o (here ed) d (get-in ed [:doc :data]) path (str (:path ed))
+        directory (cond (starts-with? path "folder:") path
+                        (starts-with? path "work:") (str "folder:" (join "/" (butlast (split (subs path 5) "/")))))]
     {:task (or (:task-id d) (get-in d [:link-source :task]) (when (= "omega/task" (:type o)) (:key o)))
      :place (or (:place o) (:place d) (get-in d [:link-source :place])
                 (when (starts-with? (str (:path ed)) "work:") (first (split (subs (:path ed) 5) "/"))))
+     :folder (or (:folder o) (:folder d) directory)
      :link-id (:link-id o) :operation (when (= "buffer/op" (:type o)) (:key o))}))
+(declare busy?)
 (defn local-actions [ed]
   (let [ctx (context ed) o (here ed) task? (:task ctx) place? (:place ctx)
         artifact? (starts-with? (str (:path ed)) "work:")
         block (org/block-at (get-in ed [:struct :blocks]) (first (c/cursor ed)))]
     (vec (concat
+      [{:key (if (= "omega/msg" (:type o)) "N" "n") :name "New task" :command :desk/new :doc (if place? "Enter a goal in this place" "Choose a place, then enter its goal")}
+       {:key "v" :name "Inspect source" :command :desk/source :doc "The text and data behind this view"}]
+      (when (= "omega/msg" (:type o))
+        [{:key "y" :name "Answer yes" :command :omega/yes :doc "Answer this question yes"}
+         {:key "n" :name "Answer no" :command :omega/no :doc "Answer this question no"}
+         {:key "a" :name "Write an answer" :command :omega/answer :doc "Reply to this exact question"}])
       (when (and task? (or (get-in ed [:doc :data :artifacts]) (:artifacts o) (:home o))) [{:key "b" :name "Working file" :command :desk/artifact :doc "Keep the conversation beside its primary file"}
+                   {:key "d" :name "Working folder" :command :desk/folder :doc "Browse the task's actual cwd"}
                    {:key "h" :name "Plan / home" :command :desk/home :doc "Return to the exact task block"}
                     ])
       (when task? [{:key "r" :name "References" :command :desk/references :doc "Inspect inputs, outputs and context"}
-                   {:key "a" :name "Attach reference" :command :desk/link :doc "Choose a relationship and a file"}
+                   {:key (if (= "omega/msg" (:type o)) "A" "a") :name "Attach reference" :command :desk/link :doc "Choose a relationship and a file"}
                    {:key "c" :name "Cancel task" :command :desk/cancel :doc "Confirm cancellation explicitly"}])
       (when place? [{:key "p" :name "Inspect place" :command :desk/place :doc "Files, subplaces and inherited settings"}
-                    {:key "n" :name "New task" :command :desk/new :doc "Enter a goal in this place"}
                     {:key "f" :name "New subplace / attach folder" :command :desk/subplace :doc "Name it; inherit or attach a directory"}])
       (when (:link-id ctx) [{:key "d" :name "Remove reference" :command :desk/unlink :doc "Confirm removal of this relationship"}])
       (when (:operation ctx) [{:key "u" :name "Undo this change" :command :buffers/undo :doc "Preserve independent later edits"}])
-      (when artifact? [{:key "t" :name "Conversation" :command :desk/conversation :doc "Close the artifact only if its draft is published"}
-                       {:key "e" :name "Edit source here" :command :insert :doc "This view is still the same editable document"}
+      (when artifact? [{:key "t" :name "Back to context" :command :desk/conversation :doc "Return to the retained task or place after publishing its draft"}
+
                        {:key "s" :name "Publish" :command :buffers/publish :doc "Save against this buffer revision"}
                        {:key "v" :name "Inspect source" :command :desk/source :doc "Toggle the underlying org text"}])
+      (when (and artifact? (not (busy? ed))) [{:key "e" :name "Edit source here" :command :insert :doc "Edit the same source document"}])
       (when (omega/task-block? block) [{:key "o" :name "Start / open task" :command :eval-cell :doc "Run the task block at the cursor"}])))))
 (defn available
   "Loaded packages contribute action values; later command definitions win."
   [ed]
   (reduce (fn [out p]
     (if-let [f (get-in p [:provides :actions])]
-      (reduce (fn [out a] (conj (vec (remove (fn [q] (= (:command q) (:command a))) out)) a)) out (f ed)) out))
+      (reduce (fn [out a] (conj (vec (remove (fn [q] (or (= (:command q) (:command a)) (and (:key a) (= (:key q) (:key a))))) out)) a)) out (f ed)) out))
     [] (pkg/packages ed)))
 (defn menu [ed] (assoc-in ed [:pkg-state "workbench" :menu?] true))
 (defn dismiss [ed] (update-in ed [:pkg-state "workbench"] dissoc :menu?))
@@ -46,7 +57,7 @@
         (c/message ed "Choose an action's letter, or Escape to close.")))))
 (defn busy? [ed] (some? (:minibuf ed)))
 (defn attach-reference [ed]
-  (let [{:keys [task place]} (context ed) from (cond task {:task task} place {:place place})]
+  (let [{:keys [task place folder]} (context ed) from (cond task {:task task} place {:place place})]
     (cond (busy? ed) (c/message ed "Finish or cancel the current prompt first.")
           (nil? from) (c/message ed "Open a task or place before attaching a reference.")
           :else
@@ -54,13 +65,14 @@
             (fn [ed choice]
               (let [kind (get {"i" :input "input" :input "o" :output "output" :output "c" :context "context" :context} (trim choice))]
                 (if (nil? kind) (c/message ed "Use i, o or c; no reference was added.")
-                  (docs/owned-prompt ed "workbench" "File or document — e.g. board.bl.org or task:t-1: "
+                  (docs/owned-prompt ed "workbench" (str "File or document — relative to " (if folder (str "@" (subs folder 7)) (or place "this place")) "; @place/file is explicit: ")
                     (fn [ed address]
                       (let [address (trim address)
                             to (cond (starts-with? address "task:") {:task (subs address 5)}
                                      (starts-with? address "place:") {:place (subs address 6)}
                                      (starts-with? address "@") {:path (str "work:" (subs address 1))}
                                      (some? (index-of address ":")) {:path address}
+                                     folder {:path (str "work:" (subs folder 7) "/" address)}
                                      place {:place place :path address}
                                      :else {:path address})
                             id (str (or task place) "-" (name kind) "-" (mod (hash (pr-str to)) 100000000))]

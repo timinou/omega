@@ -134,3 +134,110 @@ Backend suites pass 8 workbench, 24 place, 10 link, 48 buffer, 24 workspace and
 replacement/removal, protected prompts, cwd transport, width-sensitive layout
 and nested checklist draft transport. The default-presentation checker remains
 unchanged and passes 36 variants. All vendor drive tests are green.
+
+## Slice 4 — folders, working text and a complete plan loop
+
+A task's place, frozen working directory, anchored home and references have
+separate jobs. The place scopes the task rail and inherited settings. Folder
+opens its actual cwd. Home returns to its exact plan block. Working file chooses
+an explicit reference or a file discovered from the task's attributed buffer
+operations. Opening a folder and then its files retains the same conversation
+and reply draft. Relative references use that working folder, including nested
+subdirectories; an explicit `@place/file` can cross places.
+
+Starting a task from the welcome view asks for a known place before its goal.
+Starting from a task, file or folder carries that context. There is no implicit
+Omega directory. A completed task offers a follow-up; if it completes while you
+are drafting, the text becomes an owned follow-up prompt in the same place and
+cwd. Completion is a real `omega/outcome` source object in the task document,
+with presentation advice drawing its result card. Source inspection reveals
+that same document. Questions carry their full text and expose named answer
+commands that remain usable while drafting.
+
+These are projection and interaction changes, not new root schema families.
+`place` remains the folder-management family; task, link and buffer/op retain
+their existing schemas. Task metadata adds folder, artifacts and result; welcome
+metadata adds place choices; question and outcome objects carry their text.
+Changed files are derived from existing `op/task`, `op/buf` and `buf/path`
+facts. The pure mounted-path helper resolves physical cwd/file paths back into
+place-addressed paths without introducing another identity registry.
+
+### Try and customize the experience
+
+Build the real editor packages with `spikes/workspace/build.sh`, then start an
+isolated demonstration with:
+
+```sh
+spikes/workspace/desk.sh /tmp/omega-workbench-mine 8804
+```
+
+Open the URL it prints. Select a task with `j`/`k`, press Enter to focus its
+conversation, and use `Alt+h`/`Alt+l` to move focus. Navigation has its own `g`
+prefix: `g d` folder, `g b` working file, `g H` anchored plan/home, `g r`
+references, `g t` retained context, `g c` changes and `g v` source. `?` opens
+contextual actions; `Alt+/` works while composing. Type `i` to reply. `C-s`
+publishes shared working text. On a change, `u` selectively undoes that operation.
+
+For the full loop, open the Omega task's Plan / home, place the cursor in the
+first task block and press `C-Enter`. Save its inserted task reference with
+`C-s`, then Enter on that reference to open the conversation beside the plan.
+Type a reply draft and click Yes: the agent edits its own directory's board,
+finishes, and retains your draft as a follow-up. Enter creates that follow-up
+with the same cwd. Inspect source to see the real plan, task block and reference.
+The demonstration model is scripted for the seeded board/checklist goals;
+replace the host's `:model :step` adapter for a production model.
+
+Customize presentation in `ws/views.bl`: readtables classify source objects,
+presenter tables choose marks/cards, and `:around` advice wraps the existing
+conversation and composer. Source positions remain attached to the marks.
+Customize layouts and navigation in `ws/desk.bl`; customize guided workflows
+and action composition in `ws/actions.bl`. A package contributes ordinary
+commands and `:provides {:actions (fn [ed] [...])}` maps with `:key`, `:name`,
+`:command` and `:doc`; later contributions replace matching commands or keys,
+and unloading restores earlier layers. Per-editor state belongs in `:pkg-state`.
+
+For a personal key binding, evaluate `:(ed/bind :normal "g w" "desk/folder")`.
+Inspect command help with `:(ed/doc "desk/folder")`. The package itself never
+writes user key or command tables. Subplace creation is in Actions; leave its
+directory blank to inherit its parent's root, or attach a different directory.
+Place configuration inherits along the hierarchy, while an already-created
+task retains its actual cwd. Home anchors can target a file and block.
+
+An editable plan can contain:
+
+```org
+#+begin_task :id release :cwd @beam-lisp
+Finish the Beam Lisp checklist
+#+end_task
+```
+
+The same document remains a text buffer, task launcher and plan. `C-Enter`
+starts/opens the represented task; presented references lead back to its
+conversation. Checklist clicks edit the original heading keyword, preserving
+its prose and nested headings. Long artifact prose wraps to the pane width
+while editing exposes its raw source line. Unloading workbench returns to the real editor.
+
+### Final browser tour
+
+The final tour uses `npx agent-browser` through
+`test/desk-browser.py --port 8801 --slice 4`, with an isolated world rooted at
+`/tmp/omega-workbench-slice4f`. It drives keyboard and pointer commands in the
+real editor and verifies the resulting files through the HTTP providers.
+
+- [Choose a place explicitly](proof/38-explicit-place-choice.png).
+- [Goal, scope and actual working folder](proof/39-goal-with-working-folder.png).
+- [Folder beside a retained conversation draft](proof/40-folder-and-retained-conversation.png).
+- [Publish a real file edit while retaining the draft](proof/41-file-edit-keeps-reply-draft.png).
+- [Return to the same reply draft](proof/42-return-to-retained-draft.png).
+- [Inspect the underlying task document](proof/43-task-source-inspection.png).
+- [Editable plan with presented task blocks](proof/44-editable-plan-task-blocks.png).
+- [Start a real task from the plan](proof/45-plan-starts-a-real-task.png).
+- [Agent completion retains a follow-up draft](proof/46-agent-completes-plan-task-with-draft.png).
+- [Draft becomes a task in the same directory](proof/47-draft-becomes-scoped-follow-up.png).
+- [Completed plan on a compact desktop](proof/48-completed-plan-compact.png).
+- [Unload back to the underlying editor](proof/49-final-package-unloaded.png).
+
+Run the full backend, vendor/package drive and default-presentation checks with
+`spikes/workspace/test/verify.sh`. `test/desk-browser.py` accepts `--slice 1` through
+`--slice 4`; start a fresh demo root for each tour to keep its seeded tasks and
+files intact. The live world on port 8790 is never used by these tests.

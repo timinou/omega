@@ -3,7 +3,7 @@
 import argparse,json,os,pathlib,subprocess,time
 p=argparse.ArgumentParser();p.add_argument('--port',type=int,default=8801);p.add_argument('--slice',type=int,default=1);a=p.parse_args()
 if a.port==8790:raise SystemExit('Refusing live world')
-repo=pathlib.Path(__file__).resolve().parents[3];proof=repo/'spikes/workspace/proof';session='omega-desk'
+repo=pathlib.Path(__file__).resolve().parents[3];proof=repo/'spikes/workspace/proof';session='omega-desk-'+str(a.slice)
 if not os.environ.get('AGENT_BROWSER_EXECUTABLE_PATH'):
  paths=list(pathlib.Path.home().joinpath('.cache/ms-playwright').glob('chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell'))
  if paths:os.environ['AGENT_BROWSER_EXECUTABLE_PATH']=str(max(paths,key=lambda f:int(f.parents[1].name.rsplit('-',1)[1])))
@@ -94,7 +94,7 @@ def three():
  inherited=ev('blEd.state().get(blEd.K("doc")).get(blEd.K("data")).get(blEd.K("root"))');assert inherited.endswith('/omega'),inherited
  key('g');key('r');contains('No references yet');ab('click','[data-pane="main"] [data-command="desk/link"]')
  ab('type','#input-sink','c');key('Enter');ab('type','#input-sink','@beam-lisp/board.bl.org');key('Enter');contains('CONTEXT');contains('work:beam-lisp/board.bl.org');photo('32-cross-place-context-reference.png')
- ab('click','[data-pane="main"] [data-command="desk/open"]:has-text("work:beam-lisp/board.bl.org")')
+ ab('click','[data-pane="main"] [data-command="desk/open"]:has-text("board.bl.org")')
  wait('document.querySelectorAll(".pane.editor").length === 3');contains('beam-lisp board');photo('33-reference-opens-working-text.png')
  key('g');key('t');wait('document.querySelectorAll(".pane.editor").length === 2')
  key('Alt+h');row('desk/scope','omega-release-notes');key('Enter');contains('No tasks here yet')
@@ -111,7 +111,57 @@ def three():
  assert ev('document.documentElement.scrollWidth <= window.innerWidth')
  cmd('(ed/unuse "workbench")');contains('removed workbench');wait('document.querySelectorAll(".pane.editor").length === 1');photo('37-actions-package-unloaded.png')
  print('slice 3: pointer commands, contextual actions, guided input/context references, confirmed removal, retained task rail, inherited subplace and cwd, cross-place files, confirmed cancellation, scoped follow-up, compact headings and unload passed',flush=True)
+def four():
+ open();ab('click','[data-pane="main"] [data-command="desk/new"]');contains('Place —');photo('38-explicit-place-choice.png')
+ ab('type','#input-sink','beam-lisp');key('Enter');contains('New task in beam-lisp');ab('type','#input-sink','Inspect the Beam working directory');key('Enter');contains('Inspect the Beam working directory')
+ wait('blEd.state().get(blEd.K("doc")).get(blEd.K("data")).get(blEd.K("task-title")) === "Inspect the Beam working directory"')
+ beam_cwd=ev('blEd.state().get(blEd.K("doc")).get(blEd.K("data")).get(blEd.K("cwd"))');assert beam_cwd.endswith('/beam-lisp')
+ contains('Folder · beam-lisp');photo('39-goal-with-working-folder.png')
+ ab('click','[data-pane="main"] [data-command="desk/link"]');ab('type','#input-sink','o');key('Enter');ab('type','#input-sink','board.bl.org');key('Enter');contains('OUTPUT');key('Control+o');contains('g b  board.bl.org')
+ key('i');ab('type','#input-sink','Retain this reply while browsing')
+ ab('click','[data-pane="main"] [data-command="desk/folder"]');wait('blEd.state().get(blEd.K("path")) === "folder:beam-lisp" && !document.querySelector("[data-loading]")')
+ assert ev('blEd.R.printStr(blEd.F.d_editor(blEd.frame(),blEd.K("aside")).get(blEd.K("minibuf"))).includes("Retain this reply while browsing")')
+ contains('Tasks working here');photo('40-folder-and-retained-conversation.png')
+ ab('click','[data-pane="main"] [data-command="desk/open"]:has-text("board.bl.org")');wait('blEd.state().get(blEd.K("path")) === "work:beam-lisp/board.bl.org" && !document.querySelector("[data-loading]")')
+ assert ev('blEd.R.printStr(blEd.F.d_editor(blEd.frame(),blEd.K("aside")).get(blEd.K("minibuf"))).includes("Retain this reply while browsing")')
+ cmd('(ed/goto 4)');key('A');ab('type','#input-sink',' A note from the folder tour.');key('Escape');key('Control+s');contains('Published shared text')
+ assert 'A note from the folder tour.' in document('work:beam-lisp/board.bl.org')['text'];photo('41-file-edit-keeps-reply-draft.png')
+ key('g');key('t');wait('document.querySelectorAll(".pane.editor").length === 2');wait('blEd.state().get(blEd.K("mode")).name === "command"');photo('42-return-to-retained-draft.png');key('Escape')
+ # A task's source view is the actual task document, not another conversation rendering.
+ key('g');key('v');contains('#+TITLE:');contains('* say ▸');photo('43-task-source-inspection.png');key('g');key('v')
+ key('Alt+h');task_title('Refresh the Omega board');key('Enter');contains('g H  Plan / home');ab('click','[data-pane="main"] [data-command="desk/home"]')
+ wait('blEd.state().get(blEd.K("path")) === "work:omega/plan.bl.org" && !document.querySelector("[data-loading]")');contains('TASK');photo('44-editable-plan-task-blocks.png')
+ # Run the first actual task block from its presented source location.
+ cmd('(ed/goto 4)');key('Control+Enter');contains('opened t-')
+ wait('blEd.R.printStr(blEd.state().get(blEd.K("text"))).includes("#omega/task")');photo('45-plan-starts-a-real-task.png')
+ plan_text=ev('blEd.R.printStr(blEd.state().get(blEd.K("text")))');import re
+ started=re.findall(r':id \"(t-[0-9]+)\"',plan_text)
+ if not started:started=re.findall(r't-[0-9]+',plan_text)
+ assert started,plan_text
+ started_id=started[0];key('Control+s');contains('Published shared text');assert '#omega/task' in document('work:omega/plan.bl.org')['text']
+ # The result is a clickable typed task reference into the retained task pane.
+ r=ev('(()=>{const {K}=blEd;return blEd.state().get(K("text")).get(K("lines")).toArray().findIndex(s=>s.includes("#omega/task"))})()');cmd('(ed/goto '+str(r+1)+')');key('Enter')
+ wait('blEd.frame().get(blEd.K("focus")).name === "aside"');contains('NEEDS YOUR ANSWER')
+ assert ev('blEd.state().get(blEd.K("doc")).get(blEd.K("data")).get(blEd.K("task-id"))')==started_id
+ omega_cwd=ev('blEd.state().get(blEd.K("doc")).get(blEd.K("data")).get(blEd.K("cwd"))');assert omega_cwd.endswith('/omega')
+ omega_place=ev('blEd.state().get(blEd.K("doc")).get(blEd.K("data")).get(blEd.K("place"))')
+ key('i');ab('type','#input-sink','Follow up on this completed board')
+ ab('click','[data-pane="aside"] [data-command="omega/yes"]');contains('answered')
+ wait('blEd.state().get(blEd.K("doc")).get(blEd.K("data")).get(blEd.K("task-status")) === "done"')
+ wait('blEd.state().get(blEd.K("minibuf")).get(blEd.K("package")) === "workbench"')
+ assert ev('blEd.state().get(blEd.K("minibuf")).get(blEd.K("text"))')=='Follow up on this completed board'
+ contains('Updated board.bl.org in my own working directory.');contains('g b  board.bl.org');assert 'DONE Check this folder' in document('work:omega/board.bl.org')['text'];assert 'TODO Check this folder' in document('work:beam-lisp/board.bl.org')['text']
+ wait('blEd.F.d_editor(blEd.frame(),blEd.K("main")).get(blEd.K("cards")).get('+json.dumps(started_id)+').get(blEd.K("status")) === "done"')
+ photo('46-agent-completes-plan-task-with-draft.png');key('Enter');contains('Follow up on this completed board')
+ wait('blEd.state().get(blEd.K("doc")).get(blEd.K("data")).get(blEd.K("task-title")) === "Follow up on this completed board"')
+ assert ev('blEd.state().get(blEd.K("doc")).get(blEd.K("data")).get(blEd.K("cwd"))')==omega_cwd
+ assert ev('blEd.state().get(blEd.K("doc")).get(blEd.K("data")).get(blEd.K("place"))')==omega_place
+ photo('47-draft-becomes-scoped-follow-up.png');key('Alt+h');key('Control+s');contains('Published shared text')
+ ab('set','viewport','1000','780');wait('blEd.state().get(blEd.K("view")).get(blEd.K("cols")) < 60');wait('!document.querySelector("[data-loading]")');photo('48-completed-plan-compact.png')
+ cmd('(ed/unuse "workbench")');contains('removed workbench');wait('document.querySelectorAll(".pane.editor").length === 1');photo('49-final-package-unloaded.png')
+ print('slice 4: explicit place choice, real cwd, output attachment, folder/file transitions retain drafts, real file publication, task source, plan task launch, answer while drafting, terminal draft conversion, cwd-preserving follow-up, compact plan and unload passed',flush=True)
 if a.slice==1:one()
 if a.slice==2:two()
 if a.slice==3:three()
+if a.slice==4:four()
 assert not ab('errors'),ab('errors')

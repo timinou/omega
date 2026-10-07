@@ -1,5 +1,5 @@
 (ns workspace-desk-test (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
-                                [place.model :as place] [ws.desk-server :as desk] [clojure.string] [links.model]))
+                                [place.model :as place] [ws.desk-server :as desk] [clojure.string] [links.model] [buffer.model :as buffer] [omega.codemode :as cm]))
 (deftest rail-scopes-descendants-and-keeps-task-objects-addressable
   (let [e (env/open {:schema place/schema}) sys (task/start-system e {:root "/tmp" :step (loop/scripted [(loop/say "waiting")])})]
     (place/put! e {:id "root" :root "/tmp"}) (place/put! e {:id "child" :parent "root"})
@@ -25,3 +25,33 @@
         (is (= "stable" (:block (last (:artifacts ctx)))))
         (is (= "a" (:place ctx)))))
     (task/stop-system! sys) (env/close! e)))
+
+(deftest task-folder-follows-the-saved-cwd-and-does-not-confuse-it-with-an-anchored-home
+  (let [root (str "/tmp/omega-desk-folder-" (erlang/unique_integer (to-list [:positive])))
+        e (env/open {:schema place/schema}) sys {:env e}]
+    (File/mkdir_p! (str root "/a/sub")) (File/mkdir_p! (str root "/b"))
+    (place/put! e {:id "a" :root (str root "/a")}) (place/put! e {:id "b" :root (str root "/b")})
+    (let [t {:place "a" :cwd (str root "/a/sub") :home {:path "work:b/plan.bl.org" :block "task"}}]
+      (is (= "folder:a/sub" (desk/folder-address sys t)))
+      (place/put! e {:id "a" :root (str root "/b")})
+      (is (nil? (desk/folder-address sys t)))
+      (place/put! e {:id "saved" :root (str root "/a")})
+      (is (= "folder:saved/sub" (desk/folder-address sys t)))
+      (is (= #{"a" "b" "saved"} (set (map :id (desk/place-choices sys))))))
+    (env/close! e)))
+
+(deftest completed-tasks-discover-their-actual-file-operations-without-an-output-link
+  (let [root (str "/tmp/omega-desk-output-" (System/system_time :microsecond))
+        e (env/open {:schema (vec (concat place/schema links.model/schema buffer/schema))})
+        _ (File/mkdir_p! root) _ (File/write! (str root "/board.bl.org") "* TODO Board\n")
+        _ (place/put! e {:id "omega" :root root}) server (buffer/start! e)
+        sys (task/start-system e {:root root :files (buffer/port server) :tools cm/tools
+              :step (loop/scripted [(loop/call-tool "eval" {:code "(edit \"board.bl.org\" [{:old \"TODO\" :new \"DONE\"}])\n(done \"Completed the board.\")"} "edit")])})
+        id (task/open! sys {:goal "Update the board" :place "omega" :cwd root})]
+    (task/await sys id 10000)
+    (let [ctx (desk/task-context sys id)]
+      (is (= "work:omega/board.bl.org" (:path (first (:artifacts ctx)))))
+      (is (= "changed" (:kind (first (:artifacts ctx)))))
+      (is (= "Completed the board." (:task-result ctx)))
+      (is (= "* DONE Board\n" (File/read! (str root "/board.bl.org")))))
+    (task/stop-system! sys) (GenServer/stop server) (env/close! e)))

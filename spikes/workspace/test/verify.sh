@@ -3,7 +3,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd -P)
 repo=$(cd "$here/../../.." && pwd -P)
 cd "$repo"
-"$repo/bin/bl" test test/ "$here/backend_test.bl" "$here/place_test.bl" "$here/links_test.bl" "$here/buffer_test.bl" "$here/demo_test.bl" -p "$repo/spikes/workspace"
+"$repo/bin/bl" test test/ "$here/backend_test.bl" "$here/place_test.bl" "$here/links_test.bl" "$here/buffer_test.bl" "$here/demo_test.bl" "$here/desk_test.bl" -p "$repo/spikes/workspace"
 export BLED_OUT="$repo/vendor/bl-ed/web/out"
 if [ -z "${BLED_ROOT:-}" ]; then
   pin=$(sed -n 's/^ *:bl "commit:\([^" ]*\)".*/\1/p' "$repo/env.bl")
