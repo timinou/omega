@@ -186,5 +186,12 @@
   [ed label submit]
   (assoc ed :mode :command :minibuf {:prompt label :text "" :kind :prompt :submit submit}))
 
+(defn owned-prompt
+  "A package's prompt. Unuse cancels only prompts bearing that package name."
+  [ed package-name label submit]
+  (assoc (prompt ed label submit) :minibuf
+         {:prompt label :text "" :kind :prompt :submit submit
+          :package package-name :return-mode (:mode ed)}))
+
 (def table
   {:back {:doc "Go back to the previous document." :run back}})

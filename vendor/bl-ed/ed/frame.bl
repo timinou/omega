@@ -224,7 +224,10 @@
       (let [gone (filter (fn [n] (not (some (fn [m] (= m n)) (names now)))) (names before))
             added (filter (fn [p] (not (some (fn [m] (= m (:name p))) (names before)))) (pkg/packages now))
             sync (fn [ed] (reduce pkg/use (reduce pkg/unuse ed gone) added))
-            fr (reduce (fn [fr other] (update-in fr [:editors other] sync))
+            fr (reduce (fn [fr other]
+                         (let [[ed effects] (m/take-effects (sync (editor fr other)))]
+                           (-> fr (assoc-in [:editors other] ed)
+                               (update :effects into (map (fn [e] (assoc e :pane other)) effects)))))
                        fr (filter (fn [o] (not= o id)) (editor-ids fr)))
             provided? (contains? (layouts now) (:name (:layout fr)))]
         (if (or (= "single" (:name (:layout fr))) provided?) fr (unarrange fr))))))

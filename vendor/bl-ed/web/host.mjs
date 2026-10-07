@@ -315,6 +315,9 @@ const toPane = (pane, e) => (pane == null ? e : e.assoc(K("pane"), pane));
 // only if it is still the newest request AND the pane still exists (and, for a
 // refresh, still shows that path), so an older slow answer or error can never
 // overwrite a newer visit. The pane's status chip says what is loading.
+// Host-issued session identity orders effects across asynchronous requests.
+const clientId = crypto.randomUUID();
+let clientSequence = 0;
 const gate = latestGate();
 const loading = new Map();                  // pane id → path being visited
 const paneKey = (pane) => (pane == null ? "main" : pane.name ?? String(pane));
@@ -352,6 +355,22 @@ function applyDoc(j, path, visit, goto, pane) {
   if (visit && (pane == null || paneKey(pane) === get(fr, "focus").name)) history.replaceState(null, "", documentUrl(location.href, path, get(renderFrame(fr), "layout")));
 }
 
+// A generic leave event lets packages release host resources without IO in BL.
+window.addEventListener("pagehide", () => {
+  if (!fr) return;
+  for (const pane of F.d_editor_ids(fr)) fr = F.d_handle(fr, ev(K("type"), K("session-leave"), K("pane"), pane));
+  const [next, effects] = F.d_take_effects(fr).toArray(); fr = next;
+  for (const e of effects) {
+    if (get(e, "kind") !== K("intent")) continue;
+    const body = { intent: get(e, "intent"), args: { ...toJS(get(e, "args")), client: clientId, "client-seq": ++clientSequence } };
+    navigator.sendBeacon("/api/intent", new Blob([JSON.stringify(body)], { type: "application/json" }));
+  }
+});
+window.addEventListener("pageshow", event => {
+  if (!fr || !event.persisted) return;
+  for (const pane of F.d_editor_ids(fr)) dispatch(ev(K("type"), K("session-resume"), K("pane"), pane));
+});
+
 const assetUploads = new Map();
 const assetPreviews = new Map();
 async function storeAsset(url, data) {
@@ -377,7 +396,7 @@ async function perform(eff) {
     loadDoc(get(e, "path"), true, get(e, "goto"), pane);
   } else if (kind === "intent") {
     try {
-      const r = await postJSON("/api/intent", { intent: get(e, "intent"), args: toJS(get(e, "args")) });
+      const r = await postJSON("/api/intent", { intent: get(e, "intent"), args: { ...toJS(get(e, "args")), client: clientId, "client-seq": ++clientSequence } });
       const j = await r.json();
       dispatchP(ev(K("type"), K("intent-result"), K("ok?"), j.ok === true, K("message"), j.message || null,
                   K("data"), toBL(j), K("then"), get(e, "then"), K("block"), get(e, "block"), K("path"), get(e, "path")));
@@ -386,7 +405,7 @@ async function perform(eff) {
       dispatchP(ev(K("type"), K("intent-result"), K("ok?"), false, K("message"), "no omega world — run bin/bl-ed"));
     }
   } else if (kind === "save") {
-    const body = { path: get(e, "path"), text: get(e, "text"), base: get(e, "base") };
+    const body = { path: get(e, "path"), text: get(e, "text"), base: get(e, "base"), client: clientId, "client-seq": ++clientSequence };
     try {
       try {
         for (const [url, upload] of assetUploads) if (body.text.includes(url)) await upload;
@@ -397,7 +416,7 @@ async function perform(eff) {
       const r = await postJSON("/api/save", body);
       const j = await r.json();
       dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), r.ok && j.ok === true, K("message"), j.message || "",
-                  K("conflict?"), j.conflict === true, K("doc-rev"), j.rev || null));
+                  K("conflict?"), j.conflict === true, K("doc-rev"), j.rev || null, K("text"), j.text ?? null, K("submitted-text"), body.text));
     } catch (err) {
       // no server (opened as a static page): fall back to a download
       download(body.path.split("/").pop(), body.text);

@@ -150,3 +150,23 @@ from breaking a clean build. Other workspace/editor changes are excluded.
 
 The presentation package likewise moves its resize event branch from `draw`
 (where `ev` is unbound) into `intercept`, keeping the standalone build valid.
+
+
+### 2026-10-07 — workspace place/reference/buffer extensions (browser proof pending)
+
+`ed/pkg.bl` avoids introducing a nil pkg-state key when removing a stateless
+package, and supports an optional pure `:on-unuse` cleanup hook. `ed/docs.bl`
+provides package-owned prompts, cancelled on that package’s removal while
+foreign drafts remain. `ed/frame.bl`
+collects cleanup effects from every synchronized pane before layout collapse.
+The web host transports provider data, assigns client identity/monotonic request
+sequences, carries optional returned save text, and offers generic session
+leave/resume events. The serve host passes client metadata to provider writes
+and returns optional merged text or provider errors. No place/task/buffer
+vocabulary is introduced below the packages.
+
+Domain implementations and schema ownership remain in `spikes/workspace`.
+Source/editor/backend checks are documented there. These extensions have NOT
+received the required browser proof: the prior verification session denied sockets and
+made Git metadata read-only; committing later does not establish browser proof. The earlier committed workspace proof remains
+historical proof for that earlier slice only.

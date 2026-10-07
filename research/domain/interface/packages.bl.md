@@ -44,6 +44,7 @@ else, instead of being a page of its own that has to be rewritten later?
    ;; hooks, in the order ed.main/handle calls them for one event
    :intercept (fn [ed ev] nil)      ; take the event BEFORE the core (return ed) or pass (nil)
    :on-event  (fn [old new ev] new) ; after the core: react to what it DID (old → new)
+   :on-unuse  (fn [ed] ed)          ; optional pure cleanup; may emit host effects
    :adopt     (fn [ed] ed)          ; a fresh document arrived (visit, refresh): set it up
    :render    (fn [ed] nil)         ; draw this document (a view model) or pass (nil)
    :owns      [:presentation]       ; editor keys :adopt sets — unuse removes them (F7)
@@ -270,3 +271,20 @@ What changes from `spikes/present` round 2 (frame.html + frame.mjs, ~250 lines o
   pre-seam build).
 - A package compiled into the page's `out/` shares the page's single `ed.*` instance (siblings
   import by relative path), so a module does not duplicate the editor.
+
+
+## Optional host-resource cleanup
+
+A package can supply a pure `:on-unuse` function, called before its state and
+owned editor keys are removed. It may return cleanup effects for the host;
+packages without it retain their existing behavior. Frames collect cleanup
+from every editor pane, including when removal collapses a layout. The host
+also offers `:session-leave` / `:session-resume` events for page lifecycle.
+No-interaction use/unuse must not emit cleanup or alter user tables.
+
+The buffer slice uses this seam to release transient unpublished drafts;
+persistent place/link facts and published text survive editor package unload.
+
+Package commands that open a prompt can use `ed.docs/owned-prompt` with their
+package name. Unloading cancels those submit closures while preserving prompts
+owned by other packages. Plain core prompts retain their existing behavior.

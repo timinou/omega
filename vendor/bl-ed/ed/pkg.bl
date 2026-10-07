@@ -35,12 +35,15 @@
 
 (defn unuse
   "Remove a package and everything it left on the editor: its :pkg-state and
-   the keys it :owns. The editor is then as if it had never been used."
+   the keys it :owns. Optional pure :on-unuse may emit host cleanup effects."
   [ed nm]
-  (let [p (first (filter (fn [q] (= (:name q) nm)) (packages ed)))]
-    (-> (apply dissoc ed (or (:owns p) []))
-        (assoc :packages (vec (remove (fn [q] (= (:name q) nm)) (packages ed))))
-        (update :pkg-state dissoc nm))))
+  (let [p (first (filter (fn [q] (= (:name q) nm)) (packages ed)))
+        ed (if (:on-unuse p) ((:on-unuse p) ed) ed)
+        ed (if (= nm (get-in ed [:minibuf :package]))
+             (assoc ed :mode (or (get-in ed [:minibuf :return-mode]) :normal) :minibuf nil) ed)]
+    (cond-> (assoc (apply dissoc ed (or (:owns p) []))
+                   :packages (vec (remove (fn [q] (= (:name q) nm)) (packages ed))))
+      (contains? ed :pkg-state) (update :pkg-state dissoc nm))))
 
 (defn commands
   "Every package's commands, later packages winning."

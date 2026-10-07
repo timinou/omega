@@ -175,12 +175,13 @@
         (let [pv (provider cfg pp)]
           (if (or (nil? pv) (nil? (:write pv)))
             (w/json conn 403 {:ok false :message (str p " is read-only")})
-            (let [r ((:write pv) (:name pp) (:params pp) t base)]
+            (let [r ((:write pv) (:name pp) (assoc (:params pp) :client (get b "client") :client-seq (get b "client-seq")) t base)]
               (cond
                 (:read-only r) (w/json conn 403 {:ok false :message (str p " is read-only")})
+                (:error r) (w/json conn 409 {:ok false :message (str (:error r))})
                 (:conflict r)
-                (w/json conn 409 {:ok false :conflict true :rev (:conflict r) :message "changed since you loaded it — reload, or save again to overwrite"})
-                :else (w/json conn 200 {:ok true :path p :rev (:rev r)}))))))))
+                (w/json conn 409 {:ok false :conflict true :rev (:conflict r) :message (or (:message r) "changed since you loaded it — reload, or save again to overwrite")})
+                :else (w/json conn 200 (merge {:ok true :path p :rev (:rev r)} (select-keys r [:text :data]))))))))))
 
 (defn- api-eval [cfg conn]
   (let [[b conn] (body-json conn) p (get b "path") id (get b "id") t (get b "text")
