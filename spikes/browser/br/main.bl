@@ -120,7 +120,8 @@
 
 (def bl-package
   {:name "browser" :doc "Task-owned local browsers, browser blocks, session buffers and observation."
-   :commands {:browser/run-search {:doc "Run saved curated search through a real Omega task (live world)." :run run-search}
+   :commands {:browser/save-profile {:doc "Save cookies/localStorage privately for later reuse." :run (fn [ed] (action ed "save-profile"))}
+              :browser/run-search {:doc "Run saved curated search through a real Omega task (live world)." :run run-search}
               :browser/sessions {:doc "List browser sessions." :run (fn [ed] (c/effect ed {:kind :visit :path "browser:sessions"}))}
               :browser/open {:doc "Open this browser or browser task block." :run (fn [ed] (or (open-block ed) (c/message ed "No browser block here.")))}
               :browser/watch {:doc "Visit the browser and start viewport capture." :run (fn [ed] (action ed "watch"))}
@@ -130,7 +131,7 @@
               :browser/resume {:doc "Return control to the task." :run (fn [ed] (action ed "resume"))}
               :browser/close {:doc "Close this session." :run (fn [ed] (action ed "close"))}
               :browser/forget {:doc "Delete saved auth state after closing the session." :run (fn [ed] (action ed "forget"))}}
-   :keys {:normal {"space b e" :browser/run-search "space b s" :browser/sessions "space b w" :browser/watch
+   :keys {:normal {"space b a" :browser/save-profile "space b e" :browser/run-search "space b s" :browser/sessions "space b w" :browser/watch
                    "space b h" :browser/headful "space b l" :browser/headless
                    "space b p" :browser/pause "space b r" :browser/resume
                    "space b x" :browser/close "space b f" :browser/forget}}

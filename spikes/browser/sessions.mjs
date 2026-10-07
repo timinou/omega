@@ -15,10 +15,17 @@ export function publicURL(value) {
 export class Sessions {
   constructor(root, {run, executable = process.env.AGENT_BROWSER_EXECUTABLE_PATH} = {}) {
     this.root = root; this.sessions = new Map(); this.tasks = new Map(); this.pending = new Map();
+    this.registryWrite=Promise.resolve();
     this.executable = executable; this.run = run || this.cli.bind(this);
   }
   async init() {
     await fs.mkdir(this.root, {recursive:true, mode:0o700}); await fs.chmod(this.root, 0o700);
+    for(const s of JSON.parse(await fs.readFile(path.join(this.root,'sessions.json'),'utf8').catch(()=> '[]'))){
+      if(!validId(s.id)||!path.resolve(s.dir).startsWith(path.resolve(this.root)+path.sep))continue;
+      delete s.queue;s.status='closed';s.control='human';s.watching=false;s.busy=false;s.task=null;s.auth='unknown';
+      s.profile=await fs.access(path.join(s.dir,'auth-state.json')).then(()=> 'saved-storage',()=> 'ephemeral');
+      s.agentSession=`omega-${s.id}-${crypto.randomBytes(5).toString('hex')}`;this.sessions.set(s.id,s);
+    }
     if (!this.executable) {
       const cache = path.join(process.env.HOME, '.cache/ms-playwright');
       const versions = await fs.readdir(cache).catch(() => []);
@@ -27,6 +34,11 @@ export class Sessions {
         if (await fs.access(file).then(() => true, () => false)) { this.executable = file; break; }
       }
     }
+  }
+  async persist() {
+    const content=JSON.stringify([...this.sessions.values()].map(({queue,...s})=>({...s,busy:false})),null,2);
+    this.registryWrite=this.registryWrite.catch(()=>{}).then(async()=>{const file=path.join(this.root,'sessions.json');await fs.writeFile(file+'.tmp',content,{mode:0o600});await fs.rename(file+'.tmp',file);});
+    await this.registryWrite;
   }
   get(id) { if (!validId(id)) throw Error('Invalid session ID'); const s = this.sessions.get(id); if (!s) throw Error('Unknown browser session'); return s; }
   event(s, type, detail = {}) {
@@ -66,16 +78,16 @@ export class Sessions {
         provider:'local', mode, status:'starting', control:'agent', auth:'unknown', profile:'ephemeral',
         url, tabs:[], events:[], artifacts:[], rev:0, watching:false, generation:1};
       this.sessions.set(id,s);
-    } else { s.status = 'starting'; s.mode = mode; s.url = url; s.task = task || s.task; }
+    } else { s.status = 'starting'; s.control='agent'; s.mode = mode; s.url = url; s.task = task || s.task; s.generation++; }
     if (task) this.tasks.set(task,id);
     this.event(s,'session/opening',{mode,task});
     try {
-      await this.run(s,[...(mode === 'headful' ? ['--headed'] : []),'open',url]);
+      await this.run(s,[...(mode === 'headful' ? ['--headed'] : []),...(s.profile==='saved-storage'?['--state',path.join(s.dir,'auth-state.json')]:[]),'open',url]);
       s.status='running'; this.event(s,'session/opened',{url});
-      await this.capture(s); return s;
+      await this.capture(s); await this.persist(); return s;
     } catch (e) {
       // A redirect can invalidate page.title after the browser has launched.
-      try { await this.run(s,['get','url']); s.status='running'; this.event(s,'navigation/recovered',{message:e.message}); await this.capture(s); return s; }
+      try { await this.run(s,['get','url']); s.status='running'; this.event(s,'navigation/recovered',{message:e.message}); await this.capture(s); await this.persist(); return s; }
       catch { s.status='failed'; this.event(s,'session/failed',{message:e.message}); throw e; }
     }
   }
@@ -146,6 +158,10 @@ export class Sessions {
   async action(id,verb) {
     const s=this.get(id);
     if(['headful','headless'].includes(verb)) await this.switchMode(s,verb);
+    else if(verb==='save-profile') {
+      if(s.status!=='running')throw Error('Save storage from a running browser');
+      await this.lock(s,async()=>{const file=path.join(s.dir,'auth-state.json');await this.run(s,['state','save',file]);await fs.chmod(file,0o600);s.profile='saved-storage';this.event(s,'profile/saved',{auth:'Storage retained; login validity remains unknown'});});
+    }
     else if(verb==='watch') {s.watching=true; await this.lock(s,() => this.refreshFrame(s));}
     else if(verb==='pause') {s.control='human'; s.auth='needs-human'; this.event(s,'control/paused');}
     else if(verb==='resume') {s.control='agent'; s.auth='unknown'; this.event(s,'control/resumed',{auth:'User resumed; login validity is unverified'});}
@@ -157,7 +173,7 @@ export class Sessions {
       if(s.status !== 'closed') throw Error('Close the session before forgetting saved auth');
       await fs.rm(path.join(s.dir,'auth-state.json'),{force:true}); s.profile='ephemeral'; s.auth='unknown'; this.event(s,'profile/forgotten');
     } else throw Error('Unknown browser action');
-    return s;
+    await this.persist(); return s;
   }
   async waitControl(s) {
     while(s.control==='human' && s.status==='running') await new Promise(r => setTimeout(r,250));

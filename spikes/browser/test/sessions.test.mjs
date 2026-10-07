@@ -55,7 +55,9 @@ test('a host restart does not overwrite retained artifacts for the same logical 
  const first=await m.open({id:'ora'});
  const second=new Sessions(root,{run:m.run});await second.init();
  const reopened=await second.open({id:'ora'});
- assert.notEqual(first.dir,reopened.dir);
+ assert.equal(first.dir,reopened.dir);
+ assert.notEqual(first.frame,reopened.frame);
+ assert.equal(reopened.artifacts.length,4);
  assert.ok(await fs.stat(path.join(first.dir,first.frame)));
  }finally{await fs.rm(root,{recursive:true,force:true});}
 });
@@ -77,5 +79,14 @@ test('watch refresh keeps one mutable image and leaves navigation artifacts inta
  assert.equal(s.frame,'watch-viewport.png');
  assert.equal(s.artifacts.filter(a=>a.name==='watch-viewport.png').length,1);
  assert.ok(s.artifacts.some(a=>a.name===original));
+ }finally{await fs.rm(root,{recursive:true,force:true});}
+});
+
+test('explicit saved storage survives restart and can be forgotten without claiming login validity',async()=>{
+ const {m,root,calls}=await fixture();try{
+ const s=await m.open({id:'saved'});await m.action('saved','save-profile');assert.equal(s.profile,'saved-storage');
+ const fresh=new Sessions(root,{run:m.run});await fresh.init();assert.equal(fresh.get('saved').status,'closed');assert.equal(fresh.get('saved').auth,'unknown');
+ await fresh.open({id:'saved'});assert.ok(calls.some(a=>a.includes('--state')));await fresh.action('saved','close');await fresh.action('saved','forget');
+ assert.equal(fresh.get('saved').profile,'ephemeral');await assert.rejects(fs.access(path.join(s.dir,'auth-state.json')));
  }finally{await fs.rm(root,{recursive:true,force:true});}
 });

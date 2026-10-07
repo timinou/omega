@@ -2,7 +2,7 @@
 
 * Work in scoped files
 Desk ID and operation are in your task goal. Read the qualification profile.
-Keep every public output under desks/DESK/. Do not rewrite generated desk.bl.org
+Your cwd is this desk folder. Write public outputs with local filenames. Do not rewrite generated desk.bl.org
 or opportunity-ID.bl.org: desk-tool publishes these from durable structured facts.
 Create named reusable BEAM Lisp functions in search.bl and matching source blocks
 in search.bl.org BEFORE discovery. Reuse or repair previous functions. Execute
@@ -11,8 +11,8 @@ no js/JSON.parse or Java classes. Use sh maps :out/:exit; inspect failures.
 
 * Browser
 (sh "node browser-tool.mjs open https://example.org/")
-For arbitrary JS or URLs write a literal argument file then:
-(sh "node browser-tool.mjs eval --arg-file desks/DESK/argument.txt")
+For arbitrary JS or URLs write a local literal argument file then:
+(sh "node browser-tool.mjs eval --arg-file argument.txt")
 The result is readable page text. Use document.body.innerText, DOM selectors,
 links, snapshot. Do not inject giant page dumps into the model: read only the
 relevant fields/sections (about 10000 characters). Use browser-tool.mjs download
@@ -23,8 +23,8 @@ Page and token limits are enforced by the local browser gateway. If reached,
 save partial outputs and done. Do not loop formatting or retry WAF challenges.
 
 * Publishing structured opportunities
-Write JSON to desks/DESK/update.json then call:
-(sh "node desk-tool.mjs update --arg-file desks/DESK/update.json")
+Write JSON to local update.json then call:
+(sh "node desk-tool.mjs update --arg-file update.json")
 JSON schema:
 {"desk":"DESK","opportunity":{"id":"safe-lowercase-id",
 "title":"Original title","buyer":"Buyer or unknown","country":"Morocco",

@@ -1,0 +1,96 @@
+(ns pq.main
+ (:require [ed.core :as c] [ed.text :as t] [ed.docs :as docs]
+           [pp.present :as p] [pp.conv :as conv] [pp.omega :as om] [br.main :as br]))
+(defn header [ed prefix]
+ (some (fn [line] (when (starts-with? line prefix) (trim (subs line (count prefix))))) (take 12 (:lines (:text ed)))))
+(defn desk-id [ed] (or (header ed "#+PROCUREMENT_DESK:") (get-in ed [:doc :data :desk]) (get-in ed [:pkg-state "procurement" :desk])))
+(defn decision-at [ed]
+ (first (filter (fn [b] (and (= "decision" (:lang b)) (<= (:from b) (first (c/cursor ed))) (< (first (c/cursor ed)) (:to b)))) (:blocks (:struct ed)))))
+(defn opportunity-id [ed]
+ (or (when (= "procurement/opportunity" (:type (docs/object-at ed))) (:key (docs/object-at ed)))
+  (when-let [b (decision-at ed)] (:id (br/attrs (t/line (:text ed) (:from b)))))
+  (when (some? (index-of (str (:path ed)) "opportunity-"))
+   (:id (br/attrs (or (some (fn [line] (when (starts-with? line "#+begin_decision") line)) (:lines (:text ed))) ""))))))
+(defn layout [id]
+ {:name "procurement-desk" :doc "Opportunity queue, decision and accountable research."
+  :panes [{:id :queue :doc (str "procurement:" id "/queue") :width [:ch 34]}
+          {:id :decision :doc :linked :width :fill}
+          {:id :activity :doc (str "procurement:" id "/activity") :width [:ch 32]}]
+  :links [{:from :queue :on :select :to :decision :do :visit}] :focus :decision})
+(def desk-layout (layout "ora"))
+(defn adopt [ed]
+ (if-let [id (desk-id ed)]
+  (let [ed (assoc-in ed [:pkg-state "procurement" :desk] id)]
+   (if (header ed "#+PROCUREMENT_DESK:") (assoc ed :frame/layout (layout id)) ed)) ed))
+(defn intent [ed verb args]
+ (c/effect ed {:kind :intent :intent (str "procurement/" verb) :args args :then :visit-path}))
+(defn run [ed operation]
+ (if-let [desk (desk-id ed)] (intent ed "run" {:desk desk :operation operation :id (opportunity-id ed)})
+  (c/message ed "Open a decision desk first, or create one with space p n.")))
+(defn new-desk [ed]
+ (docs/owned-prompt ed "procurement" "New desk ID (lowercase, hyphens): " ""
+  (fn [ed id] (intent ed "new" {:id (trim id) :title (trim id) :from (desk-id ed)}))))
+(defn decide [ed decision]
+ (if-let [id (opportunity-id ed)]
+  (docs/owned-prompt ed "procurement" (str decision " — rationale: ") ""
+   (fn [ed reason] (intent ed "decide" {:desk (desk-id ed) :id id :decision decision :rationale reason})))
+  (c/message ed "Open an opportunity first.")))
+(defn home [ed] (docs/visit ed (str "desks/" (or (desk-id ed) "ora") "/desk.bl.org")))
+(defn button [text command] {:text (str " " text " ") :kind :strong :command command})
+(defn wrapped [ed row key text kind]
+ (map-indexed (fn [i s] (p/line-mark row [{:text s :kind kind}] (str key "/" i)))
+  (conv/wrap text (max 16 (- (or (get-in ed [:view :cols]) (when (starts-with? (str (:path ed)) "procurement:") 32) 80) 6)))))
+(defn decision-card [o ctx]
+ (let [ed (:ed ctx) a (br/attrs (t/line (:text ed) (:from o))) rows (range (inc (:from o)) (dec (:to o))) key (:key o)]
+  (p/head-card key "focus"
+   (concat [(p/line-mark (:from o) [{:text (str "● " (:stage a) "   /   " (:decision a)) :kind :who}] key)]
+    (mapcat (fn [r] (wrapped ed r (str key r) (t/line (:text ed) r) (if (= r (inc (:from o))) :heading-1 :prose))) rows)
+    [(p/line-mark (:from o) [(button "Open" :procurement/open) (button "Qualify dossier" :procurement/qualify)] (str key "/open"))
+     (p/line-mark (:from o) [(button "Needs info" :procurement/needs-information) (button "Pursue" :procurement/pursue) (button "Reject" :procurement/reject)] (str key "/decide"))]))))
+(defn measure [ed]
+ (max 16 (- (or (get-in ed [:view :cols]) (when (starts-with? (str (:path ed)) "procurement:") 32) 80) 6)))
+(defn prose [o ctx]
+ (p/stack (mapcat (fn [r]
+  (let [line (t/line (:text (:ed ctx)) r)]
+   (if (or (starts-with? line "#+USE:") (starts-with? line "#+PROCUREMENT_DESK:") (starts-with? line "#+TITLE:")) []
+    (wrapped (:ed ctx) r (str (:key o) r) line :prose)))) (range (:from o) (:to o)))))
+(defn queue-card [o ctx]
+ (p/head-card (:key o) "focus" (wrapped (:ed ctx) (:from o) (:key o) (t/line (:text (:ed ctx)) (:from o)) :strong)))
+(defn doc-actions [o ctx next]
+ (let [ed (:ed ctx) virtual? (starts-with? (str (:path ed)) "procurement:")]
+  (p/stack (concat
+   (when-not virtual? [(p/line-mark 0 [{:text "PROCUREMENT  /  " :kind :who}
+    (button "Desk" :procurement/home) (button "Discover" :procurement/discover) (button "Refresh" :procurement/refresh)
+    (button "New / reuse" :procurement/new)] "procurement/actions")])
+   (wrapped ed 0 "procurement/title" (or (header ed "#+TITLE:") "Procurement") :heading-1)
+   (:kids (next o ctx))))))
+(def decision-entry {:type :procurement/decision :match (fn [b l] (= "decision" (:lang b))) :attrs (fn [b l] (br/attrs l))})
+(defn render [ed]
+ (when (or (header ed "#+PROCUREMENT_DESK:") (starts-with? (str (:path ed)) "procurement:"))
+  (p/render (assoc om/default-presentation :fill? false :readtable (into [decision-entry br/browser-entry] (:readtable om/default-presentation))
+   :table (assoc (:table om/default-presentation) :procurement/decision decision-card :omega/browser-block br/present-browser :procurement/opportunity queue-card :omega/task prose :prose prose)
+   :around [{:type :doc :fn doc-actions}]) ed)))
+(defn open [ed]
+ (if-let [id (opportunity-id ed)] (docs/visit ed (str "desks/" (desk-id ed) "/opportunity-" id ".bl.org")) ed))
+(defn source? [ed]
+ (and (ends-with? (str (:path ed)) "search.bl.org") (some (fn [b] (and (= "beam-lisp" (:lang b)) (<= (:from b) (first (c/cursor ed))) (< (first (c/cursor ed)) (:to b)))) (:blocks (:struct ed)))))
+(def bl-package
+ {:name "procurement" :doc "Loadable, evidence-based procurement decision desks." :requires ["present" "browser"]
+  :commands {:procurement/home {:doc "Open this decision desk." :run home}
+   :procurement/open {:doc "Open the selected opportunity." :run open}
+   :procurement/new {:doc "Create a separate desk, reusing profile and curated functions." :run new-desk}
+   :procurement/discover {:doc "Run bounded official-source discovery." :run (fn [ed] (run ed "discover"))}
+   :procurement/refresh {:doc "Reuse curated functions and preserve change history." :run (fn [ed] (run ed "refresh"))}
+   :procurement/qualify {:doc "Read dossier and compare to sourced qualification facts." :run (fn [ed] (run ed "qualify"))}
+   :procurement/needs-information {:doc "Record missing information with rationale." :run (fn [ed] (decide ed "needs-information"))}
+   :procurement/pursue {:doc "Record pursue after qualification check." :run (fn [ed] (decide ed "pursue"))}
+   :procurement/reject {:doc "Record rejection with rationale." :run (fn [ed] (decide ed "reject"))}}
+  :keys {:normal {"space p h" :procurement/home "space p n" :procurement/new "space p d" :procurement/discover "space p r" :procurement/refresh "space p q" :procurement/qualify "space p i" :procurement/needs-information "space p y" :procurement/pursue "space p x" :procurement/reject}}
+  :intercept (fn [ed ev] (when (and (= :key (:type ev)) (= "C-Enter" (:key ev)))
+    (cond (source? ed) (run ed "refresh")
+     (= "procurement/opportunity" (:type (docs/object-at ed))) (open ed)
+     (some? (decision-at ed)) (open ed)
+     :else nil)))
+  :adopt adopt :owns [:frame/layout] :render render
+  :provides {:layouts {"procurement-desk" desk-layout}
+   :links {"procurement/opportunity" (fn [o] (or (:path o) (str "desks/" (:desk o) "/opportunity-" (:key o) ".bl.org")))}}})
