@@ -7,7 +7,7 @@ export BROWSER_DEMO_ROOT=${BROWSER_DEMO_ROOT:-/tmp/omega-browser-demo}
 # Fail before launching either process if a requested port is already in use.
 node --input-type=module <<'JS'
 import net from 'node:net';
-for (const port of [8796,8797]) {
+for (const port of [8796,8797,...(process.env.BROWSER_OPENAI==='1'?[8798]:[])]) {
   const occupied = await new Promise(resolve => {
     const socket = net.createConnection({host:'127.0.0.1',port});
     socket.once('connect',()=>{socket.destroy();resolve(true);});
@@ -23,12 +23,17 @@ if [ "${BROWSER_LIVE:-0}" = 1 ]; then
 else
   cp "$here/demo.bl.org" "$BROWSER_DEMO_ROOT/demo.bl.org"
 fi
-world_pid= proxy_pid=
+world_pid= proxy_pid= model_pid=
 cleanup() {
+  [ -z "$model_pid" ] || kill -TERM "$model_pid" 2>/dev/null || true
   [ -z "$proxy_pid" ] || kill -TERM "$proxy_pid" 2>/dev/null || true
   [ -z "$world_pid" ] || kill -TERM "$world_pid" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
+if [ "${BROWSER_OPENAI:-0}" = 1 ]; then
+  node "$here/procurement/model-adapter.mjs" &
+  model_pid=$!
+fi
 "$OMEGA_HOME/bin/bl" run "$here/world.bl" &
 world_pid=$!
 # Print the usable demo link only after the world can answer requests.

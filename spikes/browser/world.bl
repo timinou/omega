@@ -15,7 +15,11 @@
        (if (= 0 exit) {:ok out :done true} {:error out})))})
 (def e (env/open))
 (def live? (= "1" (System/get_env "BROWSER_LIVE")))
-(def model (when live? (llm/from-env home)))
+(def model (when live?
+  (if (= "1" (System/get_env "BROWSER_OPENAI"))
+    (llm/provider {:kind :anthropic :model (or (System/get_env "BROWSER_MODEL") "gpt-5.4")
+                   :base-url "http://127.0.0.1:8798" :stream false :identity nil})
+    (llm/from-env home))))
 (def sys (task/start-system e
   (if live?
     {:root root :tools cm/tools :step (llm/step model) :max-steps 25

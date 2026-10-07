@@ -101,7 +101,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(u.pathname==='/api/intent' && req.method==='POST') {
       const b=await body(req);const a=b.args || {};
-      if(b.intent?.startsWith('browser/')) {
+      if(b.intent?.startsWith('browser/') && b.intent!=='browser/run-proof') {
         const verb=b.intent.slice(8);
         if(verb==='task-open') {
           if(!validId(a.id))throw Error('Invalid browser session ID');
