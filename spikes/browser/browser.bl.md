@@ -208,12 +208,12 @@ old running sessions after the host restarts. Files remain for inspection.
 ## Verification and proof
 
 - [Browser block in real bl-ed](proof/01-browser-block.png).
-- Inbox screenshot pending replacement: the original capture showed only the
-  loading screen and was removed. Fresh capture requires localhost browser access.
+- [Task and browser registry in the inbox](proof/02-inbox-task-browser.png).
 - [Captured headless viewport beside the session](proof/03-headless-observe.png).
 - [Headful session](proof/04-headful-observe.png).
 - [After unuse, plain editor restored](proof/05-unuse-restores-editor.png).
 - [Task reference created by C-Enter](proof/06-task-browser-reference.png).
+- [Readable page snapshot opened as an editor buffer](proof/07-readable-artifact.png).
 - [Real cookie/localStorage handoff](proof/storage-handoff.json).
 - [Browser discovery report](proof/discovery.bl.org).
 - [Ora shortlist, including original-PDF deadline verification](proof/ora-shortlist.bl.org).
