@@ -48,7 +48,8 @@ export function toChat(b) {
         reasoning_content:chatReasoning.get(calls[0].id) || ''}:{})});
     for(const c of m.content || [])if(c.type==='tool_result')messages.push({role:'tool',tool_call_id:c.tool_use_id,content:typeof c.content==='string'?c.content:JSON.stringify(c.content)});
   }
-  return {model:b.model,messages,max_tokens:b.max_tokens,stream:false,reasoning_effort:'low',
+  return {model:b.model,messages,max_tokens:b.max_tokens,stream:false,
+    thinking:{type:process.env.BROWSER_THINKING || 'disabled'},reasoning:{effort:process.env.BROWSER_REASONING_EFFORT || 'low'},
     tools:(b.tools || []).map(t=>({type:'function',function:{name:t.name,description:t.description,parameters:t.input_schema}}))};
 }
 export function fromChat(j) {

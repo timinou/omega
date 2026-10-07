@@ -22,6 +22,8 @@ test('chat transport preserves reasoning, tool IDs and DeepSeek cache accounting
  assert.equal(request.messages[1].reasoning_content,'reason');
  assert.equal(request.messages[1].tool_calls[0].id,'ds-call');
  assert.equal(request.messages[2].tool_call_id,'ds-call');
+ assert.equal(request.thinking.type,'disabled');
+ assert.equal(request.reasoning.effort,'low');
 });
 test('truncated provider tool arguments retain usage without executing a malformed call',async()=>{
  const {fromChat}=await import('../procurement/model-adapter.mjs');
