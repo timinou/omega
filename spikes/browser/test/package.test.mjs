@@ -2,8 +2,9 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import {pathToFileURL} from 'node:url';
-const out=path.resolve('vendor/bl-ed/web/out');
+import {fileURLToPath,pathToFileURL} from 'node:url';
+const root=fileURLToPath(new URL('../../../',import.meta.url));
+const out=path.join(root,'vendor/bl-ed/web/out');
 const imp=n=>import(pathToFileURL(path.join(out,n+'.mjs')));
 const {start}=await imp('repl');
 const repl=await start(f=>fs.readFileSync(path.join(out,'src',f),'utf8'));
@@ -13,7 +14,7 @@ const K=R.kw,ev=(...a)=>R.hashMap(...a),get=(m,k)=>m?.get(K(k),null);
 const key=k=>ev(K('type'),K('key'),K('key'),k);
 const use=ed=>M.d_handle(ed,ev(K('type'),K('use'),K('package'),P.d_bl_package));
 function awaitText(ed){return get(get(ed,'text'),'lines').toArray().join('\n');}
-const text=fs.readFileSync('spikes/browser/demo.bl.org','utf8');
+const text=fs.readFileSync(new URL('../demo.bl.org',import.meta.url),'utf8');
 function at(ed,row){return ed.assoc(K('sels'),R.vec(R.hashMap(K('anchor'),R.vec(row,0),K('head'),R.vec(row,0))));}
 test('browser task C-Enter emits a host intent, ordinary tasks pass through',()=>{
  let ed=use(at(M.d_boot(text,'demo.bl.org'),4));
