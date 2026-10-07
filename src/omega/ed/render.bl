@@ -68,7 +68,7 @@
   [row now]
   (let [ask (first (:asks row))]
     {:id (:id row) :status (name (or (:status row) :open))
-     :cwd (:cwd row) :home (:home row)
+     :place (:place row) :cwd (:cwd row) :home (:home row)
      :glyph (if ask "⚑" (glyph (:status row)))
      :word (if ask "needs you" (word (:status row)))
      :title (one-line (or (:title row) (:goal row)) 60)
@@ -107,7 +107,7 @@
                    (let [rows (get by g [])
                          acc (emit acc (str "* " label " (" (count rows) ")"))]
                      (reduce (fn [acc r] (emit acc (task-line r homes) {:type "omega/task" :key (:id r)
-                                                                     :cwd (:cwd r) :home (or (:home r) (get homes (:id r)))})) acc rows)))
+                                                                     :place (:place r) :cwd (:cwd r) :home (or (:home r) (get homes (:id r)))})) acc rows)))
                  acc model/GROUPS))))
 
 ; ─── omega:tasks (the cards' data) ─────────────────────────────────────────
@@ -154,7 +154,7 @@
         acc (-> EMPTY
                 (emit (str "#+TITLE: " id " · " (one-line (or (:title row) (:goal row)) 60) " · " (glyph (:status row)) " " (word (:status row)) " · " (age (:age-ms row))
                            (when (:cwd row) (str " · cwd " (Path/basename (:cwd row)))))
-                      {:type "omega/task" :key id :cwd (:cwd row) :home (or (:home row) (get homes id))})
+                      {:type "omega/task" :key id :place (:place row) :cwd (:cwd row) :home (or (:home row) (get homes id))})
                 (emit (str "home: " (home-label homes id) (when (:owner row) (str " · parent: " (:owner row))) " · effects:" id))
                 (emit (str "cwd: " (or (:cwd row) "world root (legacy task)")))
                 (emit (if (contains? #{:done :failed :cancelled} (:status row))

@@ -1,0 +1,25 @@
+; Place management is a layer, including parent navigation and attachment.
+(ns place.main (:require [ed.core :as c] [ed.docs :as docs]))
+(defn parent [ed]
+  (if-let [id (get-in ed [:doc :data :parent])]
+    (docs/visit ed (str "place:" id))
+    (docs/visit ed "places:")))
+(defn attach [ed]
+  (docs/owned-prompt ed "places" "place map: "
+    (fn [ed text] (c/effect ed {:kind :intent :intent "place/put" :args {:text text} :then :visit-path}))))
+(defn enter [ed]
+  (if-let [o (docs/object-at ed)] (docs/visit ed (:key o) (:goto o)) (c/message ed "Select a place, folder or document.")))
+(defn new-task [ed]
+  (let [id (or (get-in ed [:doc :data :place]) (:place (docs/object-at ed)))]
+    (if id (docs/owned-prompt ed "places" "task here: "
+             (fn [ed goal] (c/effect ed {:kind :intent :intent "task/open" :args {:goal goal :path (str "place:" id)} :then :visit-path})))
+      (c/message ed "Visit or select a place first."))))
+(def bl-package
+  {:name "places" :doc "Durable places, subplaces, attached folders and inherited conventions."
+   :commands {:places/task {:doc "Open a task in the selected/current place, with a scratch home." :run new-task}
+              :places/parent {:doc "Go to the parent place, or the place tree." :run parent}
+              :places/attach {:doc "Attach or update a place using a plain map." :run attach}
+              :places/enter {:doc "Enter the selected place or location." :run enter}}
+   :keys (fn [ed] {:normal (merge {"g p" :places/parent}
+                                 (when (contains? #{"workspace/place" "workspace/file" "workspace/folder"} (:type (docs/object-at ed))) {"Enter" :places/enter}))})
+   :provides {:links {"workspace/place" (fn [o] (:key o))}}})

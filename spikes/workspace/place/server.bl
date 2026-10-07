@@ -1,0 +1,57 @@
+(ns place.server (:require [place.model :as p] [ws.server :as ws] [omega.task :as task]
+                          [bl-ed.serve :as serve] [clojure.string :as str]))
+(defn context [sys path cwd]
+  (let [places (p/all (:env sys)) roots (p/roots places)
+        address (cond (and path (str/starts-with? path "work:")) (first (str/split (subs path 5) "/"))
+                      (and path (str/starts-with? path "place:")) (subs path 6))
+        configured (when address (get-in (p/settings places address) [:cwd :value]))
+        effective (or cwd (when (and (nil? address) (nil? cwd)) (:root sys)) (when configured (Path/expand configured (p/root places address)))
+                          (when (and address (str/starts-with? path "place:")) (str "@" address)))
+        wd (if (and (nil? address) (nil? cwd)) (Path/expand (:root sys))
+             (ws/working-directory roots (:root sys) path effective))
+        explicit (when (and cwd (str/starts-with? cwd "@")) (first (str/split (subs cwd 1) "/")))
+        id (or explicit (when (and (nil? cwd) address) address) (p/containing places wd))]
+    {:cwd wd :place id}))
+(defn- line
+  ([d s] (update d :lines conj s))
+  ([d s o] (-> d (update :objects conj (assoc o :row (count (:lines d)))) (line s))))
+(defn- finish [d] {:text (str (str/join "\n" (:lines d)) "\n") :objects (:objects d) :read-only? true})
+(defn tree-doc [sys]
+  (let [places (p/all (:env sys))]
+    (finish (reduce (fn [d [id place]]
+                      (let [depth (dec (count (p/ancestors places id))) r (p/root places id)]
+                        (-> d (line (str (apply str (repeat (inc depth) "*")) " " (:name place))
+                                    {:type "workspace/place" :key (str "place:" id) :place id})
+                              (line (str "  " id " · " (or r "no directory"))))))
+                    {:lines ["#+TITLE: Places" "" "RET enters · g p parent · g H task home · Alt+h/l panes" ""]}
+                    (sort-by (fn [[id _]] (str/join "/" (map :id (reverse (p/ancestors places id))))) places)))))
+(defn place-doc [sys id]
+  (let [places (p/all (:env sys)) here (get places id) chain (p/ancestors places id)
+        r (p/root places id) descendants (p/descendants places id)
+        tasks (filter (fn [t] (contains? descendants (:place t))) (task/all sys))
+        d {:lines [(str "#+TITLE: " (:name here)) (str "place: " id) (str "directory: " (or r "none")) ""]}
+        d (if-let [parent (:parent here)] (line d (str "↑ " (:name (get places parent))) {:type "workspace/place" :key (str "place:" parent) :place parent}) d)
+        d (if-let [home (:home here)] (line d "Home document" {:type "workspace/file" :key (if (str/includes? (:path home) ":") (:path home) (str "work:" id "/" (:path home))) :goto (when (:block home) {:block (:block home)})}) d)
+        d (reduce (fn [d [child m]] (line d (str "▸ " (:name m)) {:type "workspace/place" :key (str "place:" child) :place child}))
+                  (line d "* Subplaces") (sort-by first (filter (fn [[_ m]] (= id (:parent m))) places)))
+        folder (when r (ws/folder-doc sys (p/roots places) id))
+        files (filter (fn [o] (contains? #{"workspace/file" "workspace/folder"} (:type o))) (:objects folder))
+        d (reduce (fn [d o] (line d (nth (str/split (:text folder) "\n") (:row o)) (dissoc o :row))) (line d "* Files") files)
+        d (reduce (fn [d t] (line d (str (:id t) " · " (name (:status t)) " · " (:title t) " · place " (:place t))
+                                        {:type "omega/task" :key (:id t) :home (:home t) :cwd (:cwd t)})) (line d "* Tasks here and below") tasks)
+        d (reduce (fn [d [k v]] (line d (str (pr-str k) " = " (pr-str (:value v)) " ← " (:from v))))
+                  (line d "* Effective configuration") (sort-by first (p/settings places id)))]
+    (assoc (finish d) :data {:place id :parent (:parent here) :root r})))
+(defn providers [sys]
+  (let [dynamic (fn [scheme] {:read (fn [nm req] ((:read (get (ws/providers sys (p/roots (p/all (:env sys)))) scheme)) nm req))
+                             :rev (fn [nm req] ((:rev (get (ws/providers sys (p/roots (p/all (:env sys)))) scheme)) nm req))})
+        work (dynamic "work")]
+    {"places" {:read (fn [_ _] (tree-doc sys)) :rev (fn [_ _] (serve/text-rev (:text (tree-doc sys))))}
+     "place" {:read (fn [id _] (place-doc sys id)) :rev (fn [id _] (serve/text-rev (:text (place-doc sys id))))}
+     "folder" (dynamic "folder")
+     "work" (assoc work :write (fn [nm req text base] ((:write (get (ws/providers sys (p/roots (p/all (:env sys)))) "work")) nm req text base))
+                         :eval (fn [nm req id text] ((:eval (get (ws/providers sys (p/roots (p/all (:env sys)))) "work")) nm req id text)))}))
+(defn intents [sys]
+  {"place/put" (fn [{:keys [text]}] (let [m (read-string text)]
+                                     (when-not (map? m) (throw (ex-info "Expected a place map." {})))
+                                     (p/put! (:env sys) m) {:path (str "place:" (:id m))}))})

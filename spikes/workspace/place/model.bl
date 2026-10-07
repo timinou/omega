@@ -1,0 +1,77 @@
+; Place package's host model. One family, ordinary home/config values.
+(ns place.model (:require [omega.env :as env] [clojure.string :as str]))
+(def schema
+  [{:db/ident :place/id :db/valueType :db.type/string :db/unique :db.unique/identity}
+   {:db/ident :place/name :db/valueType :db.type/string}
+   {:db/ident :place/parent :db/valueType :db.type/ref :db/index true}
+   {:db/ident :place/root :db/valueType :db.type/string}
+   {:db/ident :place/home}
+   {:db/ident :place/config}])
+(def pull [:place/id :place/name :place/parent :place/root :place/home :place/config])
+(defn all [e]
+  (into {} (map (fn [[id]] (let [m (env/pull e pull (env/eid e :place/id id))]
+                           [id {:id id :name (:place/name m) :parent (when (:place/parent m) (:place/id (env/pull e [:place/id] (:place/parent m))))
+                                :root (:place/root m) :home (:place/home m) :config (:place/config m)}]))
+               (env/q e '[:find ?id :where [?p :place/id ?id]]))))
+(defn ancestors
+  "Self first; throws for a broken parent or cycle."
+  [places id]
+  (loop [id id seen #{} out []]
+    (if (nil? id) out
+      (let [p (get places id)]
+        (when-not p (throw (ex-info (str "Unknown place: " id) {})))
+        (when (contains? seen id) (throw (ex-info "Place containment cycle." {:id id})))
+        (recur (:parent p) (conj seen id) (conj out p))))))
+(defn root [places id]
+  (reduce (fn [base p] (if-let [r (:root p)]
+                        (if (and (nil? base) (not (str/starts-with? r "/")))
+                          (throw (ex-info "Top-level place root must be absolute." {:id (:id p)}))
+                          (Path/expand r (or base "/"))) base)) nil (reverse (ancestors places id))))
+(defn roots [places] (into {} (keep (fn [[id _]] (when-let [r (root places id)] [id r])) places)))
+(defn descendants [places id]
+  (set (keep (fn [[key _]] (when (some (fn [p] (= id (:id p))) (ancestors places key)) key)) places)))
+(defn settings
+  "Resolved values with the place that supplied each value. Keys replace."
+  [places id]
+  (reduce (fn [out p] (reduce (fn [out [k v]] (assoc out k {:value v :from (:id p)})) out (:config p)))
+          {} (reverse (ancestors places id))))
+(defn containing [places path]
+  (first (first (sort-by (fn [[id r]] [(- (count r)) id])
+                  (filter (fn [[_ r]] (or (= path r) (str/starts-with? path (str r "/")))) (roots places))))))
+(defn put!
+  "Attach/update a place. Parent changes require :directory :preserve|:adopt.
+   Preserve pins the previous resolved directory as an absolute root."
+  [e m]
+  (let [places (all e) id (:id m) old (get places id)
+        _ (when-not (map? m) (throw (ex-info "Expected a place map." {})))
+        _ (when-not (string? id) (throw (ex-info "Place id must be a string." {})))
+        _ (when (and (:root m) (or (not (string? (:root m))) (str/blank? (:root m))))
+            (throw (ex-info "Place root must be a nonempty directory string." {})))
+        _ (when (and (:config m) (not (map? (:config m)))) (throw (ex-info "Place config must be a map." {})))
+        _ (when (and (:home m) (or (not (map? (:home m))) (not (string? (get-in m [:home :path])))))
+            (throw (ex-info "Place home needs a {:path string} location." {})))
+        _ (when (or (str/blank? id) (str/includes? id "/") (str/includes? id ":") (str/includes? id " "))
+            (throw (ex-info "Place id must be a nonempty address token without /, : or spaces." {})))
+        changed? (and old (contains? m :parent) (not= (:parent old) (:parent m)))
+        _ (when (and changed? (not (contains? #{:preserve :adopt} (:directory m))))
+            (throw (ex-info "Reparent requires :directory :preserve or :adopt." {})))
+        next (merge old (select-keys m [:id :name :parent :root :home :config]))
+        next (if (and changed? (= :preserve (:directory m))) (assoc next :root (root places id)) next)
+        proposed (assoc places id next)
+        _ (doseq [[key _] proposed]
+            (when-let [dir (root proposed key)]
+              (when-not (File/dir? dir) (throw (ex-info (str "Place directory does not exist: " dir) {:id key})))))
+        resolved (root proposed id)
+        _ (when (and resolved (not (File/dir? resolved))) (throw (ex-info (str "Place directory does not exist: " resolved) {})))
+        fact (cond-> {:db/id -1 :place/id id :place/name (or (:name next) id)}
+               (:parent next) (assoc :place/parent (or (env/eid e :place/id (:parent next))
+                                                     (throw (ex-info "Parent must exist." {}))))
+               (:root next) (assoc :place/root (:root next))
+               (:home next) (assoc :place/home (:home next))
+               (:config next) (assoc :place/config (:config next)))
+        retracts (when old (keep (fn [[key attr]]
+                                  (let [value (get (env/pull e [attr] (env/eid e :place/id id)) attr)]
+                                    (when (and (contains? m key) (nil? (get next key)) (some? value))
+                                      [:db/retract (env/eid e :place/id id) attr value])))
+                                [[:parent :place/parent] [:root :place/root] [:home :place/home] [:config :place/config]]))]
+    (env/tx! e (vec (concat [fact] retracts))) next))

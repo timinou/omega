@@ -23,7 +23,7 @@
 (def ^:private TASK-PULL
   [:task/id :task/goal :task/title :task/status :task/scope :task/result :task/cost :task/at
    :task/cwd :task/home-path :task/home-block
-   {:task/owner [:task/id]} {:task/waits-on [:task/id]}])
+   {:task/place [:place/id]} {:task/owner [:task/id]} {:task/waits-on [:task/id]}])
 
 (defn- last-trace-at [traces id]
   (reduce (fn [m t] (if (= id (:task t)) (max m (or (:at t) 0)) m)) 0 traces))
@@ -38,6 +38,7 @@
     {:id id
      :title (or (:task/title m) id)
      :goal (:task/goal m)
+     :place (get-in m [:task/place :place/id])
      :cwd (:task/cwd m)
      :home (when (:task/home-path m) {:path (:task/home-path m) :block (:task/home-block m)})
      :status st

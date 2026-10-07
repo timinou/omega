@@ -351,10 +351,11 @@
         (if (str/blank? goal)
           {:ok false :message "a task needs a goal (the block's text)"}
           (let [base (or (:root sys) (File/cwd!))
-                wd (if-let [resolve (:working-directory opts)] (resolve path cwd)
-                     (Path/expand (or cwd (when (and path (not (str/includes? path ":"))) (Path/dirname (Path/expand path base))) base) base))
+                context (when-let [resolve (:task-context opts)] (resolve path cwd))
+                wd (or (:cwd context) (if-let [resolve (:working-directory opts)] (resolve path cwd)
+                     (Path/expand (or cwd (when (and path (not (str/includes? path ":"))) (Path/dirname (Path/expand path base))) base) base)))
                 origin (when (and path block) {:path path :block block})
-                id (task/open! sys (cond-> {:goal goal :cwd wd :home origin}
+                id (task/open! sys (cond-> {:goal goal :cwd wd :home origin :place (:place context)}
                                     (seq scope) (assoc :scope (if (string? scope) (vec (str/split scope " ")) (vec scope)))))
                 home (if (and path block) {:path path :block block} {:path "omega:scratch" :block id})]
             (when-not origin
@@ -362,7 +363,7 @@
                                   [:db/add (env/eid (:env sys) :task/id id) :task/home-block (:block home)]]))
             (when-not (and path block)
               (scratch-append! sys opts (str "\n* " (r/one-line goal 70) "\n#+begin_task :id " id "\n" goal "\n#+end_task\n#+RESULTS: " id "\n: " (reference {:id id}) "\n")))
-            {:id id}))))
+            {:id id :path (str "task:" id)}))))
     "task/say" (fn [{:keys [id text]}] (task/say! sys id (str text) "human:me") {})
     "task/steer" (fn [{:keys [id text]}] (task/steer! sys id (str text) "human:me") {})
     "task/cancel" (fn [{:keys [id]}] (task/cancel! sys id) {})

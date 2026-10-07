@@ -59,7 +59,7 @@
 
 (def ^:private PULL
   [:task/id :task/goal :task/title :task/status :task/scope :task/refined
-   :task/cwd :task/home-path :task/home-block
+   :task/place :task/cwd :task/home-path :task/home-block
    :task/result :task/cost :task/at
    {:task/owner [:task/id]} {:task/opened-by [:actor/id]} {:task/waits-on [:task/id]}])
 
@@ -72,6 +72,7 @@
       (let [m (env/pull e PULL t)]
         {:id (:task/id m) :goal (:task/goal m) :title (:task/title m)
          :status (:task/status m) :scope (vec (or (:task/scope m) []))
+         :place (when (:task/place m) (:place/id (env/pull e [:place/id] (:task/place m))))
          :cwd (or (:task/cwd m) (:root sys) (File/cwd!))
          :home (when (:task/home-path m) {:path (:task/home-path m) :block (:task/home-block m)})
          :refined (vec (or (:task/refined m) []))
@@ -220,6 +221,7 @@
      :by         actor id who opened it (default \"human:me\")
      :scope      [path …] declared footprint
      :cwd        working directory; defaults to owner's cwd, then world's root
+     :place      place id; children inherit owner place
      :home       {:path document-address :block stable-block-id}, optional
    Returns the task id."
   [sys m]
@@ -230,11 +232,14 @@
         id (env/new-id e "t")
         by (or (:by m) (actor/human-id "me"))
         _ (when (nil? (env/eid e :actor/id by)) (actor/ensure! e by :human))
+        place-id (or (:place m) (when (:owner m) (:place (view sys (:owner m)))))
+        place-eid (when place-id (or (env/eid e :place/id place-id) (throw (ex-info "Unknown task place." {:place place-id}))))
         owner (when-let [o (:owner m)] (env/eid e :task/id o))
         fact (cond-> {:db/id -1 :task/id id :task/goal (:goal m)
                       :task/title (or (:title m) (slug (:goal m)))
                       :task/status :open :task/at (now sys) :task/cwd cwd
                       :task/opened-by (env/eid e :actor/id by)}
+               place-eid (assoc :task/place place-eid)
                (some? owner) (assoc :task/owner owner)
                (get-in m [:home :path]) (assoc :task/home-path (get-in m [:home :path]))
                (get-in m [:home :block]) (assoc :task/home-block (get-in m [:home :block]))

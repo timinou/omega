@@ -1,0 +1,51 @@
+(ns workspace-place-test (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
+                                  [place.model :as p] [place.server :as s]))
+(defn fixture []
+  (let [root (str "/tmp/omega-place-test-" (erlang/unique_integer (to-list [:positive])))]
+    (File/mkdir_p! (str root "/a/sub")) (File/mkdir_p! (str root "/b")) root))
+(deftest containment-resolution-and-explainable-overrides
+  (let [root (fixture) e (env/open {:schema p/schema})]
+    (p/put! e {:id "a" :root (str root "/a") :config {:test "parent" :other 7}})
+    (p/put! e {:id "sub" :parent "a" :root "sub" :config {:test "child"}})
+    (p/put! e {:id "virtual" :parent "sub"})
+    (is (= (str root "/a/sub") (p/root (p/all e) "virtual")))
+    (is (= #{"a" "sub" "virtual"} (p/descendants (p/all e) "a")))
+    (is (= {:test {:value "child" :from "sub"} :other {:value 7 :from "a"}} (p/settings (p/all e) "virtual")))
+    (is (try (p/put! e {:id "a" :parent "virtual" :directory :adopt}) false (catch _ true)))
+    (is (nil? (:parent (get (p/all e) "a"))))
+    (p/put! e {:id "b" :root (str root "/b")})
+    (is (try (p/put! e {:id "sub" :parent "b"}) false (catch _ true)))
+    (p/put! e {:id "sub" :parent "b" :directory :preserve})
+    (is (= (str root "/a/sub") (p/root (p/all e) "sub")))
+    (p/put! e {:id "virtual" :parent "b" :directory :adopt})
+    (is (= (str root "/b") (p/root (p/all e) "virtual")))
+    (is (try (p/put! e {:id "bad" :parent "missing"}) false (catch _ true)))
+    (env/close! e)))
+(deftest places-survive-reopen-and-task-place-is-independent-of-home
+  (let [root (fixture) path (str root "/db") e (env/open {:schema p/schema :path path})]
+    (p/put! e {:id "a" :root (str root "/a")}) (env/close! e)
+    (let [e (env/open {:schema p/schema :path path})
+          sys (task/start-system e {:step (loop/scripted [(loop/say "ok")]) :root root})
+          context (s/context sys "work:a/note.bl.org" "@a")
+          id (task/open! sys (merge context {:goal "test" :home {:path "elsewhere.bl.org" :block "x"}}))]
+      (task/await sys id 5000)
+      (is (= (str root "/a") (:cwd (task/view sys id))))
+      (is (= "a" (:place (task/view sys id))))
+      (is (= "elsewhere.bl.org" (get-in (task/view sys id) [:home :path])))
+      (is (= "a" (get-in (s/place-doc sys "a") [:data :place])))
+      (is (some (fn [o] (= id (:key o))) (:objects (s/place-doc sys "a"))))
+      (task/stop-system! sys) (env/close! e))))
+(deftest reparent-validates-descendants-and-clearing-optional-values-is-safe
+  (let [root (fixture) e (env/open {:schema p/schema})]
+    (p/put! e {:id "a" :root (str root "/a")})
+    (p/put! e {:id "sub" :parent "a" :root "sub"})
+    (is (try (p/put! e {:id "a" :root (str root "/b")}) false (catch _ true)))
+    (is (= (str root "/a") (p/root (p/all e) "a")))
+    (p/put! e {:id "a" :parent nil :config nil})
+    (is (= (str root "/a") (p/root (p/all e) "a")))
+    (p/put! e {:id "a" :config {:cwd "sub"}})
+    (let [sys {:env e :root root}]
+      (is (= {:cwd (str root "/a/sub") :place "a"} (s/context sys "work:a/plan.bl.org" nil)))
+      (is (= {:cwd (str root "/a/sub") :place "a"} (s/context sys "place:a" nil)))
+      (is (= {:cwd (str root "/a") :place "a"} (s/context sys "work:a/plan.bl.org" "@a"))))
+    (env/close! e)))
