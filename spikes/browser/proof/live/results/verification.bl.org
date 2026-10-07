@@ -1,0 +1,44 @@
+#+BROWSER_LAYOUT: procurement-review
+#+TITLE: Ora procurement final verification — executed-function evidence
+#+DATE: 2026-10-07
+#+AUTHOR: Omega
+
+* Verification method
+This file records the final real-browser pass over the four original notice URLs that were already listed in opportunities.bl.org. It does not repeat the portal search and does not re-read Ora's website.
+
+* Executed curated-function evidence
+1. `bt-open`, `page-url`, `page-text` on Morocco BNRM GPU URL.
+   - Requested: https://www.marchespublics.gov.ma/index.php?page=entreprise.EntrepriseDetailConsultation&refConsultation=1040908&orgAcronyme=s5z
+   - Observed: https://www.marchespublics.gov.ma/index.php?page=entreprise.EntrepriseDetailsConsultation&refConsultation=1040908&orgAcronyme=s5z
+   - Observed page text: deadline 27/10/2026 11:00; ref 16/BNRM/2026; object location d'une infrastructure GPU souveraine pour les traitements d'intelligence artificielle au profit de la Bibliothèque Nationale du Royaume du Maroc en lot unique; Dossier de consultation 2,2 Mo.
+2. `bt-open`, `page-url`, `page-text` on Morocco ONMT Qlik/AI URL.
+   - Requested: https://www.marchespublics.gov.ma/index.php?page=entreprise.EntrepriseDetailConsultation&refConsultation=1044940&orgAcronyme=o3f
+   - Observed: https://www.marchespublics.gov.ma/index.php?page=entreprise.EntrepriseDetailsConsultation&refConsultation=1044940&orgAcronyme=o3f
+   - Observed page text: deadline 27/10/2026 11:00; ref DA/15/26; object LA MISE EN PLACE D'UNE SOLUTION D'INTELLIGENCE ARTIFICIELLE DE PILOTAGE CONVERSATIONNEL SUR L'INFRASTRUCTURE QLIK SENSE AU PROFIT DE L'ONMT « EN LOT UNIQUE »; Dossier de consultation 19,06 Mo.
+3. `bt-open`, `page-url`, `page-text` on France Numih DPS URL.
+   - Observed: https://www.marches-publics.gouv.fr/app.php/entreprise/consultation/2908387?orgAcronyme=x7c
+   - Observed page text: deadline 15/12/2036 10:00 (heure de Paris); ref 2025-0154-00-00-MPF; title Système d'acquisition dynamique pour l'acquisition de solutions d'intelligence artificielle et prestations associées pour les besoins de Numih France; organisme Etablissements de Santé et Médico-sociaux; downloads RC, DCE, DUME.
+4. `bt-open`, `page-url`, `page-text` on France RFI video-protection URL.
+   - Observed: https://www.marches-publics.gouv.fr/app.php/entreprise/consultation/3081354?orgAcronyme=g6l
+   - Observed page text: deadline 09/11/2026 12:00 (heure de Paris); ref EC071026; title RFI - SYSTEME DE VIDEOPROTECTION ET DE CAMERAS AEROPORTEES; object appel à compétences / AI image analysis; organisme Ministère de l'Intérieur; Dossier de consultation 1,6 Mo.
+5. `bt-links` and DOM/link inspection on the ONMT page confirmed the PMMP detail URL is the plural `EntrepriseDetailsConsultation` form and identified a notice-download endpoint, but opening that endpoint did not show additional buyer/procedure text.
+6. Readback of search.bl and search.bl.org confirmed the final `ted-search` has no `buyer-country=FRA&buyer-country=MAR` parameter and the source block is synchronized.
+
+* Actionable now
+- Morocco ONMT `DA/15/26` is the most directly actionable software/AI contract-style notice: read the visible Dossier de consultation (19,06 Mo) to confirm procedure, qualification, references and Qlik scope before deciding whether to bid.
+- France Numih `2025-0154-00-00-MPF` is actionable as DPS admission: read the visible RC/DCE/DUME and decide whether qualification is worth pursuing; it is not a direct purchase order.
+- Correct the original-notice URLs in any downstream tooling to the observed plural PMMP URLs and the observed PLACE URLs above.
+
+* Still unknown / not actionable without further evidence
+- Morocco deadlines have no explicit timezone label on the detail pages; the actual timezone is unknown.
+- Morocco exact buyer/procuring entity and formal procedure type are not shown on the detail pages; only ONMT/BNRM object text is visible.
+- Morocco GPU notice is verified open but not a primary software-services fit; do not act on it without GPU/cloud-infrastructure evidence and local qualification review.
+- France RFI video item is verified open but is an RFI/appel à compétences and security/video scope; not a primary Ora fit. Security/clearance requirements are not shown and must not be asserted.
+- EU-wide TED remains unverified because of WAF/human verification; no EU-wide original notice is actionable yet.
+- DPS call-off rules, DUME/eligibility conditions, Morocco tender-dossier conditions, and any references/guarantees/certifications remain unread and unknown.
+
+* Dated evidence files
+- evidence-2026-10-07-morocco-bnrm-gpu-detail.txt
+- evidence-2026-10-07-morocco-onmt-qlik-detail.txt
+- evidence-2026-10-07-france-numih-dps-detail.txt
+- evidence-2026-10-07-france-rfi-video-detail.txt

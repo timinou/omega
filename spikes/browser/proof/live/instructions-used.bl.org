@@ -1,0 +1,46 @@
+#+TITLE: Ora procurement research — executable brief
+#+BROWSER_LAYOUT: procurement-review
+
+* Outcome
+Use the real browser to understand https://ora-ventures.com/en/, then find external
+procurement notices fitting Ora's demonstrated services in Morocco and Europe.
+Today is 2026-10-07. Never submit, register, message or pay. Do not spawn other tasks.
+
+* Deliverables — authored by Omega, not supplied company/search content
+1. company.bl.org: cited company brief, capabilities, fit rubric, unknowns. Do not
+   invent company domicile, registration, certifications, languages or references.
+2. search.bl.org: human-readable strategy plus runnable #+begin_src beam-lisp blocks
+   containing named curated functions YOU generate and execute. Cover Morocco,
+   France and EU-wide opportunities. Explain each function and source limitations.
+   Persist executable code in search.bl too if useful. Record execution evidence.
+3. opportunities.bl.org: include #+BROWSER_LAYOUT: procurement-review at the top.
+   List only verified still-open opportunities as actionable recommendations;
+   keep unverified/closed leads in a separate section. For every candidate: buyer,
+   title, country, service fit, deadline with timezone if given, original notice URL,
+   evidence URL, eligibility unknowns, bid/no-bid assessment, and next action.
+   If a source is blocked, report it and try an alternate official source.
+4. run-review.bl.org: instruction compliance, failed tools/sources, unresolved
+   discrepancies, user-experience friction, generated-function execution proof.
+
+* Curated functions and browser transport
+You have Omega's eval tool with read/write/edit/sh/done, etc. Relative files are
+in this isolated run directory. The host helper is browser-tool.mjs here.
+Examples of the transport (these are infrastructure, not curated search functions):
+(sh "node browser-tool.mjs open https://ora-ventures.com/en/")
+(sh "node browser-tool.mjs snapshot")
+(sh "node browser-tool.mjs links")
+(sh "node browser-tool.mjs eval 'document.body.innerText.slice(0,16000)'")
+(sh "node browser-tool.mjs click '@e12'")
+(sh "node browser-tool.mjs fill '@e3' 'digital transformation'")
+Every call uses your task-owned browser, recorded in browser:sessions.
+Generate reusable functions around this transport, execute those functions, and
+save source observations to evidence files. Shell commands return {:out :exit};
+inspect exit codes. Use browser open/links/snapshot for external discovery.
+Search engines may help discover URLs, but final tender claims need original
+buyer/official portal evidence. Ora's website is capability evidence only.
+Do not spend the run merely reading Ora. Search procurement portals and buyers.
+Read up to about 12 source pages and 4 promising original notices; bounded output,
+about 20 model turns maximum. Return an honest useful shortlist even if none can
+be verified open. Do not manufacture success, dates, eligibility, or token counts.
+No need to ask permission for browsing or writing these local deliverables.
+Use (done ...) only after writing all four deliverables and executing functions.

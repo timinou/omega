@@ -1,0 +1,76 @@
+#+TITLE: Ora procurement search strategy + executable curated functions
+#+DATE: 2026-10-07
+#+AUTHOR: Omega (generated during run; not supplied search content)
+
+* Search strategy
+- Match Ora's demonstrated services to notices about AI, CRM/ERP, process automation, digital transformation, market strategy/communications.
+- Morocco: official Portail Marocain des Marchés Publics (PMMP) advanced search, current consultations only, French keywords.
+- France: PLACE (marches-publics.gouv.fr) is the state procurement platform; BOAMP content redirects to PLACE. Use official site, not aggregators.
+- EU-wide: TED (ted.europa.eu) is the authoritative EU supplement; use buyer/official notice URL as the final evidence.
+- Every final recommendation must have original buyer/portal evidence URL. Search-engine results are leads only.
+
+* Source limitations
+- PMMP is ASP.NET/Prado; refs and hidden form state change, so functions target stable element ids where possible.
+- PLACE and TED may be client-heavy or block automation; report any block and try an alternate official source.
+- Keyword search can miss notices that use equivalent terms (e.g. système d'information, transformation digitale, plateforme, automatisation).
+
+* Named curated functions (v4 final: --arg-file transport avoids shell quoting; Elixir String/replace for simple URL spaces; plural PMMP detail-URL filter; no TED buyer-country restriction)
+#+begin_src beam-lisp
+(defn bt-arg [action arg]
+  (write ".bt-arg.tmp" arg)
+  (sh (str "node browser-tool.mjs " action " --arg-file .bt-arg.tmp")))
+(defn bt-noarg [action] (sh (str "node browser-tool.mjs " action)))
+(defn bt-eval [js] (bt-arg "eval" js))
+(defn bt-links [] (bt-noarg "links"))
+(defn bt-open [url] (bt-arg "open" url))
+(defn page-text [] (bt-eval "document.body.innerText"))
+(defn page-url [] (bt-eval "location.href"))
+(defn capture-evidence [label url text] (write (str "evidence-" label ".txt") (str "URL: " url "\n\n" text "\n")))
+(defn ma-keyword [kw]
+  (bt-open "https://www.marchespublics.gov.ma/index.php?page=entreprise.EntrepriseAdvancedSearch&searchAnnCons")
+  (bt-eval (str "var el=document.querySelector('#ctl0_CONTENU_PAGE_AdvancedSearch_keywordSearch'); el.value=" (pr-str kw) "; document.querySelector('#ctl0_CONTENU_PAGE_AdvancedSearch_lancerRecherche').click(); 'submitted'"))
+  (page-text))
+(defn ma-rows []
+  (bt-eval "JSON.stringify([...document.querySelectorAll('tr')].map(r=>({text:(r.innerText||'').replace(/\\s+/g,' ').trim().slice(0,700),hrefs:[...r.querySelectorAll('a')].map(a=>a.href).filter(h=>h.includes('EntrepriseDetailsConsultation')||h.includes('EntrepriseDetailConsultation'))})).filter(r=>r.text.length>10))"))
+(defn fr-place-open [] (bt-open "https://www.marches-publics.gouv.fr/"))
+(defn fr-place-text [] (page-text))
+(defn fr-place-search [kw]
+  (bt-open "https://www.marches-publics.gouv.fr/")
+  (bt-eval (str "var inputs=[...document.querySelectorAll('input[type=text],input:not([type]),textarea')]; var el=inputs.find(e=>e.placeholder&&/mot|recherche|keyword|objet/i.test(e.placeholder+e.name+e.id)); if(!el) el=inputs[0]; el.value=" (pr-str kw) "; if(el.form){el.form.requestSubmit?el.form.requestSubmit():el.form.submit()} else {el.dispatchEvent(new Event('change',{bubbles:true}));} 'sent'"))
+  (page-text))
+(defn fr-place-links [] (bt-links))
+(defn ted-open [path] (bt-open (str "https://ted.europa.eu" path)))
+(defn ted-search [q]
+  (let [query (str/replace q " " "%20")]
+    (ted-open (str "/en/search/result?query=" query))
+    (page-text)))
+(defn ted-text [] (page-text))
+(defn ted-links [] (bt-links))
+#+end_src
+
+
+* Ireland eTenders curated functions (v5: official national portal for the Europe gap)
+#+begin_src beam-lisp
+(defn ie-etenders-open [path] (bt-open (str "https://www.etenders.gov.ie" path)))
+(defn ie-etenders-text [] (page-text))
+(defn ie-etenders-links [] (bt-links))
+(defn ie-etenders-url [] (page-url))
+(defn ie-etenders-search [kw]
+  (bt-open "https://www.etenders.gov.ie/epps/prepareAdvancedSearch.do?type=cftFTS")
+  (bt-eval (str "var el=document.querySelector('#Title'); el.value=" (pr-str kw) "; var f=el.form; f.requestSubmit?f.requestSubmit():f.submit(); 'submitted'"))
+  (bt-links))
+(defn ie-etenders-set-search [title status]
+  (bt-eval (str "var t=document.querySelector('#Title'); var s=document.querySelector('#Status'); if(t)t.value=" (pr-str title) "; if(s){s.value=" (pr-str status) "; s.dispatchEvent(new Event('change',{bubbles:true}));} var f=document.querySelector('form'); f.requestSubmit?f.requestSubmit():f.submit(); 'submitted'")))
+#+end_src
+
+* Execution plan
+1. Execute ma-keyword for 'intelligence artificielle' and 'transformation numérique'; capture ma-rows.
+2. Execute fr-place-search for 'intelligence artificielle'; capture resulting page.
+3. Execute EU-wide ted-search for 'artificial intelligence' and 'digital transformation' with no buyer-country filter; inspect original notice links and deadlines.
+4. Save evidence files for pages where actionable candidates appear.
+
+* UI usage note
+- `space b e` launches a new Omega task to execute saved searches; it does not open browser blocks.
+- `C-Enter` inside a `search.bl.org` beam-lisp block launches that same task through the browser package, not Babel.
+- `C-Enter` inside a `begin_browser` block opens a browser observation.
+- The saved `#+begin_src beam-lisp` block does not evaluate functions inside the browser JS editor; it is executable in Omega eval / Babel, not in browser JavaScript.

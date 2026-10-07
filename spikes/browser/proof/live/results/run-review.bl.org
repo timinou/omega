@@ -1,0 +1,74 @@
+#+BROWSER_LAYOUT: procurement-review
+#+TITLE: Ora procurement run review
+#+DATE: 2026-10-07
+#+AUTHOR: Omega
+
+* Summary
+- Kept verified Morocco ONMT/BNRM and France Numih/Intérieur findings.
+- Added an official Ireland eTenders finding to close the Europe gap.
+- One still-open software/digital-transformation framework was verified: Cork
+   County Council, deadline 27/10/2026 16:00.
+- No applications, registrations, messages or payments were made.
+
+* Instruction compliance
+- Read instructions.bl.org, company.bl.org, search.bl, search.bl.org,
+   opportunities.bl.org, run-review.bl.org and verification.bl.org: yes.
+- Used the real task-owned browser through browser-tool.mjs: yes.
+- Generated named curated functions, executed them, and persisted matching
+   source in search.bl and search.bl.org: yes.
+- Did not re-read Ora or repeat PMMP/PLACE/TED searches in this Europe-gap
+   pass: yes.
+- No applications, registrations, messages or payments: yes.
+- No spawned tasks: yes.
+
+* Browser-load accounting
+- Europe-gap pass used Ireland eTenders: 1 home page, 1 advanced-search
+   form/result route, and 1 original notice detail page. Additional query
+   variations stayed on the same dynamic viewCFTSAction.do result route and
+   were not counted as new source pages.
+- No PMMP, PLACE or TED navigation was repeated in this pass.
+
+* Generated-function execution proof
+- Defined and executed: ie-etenders-open, ie-etenders-text, ie-etenders-links,
+   ie-etenders-url, ie-etenders-search and ie-etenders-set-search.
+- ie-etenders-search "digital transformation" surfaced a closed Irish Centre
+   for Business Excellence framework (evaluation) and other closed/archived
+   leads.
+- ie-etenders-set-search "digital" "Tender Submission" surfaced the still-open
+   Cork County Council notice, resourceId 9123020.
+- bt-open, page-url and bt-eval on the Cork detail page verified: buyer Cork
+   County Council; title, procedure competitive dialogue, framework agreement;
+   deadline 27/10/2026 16:00; estimated value EUR 2,500,000; duration 10
+   years; CPV includes CRM software package and CRM software development
+   services.
+- Evidence written to
+   evidence-2026-10-07-ireland-cork-digital-platform-detail.txt.
+
+* Failed tools/sources and repairs
+- TED remained blocked by AWS WAF/human verification, so the Europe gap was
+   closed through the official Ireland eTenders portal instead.
+- Shell quoting was avoided with the existing --arg-file transport.
+- java.net.URLEncoder and js/JSON.parse remained unavailable; functions
+   returned shell/plain text and were inspected directly.
+
+* Unresolved discrepancies / unknowns
+- Ireland deadline timezone is not explicitly labeled on the detail page; do
+   not assert Ireland local time.
+- The Ireland notice lists Procurement Type as Supplies while CPV codes
+   include software development services; the precise contract model must be
+   confirmed from the tender documents.
+- Eligibility, ESPD, competitive-dialogue qualification, framework call-off
+   terms, references, insurance and security requirements remain unread.
+
+* User-experience friction
+- eTenders is form-heavy but the advanced-search fields and detail page were
+   readable through DOM evaluation.
+- The detail page's accessibility snapshot showed field labels but empty
+   values; direct DOM evaluation of the description list was required to
+   capture values.
+
+* Final files
+- company.bl.org, search.bl.org, search.bl, opportunities.bl.org,
+   run-review.bl.org, verification.bl.org, europe-coverage.bl.org
+- Dated original-notice evidence files: Morocco BNRM, Morocco ONMT, France
+   Numih, France RFI, Ireland Cork digital platform.

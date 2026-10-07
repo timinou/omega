@@ -1,0 +1,67 @@
+#+BROWSER_LAYOUT: procurement-review
+#+TITLE: Europe coverage gap — Ireland eTenders verified source
+#+DATE: 2026-10-07
+#+AUTHOR: Omega
+
+* Summary
+- Source: Ireland eTenders, an official national procurement portal.
+Verified still-open notice: Cork County Council digital services development
+   platform framework.
+- Deadline: 27/10/2026 16:00; timezone not explicitly labeled on the page.
+- Original URL:
+  https://www.etenders.gov.ie/epps/cft/prepareViewCfTWS.do?resourceId=9123020
+
+* Why this source
+TED remained blocked by AWS WAF/human verification. Ireland eTenders is an
+official national procurement portal, so it closes the Europe coverage gap
+without repeating PMMP, PLACE or TED searches. It provides original buyer,
+procedure, deadline and CPV fields on the notice detail page.
+
+* Executed curated function
+#+begin_src beam-lisp
+(defn ie-etenders-open [path] (bt-open (str "https://www.etenders.gov.ie" path)))
+(defn ie-etenders-text [] (page-text))
+(defn ie-etenders-links [] (bt-links))
+(defn ie-etenders-url [] (page-url))
+(defn ie-etenders-search [kw]
+  (bt-open "https://www.etenders.gov.ie/epps/prepareAdvancedSearch.do?type=cftFTS")
+  (bt-eval (str "var el=document.querySelector('#Title'); el.value=" (pr-str kw) "; var f=el.form; f.requestSubmit?f.requestSubmit():f.submit(); 'submitted'"))
+  (bt-links))
+(defn ie-etenders-set-search [title status]
+  (bt-eval (str "var t=document.querySelector('#Title'); var s=document.querySelector('#Status'); if(t)t.value=" (pr-str title) "; if(s){s.value=" (pr-str status) "; s.dispatchEvent(new Event('change',{bubbles:true}));} var f=document.querySelector('form'); f.requestSubmit?f.requestSubmit():f.submit(); 'submitted'")))
+#+end_src
+
+* Execution evidence
+`ie-etenders-set-search "digital" "Tender Submission"` returned a result row
+   with resourceId 9123020 and title "Establishment of a Single Party
+   Framework Agreement for the provision, development, maintenance and support
+   of a Digital Services Development Platform and associated services."
+- `bt-open` on the original detail URL opened the notice workspace.
+- Direct DOM evaluation of the description list verified:
+  - Buyer: Cork County Council
+  - Procedure: Competitive dialogue
+  - CFT involves: The establishment of a framework agreement
+  - Deadline: 27/10/2026 16:00
+  - Clarification deadline: 15/10/2026 16:00
+  - Estimated value: EUR 2,500,000
+  - Contract duration: 10 years
+  - CPV: 48000000, 48445000, 48810000, 72212445
+- Evidence file: evidence-2026-10-07-ireland-cork-digital-platform-detail.txt
+
+* Fit assessment
+- Strong fit for custom software development, maintenance and support.
+The notice is a single-party framework agreement, not a direct purchase order.
+Procurement Type is listed as Supplies while CPV includes software development
+   services; confirm the precise contract model from the tender documents.
+
+* Eligibility unknowns
+- eTenders supplier registration and ESPD requirements
+- Competitive-dialogue qualification and shortlisting criteria
+- Framework call-off terms, references, insurance and security requirements
+- Deadline timezone (not explicitly labeled on the detail page)
+
+* Next action
+Open the tender workspace documents on eTenders and read the
+   competitive-dialogue and framework documents before deciding whether Ora
+   can evidence platform development, maintenance and support capacity.
+- Do not register, submit, message or pay during this research pass.
