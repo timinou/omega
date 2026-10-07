@@ -92,7 +92,7 @@
   (let [o (object ed)]
     (case (:type o)
       "desk/scope" (docs/visit ed (:key o))
-      "omega/task" (cond (= "rail" (get-in ed [:doc :data :desk])) (-> ed (c/effect {:kind :visit :pane :main :path (str "task:" (:key o))}) (focus-next 1))
+      "omega/task" (cond (= "rail" (get-in ed [:doc :data :desk])) (-> ed (c/effect {:kind :visit :pane [:aside :main] :path (str "task:" (:key o))}) (c/effect {:kind :frame-focus :target [:aside :main]}))
                          (= views/artifact (active-presentation ed)) (-> ed (c/effect {:kind :visit :pane :aside :path (str "task:" (:key o))}) (focus-next 1))
                          :else (docs/visit ed (str "task:" (:key o))))
       (if (= views/artifact (active-presentation ed)) (toggle-todo ed)
@@ -186,7 +186,7 @@
                  (and (= :intent-result (:type ev)) (:ok? ev) (= :desk-cancelled (:then ev))) (c/message new "Task cancelled.")
                  (and (= :intent-result (:type ev)) (:ok? ev) (= :desk-created (:then ev)))
                  (if (= "rail" (get-in new [:doc :data :desk]))
-                   (-> new (c/effect {:kind :visit :pane :main :path (get-in ev [:data :path])}) (focus-next 1))
+                   (-> new (c/effect {:kind :visit :pane [:aside :main] :path (get-in ev [:data :path])}) (c/effect {:kind :frame-focus :target [:aside :main]}))
                    (docs/visit new (get-in ev [:data :path])))
                  (and (= :doc (:type ev)) (:visit? ev) (= "rail" (get-in new [:doc :data :desk])))
                  (let [r (or (first (sort (map first (filter (fn [[r o]] (= "omega/task" (:type o))) (:obj-index new)))))
@@ -196,7 +196,7 @@
    :intercept (fn [ed ev]
                 (cond
                   (and (= :command (:type ev)) (contains? #{:command :palette} (:mode ed))
-                       (contains? #{:insert :desk/toggle} (:command ev))) (c/message ed "Finish or cancel the current prompt first.")
+                       (contains? #{:insert :desk/toggle :omega/answer :omega/say :omega/steer} (:command ev))) (c/message ed "Finish or cancel the current prompt first.")
                   (get-in ed [:pkg-state "workbench" :menu?]) (actions/menu-key ed ev)
                   (and (= :key (:type ev)) (or (= "M-/" (:key ev)) (and (= :normal (:mode ed)) (empty? (:pending ed)) (= "?" (:key ev))))) (actions/menu ed)
                   (and (= :key (:type ev)) (= :normal (:mode ed)) (empty? (:pending ed)) (= "task" (get-in ed [:doc :data :desk]))
@@ -221,6 +221,7 @@
                    menu? (get-in ed [:pkg-state "workbench" :menu?])]
                (when (or pr menu?)
                  (cond-> (if pr (assoc (p/render pr ed) :presentation (:name pr)) (p/render views/source ed))
+                   (and (= pr views/conversation) (= :prompt (get-in ed [:minibuf :kind]))) (assoc-in [:minibuf :inline?] true)
                    menu? (assoc :overlay {:kind :actions :title "Actions here · letter or click · Esc closes" :items (actions/available ed)})))))
    :provides {:actions actions/local-actions :layouts {"desk" desk "desk-artifact" artifact-layout}
               :links {"omega/task" (fn [o] (str "task:" (:key o)))}

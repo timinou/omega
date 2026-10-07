@@ -133,7 +133,7 @@ test('a reply draft becomes a scoped follow-up when its task finishes',()=>{
  .assoc(K('doc'),ev(K('rev'),'1',K('read-only?'),true,K('data'),ev(K('desk'),'task',K('task-id'),'t-5',K('task-status'),'idle',K('place'),'beam',K('cwd'),'/tmp/beam')))
  .assoc(K('mode'),K('command')).assoc(K('minibuf'),ev(K('kind'),K('prompt'),K('text'),'Keep this follow-up',K('submit'),e=>e));
  ed=M.d_handle(ed,ev(K('type'),K('doc'),K('path'),'task:t-5',K('text'),'#+TITLE: t-5 ✓ done\n\n\n\n* you · 1\nA goal\n',K('rev'),'2',K('read-only?'),true,K('data'),ev(K('desk'),'task',K('task-id'),'t-5',K('task-status'),'done',K('place'),'beam',K('cwd'),'/tmp/beam')));
- assert.equal(g(g(ed,'minibuf'),'text'),'Keep this follow-up');assert.equal(g(g(ed,'minibuf'),'package'),'workbench');
+ assert.equal(g(g(ed,'minibuf'),'text'),'Keep this follow-up');assert.equal(g(g(ed,'minibuf'),'package'),'workbench');assert.equal(g(g(M.d_render(ed),'minibuf'),'inline?'),true);
  ed=M.d_handle(ed,key('Enter'));const fx=M.d_take_effects(ed).toArray()[1].toArray().find(f=>g(f,'intent')==='task/open');
  assert.equal(g(g(fx,'args'),'cwd'),'/tmp/beam');assert.equal(g(g(fx,'args'),'path'),'place:beam');assert.equal(g(g(fx,'args'),'goal'),'Keep this follow-up');
 });
@@ -146,6 +146,8 @@ test('source inspection renders the task org text and a busy command prompt bloc
  .assoc(K('mode'),K('command')).assoc(K('minibuf'),ev(K('kind'),K('eval'),K('text'),'(unfinished'));
  const original=g(file,'text');file=M.d_handle(file,ev(K('type'),K('command'),K('command'),K('insert')));
  assert.equal(g(file,'mode'),K('command'));assert.strictEqual(g(file,'text'),original);assert.equal(g(g(file,'minibuf'),'text'),'(unfinished');
+ file=file.assoc(K('obj-index'),R.hashMap(2,ev(K('type'),'omega/msg',K('key'),'m-1',K('task'),'t-1')));
+ file=M.d_handle(file,ev(K('type'),K('command'),K('command'),K('omega/answer')));assert.equal(g(g(file,'minibuf'),'text'),'(unfinished');
 });
 
 test('relative task references resolve in the actual nested working folder',async()=>{
@@ -165,4 +167,16 @@ test('long artifact prose wraps by pane width and remains raw while editing',asy
  assert.ok(rows(narrow).length>rows(original).length);
  const editing=narrow.assoc(K('mode'),K('insert')).assoc(K('sels'),R.vec(ev(K('anchor'),R.vec(3,0),K('head'),R.vec(3,0))));
  assert.equal(rows(editing).length,1);assert.equal(R.printStr(g(narrow,'text')),R.printStr(g(original,'text')));
+});
+
+test('rail opening and task creation target the retained conversation beside a file',()=>{
+ let rail=boot().assoc(K('sels'),R.vec(ev(K('anchor'),R.vec(7,0),K('head'),R.vec(7,0))));
+ let fr=F.d_arrange(F.d_single(rail),W.d_artifact_layout);fr=F.d_take_effects(fr).toArray()[0];fr=fr.assoc(K('focus'),K('rail'));
+ const file=M.d_boot('a working file','work:omega/plan.bl.org');fr=fr.assoc(K('editors'),g(fr,'editors').assoc(K('main'),file));
+ let next=F.d_handle(fr,ev(K('type'),K('command'),K('command'),K('desk/open')));
+ assert.equal(g(next,'focus'),K('aside'));assert.strictEqual(F.d_editor(next,K('main')),file);
+ assert.equal(g(F.d_take_effects(next).toArray()[1].toArray().find(e=>g(e,'path')==='task:t-1'),'pane'),K('aside'));
+ next=F.d_handle(fr,ev(K('type'),K('intent-result'),K('ok?'),true,K('then'),K('desk-created'),K('data'),ev(K('path'),'task:t-new')));
+ assert.equal(g(next,'focus'),K('aside'));assert.strictEqual(F.d_editor(next,K('main')),file);
+ assert.equal(g(F.d_take_effects(next).toArray()[1].toArray().find(e=>g(e,'path')==='task:t-new'),'pane'),K('aside'));
 });

@@ -241,3 +241,29 @@ Run the full backend, vendor/package drive and default-presentation checks with
 `spikes/workspace/test/verify.sh`. `test/desk-browser.py` accepts `--slice 1` through
 `--slice 4`; start a fresh demo root for each tour to keep its seeded tasks and
 files intact. The live world on port 8790 is never used by these tests.
+
+## Slice 5 — retain working text through navigation
+
+Rail task opening and creation resolve the conversation pane: main in the
+compact layout, aside beside a working file. They no longer replace that file.
+The frame resolves ordered pane candidates for visits and focus, and refuses a
+visit that would replace unsaved text or a nonempty prompt. Selection previews
+follow the same rule. Revisiting an address with a draft preserves its editor.
+
+Named Answer/Say/Steer actions refuse to replace a current prompt. Yes/No remain
+usable while drafting. Conversation prompts are drawn once, inline in their
+composer. The seeded plan's navigation notes match the actual shortcuts.
+
+`test/desk-browser.py --port 8805 --slice 5` passed on the isolated root
+`/tmp/omega-workbench-polish-final`, with no browser errors. It verifies real
+plan publication, task switching beside the plan, refusal to lose a reply and
+unload. The complete editor/package drive suite passes 172 tests; the focused
+frame/workbench suite passes 34. The unchanged default-presentation checker
+still passes all 36 variants.
+
+- [Answer action preserves the reply](proof/50-answer-action-preserves-reply.png).
+- [Wrapped plan on a narrow desktop](proof/51-wrapped-plan-on-compact-desktop.png).
+- [Polished plan remains actual working text](proof/52-polished-plan-remains-working-text.png).
+- [Package unloaded](proof/53-polished-package-unloaded.png).
+- [Rail task switch keeps the working plan](proof/54-rail-switch-keeps-working-plan.png).
+- [Pending reply survives a refused task switch](proof/55-task-switch-preserves-reply-draft.png).

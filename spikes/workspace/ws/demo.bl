@@ -29,7 +29,7 @@
         _ (doseq [[_ dir] places] (File/mkdir_p! dir)
             (when-not (File/regular? (str dir "/board.bl.org"))
               (File/write! (str dir "/board.bl.org") (str "#+TITLE: " (Path/basename dir) " board\n\n* TODO Check this folder\nAn ordinary editable todo board.\n"))))
-        plan (str "#+TITLE: Two working directories\n\n* Omega board\n#+begin_task :id omega-board :cwd @omega\nUpdate the omega board.\n#+end_task\n\n* Beam Lisp board\n#+begin_task :id beam-board :cwd @beam-lisp\nUpdate the beam-lisp board.\n#+end_task\n\n* Notes\nThis plan is editable text. Both tasks live here; each edits its own board.bl.org.\nAlt+h/l focuses panes. g H goes home; g f visits the folder; g t visits a task.\n")
+        plan (str "#+TITLE: Two working directories\n\n* Omega board\n#+begin_task :id omega-board :cwd @omega\nUpdate the omega board.\n#+end_task\n\n* Beam Lisp board\n#+begin_task :id beam-board :cwd @beam-lisp\nUpdate the beam-lisp board.\n#+end_task\n\n* Notes\nThis plan is editable text. Both tasks live here; each edits its own board.bl.org.\nAlt+h/l focuses panes. g H goes home; g d visits the folder; g t returns to context.\n")
         _ (when-not (File/regular? (str root "/omega/plan.bl.org")) (File/write! (str root "/omega/plan.bl.org") plan))
         e (env/open {:path (str root "/.omega/db") :schema (vec (concat place/schema link/schema buffer/schema))})
         _ (doseq [[id dir] places]

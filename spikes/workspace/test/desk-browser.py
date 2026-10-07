@@ -160,8 +160,32 @@ def four():
  ab('set','viewport','1000','780');wait('blEd.state().get(blEd.K("view")).get(blEd.K("cols")) < 60');wait('!document.querySelector("[data-loading]")');photo('48-completed-plan-compact.png')
  cmd('(ed/unuse "workbench")');contains('removed workbench');wait('document.querySelectorAll(".pane.editor").length === 1');photo('49-final-package-unloaded.png')
  print('slice 4: explicit place choice, real cwd, output attachment, folder/file transitions retain drafts, real file publication, task source, plan task launch, answer while drafting, terminal draft conversion, cwd-preserving follow-up, compact plan and unload passed',flush=True)
+def five():
+ open();ab('click','[data-pane="rail"] [data-command="desk/open"]:has-text("Refresh the Omega")')
+ wait('blEd.frame().get(blEd.K("focus")).name === "main"');contains('NEEDS YOUR ANSWER')
+ key('i');ab('type','#input-sink','Keep my reply while choosing actions')
+ ab('click','[data-pane="main"] [data-command="omega/answer"]');contains('Finish or cancel the current prompt first.')
+ assert ev('blEd.state().get(blEd.K("minibuf")).get(blEd.K("text"))')=='Keep my reply while choosing actions'
+ photo('50-answer-action-preserves-reply.png');key('Escape');key('g');key('H')
+ wait('blEd.state().get(blEd.K("path")) === "work:omega/plan.bl.org" && !document.querySelector("[data-loading]")')
+ ab('set','viewport','1000','780');wait('blEd.state().get(blEd.K("view")).get(blEd.K("cols")) < 60');photo('51-wrapped-plan-on-compact-desktop.png')
+ r=ev('(()=>{const {K}=blEd;return blEd.state().get(K("text")).get(K("lines")).toArray().findIndex(s=>s.startsWith("This plan is editable"))})()')
+ assert r>=0;cmd('(ed/goto '+str(r+1)+')');key('i');ab('type','#input-sink','An edited note. ');key('Escape');key('Control+s');contains('Published shared text')
+ assert 'An edited note. This plan is editable' in document('work:omega/plan.bl.org')['text']
+ key('Alt+h');task_title('Finish the Beam Lisp checklist');key('Enter');wait('blEd.frame().get(blEd.K("focus")).name === "aside"')
+ assert ev('blEd.F.d_editor(blEd.frame(),blEd.K("main")).get(blEd.K("path"))')=='work:omega/plan.bl.org'
+ assert ev('blEd.R.printStr(blEd.F.d_editor(blEd.frame(),blEd.K("main")).get(blEd.K("text"))).includes("An edited note.")')
+ contains('Finish the Beam Lisp checklist');photo('54-rail-switch-keeps-working-plan.png')
+ key('i');ab('type','#input-sink','Retain this Beam reply');key('Alt+h');key('Alt+h');task_title('Refresh the Omega board');key('Enter')
+ contains('Publish the file or finish/cancel its prompt');assert ev('blEd.state().get(blEd.K("minibuf")).get(blEd.K("text"))')=='Retain this Beam reply'
+ assert ev('blEd.state().get(blEd.K("doc")).get(blEd.K("data")).get(blEd.K("task-title"))')=='Finish the Beam Lisp checklist'
+ photo('55-task-switch-preserves-reply-draft.png');key('Escape');key('Alt+h')
+ key('g');key('v');contains('#+begin_task');photo('52-polished-plan-remains-working-text.png')
+ cmd('(ed/unuse "workbench")');wait('document.querySelectorAll(".pane.editor").length === 1');photo('53-polished-package-unloaded.png')
+ print('slice 5: answer action preserves an existing reply, compact plan wraps prose, real source edit publishes and unload returns to the editor passed',flush=True)
 if a.slice==1:one()
 if a.slice==2:two()
 if a.slice==3:three()
 if a.slice==4:four()
+if a.slice==5:five()
 assert not ab('errors'),ab('errors')
