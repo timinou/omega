@@ -28,11 +28,11 @@
  (if-let [desk (desk-id ed)] (intent ed "run" {:desk desk :operation operation :id (opportunity-id ed)})
   (c/message ed "Open a decision desk first, or create one with space p n.")))
 (defn new-desk [ed]
- (docs/owned-prompt ed "procurement" "New desk ID (lowercase, hyphens): " ""
+ (docs/owned-prompt ed "procurement" "New desk ID (lowercase, hyphens): "
   (fn [ed id] (intent ed "new" {:id (trim id) :title (trim id) :from (desk-id ed)}))))
 (defn decide [ed decision]
  (if-let [id (opportunity-id ed)]
-  (docs/owned-prompt ed "procurement" (str decision " — rationale: ") ""
+  (docs/owned-prompt ed "procurement" (str decision " — rationale: ")
    (fn [ed reason] (intent ed "decide" {:desk (desk-id ed) :id id :decision decision :rationale reason})))
   (c/message ed "Open an opportunity first.")))
 (defn home [ed] (docs/visit ed (str "desks/" (or (desk-id ed) "ora") "/desk.bl.org")))
@@ -49,11 +49,16 @@
      (p/line-mark (:from o) [(button "Needs info" :procurement/needs-information) (if (= "qualification-checked" (:stage a)) (button "Pursue" :procurement/pursue) {:text " Pursue · check first " :kind :comment}) (button "Reject" :procurement/reject)] (str key "/decide"))]))))
 (defn measure [ed]
  (max 16 (- (or (get-in ed [:view :cols]) (when (starts-with? (str (:path ed)) "procurement:") 32) 80) 6)))
+(defn follow-link [ed]
+ (let [line (t/line (:text ed) (first (c/cursor ed))) start (index-of line "[[") end (index-of line "][")]
+  (if (and start end (< start end)) (docs/visit ed (subs line (+ start 2) end)) ed)))
 (defn prose [o ctx]
  (p/stack (mapcat (fn [r]
   (let [line (t/line (:text (:ed ctx)) r)]
    (if (or (starts-with? line "#+USE:") (starts-with? line "#+PROCUREMENT_DESK:") (starts-with? line "#+TITLE:")) []
-    (wrapped (:ed ctx) r (str (:key o) r) line :prose)))) (range (:from o) (:to o)))))
+    (if (and (starts-with? line "[[") (some? (index-of line "][")))
+     [(p/line-mark r [(button (subs line (+ 2 (index-of line "][")) (- (count line) 2)) :procurement/follow)] (str (:key o) r))]
+     (wrapped (:ed ctx) r (str (:key o) r) line :prose))))) (range (:from o) (:to o)))))
 (defn queue-card [o ctx]
  (p/head-card (:key o) "focus" (wrapped (:ed ctx) (:from o) (:key o) (t/line (:text (:ed ctx)) (:from o)) :strong)))
 (defn doc-actions [o ctx next]
@@ -76,7 +81,8 @@
  (and (ends-with? (str (:path ed)) "search.bl.org") (some (fn [b] (and (= "beam-lisp" (:lang b)) (<= (:from b) (first (c/cursor ed))) (< (first (c/cursor ed)) (:to b)))) (:blocks (:struct ed)))))
 (def bl-package
  {:name "procurement" :doc "Loadable, evidence-based procurement decision desks." :requires ["present" "browser"]
-  :commands {:procurement/home {:doc "Open this decision desk." :run home}
+  :commands {:procurement/follow {:doc "Open the file reference at the cursor." :run follow-link}
+   :procurement/home {:doc "Open this decision desk." :run home}
    :procurement/open {:doc "Open the selected opportunity." :run open}
    :procurement/new {:doc "Create a separate desk, reusing profile and curated functions." :run new-desk}
    :procurement/discover {:doc "Run bounded official-source discovery." :run (fn [ed] (run ed "discover"))}

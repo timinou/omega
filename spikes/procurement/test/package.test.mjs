@@ -15,3 +15,13 @@ test('file directive chooses desk-scoped layout; ordinary document remains untou
 test('selected decision is the cursor card, not the first notice in the file',()=>{let ed=at(use(M.d_boot(source,'desks/second/desk.bl.org')),9);assert.equal(P.d_opportunity_id(ed),'second');ed=M.d_handle(ed,key('C-Enter'));const [,fx]=M.d_take_effects(ed).toArray();assert.equal(get(fx.toArray().find(e=>get(e,'kind')===K('visit')),'path'),'desks/second/opportunity-second.bl.org');});
 test('refresh source runs through Omega intent and keeps workspace context',()=>{let ed=at(use(M.d_boot('#+PROCUREMENT_DESK: second\n#+begin_src beam-lisp\n(defn search [] nil)\n#+end_src','desks/second/search.bl.org')),2);ed=M.d_handle(ed,key('C-Enter'));const [,fx]=M.d_take_effects(ed).toArray();const x=fx.toArray().find(e=>get(e,'intent')==='procurement/run');assert.equal(get(get(x,'args'),'desk'),'second');assert.equal(get(get(x,'args'),'operation'),'refresh');});
 test('unload removes layout, state, commands and owned prompt in all panes',()=>{const ed=M.d_boot(source,'desks/second/desk.bl.org'),tables=get(ed,'user-commands');let fr=F.d_handle(F.d_single(ed),ev(K('type'),K('use'),K('package'),P.d_bl_package));assert.equal(get(get(fr,'layout'),'name'),'procurement-desk');fr=F.d_handle(fr,key(':'));for(const ch of '(ed/unuse "procurement")')fr=F.d_handle(fr,ev(K('type'),K('text'),K('text'),ch));fr=F.d_handle(fr,key('Enter'));assert.equal(get(get(fr,'layout'),'name'),'single');const survivor=F.d_focused(fr);assert.equal(get(survivor,'user-commands'),tables);assert.equal(G.d_names(survivor).toArray().includes('procurement'),false);assert.equal(get(get(survivor,'pkg-state'),'procurement')==null,true);});
+
+test('new-desk prompt submits a scoped host intent and unload cancels its closure',()=>{
+ let ed=use(M.d_boot(source,'desks/second/desk.bl.org'));
+ ed=M.d_handle(ed,ev(K('type'),K('command'),K('command'),K('procurement/new')));
+ assert.equal(get(get(ed,'minibuf'),'package'),'procurement');
+ let submitted=M.d_handle(M.d_handle(ed,ev(K('type'),K('text'),K('text'),'third')),key('Enter'));
+ const [,fx]=M.d_take_effects(submitted).toArray();const x=fx.toArray().find(e=>get(e,'intent')==='procurement/new');
+ assert.equal(get(get(x,'args'),'from'),'second');assert.equal(get(get(x,'args'),'id'),'third');
+ const removed=G.d_unuse(ed,'procurement');assert.equal(get(removed,'mode'),K('normal'));assert.equal(get(get(removed,'minibuf'),'submit')==null,true);
+});
