@@ -1,64 +1,155 @@
-# Workspace slice: schema and location contracts
+# Workspace schema: consolidated package-owned families
 
-2026-10-07. Implemented attributes are in `src/omega/schema.bl`; future attributes below are proposals, not installed schema.
+2026-10-07. The initial cwd/home slice is committed in `592224d`. The extensions
+below are implemented in source, but their browser proof and commits are pending
+because the current execution sandbox denies sockets and Git writes.
 
-## Installed task attributes
-
-All three use the normal single-valued datom cardinality. They are additive: existing worlds open with the new schema without rewriting old task entities.
+## Core task additions
 
 | Attribute | Type | Indexed | Meaning |
 |---|---|---|---|
-| `:task/cwd` | string | yes | Absolute expanded working directory, recorded before the executor starts. Shell, file port and eval context use it. Children inherit the owner's directory. |
-| `:task/home-path` | string | yes | Document address of the originating task block. Independent of working directory. A file address or provider address, e.g. `work:omega/plan.bl.org`. |
-| `:task/home-block` | string | no | Exact stable `:id` in that document. Navigation searches current source for the complete ID, not a substring or saved row number. |
+| `:task/place` | ref | yes | Organizing place, independent of ownership, cwd, home and dependencies. Children inherit it unless explicitly overridden. |
+| `:task/cwd` | string | yes | Absolute expanded directory fixed when the task opens. File, shell, eval and child task context use it. |
+| `:task/home-path` | string | yes | Originating document address, e.g. `work:omega/plan.bl.org`. |
+| `:task/home-block` | string | no | Complete stable block ID in that document, resolved against current source. |
 
-Example entity (existing attributes omitted):
+All are single-valued and additive. Legacy tasks fall back to the world root;
+legacy `homes.edn` entries remain readable, but new homes are task facts.
 
-```clojure
-{:task/id "t-41"
- :task/cwd "/tmp/omega-workspace-slice/beam-lisp"
- :task/home-path "work:omega/plan.bl.org"
- :task/home-block "beam-board"}
-```
+Prelude-generated file claims use absolute expanded `:trace/subject` paths.
+Its type/cardinality is unchanged. Old relative claims are not rewritten.
+Expansion is lexical, not symlink/inode identity. Scope remains a declared
+footprint, and no new scope semantics or permissions are inferred from places.
 
-No cwd mutation verb is supplied in this slice. Existing task status, goal, ownership, waits and scope attributes keep their types and cardinalities. Scope remains a declared footprint, not a working directory or a lock; relative scope entries should be interpreted against the task's cwd.
+## Place package — one family for places and subplaces
 
-Legacy tasks without cwd use the world's root. Legacy `homes.edn` entries remain readable. New homes are datom facts; the side file no longer receives new entries. Facts take precedence over legacy entries. API-created homeless tasks retain the existing scratch home.
+Declared in `place/model.bl`, installed through `env/open` extra schema:
 
-The existing `:trace/subject` string attribute is unchanged in type and cardinality. Prelude-generated file claims now use absolute expanded paths. Thus `a/board.bl.org` and `b/board.bl.org` are distinct claim subjects; `board.bl.org` and its absolute spelling in the same directory identify the same claim. This is lexical expansion, not symlink/inode identity. Old relative claim facts are not rewritten by this slice.
+| Attribute | Type | Properties |
+|---|---|---|
+| `:place/id` | string | unique identity; explicit stable address token |
+| `:place/name` | string | renameable display name |
+| `:place/parent` | ref | indexed; one primary parent |
+| `:place/root` | string | absolute directory, or relative to rooted ancestry |
+| `:place/home` | open value | `{:path … :block …}` location; block optional |
+| `:place/config` | open value | plain map of local conventions |
 
-## Values that do not need database attributes
-
-Attached places are explicit host configuration:
-
-```clojure
-{"omega" "/tmp/omega-workspace-slice/omega"
- "beam-lisp" "/tmp/omega-workspace-slice/beam-lisp"}
-```
-
-The provider schemes are `places:`, `folder:<alias>/<relative-directory>`, and `work:<alias>/<relative-file>`. Aliases are stable within the configured host. The same relative basename in two places has two document addresses. These directories are execution/navigation context, not a new sandbox policy.
-
-A home/location value is ordinary data:
-
-```clojure
-{:path "work:omega/plan.bl.org" :block "beam-board"}
-```
-
-The frame layout, pane focus, editor draft, DWIM goal columns, selections, folds, and reading positions stay in editor/frame/package state. Nothing here requires `:place/*`, `:folder/*`, `:buffer/*`, or `:pane/*` entities. The task's home and cwd are durable; the user's current attention is not a task fact.
-
-## Next schema proposal: explicit references
-
-When arbitrary file/section references are added, use relation entities rather than a `:task/files` bag that conflates input, output, scope and changes:
+Subplaces are place entities with a parent. No `:subplace/*`, `:folder/*`,
+`:mount/*`, `:context/*`, or `:environment/*` family is introduced. A place
+without its own root inherits its ancestor's directory; an unrooted logical
+place remains browsable but cannot provide an execution directory.
 
 ```clojure
-[{:db/ident :task.link/id :db/valueType :db.type/string :db/unique :db.unique/identity}
- {:db/ident :task.link/task :db/valueType :db.type/ref :db/index true}
- {:db/ident :task.link/path :db/valueType :db.type/string :db/index true}
- {:db/ident :task.link/block :db/valueType :db.type/string}
- {:db/ident :task.link/kind :db/valueType :db.type/keyword :db/index true}
- {:db/ident :task.link/at :db/valueType :db.type/long}]
+{:id "editor" :name "Editor" :parent "omega" :root "vendor/bl-ed"
+ :home {:path "README.bl.org"}
+ :config {:test-command "…"}}
 ```
 
-`kind` describes the declared relationship (`:input`, `:output`, `:context`). Each link can identify an entire document or an anchored section. Multiple notes can reference the same task without changing its originating home. These definitions should belong to the task-reference package and be passed through `env/open`'s existing extra-schema contract.
+Package verbs validate cycles, missing parents and resolved directories,
+including descendants affected by a root change. Reparenting requires
+`:directory :preserve` or `:adopt`. Preserve pins the previous resolved directory;
+adopt resolves the retained relative root against the new ancestry. Neither
+moves files. Clearing an optional field uses nil.
 
-Actual edits should come from the buffer/change operation log described in `research/domain/interface/bl-ed.bl.md`, with task, cell, document, base/new revisions and time. They should not be inferred from declared links or copied into `:task/scope`. A query can derive “tasks that changed this file” from those operations. Shared-buffer edit attribution and that operation schema are outside this slice.
+Settings inherit from root to leaf; the closest definition replaces a key.
+The effective view retains `{:value v :from place-id}` for every setting.
+`:cwd` supplies the default task directory, relative to the selected place's
+root; a task block's explicit cwd overrides it. Other keys are visible data
+for packages to consume, not arbitrary automatic command execution.
+
+`places:` shows the containment tree. `place:<id>` shows parent, subplaces,
+physical files, tasks in the place and descendants, and effective settings.
+`folder:<id>/<relative-directory>` remains physical traversal. `work:<id>/<path>`
+resolves a file through the place. IDs are opaque tokens without `/`, `:` or
+spaces; nesting comes from the parent ref, not the ID spelling.
+
+Task cwd remains recorded even when place roots change. Homes and file links
+resolve through the current place; this slice does not promise stable document
+identity across a root change or external file rename.
+
+## Reference package — explicit relationships
+
+Declared in `links/model.bl`:
+
+| Attribute | Type | Properties |
+|---|---|---|
+| `:link/id` | string | unique identity; caller supplies stable ID |
+| `:link/from` | ref | indexed; an existing task or place |
+| `:link/to` | open value | entity or document/anchor location |
+| `:link/kind` | keyword | indexed; `:input`, `:output`, `:context` |
+| `:link/at` | long | latest attachment/update time, milliseconds |
+
+```clojure
+{:id "navigation-plan"
+ :from {:place "editor"}
+ :kind :context
+ :to {:place "omega" :path "plan.bl.org" :block "navigation"}}
+```
+
+Targets can be `{:task id}`, `{:place id}`, `{:path address :block optional}`,
+or `{:place id :path relative-file :block optional}`. Updating the same link
+ID changes the relationship; removing it retracts the entity. Declared links
+are never presented as evidence of an actual edit.
+
+Documents and anchors remain location values. There is no document/anchor
+entity family and no second task-specific reference family.
+
+## Buffer package — buffers and accepted operations
+
+Declared in `buffer/model.bl`, alongside tasks in the same env:
+
+- `:buf/path`: unique string identity, absolute expanded file path.
+- `:buf/text`: current accepted text, string.
+- `:buf/rev`: monotonic accepted-operation revision, long.
+- `:buf/publish-pending`: boolean; accepted text still needs projection to disk.
+- `:op/id`: unique string, `<absolute-path>@<revision>`.
+- `:op/buf`: indexed ref to the buffer.
+- `:op/rev`, `:op/base`: result/base revision, longs.
+- `:op/actor`: indexed string identifying the publisher/agent.
+- `:op/task`: indexed task ref, when a task made the edit.
+- `:op/cell`: indexed string, when eval supplied a cell.
+- `:op/kind`: keyword (`:edit`, `:write`, `:publish`, `:resolve`, `:adopt`, `:undo`).
+- `:op/span`: open `[from to]` offset value in the preceding text.
+- `:op/old`, `:op/new`: replaced/replacement strings.
+- `:op/before`, `:op/after`: full snapshots for this slice's base lookup and undo.
+- `:op/reverts`: ref to a reverted operation, when applicable.
+- `:op/at`: long, milliseconds.
+
+`:op/*` describes addressable accepted changes and belongs to the buffer
+package. It is not a universal action log. Human publication attribution names
+the publishing client; it does not reconstruct every origin inside pasted or
+automatically generated text.
+
+A BEAM manager serializes requests. Provider base tokens are monotonic buffer revisions, so returning to equal text does not alias an earlier revision. Current text and accepted operations are
+durable; unpublished drafts and request sequences are transient process state.
+The default disk file port remains unchanged; the demo installs the buffer port.
+
+The merge policy accepts disjoint contiguous changes and refuses overlap,
+same-point insertions and ambiguous boundaries. It is conservative, not a
+claim of arbitrary concurrent-edit convergence. Agents see compatible drafts
+on read; accepted agent edits publish only their own changes. Overlapping agent
+edits return an error asking for the draft to be published or revised. They are
+not yet parked as interactive suggestions.
+
+Manual conflict resolution requires an explicit confirmation and the exact chosen remote revision; a newer revision refuses the attempt.
+
+Undo applies an inverse through the same overlap checks and appends an operation
+referencing the original. Later independent work remains. Snapshot storage is
+intentionally simple and grows with edits; compaction and delta-only storage
+are future work. File publication and the fact transaction are not one atomic
+filesystem transaction. Acceptance marks publication pending in the same fact transaction. A failed disk write retains the accepted revision and operation; the next buffer access retries publication, including after reopening the world. It never reuses the accepted operation ID or adopts the old disk contents over the accepted text.
+
+## Editor state and composition
+
+Pane focus, layouts, cursor positions, command drafts, folds and presentation
+state remain editor/frame/package values. Plans, boards and saved query text
+remain documents. No pane, view, execution-attempt, or configuration-binding
+entity family is added.
+
+```clojure
+(env/open {:path "/tmp/my-world/.omega/db"
+           :schema (vec (concat place/schema links/schema buffer/schema))})
+```
+
+Packages own schema definitions and host verbs; generic bl-ed only knows
+layouts, document events, effects and optional cleanup hooks.

@@ -2,21 +2,25 @@
 (ns ws.demo
   (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
             [omega.codemode :as cm] [omega.ed.providers :as pv]
-            [bl-ed.serve :as serve] [ws.server :as workspace]))
+            [bl-ed.serve :as serve] [clojure.string :as str] [ws.server :as workspace] [place.model :as place] [place.server :as places] [links.model :as link] [links.server :as links] [buffer.model :as buffer] [buffer.server :as buffers]))
 
 (defn model []
-  (loop/by-goal
-    (into {} (map (fn [goal]
-                    [goal [(loop/call-tool "eval" {:code "(println (sh \"pwd\"))\n(println (read \"board.bl.org\"))"})
-                           (loop/call-tool "eval" {:code "(send \"human:me\" :ask \"Mark this folder's board DONE?\")"})
-                           (loop/say "I checked my working directory and board. Waiting for your answer.")
-                           (fn [req]
-                             (let [reply (str (get-in (last (:messages req)) [:content 0 :text]))]
-                               (loop/call-tool "eval"
-                                 {:code (if (clojure.string/includes? reply "yes")
-                                          "(edit \"board.bl.org\" [{:old \"TODO\" :new \"DONE\"}])\n(done \"Updated board.bl.org in my own working directory.\")"
-                                          "(done \"Kept the board unchanged.\")")})))]] )
-                  ["Update the omega board." "Update the beam-lisp board."]))))
+  ; Derive the stage from durable conversation, not a process-local counter.
+  ; Reopened tasks and two tasks with the same goal keep independent scripts.
+  (fn [req]
+    (let [messages (:messages req) goal (get-in (first messages) [:content 0 :text])
+          stage (count (filter (fn [m] (= :assistant (:role m))) messages))
+          reply (str (get-in (last messages) [:content 0 :text]))]
+      (if (contains? #{"Update the omega board." "Update the beam-lisp board."} goal)
+        (cond
+          (= stage 0) (loop/call-tool "eval" {:code "(println (sh \"pwd\"))\n(println (read \"board.bl.org\"))"} "demo-read")
+          (= stage 1) (loop/call-tool "eval" {:code "(send \"human:me\" :ask \"Mark this folder's board DONE?\")"} "demo-ask")
+          (= stage 2) (loop/say "I checked my working directory and board. Waiting for your answer.")
+          :else (loop/call-tool "eval"
+                  {:code (if (str/includes? reply "yes")
+                           "(edit \"board.bl.org\" [{:old \"TODO\" :new \"DONE\"}])\n(done \"Updated board.bl.org in my own working directory.\")"
+                           "(done \"Kept the board unchanged.\")")} "demo-finish"))
+        (loop/say "This offline model demonstrates the two board goals. Install your own :step function for other work.")))))
 
 (defn launch [root port home]
   (let [places {"omega" (str root "/omega") "beam-lisp" (str root "/beam-lisp")}
@@ -25,11 +29,19 @@
               (File/write! (str dir "/board.bl.org") (str "#+TITLE: " (Path/basename dir) " board\n\n* TODO Check this folder\nAn ordinary editable todo board.\n"))))
         plan (str "#+TITLE: Two working directories\n\n* Omega board\n#+begin_task :id omega-board :cwd @omega\nUpdate the omega board.\n#+end_task\n\n* Beam Lisp board\n#+begin_task :id beam-board :cwd @beam-lisp\nUpdate the beam-lisp board.\n#+end_task\n\n* Notes\nThis plan is editable text. Both tasks live here; each edits its own board.bl.org.\nAlt+h/l focuses panes. g H goes home; g f visits the folder; g t visits a task.\n")
         _ (when-not (File/regular? (str root "/omega/plan.bl.org")) (File/write! (str root "/omega/plan.bl.org") plan))
-        sys (task/start-system (env/open) {:step (model) :tools cm/tools :root root})
+        e (env/open {:path (str root "/.omega/db") :schema (vec (concat place/schema link/schema buffer/schema))})
+        _ (doseq [[id dir] places]
+            (when-not (get (place/all e) id) (place/put! e {:id id :name id :root dir :home (when (= id "omega") {:path "plan.bl.org"}) :config {:test-command "printf offline-demo"}})))
+        _ (when-not (get (place/all e) "boards") (place/put! e {:id "boards" :name "Boards" :parent "omega" :config {:view :todo-board}}))
+        _ (when (empty? (link/all e {:place "boards"}))
+            (link/put! e {:id "boards-plan" :from {:place "boards"} :kind :context :to {:place "omega" :path "plan.bl.org" :block "beam-board"}}))
+        server (buffer/start! e)
+        sys (task/start-system e {:step (model) :tools cm/tools :root root :files (buffer/port server)})
+        _ (task/recover! sys)
         opts {:state (str root "/.omega/ed")
-              :working-directory (fn [path cwd] (workspace/working-directory places root path cwd))}
+              :task-context (fn [path cwd] (places/context sys path cwd))}
         r (serve/start! {:port port :root root :web (str home "/vendor/bl-ed/web")
-                         :providers (merge (pv/providers sys opts) (workspace/providers sys places))
-                         :intents (pv/intents sys opts)})]
-    (println (str (:url r) "?file=places:&use=present,dwim,workspace&layout=workspace"))
+                         :providers (merge (pv/providers sys opts) (places/providers sys) (links/providers sys) (buffers/providers sys server))
+                         :intents (merge (pv/intents sys opts) (places/intents sys) (links/intents sys) (buffers/intents sys server))})]
+    (println (str (:url r) "?file=places:&use=present,dwim,workspace,places,references,buffers&layout=workspace"))
     (receive :never nil)))

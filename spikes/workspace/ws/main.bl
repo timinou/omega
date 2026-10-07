@@ -31,7 +31,9 @@
       (docs/visit ed "places:"))))
 
 (def commands
-  {:workspace/left {:doc "Focus the editor pane to the left; clamp at the edge."
+  {:workspace/visit {:doc "Visit a document/provider address entered as text."
+                     :run (fn [ed] (docs/owned-prompt ed "workspace" "visit: " (fn [ed path] (docs/visit ed path))))}
+   :workspace/left {:doc "Focus the editor pane to the left; clamp at the edge."
                     :run (fn [ed] (c/effect ed {:kind :frame-focus :direction -1}))}
    :workspace/right {:doc "Focus the editor pane to the right; clamp at the edge."
                      :run (fn [ed] (c/effect ed {:kind :frame-focus :direction 1}))}

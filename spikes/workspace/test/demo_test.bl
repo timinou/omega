@@ -1,0 +1,37 @@
+(ns workspace-demo-test (:require [ws.demo :as demo] [omega.env] [omega.task] [omega.actor] [omega.codemode] [buffer.model] [clojure.string]))
+(defn req [n reply]
+  {:messages (vec (concat [{:role :user :content [{:type :text :text "Update the omega board."}]}]
+                         (repeat n {:role :assistant :content []})
+                         (when reply [{:role :user :content [{:type :text :text reply}]}])))})
+(deftest offline-model-is-conversation-derived-and-independent-per-task
+  (let [step (demo/model)]
+    (is (= "demo-read" (get-in (step (req 0 nil)) [:content 0 :id])))
+    (is (= "demo-ask" (get-in (step (req 1 nil)) [:content 0 :id])))
+    (is (= "demo-read" (get-in (step (req 0 nil)) [:content 0 :id])))
+    (is (clojure.string/includes? (get-in (step (req 3 "yes")) [:content 0 :input :code]) "(edit"))
+    (is (clojure.string/includes? (get-in ((demo/model) (req 3 "yes")) [:content 0 :input :code]) "(edit"))
+    (is (clojure.string/includes? (get-in (step (req 3 "no")) [:content 0 :input :code]) "Kept"))))
+
+(deftest real-demo-tasks-share-no-script-counter-and-resume-after-reopen
+  (let [root (str "/tmp/omega-demo-recovery-" (erlang/unique_integer (to-list [:positive]))) db (str root "/db")
+        e (omega.env/open {:path db :schema buffer.model/schema})
+        server (buffer.model/start! e)
+        _ (doseq [dir ["a" "b"]] (File/mkdir_p! (str root "/" dir)) (File/write! (str root "/" dir "/board.bl.org") "* TODO Board\n"))
+        sys (omega.task/start-system e {:root root :step (demo/model) :tools omega.codemode/tools :files (buffer.model/port server)})
+        a (omega.task/open! sys {:goal "Update the omega board." :cwd (str root "/a")})
+        b (omega.task/open! sys {:goal "Update the omega board." :cwd (str root "/b")})]
+    (is (= :idle (:status (omega.task/await sys a 15000))))
+    (is (= :idle (:status (omega.task/await sys b 15000))))
+    (is (= 2 (count (filter (fn [m] (= :ask (:kind m))) (omega.actor/inbox e "human:me")))))
+    (omega.task/stop-system! sys) (GenServer/stop server) (omega.env/close! e)
+    (let [e (omega.env/open {:path db :schema buffer.model/schema}) server (buffer.model/start! e)
+          sys (omega.task/start-system e {:root root :step (demo/model) :tools omega.codemode/tools :files (buffer.model/port server)})
+          ask (first (filter (fn [m] (and (= :ask (:kind m)) (= b (:from m)))) (omega.actor/inbox e "human:me")))]
+      (omega.task/recover! sys) (omega.actor/reply! e (:id ask) "yes")
+      (loop [n 300]
+        (when (and (> n 0) (not (omega.task/terminal? (omega.task/status sys b))))
+          (Process/sleep 20) (recur (dec n))))
+      (is (= :done (omega.task/status sys b)))
+      (is (= "* DONE Board\n" (File/read! (str root "/b/board.bl.org"))))
+      (is (= "* TODO Board\n" (File/read! (str root "/a/board.bl.org"))))
+      (omega.task/stop-system! sys) (GenServer/stop server) (omega.env/close! e))))
