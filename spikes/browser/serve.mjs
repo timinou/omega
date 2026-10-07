@@ -131,13 +131,6 @@ const server=http.createServer(async(req,res)=>{
     }
     if(u.pathname==='/api/doc' && p?.startsWith('procurement:'))return json(res,200,await procurement.doc(p));
     if(u.pathname==='/api/rev' && p?.startsWith('procurement:')) {await new Promise(r=>setTimeout(r,1500));const d=await procurement.doc(p);return json(res,200,{ok:true,path:p,rev:d.rev,changed:d.rev!==u.searchParams.get('since')});}
-    if(u.pathname==='/' && u.searchParams.get('file') && !u.searchParams.has('autoload')) {
-      const file=path.resolve(root,u.searchParams.get('file'));
-      if(file.startsWith(path.resolve(root)+path.sep)){const text=await fs.readFile(file,'utf8').catch(()=> '');
-        if(text.split('\n').slice(0,12).some(l=>l.startsWith('#+USE:') && l.includes('procurement'))){
-          u.searchParams.set('use',[...new Set(['present','browser','procurement',...(u.searchParams.get('use')||'').split(',').filter(Boolean)])].join(','));u.searchParams.set('autoload','1');res.writeHead(302,{location:u.pathname+u.search});return res.end();
-        }}
-    }
     if(u.pathname==='/api/doc' && p?.startsWith('browser:'))return json(res,200,await virtualDoc(p));
     if(u.pathname==='/api/rev' && (p?.startsWith('browser:') || (p?.startsWith('task:') && manager.tasks.has(p.slice(5))))) {
       const controller=new AbortController();res.on('close',()=>controller.abort());

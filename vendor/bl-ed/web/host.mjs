@@ -24,7 +24,9 @@
 // frame value). They do not touch the DOM: test/host.test.mjs drives this same
 // code under Node, and the page itself boots only where a document exists.
 
+import { documentPackages } from "./document-packages.mjs";
 import * as R from "./out/rt.mjs";
+import { packageHosts } from "./package-hosts.mjs";
 
 // ─── primitives ────────────────────────────────────────────────────────────
 
@@ -275,6 +277,7 @@ let bootQueue = [];                         // input typed before the first disp
 function settle() {
   const [fr2, effects] = F.d_take_effects(fr).toArray();
   fr = fr2;
+  syncPackageHosts();
   for (const e of effects) perform(e);
   draw();
   return effects.length;
@@ -310,6 +313,20 @@ function toJS(x) {
   return x;
 }
 const postJSON = (url, body) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+const pkgHosts = packageHosts({ dispatch: e => dispatch(toBL(e)), toBL, toJS,
+  language: () => lang.start() });
+const documentAutoUsed = new Set(), documentSuppressed = new Set();
+let previousPackageNames = new Set();
+function syncPackageHosts() {
+  const names = new Set();
+  for (const id of F.d_editor_ids(fr)) {
+    const ed = F.d_editor(fr, id);
+    for (const p of get(ed, "packages") || []) names.add(get(p, "name"));
+  }
+  for (const name of previousPackageNames) if (!names.has(name)) documentSuppressed.add(name);
+  previousPackageNames = names;
+  pkgHosts.sync(names);
+}
 
 // an event for the pane that asked (a host answer carries {:pane id} back)
 const toPane = (pane, e) => (pane == null ? e : e.assoc(K("pane"), pane));
@@ -337,7 +354,16 @@ function setLoading(pane, path) {
 }
 async function fetchDoc(path, signal) {
   const r = await fetch("/api/doc?path=" + encodeURIComponent(path), { signal });
-  return await r.json();
+  const j = await r.json();
+  if (j.ok) j.packageEvents = await Promise.all(documentPackages(j.text, { loaded: fr ? new Set([...(get(ed$(), "packages") || [])].map(p => get(p, "name"))) : new Set(), suppressed: documentSuppressed }).map(async name => ({ name, event: await loadPackage(name) })));
+  return j;
+}
+function installDocumentPackages(j) {
+  for (const { name, event } of j.packageEvents || []) {
+    if (documentSuppressed.has(name)) continue;
+    const loaded = [...(get(ed$(), "packages") || [])].some(p => get(p, "name") === name);
+    if (!loaded && get(event, "package")) { documentAutoUsed.add(name); dispatch(event); }
+  }
 }
 function loadDoc(path, visit, goto, pane) {
   const id = paneKey(pane);
@@ -357,11 +383,13 @@ function applyDoc(j, path, visit, goto, pane) {
              K("title"), j.title || path, K("objects"), toBL(j.objects || []), K("data"), toBL(j.data ?? null), K("visit?"), !!visit);
   if (goto) e = e.assoc(K("goto"), goto);
   dispatch(toPane(pane, e));
+  installDocumentPackages(j);
   if (visit && (pane == null || paneKey(pane) === get(fr, "focus").name)) history.replaceState(null, "", documentUrl(location.href, path, get(renderFrame(fr), "layout")));
 }
 
 // A generic leave event lets packages release host resources without IO in BL.
 window.addEventListener("pagehide", () => {
+  pkgHosts.dispose();
   if (!fr) return;
   for (const pane of F.d_editor_ids(fr)) fr = F.d_handle(fr, ev(K("type"), K("session-leave"), K("pane"), pane));
   const [next, effects] = F.d_take_effects(fr).toArray(); fr = next;
@@ -394,7 +422,10 @@ async function perform(eff) {
   const e = eff;
   const dispatchP = (x) => dispatch(toPane(pane, x));
   const kind = get(e, "kind").name;
-  if (kind === "asset-store") {
+  if (kind === "package-host") {
+    try { await pkgHosts.effect(get(e, "package"), toJS(e)); }
+    catch (err) { dispatchP(ev(K("type"), K("eval-result"), K("id"), "package-host", K("text"), err.message)); }
+  } else if (kind === "asset-store") {
     try { await storeAsset(get(e, "url"), get(e, "data")); }
     catch (err) { dispatchP(ev(K("type"), K("asset-error"), K("message"), "Image not saved: " + err.message + " — paste again to retry")); }
   } else if (kind === "visit") {
@@ -463,10 +494,12 @@ async function perform(eff) {
     // a compiled BL namespace with a `bl-package` var (d_bl_package);
     // a bare name resolves to ./pkg/<name>.mjs next to the page
     const name = get(e, "name");
+    documentSuppressed.delete(name);documentAutoUsed.delete(name);
     const url = packageUrl(name);
     try {
       const mod = await withTimeout(import(new URL(url, location.href).href), 15000, url);
       const p = mod.package ?? mod.d_bl_package;
+      if (p) pkgHosts.register(get(typeof p === "function" ? p() : p, "name"), mod.createHost);
       dispatchP(ev(K("type"), K("use"), K("package"), typeof p === "function" ? p() : p, K("message"), p ? null : url + " exports no `package`"));
     } catch (err) {
       dispatchP(ev(K("type"), K("use"), K("package"), null, K("message"), "cannot load " + url + ": " + err.message));
@@ -706,7 +739,14 @@ const viewPainters = {
     if (dom.lens.style.cssText !== css) dom.lens.style.cssText = css;
   },
 };
-function paintView(dom, p) { const f = viewPainters[get(p, "view-kind").name]; if (f) f(dom, p); }
+function paintView(dom, p) {
+  if (get(p, "view-kind") === K("host")) {
+    const model = toJS(get(p, "view"));
+    if (model?.package) pkgHosts.paint(model.package, dom.body, model, get(p, "of").name);
+    return;
+  }
+  const f = viewPainters[get(p, "view-kind").name]; if (f) f(dom, p);
+}
 function minimapSlotAt(root, clientY) {
   const k = +root.dataset.k, ys = JSON.parse(root.dataset.ys || "[]");
   const y = (clientY - root.querySelector(".view-body").getBoundingClientRect().top) / k;
@@ -1104,7 +1144,7 @@ function focusPane(id) { if (get(fr, "focus").name !== id) fr = fr.assoc(K("focu
 function activateCommand(node, command) {
   const id = paneOf(node); focusPane(id);
   const line = node.closest(".line"), mode = get(ed$(), "mode");
-  if (line && (mode === K("normal") || mode === K("select"))) {
+  if (line && (mode === K("normal") || mode === K("select") || mode === K("command"))) {
     const row = Number(line.dataset.src ?? line.dataset.row);
     dispatch(ev(K("type"), K("click"), K("pos"), R.vec(row, 0)));
   }
@@ -1219,6 +1259,7 @@ async function loadPackage(name) {
   try {
     const mod = await withTimeout(import(new URL(url, location.href).href), 15000, url);
     const p = mod.package ?? mod.d_bl_package;
+    if (p) pkgHosts.register(get(typeof p === "function" ? p() : p, "name"), mod.createHost);
     return ev(K("type"), K("use"), K("package"), typeof p === "function" ? p() : p, K("message"), p ? null : url + " exports no `package`");
   } catch (err) {
     return ev(K("type"), K("use"), K("package"), null, K("message"), "cannot load " + url + ": " + err.message);
@@ -1244,6 +1285,12 @@ fr = F.d_single(M.d_boot(text, path));
 if (doc) fr = F.d_handle(fr, ev(K("type"), K("doc"), K("path"), path, K("text"), doc.text, K("rev"), doc.rev, K("read-only?"), !!doc.readOnly,
                      K("title"), doc.title || path, K("objects"), toBL(doc.objects || []), K("data"), toBL(doc.data || null), K("visit?"), false));
 for (const u of useEvents) fr = F.d_handle(fr, u);
+for (const { name, event } of doc?.packageEvents || []) {
+  if (![...(get(ed$(), "packages") || [])].some(p => get(p, "name") === name)) {
+    if (get(event, "package")) documentAutoUsed.add(name);
+    fr = F.d_handle(fr, event);
+  }
+}
 if (wantLayout) {
   const layout = F.d_layouts(ed$()).get(wantLayout, null);
   if (layout) fr = F.d_arrange(fr, layout);

@@ -199,3 +199,15 @@ the paint signature so an updated action cannot retain a stale pointer target.
 Host and drive tests verify names, user command lookup and read-only refusal.
 The action overlay uses compact key/name/help rows and remains bounded by the
 viewport. Domain menus and action composition stay in packages.
+
+
+### 2026-10-07 — declarative file-local packages
+
+The host reads `#+USE: installed,bare,names` within a document's first twelve
+lines on boot and ordinary visits. It imports package values, then installs them
+through the same frame `:use` events as explicit use. No document code or remote
+module references are evaluated. An explicit unload suppresses that file-local
+package for subsequent refreshes/visits in this browser session; explicit use
+reenables it. Domain layouts stay in their packages. `document-packages.mjs` and
+its tests pin declaration ordering, boundaries and unload suppression. Existing
+package host resource disposal remains responsible for unload cleanup.
