@@ -152,7 +152,7 @@ The presentation package likewise moves its resize event branch from `draw`
 (where `ev` is unbound) into `intercept`, keeping the standalone build valid.
 
 
-### 2026-10-07 — workspace place/reference/buffer extensions (browser proof pending)
+### 2026-10-07 — workspace place/reference/buffer extensions
 
 `ed/pkg.bl` avoids introducing a nil pkg-state key when removing a stateless
 package, and supports an optional pure `:on-unuse` cleanup hook. `ed/docs.bl`
@@ -166,7 +166,8 @@ and returns optional merged text or provider errors. No place/task/buffer
 vocabulary is introduced below the packages.
 
 Domain implementations and schema ownership remain in `spikes/workspace`.
-Source/editor/backend checks are documented there. These extensions have NOT
-received the required browser proof: the prior verification session denied sockets and
-made Git metadata read-only; committing later does not establish browser proof. The earlier committed workspace proof remains
-historical proof for that earlier slice only.
+Source/editor/backend checks are documented there. The complete real-editor
+agent-browser drive passed on offline port 8798, including used/unloaded
+screenshots for each package. All 66 vendor tests, including cold HTTP startup,
+and the unchanged 36-variant presentation equivalence check passed. The earlier
+committed workspace screenshots remain historical proof for the earlier slice.

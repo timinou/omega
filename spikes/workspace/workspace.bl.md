@@ -1,6 +1,6 @@
 # Working places, task homes, and navigation
 
-Initial slice committed as `592224d`; place/reference/buffer extensions are implemented but awaiting browser proof and commits. 2026-10-07. Schema: [schema.bl.md](schema.bl.md).
+Initial slice committed as `592224d`; place/reference/buffer extensions are committed and browser-verified. 2026-10-07. Schema: [schema.bl.md](schema.bl.md).
 
 ## Experience
 
@@ -81,20 +81,31 @@ Unload layers separately with `(ed/unuse "places")`, `"references"`, `"buffers"`
 
 ## Extension validation status
 
-The latest place backend has 20 passing assertions; links has 8; buffers has 48. The full BEAM suite passed 24 files; the seven affected backend/core files were then rerun with the final publication-recovery changes and all passed. The demo has 12 passing assertions exercising duplicate goals and recovery. The extension editor suite includes 27 tests; vendor drive tests not requiring sockets pass 65/65; DWIM 40/40 and present scrolling 12/12 pass. The unchanged presentation checker passes 36 variants.
+The latest place backend has 22 passing assertions; links has 10; buffers has 48. The full BEAM suite passed 24 files; the seven affected backend/core files were then rerun with the final publication-recovery changes and all passed. The demo has 12 passing assertions exercising duplicate goals and recovery. The extension editor suite includes 27 tests; vendor tests including the cold HTTP test pass 66/66; DWIM 40/40 and present scrolling 12/12 pass. The unchanged presentation checker passes 36 variants.
 
-Required **new browser screenshots remain pending**. In the prior verification session, `npx agent-browser` failed to start because the sandbox denied socket creation; Git metadata was also read-only. The cold HTTP test was blocked by the same socket restriction. Later commits do not establish these passing gates.
+The complete real-editor browser drive passed on 2026-10-07 using `npx agent-browser`, offline port **8798**, session `omega-workspace-tour`, and fresh root `/tmp/omega-workspace-tour-20261007b`. It verified attachment, parent navigation, inherited settings, anchored references, link creation/removal, unpublished drafts, agent edits, publication, attribution, selective undo, and package unload. No browser errors were reported. The other folder’s board stayed TODO. The full verification script also passed, including cold HTTP startup and all 36 presentation-equivalence variants. Intent-reader regressions then passed separately (22 place / 10 reference assertions).
 
-To complete the remaining verification, run:
+To reproduce the verification against a fresh demo root, run:
 
 ```sh
 spikes/workspace/test/verify.sh
 # In another terminal, against a fresh root:
-spikes/workspace/demo.sh /tmp/omega-workspace-proof 8794
-python3 spikes/workspace/test/browser.py --port 8794 --slice all
+spikes/workspace/demo.sh /tmp/omega-workspace-proof 8798
+python3 spikes/workspace/test/browser.py --port 8798 --session omega-workspace-tour --slice all
 ```
 
 The browser drive tests places, references and buffers in sequence and records package-used/unloaded screenshots for each. Run against a fresh root because it asserts initial TODO board contents. The script accepts `--slice places`, `references`, or `buffers` to drive one slice.
+
+## Screenshot tour
+
+1. [Places and inherited settings](proof/05-places-used.png): folder context and package configuration are inspectable editor documents.
+2. [A subplace](proof/06-subplace-created.png): Proof notes shares its parent’s physical folder, inherits the board view, and overrides the test command with visible provenance.
+3. [References and the plan](proof/09-reference-created.png): a place’s context points to a stable task block; an output relation points into another folder. [Anchored arrival](proof/14-anchored-plan.png) lands on the Beam Lisp task.
+4. [Human draft alongside agent work](proof/11-shared-draft-and-agent.png): the board becomes DONE while HUMAN DRAFT remains unpublished; the task conversation occupies the neighboring pane.
+5. [Accepted changes](proof/12-attributed-changes.png): human publication and the task’s edit have separate identities, revisions and attribution.
+6. [Selective undo](proof/15-selective-undo.png): undoing the task edit restores TODO while preserving the subsequently published human text.
+
+Package-unloaded proof: [places](proof/07-places-unused.png), [references](proof/10-references-unused.png), [buffers](proof/13-buffers-unused.png).
 
 ## Initial committed slice: historical proof
 

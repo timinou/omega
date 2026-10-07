@@ -8,11 +8,13 @@ typed object; RET uses the places/workspace layer to visit its target and
 optional exact source block. The `links/add` and `links/remove` commands use
 ordinary minibuffer prompts. Links are declared relationships, not edit logs.
 
-Proof gate: `test/links_test.bl` (8 assertions) and
-`test/links-drive.test.mjs` (2 editor tests). Real-browser proof is pending:
-`python3 spikes/workspace/test/browser.py --port 8794 --slice references` drives
+Proof gate: `test/links_test.bl` (10 assertions) and
+`test/links-drive.test.mjs` (2 editor tests). Real-browser proof recorded on 2026-10-07 at offline port 8798:
+`python3 spikes/workspace/test/browser.py --port 8798 --session omega-workspace-tour --slice references` drives
 an anchored visit, creation, removal and package unload, writing screenshots
-08–10. No screenshots are claimed until that command actually passes.
+08–10.
 
-The prior verification session denied socket creation and Git index writes.
-Browser proof remains pending; later commits do not establish that proof.
+Screenshots: [references used](../proof/08-references-used.png),
+[reference created](../proof/09-reference-created.png),
+[anchored plan](../proof/14-anchored-plan.png),
+[package unloaded](../proof/10-references-unused.png).

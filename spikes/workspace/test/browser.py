@@ -4,10 +4,10 @@ Run against a fresh /tmp demo root. No live-world requests. Requires loopback
 and Chromium. Uses keyboard commands plus browser HTTP reads for assertions.
 """
 import argparse,json,os,pathlib,subprocess,time,urllib.parse
-p=argparse.ArgumentParser();p.add_argument('--port',type=int,default=8794);p.add_argument('--slice',choices=['places','references','buffers','all'],default='all');a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--port',type=int,default=8794);p.add_argument('--session',default='omega-workspace-proof');p.add_argument('--slice',choices=['places','references','buffers','all'],default='all');a=p.parse_args()
 if a.port==8790:raise SystemExit('Refusing live-world port 8790')
 repo=pathlib.Path(__file__).resolve().parents[3];proof=repo/'spikes/workspace/proof';proof.mkdir(exist_ok=True)
-session='omega-workspace-proof';base=f'http://127.0.0.1:{a.port}'
+session=a.session;base=f'http://127.0.0.1:{a.port}'
 if not os.environ.get('AGENT_BROWSER_EXECUTABLE_PATH'):
  candidates=list(pathlib.Path.home().joinpath('.cache/ms-playwright').glob('chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell'))
  if candidates:
@@ -48,7 +48,7 @@ def visit(path):
  # Explicit visit selects the desired document regardless of layout bootstrap.
  open_in_pane(path)
 def photo(name):ab('screenshot',str(proof/name))
-def doc(path):return evaluate('await (await fetch('+json.dumps('/api/doc?path='+urllib.parse.quote(path,safe=''))+')).json()')
+def doc(path):return evaluate('fetch('+json.dumps('/api/doc?path='+urllib.parse.quote(path,safe=''))+').then(r => r.json())')
 def current(path):
  assert path in body(),body()
 def unused(name,png):
@@ -67,7 +67,7 @@ def places():
 def references():
  visit('place:boards');key('g');key('r');wait_loaded('links:place/boards');wait_contains('References for place boards')
  photo('08-references-used.png');command('(ed/goto 4)');key('Enter');wait_loaded('work:omega/plan.bl.org')
- assert 'task block' in body(),body()
+ assert 'task block' in body(),body();photo('14-anchored-plan.png')
  # Add an explicit relation through the real minibuffer.
  command('(ed/cmd "links/add")');wait_contains('link map:')
  ab('type','textarea:focus','{:id "proof-board" :from {:place "boards"} :kind :output :to {:place "beam-lisp" :path "board.bl.org"}}');key('Enter')
@@ -93,7 +93,7 @@ def buffers():
  # Browser-only HTTP assertion verifies that unpublished text has not reached disk's projection.
  assert 'HUMAN DRAFT' not in doc('work:beam-lisp/board.bl.org')['text']
  key('Alt+l');open_in_pane(task_doc);wait_contains('Mark this folder\'s board DONE?')
- command('(ed/goto 1)');key('y');wait_contains('answered '+task+': yes');wait_contains('Updated board.bl.org')
+ command('(ed/goto 1)');key('y');wait_contains('answered '+task+': yes');wait_contains('✓ done')
  key('Alt+h');wait_contains('DONE Check this folder');wait_contains('HUMAN DRAFT');photo('11-shared-draft-and-agent.png')
  key('Control+s');wait_contains('Published shared text')
  assert 'HUMAN DRAFT' in doc('work:beam-lisp/board.bl.org')['text']
@@ -102,6 +102,7 @@ def buffers():
  # Agent operation is first; human publication second. Undo the agent op only.
  command('(ed/goto 7)');key('u');wait_contains('reverted ')
  result=doc('work:beam-lisp/board.bl.org')['text'];assert 'TODO Check this folder' in result and 'HUMAN DRAFT' in result,result
+ open_in_pane('work:beam-lisp/board.bl.org');wait_contains('TODO Check this folder');wait_contains('HUMAN DRAFT');photo('15-selective-undo.png')
  unused('buffers','13-buffers-unused.png')
  print('buffers: unpublished draft, agent edit, publish, attribution, selective undo and unload verified',flush=True)
 

@@ -17,8 +17,8 @@ page leave release pending draft resources through pure hooks and host effects.
 Drafts themselves are transient and should be published before closing/restarting.
 
 Proof gate: `test/buffer_test.bl` (48 assertions) and
-`test/buffer-drive.test.mjs` (12 editor tests). Real-browser proof is pending:
-`python3 spikes/workspace/test/browser.py --port 8794 --slice buffers` drives
+`test/buffer-drive.test.mjs` (12 editor tests). Real-browser proof recorded on 2026-10-07 at offline port 8798:
+`python3 spikes/workspace/test/browser.py --port 8798 --session omega-workspace-tour --slice buffers` drives
 unpublished typing, an agent edit, publication, attribution, selective undo and
 unload, writing screenshots 11–13. It verifies the other place's board remains
 untouched. Run against a fresh demo root.
@@ -29,5 +29,7 @@ resolution; no automatic overwrite is offered by this package. After manually
 resolving the text, run `buffers/resolve` and type `resolved` to confirm the
 chosen remote revision. If it moved again, publication is refused.
 
-The prior verification session denied socket creation and Git index writes.
-Browser proof remains pending; later commits do not establish that proof.
+Screenshots: [shared draft and agent edit](../proof/11-shared-draft-and-agent.png),
+[attributed changes](../proof/12-attributed-changes.png),
+[selective undo](../proof/15-selective-undo.png),
+[package unloaded](../proof/13-buffers-unused.png).
