@@ -2,6 +2,10 @@ import fs from 'node:fs/promises';
 // Infrastructure only; the model authors its own curated functions around this.
 const [action,...args]=process.argv.slice(2);
 try {
+  if(args[0]==='--args-file'){
+    if(args.length!==2)throw Error('Use ACTION --args-file PATH for literal argument arrays');
+    const values=JSON.parse(await fs.readFile(args[1],'utf8'));if(!Array.isArray(values)||!values.every(v=>typeof v==='string'))throw Error('Argument array must contain strings');args.splice(0,args.length,...values);
+  }
   if(args[0]==='--arg-file'){
     if(args.length!==2)throw Error('Use ACTION --arg-file PATH for one literal argument.');
     const argument=await fs.readFile(args[1],'utf8');args.splice(0,args.length,argument);

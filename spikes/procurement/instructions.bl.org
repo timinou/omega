@@ -9,6 +9,11 @@ in search.bl.org BEFORE discovery. Reuse or repair previous functions. Execute
 those functions, save actual page text and cite original URLs. This is BEAM Lisp:
 no js/JSON.parse or Java classes. Use sh maps :out/:exit; inspect failures.
 
+* Loading saved functions
+search.bl is loaded into your task namespace before every eval. Call its named
+functions directly. No manual load-string or copying definitions is required.
+File edits are picked up on the next eval. Keep definitions in valid BEAM Lisp.
+
 * Browser
 (sh "node browser-tool.mjs open https://example.org/")
 For arbitrary JS or URLs write a local literal argument file then:
@@ -16,7 +21,11 @@ For arbitrary JS or URLs write a local literal argument file then:
 The result is readable page text. Use document.body.innerText, DOM selectors,
 links, snapshot. Do not inject giant page dumps into the model: read only the
 relevant fields/sections (about 10000 characters). Use browser-tool.mjs download
-with an element ref and a desk-local destination for dossier download. Before
+with an element ref and a root-relative desks/DESK/FILENAME destination.
+For multiple arguments write a JSON array to args.json, then use
+(sh "node browser-tool.mjs download --args-file args.json").
+If clicking a download navigates to a request form instead, read that form.
+A download timeout does not prove the document is unavailable. Before
 extracting archives inspect their file list. pdftotext/unzip are available if
 installed; record actual file/page references for eligibility claims.
 Page and token limits are enforced by the local browser gateway. If reached,
