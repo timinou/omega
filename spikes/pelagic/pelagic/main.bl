@@ -37,6 +37,7 @@
     (= :pelagic/export (:type ev)) (send ed :export {})
     (= :pelagic/record (:type ev)) (send ed :record {})
     (= :pelagic/cue (:type ev)) (send ed :cue {:bar (* 16 (max 0 (min 3 (:movement ev))))})
+    (= :pelagic/revision (:type ev)) (update-in ed [:pkg-state "pelagic"] merge (:config ev) {:revision (:revision ev) :phase (:phase ev)})
     (= :pelagic/status (:type ev)) (-> ed
        (assoc-in [:pkg-state "pelagic" :playing] (:playing ev))
        (c/message (:message ev)))
@@ -51,6 +52,7 @@
               :pelagic/perform {:doc "Start continuous performance" :run (fn [ed] (send ed :perform (state ed)))}
               :pelagic/panic {:doc "Stop voices and cancel pending edits" :run (fn [ed] (send ed :request {:kind "panic"}))}
               :pelagic/stop {:doc "Stop all voices" :run stop}
+              :pelagic/preview {:doc "Validate buffer without applying" :run (fn [ed] (send ed :evaluate {:source (t/to-string (:text ed)) :preview true}))}
               :pelagic/eval {:doc "Evaluate live Beam Lisp / GLSL blocks" :run evaluate}
               :pelagic/stage {:doc "Show live source and stage" :run (fn [ed] (assoc ed :frame/layout stage))}
               :pelagic/cinema {:doc "Enlarge the stage" :run (fn [ed] (assoc ed :frame/layout cinema))}}

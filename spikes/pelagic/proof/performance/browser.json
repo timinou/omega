@@ -1,0 +1,91 @@
+{
+  "checks": [
+    "continuous transport starts",
+    "real editor evaluates instrument and releases staging namespace",
+    "audio and scene activate as one quantized revision",
+    "invalid shader rejects entire transaction",
+    "preview makes no performance change",
+    "gestures layering and seeded variations",
+    "undo and redo restore whole performance",
+    "snapshot recall",
+    "cancelled revision never activates",
+    "rapid scene cues coalesce latest state",
+    "pause and resume preserve phase",
+    "tempo change preserves advancing clock",
+    "session and audio asset round trip",
+    "MIDI CC adapter",
+    "incremental recording finalizes actual live audio and shader",
+    "GPU loss pauses and restores the stage",
+    "exact unuse and resource disposal"
+  ],
+  "stats": {
+    "playing": true,
+    "nextStep": 161,
+    "voices": 22,
+    "context": "running",
+    "frames": 1483,
+    "recording": false,
+    "patterns": [
+      "melody"
+    ],
+    "pending": 0,
+    "mode": "performance",
+    "beat": 39.4289194899818,
+    "revision": 12,
+    "phase": "ACTIVE",
+    "resources": {
+      "voices": 22,
+      "peakVoices": 23,
+      "triggered": 76,
+      "nodes": 275,
+      "buses": 6,
+      "intents": 75
+    },
+    "gpu": {
+      "programs": 2,
+      "targets": 3,
+      "transition": false
+    },
+    "diagnostics": {
+      "missed": 0,
+      "ticks": 770,
+      "longTasks": 12
+    }
+  },
+  "metrics": {
+    "elapsedSeconds": 21.758699999988078,
+    "missedEvents": 0,
+    "schedulerTicks": 770,
+    "longTasks": 12,
+    "frameP95": 37.5,
+    "frameP99": 75.60000002384186,
+    "framesOver100Percent": 0.8264462809917356,
+    "compileP95": 175.5,
+    "resources": {
+      "voices": 22,
+      "peakVoices": 23,
+      "triggered": 76,
+      "nodes": 275,
+      "buses": 6,
+      "intents": 75
+    },
+    "gpu": {
+      "programs": 2,
+      "targets": 3,
+      "transition": false
+    },
+    "history": 6,
+    "namespaces": 0,
+    "recording": null,
+    "audioTiming": {
+      "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+      "samples": 8,
+      "p95Ms": 0.014344262300625132,
+      "maxMs": 0.014344262300625132,
+      "ready": true,
+      "error": null
+    },
+    "avTiming": "visual activation samples the same audio clock; physical output latency is not measured"
+  },
+  "pageErrors": []
+}

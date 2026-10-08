@@ -1,0 +1,57 @@
+// Bounded browser IO. Session revisions contain hashes, not embedded audio.
+export class LocalStore {
+  constructor(){this.pending=0;this.db=null;this.closed=false;}
+  async open(){
+    if(this.closed)throw new Error('Storage closed');if(this.db)return this.db;
+    return this.db=await new Promise((resolve,reject)=>{const request=indexedDB.open('omega-pelagic',1);
+      request.onupgradeneeded=()=>{for(const name of ['assets','chunks','takes'])request.result.createObjectStore(name);};
+      request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+  }
+  async op(store,mode,run){
+    const db=await this.open();if(this.closed)throw new Error('Storage closed');this.pending++;
+    try{return await new Promise((resolve,reject)=>{const transaction=db.transaction(store,mode),request=run(transaction.objectStore(store));
+      transaction.oncomplete=()=>resolve(request?.result);transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error||new Error('Storage transaction aborted'));});}
+    finally{this.pending--;}
+  }
+  put(store,key,value){return this.op(store,'readwrite',s=>s.put(value,key));}
+  get(store,key){return this.op(store,'readonly',s=>s.get(key));}
+  remove(store,key){return this.op(store,'readwrite',s=>s.delete(key));}
+  async asset(file){const data=await file.arrayBuffer();const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',data))].map(x=>x.toString(16).padStart(2,'0')).join('');await this.put('assets',hash,file);return hash;}
+  close(){this.closed=true;this.db?.close();this.db=null;}
+}
+export class LiveTake {
+  constructor(store,stream,options={}){
+    this.store=store;this.stream=stream;this.id=crypto.randomUUID();this.count=0;this.bytes=0;this.pendingBytes=0;this.error=null;
+    const mime=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(x=>MediaRecorder.isTypeSupported(x));
+    this.mime=mime;this.recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:options.bitRate||1200000,audioBitsPerSecond:128000});
+    this.writes=Promise.resolve();this.started=performance.now();this.stopped=null;
+    this.recorder.ondataavailable=event=>{
+      if(!event.data.size)return;const index=this.count++,blob=event.data;this.bytes+=blob.size;this.pendingBytes+=blob.size;
+      // Never grow an unbounded RAM queue when storage is slow or full.
+      if(this.pendingBytes>16*1024*1024){this.fail(new Error('Recording storage backlog exceeded 16 MB'));return;}
+      this.writes=this.writes.then(()=>this.store.put('chunks',this.id+':'+index,blob)).then(()=>{this.pendingBytes-=blob.size;}).catch(e=>this.fail(e));
+    };
+    this.recorder.onerror=event=>this.fail(event.error||new Error('MediaRecorder failed'));
+  }
+  fail(error){this.error=error;if(this.recorder.state!=='inactive')this.recorder.stop();}
+  start(){this.recorder.start(2000);return this;}
+  async stop(){
+    if(this.stopped)return this.stopped;
+    return this.stopped=(async()=>{
+      if(this.recorder.state!=='inactive')await new Promise(resolve=>{this.recorder.onstop=resolve;this.recorder.stop();});
+      await this.writes;this.stream.getTracks().forEach(t=>t.stop());
+      const info={id:this.id,chunks:this.count,bytes:this.bytes,mime:this.mime,duration:(performance.now()-this.started)/1000,error:this.error?.message||null};
+      await this.store.put('takes',this.id,info);if(this.error)throw this.error;return info;
+    })();
+  }
+  async blob(){await this.stop();const chunks=[];for(let i=0;i<this.count;i++){const chunk=await this.store.get('chunks',this.id+':'+i);if(!chunk)throw new Error('Missing recording chunk '+i);chunks.push(chunk);}return new Blob(chunks,{type:this.mime});}
+  async exportTo(writable){await this.stop();for(let i=0;i<this.count;i++){const chunk=await this.store.get('chunks',this.id+':'+i);if(!chunk)throw new Error('Missing recording chunk '+i);await writable.write(chunk);}await writable.close();}
+}
+export function validateSession(value){
+  if(!value||value.schema!=='omega.pelagic'||value.version!==1)throw new Error('Unsupported PELAGIC session version');
+  if(!value.state?.config||!value.state.patterns||!value.state.visual||!value.state.scenes||!value.state.variation)throw new Error('Incomplete session');
+  if(JSON.stringify(value).length>2*1024*1024)throw new Error('Session exceeds 2 MB');
+  if(Object.keys(value.snapshots||{}).length>16)throw new Error('Snapshot limit exceeded');
+  for(const asset of value.assets||[])if(!['a','b'].includes(asset.deck)||!/^[a-f0-9]{64}$/.test(asset.hash)||!Number.isFinite(asset.bpm)||asset.bpm<40||asset.bpm>240)throw new Error('Invalid audio reference');
+  return value;
+}
