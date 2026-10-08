@@ -36,6 +36,14 @@
 (def intents (assoc (pv/intents sys) "browser/run-proof"
   (fn [a] {:task (task/view sys (:id a)) :turns (loop/turns sys (:id a))
            :model (when live? (:model model)) :live live?})))
+(def intents (assoc intents "procurement/model-open"
+ (fn [{:keys [goal desk maxSteps maxInput maxOutput]}]
+  (when-not (and (re-matches #"[a-z0-9][a-z0-9-]{0,63}" desk)
+    (<= 1 maxSteps 16) (<= 10000 maxInput 400000) (<= 1000 maxOutput 32000))
+   (throw (ex-info "Invalid bounded research configuration" {})))
+  (let [id (task/open! (assoc sys :max-steps maxSteps :token-budget {:input maxInput :output maxOutput})
+    {:goal goal :title (str "Procurement · " desk) :cwd (str root "/desks/" desk)})]
+   {:id id :path (str "task:" id)}))))
 (def server (serve/start! {:port 8796 :root root :web (str home "/vendor/bl-ed/web")
                           :providers (pv/providers sys) :intents intents}))
 (println (str "Isolated browser demo world: " (:url server)))

@@ -75,3 +75,14 @@ only if needed for public consultation documents, through browser interaction.
 Do not fabricate a company's legal identity or accept contracts on its behalf.
 No buyer contact, bid submission, payment or applications. If login/identity
 requirements prevent document access, record the exact blocker and next action.
+
+* Bounded research and checkpoint publication
+The host creates .research-context.json for the current run. desk-tool.mjs
+supplies its desk and run IDs automatically; a checkpoint JSON can be simply
+{"phase":"complete","note":"Published one original notice","evidence":["desks/DESK/report.txt"]}.
+Source helpers and their Org blocks must match before completion. Discovery
+requires a newly published finding, or an explicit no-results report after actual
+browser work. A stopped task without that checkpoint is partial, even if it said
+done. Browser errors are retained; two errors exhaust the retry allowance.
+Reserve the last two steps for publication, source synchronization and done.
+Use Node for JSON.parse/JSON.stringify. js/JSON is not a Beam Lisp namespace.

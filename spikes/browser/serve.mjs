@@ -5,6 +5,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {Sessions,validId} from './sessions.mjs';
 import {Procurement} from '../procurement/service.mjs';
+import {recover} from '../procurement/lifecycle.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url));
 const instance=crypto.randomUUID().slice(0,8);
 const root=process.env.BROWSER_DEMO_ROOT || '/tmp/omega-browser-demo';
@@ -12,6 +13,8 @@ const manager=new Sessions(process.env.BROWSER_STATE_ROOT || root + '.private');
 await manager.init();
 const upstream='http://127.0.0.1:8796';
 const procurement=new Procurement(root,upstream);
+procurement.sessions=async()=>Array.from(manager.sessions.values(),s=>({id:s.id,status:s.status,mode:s.mode,control:s.control,task:s.task,auth:s.auth,profile:s.profile,frameAt:s.frameAt}));
+await recover(procurement);
 const json=(res,status,body)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(body));};
 async function body(req) {
   let value=''; for await(const chunk of req) {value+=chunk;if(value.length>65536)throw Error('Request too large');}
@@ -72,6 +75,7 @@ function ownedDoc(doc) {
   doc.rev+=`-browser-${s.rev}`; return doc;
 }
 const server=http.createServer(async(req,res)=>{
+  let browserTask=null;
   try {
     // These intents control a local browser. Only same-origin requests may mutate it.
     const host=req.headers.host;
@@ -81,7 +85,7 @@ const server=http.createServer(async(req,res)=>{
     if(u.pathname.startsWith('/procurement/artifact/')){const [id,...parts]=decodeURIComponent(u.pathname.slice('/procurement/artifact/'.length)).split('/');const a=await procurement.artifact(id,parts.join('/'));res.writeHead(200,{'content-type':a.type,'cache-control':'no-store','content-disposition':`inline; filename*=UTF-8''${encodeURIComponent(a.name)}`});return res.end(a.data);}
     if(u.pathname==='/browser/tool' && req.method==='POST') {
       const b=await body(req);
-      if(!validId(b.task))throw Error('Invalid task ID');
+      if(!validId(b.task))throw Error('Invalid task ID');browserTask=b.task;
       await procurement.budget(b.task,b.action);
       const verbs=new Set(['open','snapshot','links','eval','click','fill','get','scroll','download']);
       if(!verbs.has(b.action) || !Array.isArray(b.args) || !b.args.every(x=>typeof x==='string'))throw Error('Invalid browser operation');
@@ -105,6 +109,7 @@ const server=http.createServer(async(req,res)=>{
         if(['click','fill','scroll'].includes(b.action))await manager.capture(s);
         manager.event(s,'model/browser-operation',{action:b.action});return result;
       });
+      await procurement.browserEvent(b.task,s.id);
       return json(res,200,{ok:true,result});
     }
     if(u.pathname==='/browser/research' && req.method==='POST') {
@@ -132,6 +137,11 @@ const server=http.createServer(async(req,res)=>{
       const result=await r.text();
       if(b.intent==='task/cancel' && manager.tasks.has(a.id))await manager.action(manager.tasks.get(a.id),'close');
       res.writeHead(r.status,{'content-type':'application/json'});return res.end(result);
+    }
+    if(u.pathname==='/api/doc' && /^desks\/[^/]+\/qualification-(?!facts-).*\.bl\.org$/.test(p||'')) {
+      const original=await (await fetch(upstream+u.pathname+u.search)).json();
+      if(original.ok){const [_,desk,file]=p.split('/');const id=file.slice(14,-7);original.text=original.text.replace(/^(#\+TITLE:.*)$/m,'$1 — HISTORICAL NARRATIVE')+`\n\n* Current facts supersede this narrative\n[[desks/${desk}/qualification-facts-${id}.bl.org][Open current qualification facts]]\n`;}
+      return json(res,200,original);
     }
     if(u.pathname==='/api/doc' && p?.startsWith('procurement:'))return json(res,200,await procurement.doc(p));
     if(u.pathname==='/api/rev' && p?.startsWith('procurement:')) {await new Promise(r=>setTimeout(r,1500));const d=await procurement.doc(p);return json(res,200,{ok:true,path:p,rev:d.rev,changed:d.rev!==u.searchParams.get('since')});}
@@ -171,7 +181,7 @@ const server=http.createServer(async(req,res)=>{
     const r=await fetch(upstream+req.url,{method:req.method});
     const headers={};for(const k of ['content-type','cache-control'])if(r.headers.has(k))headers[k]=r.headers.get(k);
     res.writeHead(r.status,headers);res.end(Buffer.from(await r.arrayBuffer()));
-  } catch(e) {if(!res.destroyed)json(res,400,{ok:false,message:e.message});}
+  } catch(e) {if(browserTask)await procurement.browserEvent(browserTask,null,e.message).catch(()=>{});if(!res.destroyed)json(res,400,{ok:false,message:e.message});}
 });
 server.listen(8797,'127.0.0.1',()=>console.log('Browser demo: http://127.0.0.1:8797/?file=demo.bl.org&use=present,browser'));
 async function stop() {server.close();await manager.shutdown();process.exit(0);}
