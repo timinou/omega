@@ -1,0 +1,15 @@
+Evidence (DCE link / download attempt) collected 2026-10-07 via task browser on the original PMMP notice.
+URL: https://www.marchespublics.gov.ma/index.php?page=entreprise.EntrepriseDetailsConsultation&refConsultation=1044940&orgAcronyme=o3f
+
+DCE download control (captured this run by DOM query):
+  tag: A
+  id: ctl0_CONTENU_PAGE_linkDownloadDce
+  text: "Dossier de consultation - 19,06 Mo"
+  href: index.php?page=entreprise.EntrepriseDemandeTelechargementDce&refConsultation=1044940&orgAcronyme=o3f
+Related controls present: ctl0_CONTENU_PAGE_linkDownloadReglement (A, empty href), ctl0_CONTENU_PAGE_pictoDce (IMG), ctl0_CONTENU_PAGE_linkDownloadComplement (A, empty href).
+
+Download attempts via browser-tool.mjs download (destination desks/ora/dossier.zip):
+  1) target '#ctl0_CONTENU_PAGE_linkDownloadDce' -> "Download needs a browser target and a desk-local filename" when the '#' was consumed by the shell; after single-quoting the target the gateway replied: "Element not found: #ctl0_CONTENU_PAGE_linkDownloadDce. Verify the selector, role, or name is correct and the element exists in the DOM." (the element was demonstrably present in the DOM via eval).
+  2) Subsequent download/snapshot calls returned "Research token budget reached. Save partial outputs from existing evidence and call done."
+
+Result: the Dossier de consultation was NOT downloaded; no byte of the DCE was obtained and no page of it was read. Download appears to require a browser element ref (snapshot) rather than a CSS selector/href; the snapshot was blocked by the run token budget.

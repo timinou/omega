@@ -1,0 +1,49 @@
+#+USE: present,browser,procurement
+#+PROCUREMENT_DESK: ora
+#+TITLE: Run report — ONMT Qlik Sense qualification (run 51b29007)
+#+DATE: 2026-10-07
+#+OPERATION: qualify
+#+STAGE: notice-checked
+#+DECISION: needs-information
+
+* Goal
+Qualify opportunity onmt-qlik (ONMT — conversational AI and BI on Qlik Sense) by reading
+the original notice and the consultation dossier, comparing requirements to profile facts.
+
+* What was done
+- Reused the named curated functions in search.bl (bt-arg/bt-eval/bt-open/bt-download...).
+- Opened the original PMMP notice (1 browser navigation) and re-confirmed the fields already
+  on record: reference DA/15/26; deadline 27/10/2026 11:00; objet = conversational AI
+  piloting solution on Qlik Sense infrastructure for ONMT, single lot.
+- Found and captured the DCE download control from the DOM:
+  A#ctl0_CONTENU_PAGE_linkDownloadDce, text "Dossier de consultation - 19,06 Mo",
+  href index.php?page=entreprise.EntrepriseDemandeTelechargementDce&refConsultation=1044940&orgAcronyme=o3f.
+- Attempted the download with browser-tool.mjs download into desks/ora/dossier.zip.
+
+* Result
+Dossier NOT retrieved. Attempts and exact outcomes:
+- Shell-consumed target ('#...') -> "Download needs a browser target and a desk-local filename";
+  with the dest under desks/ -> "Download must be scoped to desks/" when the dest was bare.
+- Single-quoted CSS selector target -> "Element not found: #ctl0_CONTENU_PAGE_linkDownloadDce"
+  although the element exists in the DOM via eval (download appears to need a snapshot ref).
+- The very next browser calls (snapshot/download) returned
+  "Research token budget reached. Save partial outputs from existing evidence and call done."
+No DCE byte was obtained, no consultation-document page was read. No limit was bypassed
+and no direct HTTP fetch was attempted.
+
+* Files written
+- desks/ora/evidence-2026-10-07-morocco-onmt-qlik-dce-link.txt — DCE control + download-blocker evidence.
+- desks/ora/qualification-onmt-qlik.bl.org — requirements -> (only readable references) -> profile fact -> UNKNOWN.
+- desks/ora/search.bl / search.bl.org — appended v7 functions (probe-download-links, bt-download-q) and lessons.
+- desks/ora/update.json — structured update (no stage advance).
+
+* Decision
+needs-information; eligibility UNKNOWN. Stage stays notice-checked: no dossier page was read,
+so no requirement could be judged met/not met and no advance is justified.
+
+* Next actions
+1. Open notice, take snapshot, grab the DCE control ref, then
+   node browser-tool.mjs download <ref> desks/ora/dossier.zip.
+2. Inspect archive, pdftotext règlement/CPS/CDC, cite pages for Qlik, references, guarantees, admin pieces.
+3. Record exactly any login/payment requirement (no false identity, no registration unless needed).
+4. Compare to Ora facts, then decide pursue/reject.

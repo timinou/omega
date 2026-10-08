@@ -1,0 +1,74 @@
+(defn bt-arg [action arg]
+  (write ".bt-arg.tmp" arg)
+  (sh (str "node browser-tool.mjs " action " --arg-file .bt-arg.tmp")))
+(defn bt-noarg [action] (sh (str "node browser-tool.mjs " action)))
+(defn bt-eval [js] (bt-arg "eval" js))
+(defn bt-links [] (bt-noarg "links"))
+(defn bt-open [url] (bt-arg "open" url))
+(defn page-text [] (bt-eval "document.body.innerText"))
+(defn page-url [] (bt-eval "location.href"))
+(defn capture-evidence [label url text] (write (str "evidence-" label ".txt") (str "URL: " url "\n\n" text "\n")))
+(defn ma-keyword [kw]
+  (bt-open "https://www.marchespublics.gov.ma/index.php?page=entreprise.EntrepriseAdvancedSearch&searchAnnCons")
+  (bt-eval (str "var el=document.querySelector('#ctl0_CONTENU_PAGE_AdvancedSearch_keywordSearch'); el.value=" (pr-str kw) "; document.querySelector('#ctl0_CONTENU_PAGE_AdvancedSearch_lancerRecherche').click(); 'submitted'"))
+  (page-text))
+(defn ma-rows []
+  (bt-eval "JSON.stringify([...document.querySelectorAll('tr')].map(r=>({text:(r.innerText||'').replace(/\\s+/g,' ').trim().slice(0,700),hrefs:[...r.querySelectorAll('a')].map(a=>a.href).filter(h=>h.includes('EntrepriseDetailsConsultation')||h.includes('EntrepriseDetailConsultation'))})).filter(r=>r.text.length>10))"))
+(defn fr-place-open [] (bt-open "https://www.marches-publics.gouv.fr/"))
+(defn fr-place-text [] (page-text))
+(defn fr-place-search [kw]
+  (bt-open "https://www.marches-publics.gouv.fr/")
+  (bt-eval (str "var inputs=[...document.querySelectorAll('input[type=text],input:not([type]),textarea')]; var el=inputs.find(e=>e.placeholder&&/mot|recherche|keyword|objet/i.test(e.placeholder+e.name+e.id)); if(!el) el=inputs[0]; el.value=" (pr-str kw) "; if(el.form){el.form.requestSubmit?el.form.requestSubmit():el.form.submit()} else {el.dispatchEvent(new Event('change',{bubbles:true}));} 'sent'"))
+  (page-text))
+(defn fr-place-links [] (bt-links))
+(defn ted-open [path] (bt-open (str "https://ted.europa.eu" path)))
+(defn ted-search [q]
+  (let [query (str/replace q " " "%20")]
+    (ted-open (str "/en/search/result?query=" query))
+    (page-text)))
+(defn ted-text [] (page-text))
+(defn ted-links [] (bt-links))
+
+(defn ie-etenders-open [path] (bt-open (str "https://www.etenders.gov.ie" path)))
+(defn ie-etenders-text [] (page-text))
+(defn ie-etenders-links [] (bt-links))
+(defn ie-etenders-url [] (page-url))
+(defn ie-etenders-search [kw]
+  (bt-open "https://www.etenders.gov.ie/epps/prepareAdvancedSearch.do?type=cftFTS")
+  (bt-eval (str "var el=document.querySelector('#Title'); el.value=" (pr-str kw) "; var f=el.form; f.requestSubmit?f.requestSubmit():f.submit(); 'submitted'"))
+  (bt-links))
+(defn ie-etenders-set-search [title status]
+  (bt-eval (str "var t=document.querySelector('#Title'); var s=document.querySelector('#Status'); if(t)t.value=" (pr-str title) "; if(s){s.value=" (pr-str status) "; s.dispatchEvent(new Event('change',{bubbles:true}));} var f=document.querySelector('form'); f.requestSubmit?f.requestSubmit():f.submit(); 'submitted'")))
+;; v6 ONMT/local run: snapshot + dossier download helpers
+(defn bt-snapshot [] (bt-noarg "snapshot"))
+(defn bt-download [target dest] (sh (str "node browser-tool.mjs download " target " " dest)))
+(defn onmt-url [] "https://www.marchespublics.gov.ma/index.php?page=entreprise.EntrepriseDetailsConsultation&refConsultation=1044940&orgAcronyme=o3f")
+(defn onmt-open [] (bt-open (onmt-url)))
+
+;; v7 ONMT qualification run: DOM probe + shell-safe download (quote target; dest must be root-relative desks/...)
+(defn probe-download-links []
+  (bt-eval "JSON.stringify([...document.querySelectorAll('[id*=ownload],[id*=Dce],[id*=DCE]')].map(e=>({tag:e.tagName,id:e.id,txt:(e.innerText||'').trim().slice(0,60),href:e.getAttribute('href')})))"))
+(defn bt-download-q [target dest]
+  (sh (str "node browser-tool.mjs download '" target "' " dest)))
+
+
+;; v8 ONMT qualification: local DCE page extraction + evidence saving
+(defn dce-page [file & nums]
+  (sh (str "node pages.mjs " file " " (str/join " " (map str nums)))))
+(defn rc-pages [& nums] (apply dce-page "dce/RC.txt" nums))
+(defn cps-pages [& nums] (apply dce-page "dce/CPS.txt" nums))
+(defn dce-list [] (sh "find dce -type f"))
+;; v9 ora-refresh: bounded notice refresh + status classification
+(defn sh-out [m] (get m :out))
+(defn refresh-check [label url]
+  (bt-open url)
+  (let [out (or (get (page-text) :out) "")]
+    (write (str "evidence-refresh-" label ".txt") (str "URL: " url "\n\n" out "\n"))
+    (subs out 0 (min 3000 (count out)))))
+(defn notice-closed? [text]
+  (let [t (str/lower-case (or text ""))]
+    (or (str/includes? t "clotur") (str/includes? t "closed") (str/includes? t "ferme")
+        (str/includes? t "annul") (str/includes? t "cancel") (str/includes? t "infructueu"))))
+(defn notice-status [label url]
+  (let [t (refresh-check label url)]
+    {"label" label "url" url "closed?" (notice-closed? t) "head" t}))

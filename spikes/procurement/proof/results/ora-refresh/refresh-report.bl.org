@@ -1,0 +1,44 @@
+#+USE: present,browser,procurement
+#+PROCUREMENT_DESK: ora-refresh
+#+TITLE: ora-refresh run report — 93e3e3e2-44be-482a-a75a-d6c214427ce9
+#+DATE: 2026-10-07
+#+OPERATION: refresh
+
+* Summary
+Bounded refresh of the three notices inherited from the ora desk. Reused the
+saved search.bl functions (bt-open/page-text/refresh-check/notice-closed?); no
+new discovery was completed because the human steer stopped further browsing.
+All three notices were re-fetched live and are still OPEN with unchanged
+deadlines; each was republished at stage notice-checked (no dossier
+qualification is claimed in this desk).
+
+* Reuse
+- search.bl v9 extended with sh-out, refresh-check, notice-closed?, notice-status; matching source block appended to search.bl.org (code block byte-identical to search.bl, verified with diff => MATCH).
+- DCE/evidence files copied from desks/ora into this desk so every evidence path is local (desks/ora-refresh/...).
+- The source desk's qualification-checked assessment for ONMT was deliberately downgraded to notice-checked here because eligibility was not re-assessed in this refresh.
+
+* Live checks (4 navigations of 8)
+- Morocco ONMT (marchespublics.gov.ma refConsultation=1044940): OPEN, deadline 27/10/2026 11:00, ref DA/15/26. Evidence: evidence-refresh-morocco-onmt-qlik.txt.
+- France Numih DPS (marches-publics.gouv.fr consultation/2908387): OPEN, deadline 15/12/2036 10:00 (heure de Paris), ref 2025-0154-00-00-MPF. Evidence: evidence-refresh-france-numih.txt.
+- Ireland Cork County Council (etenders.gov.ie resourceId=9123020): OPEN, deadline 27/10/2026 16:00, competitive dialogue, EUR 2,500,000, 10-year framework. Evidence: evidence-refresh-ireland-cork.txt.
+
+* Failures / limits
+- Morocco keyword discovery (ma-keyword "intelligence artificielle") returned an empty/short result (length 1): the PMMP advanced-search selector (#ctl0_CONTENU_PAGE_AdvancedSearch_keywordSearch) likely changed. No rows parsed; discovery not completed. Recorded as a blocker, not retried.
+- Broad searches were stopped per human steer to finish within budget.
+- No dossier/eligibility review performed this run; all unknowns preserved.
+
+* Published opportunities
+- [[desks/ora-refresh/opportunity-onmt-qlik.bl.org][onmt-qlik]] — needs-information, notice-checked, open.
+- [[desks/ora-refresh/opportunity-numih-ai.bl.org][numih-ai]] — needs-information, notice-checked, open.
+- [[desks/ora-refresh/opportunity-cork-platform.bl.org][cork-platform]] — needs-information, notice-checked, open.
+
+* Actionable links
+- ONMT: https://www.marchespublics.gov.ma/index.php?page=entreprise.EntrepriseDetailsConsultation&refConsultation=1044940&orgAcronyme=o3f
+- Numih DPS: https://www.marches-publics.gouv.fr/app.php/entreprise/consultation/2908387?orgAcronyme=x7c
+- Cork CFT: https://www.etenders.gov.ie/epps/cft/prepareViewCfTWS.do?resourceId=9123020
+
+* Next actions
+- Read ONMT DCE qualification rules (local dce/RC.txt, dce/CPS.txt) and decide on attestations/guarantees.
+- Read Numih règlement + DUME; decide whether DPS admission is practical.
+- Read Cork framework qualification/ESPD before the 2026-10-27 16:00 deadline.
+- When the PMMP keyword selector is repaired, resume Morocco discovery.

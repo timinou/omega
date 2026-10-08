@@ -1,0 +1,50 @@
+#+USE: present,browser,procurement
+#+PROCUREMENT_DESK: ora
+#+TITLE: ONMT Qlik qualification — audit of date and provenance correction
+#+DATE: 2026-10-07
+
+* What was corrected
+- The qualification run had stamped everything 2026-10-08. The actual UTC date is 2026-10-07.
+- qualification-onmt-qlik.bl.org: #+DATE corrected to 2026-10-07; outcome now states the consultation dossier was obtained by the preceding browser task and reviewed locally this run (not downloaded/read in this run).
+- Last run report run-660e7bd1-b876-414d-8f29-768d6eaf2196.bl.org: #+DATE corrected; provenance notes the DCE (dossier.zip) was acquired by the preceding browser task.
+- Structured ONMT summary republished through desk-tool update: summary provenance corrected and the evidence path repointed to the correctly dated file.
+
+* Evidence handling
+- Old misdated file retained for audit: desks/ora/evidence-2026-10-08-onmt-qlik-dce-requirements.txt (unchanged).
+- Correctly dated copy created and published: desks/ora/evidence-2026-10-07-onmt-qlik-dce-requirements.txt.
+- Its DCE excerpts (RC pages 5/7/8, CPS page 6) and all requirements/unknowns are preserved verbatim apart from the date string.
+
+* Requirements and unknowns preserved
+- RC p.7 Art.5 N.B.: >=2 attestations (Qlik Sense deployment/integration + AI solution) — UNKNOWN.
+- RC p.8 Art.6: minimum team profiles (chef de projet, Expert IA, Expert BI/Qlik, full-stack) — UNKNOWN.
+- RC pp.5-6 Art.4/5.I.A: legal, fiscal (percepteur) and CNSS regularity, RCCM model 9 — UNKNOWN.
+- CPS p.6 Art.14: 20,000 MAD provisional guarantee and 3% definitive guarantee — UNKNOWN.
+- Language (French dossiers) — UNKNOWN.
+- Structured unknowns array (named Qlik and AI references, team CVs, Moroccan registration/fiscal/CNSS, guarantees) unchanged.
+
+* Remaining unknowns / caveats
+- No Ora profile fact evidences Qlik Sense references, named attestations, team CVs, Moroccan registration or guarantees, so no requirement is met and the decision stays needs-information.
+- The DCE was obtained by the preceding browser task; this run did not re-download it.
+- Other opportunities (numih-ai, cork-platform) were not modified.
+
+* Audit correction — 2026-10-07 (RC pages 5, 6, 17)
+Corrected overly broad Moroccan registration/CNSS/fiscal wording in the onmt-qlik
+summary, nextAction, unknowns and administrative requirement fact.
+- RC PDF page 5 (Article 4): participation conditions are stated generally for
+  personnes physiques ou morales (fiscal regularity, CNSS affiliation, activity
+  in relation to the object). This page does NOT restrict participation to
+  domestically registered operators.
+- RC PDF page 6 (Article 5.I.A.2): the percepteur du lieu d'imposition fiscal
+  attestation, the CNSS regularity attestation and the RCCM modele 9 certificate
+  are expressly required only from 'le concurrent auquel il est envisage
+  d'attribuer le marche' (the competitor to whom the contract is envisaged to be
+  awarded), each issued within the last year.
+- RC PDF page 17 (Articles 15-16): the dirham is the offer currency; a 15%
+  preference is applied in favour of competitors installed in Morocco when
+  evaluating financial offers. Foreign / non-installed competitors remain
+  admissible, so no mandatory Moroccan legal-registration/CNSS/fiscal requirement
+  blocks a foreign bidder at offer stage.
+Remaining UNKNOWN verdicts (RC p.7 two Qlik/AI attestations; RC p.8 four minimum
+team profiles; CPS p.6 20,000 MAD provisional guarantee) are unchanged and the
+decision stays needs-information. Uncertainty that Ora's bidding legal form
+(foreign entity vs Moroccan-installed partner) is not established is explicit.

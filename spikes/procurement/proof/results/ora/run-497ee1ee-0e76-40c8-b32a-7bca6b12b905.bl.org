@@ -1,0 +1,33 @@
+#+USE: present,browser,procurement
+#+PROCUREMENT_DESK: ora
+#+TITLE: Run report — 497ee1ee-0e76-40c8-b32a-7bca6b12b905
+#+DATE: 2026-10-07
+#+OPERATION: qualify
+#+OPPORTUNITY: onmt-qlik
+
+* What was asked
+Qualify ONMT — conversational AI and BI on Qlik Sense (Morocco). Review the original notice,
+download/read the dossier, compare to Ora profile, write qualification-onmt-qlik.bl.org, stage
+advance only with real evidence.
+
+* What happened
+- Confirmed the original PMMP notice by direct navigation: deadline 27/10/2026 11:00,
+  Reference DA/15/26, single-lot objet, dossier link present (19,06 Mo).
+- Attempted to download the DCE via browser-tool.mjs download. The action needs a browser
+  element ref (URLs are rejected with "Element not found"), and the ref was not captured
+  before the browser/step budget was exhausted during helper-path repair.
+- The run was stopped from further browser calls per operator steer.
+
+* Result
+- Stage kept at notice-checked; decision needs-information.
+- Qualification report written; eligibility UNKNOWN; no document claims made.
+- Curated functions updated in desks/ora/search.bl and search.bl.org (snapshot, download,
+  ONMT open helpers), matching source blocks.
+
+* Not done / not asserted
+- No dossier file downloaded or read; no Qlik reference, registration, guarantee or bid
+  eligibility established. No buyer contact, application, payment or bid.
+
+* Evidence
+[[desks/ora/evidence-2026-10-07-morocco-onmt-qlik-detail.txt][notice evidence]]
+[[desks/ora/qualification-onmt-qlik.bl.org][qualification report]]

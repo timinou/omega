@@ -1,0 +1,36 @@
+#+USE: present,browser,procurement
+#+PROCUREMENT_DESK: ora
+#+TITLE: Run report — onmt-qlik qualification
+#+DATE: 2026-10-07
+#+RUN: 660e7bd1-b876-414d-8f29-768d6eaf2196
+
+* Goal
+Qualify the ONMT Qlik Sense consultation (DA/15/26) against the Ora profile from
+the actual consultation documents, not marketing text.
+
+* What happened
+- Reused the DCE (dossier.zip, acquired by the preceding browser task) and its extracted text in
+  dce/RC.txt (26 PDF pages) and dce/CPS.txt (24 PDF pages). No browser
+  navigation was needed, so none was spent.
+- Added curated functions to search.bl (v8): dce-page, rc-pages, cps-pages,
+  dce-list, using node pages.mjs to print bounded page excerpts. Matching source
+  block added to search.bl.org.
+- Read RC pages 5, 6, 7, 8 and CPS page 6; located the mandatory requirements
+  (references, team profiles, administrative capacity, guarantees, language).
+- Saved real excerpts to evidence-2026-10-07-onmt-qlik-dce-requirements.txt and
+  wrote qualification-onmt-qlik.bl.org.
+- Published the structured update via desk-tool.mjs update.
+
+* Decision
+needs-information / stage qualification-checked. Requirements were compared to
+profile facts; all cited requirements are UNKNOWN because the profile does not
+evidence Qlik references, named attestations, team CVs, Moroccan registration or
+financial guarantees. Not pursue.
+
+* Key requirement (page reference)
+RC.txt PDF page 7 (Article 5 N.B.): at least two attestations, one Qlik Sense
+integration, one AI solution — otherwise the offer is rejected.
+
+* Limits honoured
+No buyer contact, no bid, no payment, no registrations, no false company claims.
+No browsing budget used. No other opportunity was modified.
