@@ -4,6 +4,13 @@ uniform float iBeat;
 uniform float iScene;
 uniform float iEnergy;
 uniform float iAccent;
+uniform float iStemKick;
+uniform float iStemBass;
+uniform float iStemMelody;
+uniform float iIntensity;
+uniform float iSymmetry;
+uniform float iPalette;
+uniform float iFeedback;
 #define PI 3.14159265359
 mat2 rot(float a){float s=sin(a),c=cos(a);return mat2(c,-s,s,c);}
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
@@ -14,6 +21,7 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
  vec2 uv=(fragCoord-.5*iResolution.xy)/iResolution.y;
  float t=iGlobalTime,b=iBeat;
  float bass=iAudioBass,mid=iAudioMid,hi=iAudioHigh,hit=iAudioOnset;
+ bass=max(bass,iStemBass);mid=max(mid,iStemMelody);
  float sound=clamp(iOvertoneVolume*9.,0.,1.);
  // Exactly one of four visual languages, with slow crossfades around act changes.
  float scene=clamp(iScene,0.,3.);
@@ -56,7 +64,7 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
  color+=tunnel*w1;
  // III. Cathedral: a kinetic, folded light mandala with spectral petal edges.
  // Every four bars the symmetry flips between six and eight, with an eight-beat iris.
- float petals=mix(6.,8.,mod(cut,2.));
+ float petals=mix(iSymmetry,iSymmetry+2.,mod(cut,2.));
  float fold=abs(mod(a+PI/petals+floor(b/8.)*.12,2.*PI/petals)-PI/petals);
  vec2 k=vec2(cos(fold),sin(fold))*r;
  vec3 cathedral=vec3(0.);
@@ -97,7 +105,9 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
  color+=hot*line(bracket,.0012)*hit*2.;
  // Filmic contrast and dark margins; no automatic full-screen strobe.
  color*=1.-.45*smoothstep(.35,1.1,r);
- color=1.-exp(-color*1.35);
+ color=1.-exp(-color*1.35*iIntensity);
+ color=mix(color,color.gbr,clamp(iPalette,0.,1.));
+ color=mix(color,texture2D(iChannel1,fragCoord/iResolution.xy).rgb,clamp(iFeedback,0.,.7));
  color=pow(max(color,0.),vec3(.9));
  color+=(hash(fragCoord+floor(t*24.))-.5)*.004;
  fragColor=vec4(color,1.);

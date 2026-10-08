@@ -1,3 +1,4 @@
+import {audioFeatures} from './features.mjs';
 // Web Audio interpreter for pure BL UGen graphs. No score/pattern logic here.
 export function plain(x) {
   if (x?.constructor?.name === "Flt") return x.v;
@@ -56,6 +57,7 @@ export class AudioEngine {
       input.connect(low); low.connect(mid); mid.connect(high); high.connect(filter); filter.connect(duck); duck.connect(gain); gain.connect(this.mix);
       this.decks[key]={input,low,mid,high,filter,duck,gain};
     }
+    this.buses=new Map();this.intents=[];this.peakVoices=0;this.triggered=0;
     this.noise=new Map(); this.configure(this.config,0);
   }
   impulse(seconds,seed) {
@@ -80,6 +82,7 @@ export class AudioEngine {
   configure(values,time=this.ctx.currentTime) {
     Object.assign(this.config,values); const c=this.config;
     const set=(p,v)=>{p.cancelScheduledValues(time);p.setTargetAtTime(v,time,.025);};
+    for(const b of this.buses?.values()||[])set(b.gain.gain,c[b.stem]===false?0:1);
     set(this.output.gain,Math.max(0,Math.min(1,c.master)));
     set(this.wet.gain,c.space*.8); set(this.echo.gain,c.echo*.55); set(this.feedback.gain,Math.min(.7,c.echo+.12));
     set(this.delay.delayTime,60/c.bpm*.75);
@@ -90,9 +93,51 @@ export class AudioEngine {
       for(const band of ['low','mid','high']) set(d[band].gain,values[`eq-${key}-${band}`] ?? this.config[`eq-${key}-${band}`] ?? 0);
     }
   }
+  async startTelemetry(url){
+    this.timing={samples:[],error:null,ready:false};
+    try{
+      await this.ctx.audioWorklet.addModule(url);if(this.disposed)return;
+      this.probe=new AudioWorkletNode(this.ctx,'pelagic-timing-probe',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
+      this.probe.port.onmessage=e=>{this.timing.samples.push((e.data.actual-e.data.expected)*1000);if(this.timing.samples.length>8192)this.timing.samples.shift();};
+      this.probe.connect(this.ctx.destination);this.probeBuffer=this.ctx.createBuffer(1,1,this.ctx.sampleRate);this.probeBuffer.getChannelData(0)[0]=1;this.timing.ready=true;
+    }catch(e){this.timing.error=e.message;}
+  }
+  timingReport(){const values=this.timing?.samples.slice().sort((a,b)=>a-b)||[];
+    return {method:'AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback',samples:values.length,
+      p95Ms:values[Math.floor(values.length*.95)]??null,maxMs:values.at(-1)??null,ready:!!this.timing?.ready,error:this.timing?.error||null};}
+  bus(stem,deck) {
+    const key=stem+':'+deck;
+    if(!this.buses.has(key)) {
+      const gain=this.ctx.createGain(),analyser=this.ctx.createAnalyser();analyser.fftSize=512;analyser.smoothingTimeConstant=.15;
+      gain.gain.value=this.config[stem]===false?0:1;
+      gain.connect(this.decks[deck].input);gain.connect(analyser);
+      this.buses.set(key,{stem,deck,gain,analyser,fft:new Uint8Array(256),wave:new Uint8Array(512)});
+    }
+    return this.buses.get(key);
+  }
+  signals(time=this.ctx.currentTime) {
+    const out={};
+    for(const b of this.buses.values()) {
+      b.analyser.getByteFrequencyData(b.fft);b.analyser.getByteTimeDomainData(b.wave);
+      const f=audioFeatures(b.fft,b.wave,{sampleRate:this.ctx.sampleRate,fftSize:512});
+      const fade=(b.deck==='a'?Math.cos(this.config.crossfade*Math.PI/2):Math.sin(this.config.crossfade*Math.PI/2))*this.config['deck-'+b.deck]*this.config.master;
+      const prior=out[b.stem]||{level:0,onset:0,pitch:0};
+      const intent=this.intents.findLast(x=>x.stem===b.stem&&x.time<=time);
+      out[b.stem]={level:Math.min(1,prior.level+f.volume*10*fade),onset:Math.max(prior.onset,
+        this.config[b.stem]===false?0:(intent?Math.exp(-Math.max(0,time-intent.time)*12)*intent.velocity*fade:0)),pitch:intent?.pitch||0};
+    }
+    return out;
+  }
+  cancelFrom(time) {
+    for(const [id,v] of this.voices)if(v.start>=time){for(const n of v.sources){n.onended=null;try{n.stop();}catch{}}v.owned.forEach(n=>n.disconnect());this.voices.delete(id);}
+    this.intents=this.intents.filter(x=>x.time<time);
+  }
+  resources(){return {voices:this.voices.size,peakVoices:this.peakVoices,triggered:this.triggered,
+    nodes:[...this.voices.values()].reduce((n,v)=>n+v.owned.length,0),buses:this.buses.size,intents:this.intents.length};}
   trigger(input,time=this.ctx.currentTime) {
     if(this.disposed) throw new Error('Audio engine disposed');
     const v=plain(input); validateGraph(v.graph);
+    if(this.voices.size>=192)throw new Error('Voice budget exceeded (192); simplify the patch');
     const c=this.ctx, params=v.params || {}, start=Math.max(time,c.currentTime), owned=[], sources=[], controls=new Map();
     const resolve=x=>x?.ugen==='param' ? (params[x.key] ?? x.default) : x;
     const num=(x)=>{ const y=resolve(x); if(typeof y!=='number'||!Number.isFinite(y)) throw new Error('Expected numeric control'); return y; };
@@ -164,12 +209,18 @@ export class AudioEngine {
     let result;
     try {result=signal(compile(v.graph));} catch(e){for(const s of sources){try{s.stop();}catch{}}owned.forEach(n=>n.disconnect());throw e;}
     const level=own(c.createGain());level.gain.value=1;result.connect(level);
-    level.connect(this.decks[v.deck==='a'?'a':'b'].input);
+    const deck=v.deck==='a'?'a':'b',stem=v.stem||({tide:'atmosphere',air:'atmosphere',lantern:'melody'})[v.synth]||(['kick','bass','hat','snare'].includes(v.synth)?v.synth:'melody');
+    level.connect(this.bus(stem,deck).gain);
+    this.intents.push({stem,time:start,velocity:Math.min(1,(params.amp??.1)*2),pitch:params.freq||0});
+    if(this.intents.length>256)this.intents.splice(0,this.intents.length-256);
+    this.triggered++;this.peakVoices=Math.max(this.peakVoices,this.voices.size+1);
     if(v.synth==='kick') {
+      if(this.probe){const pilot=c.createBufferSource();pilot.buffer=this.probeBuffer;pilot.connect(this.probe);this.probe.port.postMessage(start);pilot.start(start);pilot.onended=()=>pilot.disconnect();}
+
       const p=this.decks.a.duck.gain;p.cancelScheduledValues(start);p.setValueAtTime(.5,start);p.linearRampToValueAtTime(1,start+.27);
     }
     const id=++this.serial;
-    this.voices.set(id,{id,params,level,owned,sources,controls,end,synth:v.synth});
+    this.voices.set(id,{id,params,level,owned,sources,controls,start,end,synth:v.synth,stem});
     const last=sources[sources.length-1];
     if(last)last.onended=()=>{owned.forEach(n=>n.disconnect());this.voices.delete(id);};
     return id;
@@ -184,7 +235,8 @@ export class AudioEngine {
   }
   kill(id){const v=this.voices.get(id);if(v){v.level.gain.setTargetAtTime(0,this.ctx.currentTime,.005);for(const s of v.sources){try{s.stop(this.ctx.currentTime+.03);}catch{}}}}
   stop(){for(const id of this.voices.keys())this.kill(id);}
-  dispose(){if(this.disposed)return;this.disposed=true;this.stop();for(const d of Object.values(this.decks))Object.values(d).forEach(n=>n.disconnect());
+  dispose(){if(this.disposed)return;this.disposed=true;if(this.probe){this.probe.port.onmessage=null;this.probe.disconnect();this.probe.port.close();}this.stop();for(const v of this.voices.values()){for(const s of v.sources)s.onended=null;v.owned.forEach(n=>n.disconnect());}
+    for(const b of this.buses.values()){b.gain.disconnect();b.analyser.disconnect();}this.buses.clear();this.intents=[];for(const d of Object.values(this.decks))Object.values(d).forEach(n=>n.disconnect());
     for(const n of [this.mix,this.dry,this.delay,this.feedback,this.echo,this.delayFilter,this.reverb,this.wet,this.compressor,this.output,this.analyser])n.disconnect();this.voices.clear();}
 }
 export function wav(buffer) {
