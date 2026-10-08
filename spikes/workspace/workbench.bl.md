@@ -168,7 +168,7 @@ Build the real editor packages with `spikes/workspace/build.sh`, then start an
 isolated demonstration with:
 
 ```sh
-spikes/workspace/desk.sh /tmp/omega-workbench-mine 8804
+spikes/workspace/desk.sh /tmp/omega-workbench-mine 8806
 ```
 
 Open the URL it prints. Select a task with `j`/`k`, press Enter to focus its
