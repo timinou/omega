@@ -1,0 +1,65 @@
+[
+  {
+    "elapsed": 20.042,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 37})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 2,
+      "targetBeat": 48,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 20.084,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+    },
+    "result": {
+      "ok": false,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 45.076,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 38})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 3,
+      "targetBeat": 96,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 45.117,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "snapshot",
+        "name": "soak-home"
+      }
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 70.076,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 39})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 4,
+      "targetBeat": 144,
+      "edits": 2
+    }
+  }
+]

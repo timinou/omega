@@ -3,8 +3,9 @@
 An original 64-bar descent: **Bathymetry → Current → Cathedral → Afterglow**.
 Reworked as **CURRENT CLUB**: a four-on-the-floor descent with explicit
 audio-band-driven VJ scenes. [Revision and response proof](club.bl.md).
-The next iteration adds a continuous performance instrument: quantized scenes,
-transactions, history, snapshots and bounded live capture.
+The implemented continuous performance instrument adds quantized scenes,
+transactions, history, snapshots and bounded live capture, demonstrated in an
+actual twenty-minute set. Two sustained timing release gates remain open.
 [Performance guide and measured limits](performance.bl.md).
 At 122 BPM, the main narrative runs 125.90 seconds, followed by its atmospheric
 tail. Live soundscapes, a syncopated dub groove, harmonic bells and procedural

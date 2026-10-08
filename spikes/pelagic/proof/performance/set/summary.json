@@ -1,0 +1,133 @@
+{
+  "sourceCommit": "d65301910685db5db11fdf637d7331652daba2ea",
+  "operator": "agent-operated real editor; source changes evaluated with Control+Enter; no prerecorded musical action script",
+  "counts": {
+    "acceptedPatternEdits": 10,
+    "acceptedVisualLaunches": 13,
+    "gestures": {
+      "release": 2,
+      "build": 2,
+      "drop": 4,
+      "break": 3
+    },
+    "undo": 1,
+    "redo": 1,
+    "snapshotRecalls": 2,
+    "importedDeckFiles": 2,
+    "rejectedLiveEdits": 2
+  },
+  "countMethod": "Accepted edit requests, not a claim that every rapid/coalesced request produced a separate audible revision. The initial demo evaluation is excluded.",
+  "status": "needs-review",
+  "gates": {
+    "duration": true,
+    "audioDeadlines": true,
+    "nativeClockProgress": true,
+    "frameP95": false,
+    "frameLongIntervals": true,
+    "AVSubmit": true,
+    "sampleProbe": false,
+    "boundedResources": true,
+    "boundedRecording": true,
+    "heapPlateau": true
+  },
+  "metrics": {
+    "elapsedSeconds": 1203.996699999988,
+    "missedEvents": 0,
+    "schedulerTicks": 44042,
+    "longTasks": 502,
+    "frameP95": 50,
+    "frameP99": 73,
+    "framesOver100Percent": 0.2831645786854299,
+    "audioClock": {
+      "sampleRate": 48000,
+      "baseLatency": 0.010666666666666666,
+      "outputLatency": 0.032,
+      "nativeSeconds": 1196.352,
+      "wallSeconds": 1202.0785,
+      "rate": 0.995236168020641
+    },
+    "avSubmitP95Ms": 41.45355191256827,
+    "avSamples": 19,
+    "activationMaxMs": 4.600000023841858,
+    "renderMaxMs": 5.600000023841858,
+    "compileP95": 389.9000000357628,
+    "resources": {
+      "voices": 2,
+      "peakVoices": 31,
+      "triggered": 6502,
+      "nodes": 24,
+      "buses": 6,
+      "intents": 256
+    },
+    "gpu": {
+      "programs": 5,
+      "targets": 3,
+      "renderSize": [
+        774,
+        410
+      ],
+      "outputSize": [
+        774,
+        410
+      ],
+      "transition": false
+    },
+    "storageTransactions": 0,
+    "history": 17,
+    "namespaces": 0,
+    "recording": null,
+    "audioTiming": {
+      "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+      "samples": 1168,
+      "p95Ms": 0.04915364593216509,
+      "maxMs": 34.64396158852878,
+      "ready": true,
+      "error": null
+    },
+    "avTiming": "visual activation samples the same audio clock; physical output latency is not measured"
+  },
+  "heapGrowthPercent": 4.399298365491577,
+  "assets": {
+    "current-loop.wav": {
+      "bytes": 694110,
+      "sha256": "6128abe456f2c1fb8019ed68827c9df8b1f400273cd7fbda20ffb79b497715d6"
+    },
+    "deep-field.wav": {
+      "bytes": 694076,
+      "sha256": "91f812dd7aff79cec5ea72a6526a33e6be2eb09550d8f88af24cf615c4f86dbd"
+    }
+  },
+  "capture": {
+    "schema": "omega.pelagic.take",
+    "version": 1,
+    "id": "8b21e528-4b56-4f5b-9ead-6e86229e2835",
+    "chunks": 589,
+    "bytes": 176374894,
+    "mime": "video/webm;codecs=vp8,opus",
+    "duration": 1200.4817000000478,
+    "error": null,
+    "capture": {
+      "width": 1280,
+      "height": 720,
+      "requestedFPS": 30,
+      "geometryScale": 0.75
+    },
+    "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "sampleRate": 48000
+  },
+  "ending": "Release gesture and ambient ending are in the original. An attempted manual fader fade arrived after the capture cutoff and is not part of the recording. Listening copies and highlight have explicitly labelled editorial fades.",
+  "loudness": {
+    "method": "ffmpeg ebur128 true-peak analysis; native WebM and pre-encode listening master",
+    "native": {
+      "integratedLUFS": -21.1,
+      "rangeLU": 10.9,
+      "truePeakDBFS": -4.7
+    },
+    "listeningMaster": {
+      "integratedLUFS": -18.1,
+      "rangeLU": 10.9,
+      "truePeakDBFS": -1.6
+    }
+  },
+  "limits": "Sample probes are separate silent graphs, not audible-voice loopback. AV submission does not measure display latency. Physical MIDI, mobile sustained playback and absence of device underruns are unproven. Twenty-minute evidence predates final UI/error/recovery fixes, which have shorter regression coverage."
+}

@@ -3,6 +3,8 @@
     "continuous transport starts",
     "real editor evaluates instrument and releases staging namespace",
     "audio and scene activate as one quantized revision",
+    "invalid BL keeps the performance and reports a readable diagnostic",
+    "editing the active scene definition prepares its transition",
     "invalid shader rejects entire transaction",
     "preview makes no performance change",
     "gestures layering and seeded variations",
@@ -20,107 +22,107 @@
   ],
   "stats": {
     "playing": true,
-    "audioTime": 22.856,
-    "nextStep": 191,
+    "audioTime": 25.336,
+    "nextStep": 207,
     "lastEvaluation": {
-      "id": 7,
+      "id": 9,
       "ok": true,
-      "revision": 11,
-      "targetBeat": 36,
+      "revision": 12,
+      "targetBeat": 40,
       "edits": 1
     },
-    "evalCount": 7,
-    "voices": 25,
+    "evalCount": 9,
+    "voices": 17,
     "context": "running",
-    "frames": 1066,
+    "frames": 1216,
     "recording": false,
     "patterns": [
       "melody"
     ],
     "pending": 0,
     "mode": "performance",
-    "time": 22.265333333333338,
-    "beat": 45.6002564663024,
-    "revision": 12,
+    "time": 24.16933333333333,
+    "beat": 49.50354535519127,
+    "revision": 13,
     "phase": "ACTIVE",
     "resources": {
-      "voices": 25,
-      "peakVoices": 26,
-      "triggered": 127,
-      "nodes": 300,
+      "voices": 17,
+      "peakVoices": 28,
+      "triggered": 140,
+      "nodes": 184,
       "buses": 6,
-      "intents": 126
+      "intents": 139
     },
     "gpu": {
-      "programs": 2,
+      "programs": 3,
       "targets": 3,
       "renderSize": [
         774,
-        410
+        447
       ],
       "outputSize": [
         774,
-        410
+        447
       ],
       "transition": false
     },
     "diagnostics": {
       "missed": 0,
-      "ticks": 780,
-      "longTasks": 14
+      "ticks": 920,
+      "longTasks": 10
     }
   },
   "metrics": {
-    "elapsedSeconds": 24.87369999998808,
+    "elapsedSeconds": 27.28069999998808,
     "missedEvents": 0,
-    "schedulerTicks": 781,
-    "longTasks": 14,
-    "frameP95": 57,
-    "frameP99": 96,
-    "framesOver100Percent": 0.7552870090634441,
+    "schedulerTicks": 920,
+    "longTasks": 10,
+    "frameP95": 49,
+    "frameP99": 93,
+    "framesOver100Percent": 0.8042895442359249,
     "audioClock": {
       "sampleRate": 48000,
       "baseLatency": 0.010666666666666666,
-      "outputLatency": 0.032,
-      "nativeSeconds": 22.877333333333333,
-      "wallSeconds": 23.357900000035762,
-      "rate": 0.9794259472511787
+      "outputLatency": 0.04,
+      "nativeSeconds": 25.354666666666667,
+      "wallSeconds": 26.079100000023843,
+      "rate": 0.9722216896535343
     },
-    "avSubmitP95Ms": 27.814207650267875,
-    "avSamples": 8,
-    "activationMaxMs": 9.199999988079071,
-    "renderMaxMs": 48.30000001192093,
-    "compileP95": 400.69999998807907,
+    "avSubmitP95Ms": 33.12021857924208,
+    "avSamples": 9,
+    "activationMaxMs": 10.300000011920929,
+    "renderMaxMs": 25.600000023841858,
+    "compileP95": 268.80000001192093,
     "resources": {
-      "voices": 26,
-      "peakVoices": 26,
-      "triggered": 128,
-      "nodes": 309,
+      "voices": 16,
+      "peakVoices": 28,
+      "triggered": 140,
+      "nodes": 173,
       "buses": 6,
-      "intents": 127
+      "intents": 139
     },
     "gpu": {
-      "programs": 2,
+      "programs": 3,
       "targets": 3,
       "renderSize": [
         774,
-        410
+        447
       ],
       "outputSize": [
         774,
-        410
+        447
       ],
       "transition": false
     },
     "storageTransactions": 0,
-    "history": 6,
+    "history": 7,
     "namespaces": 0,
     "recording": null,
     "audioTiming": {
       "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
-      "samples": 15,
-      "p95Ms": 2.647491455078921,
-      "maxMs": 2.647491455078921,
+      "samples": 19,
+      "p95Ms": 0.019332885742073813,
+      "maxMs": 0.019332885742073813,
       "ready": true,
       "error": null
     },

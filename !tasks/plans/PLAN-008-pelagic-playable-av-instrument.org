@@ -13,9 +13,10 @@ breakdowns, drops and release. Demonstrate operation without reloads or external
 editing of the proof recording.
 
 User requested a full implementation plan for all three proposed workstreams and
-instructed us to commit as work progresses. This document is the planning
-deliverable; proposed APIs and acceptance targets below are not implemented or
-measured results. Implementation follows this plan in verified, scoped commits.
+instructed us to commit as work progresses. The original design sections below record the proposed APIs and targets, not
+API documentation. The final checkpoint records implemented scope and measured
+results; spikes/pelagic/performance.bl.md documents the actual API. Implementation
+follows verified, scoped commits. Reliability release gates remain open.
 
 * Observed starting point
 
@@ -320,21 +321,24 @@ failures by shortening the run or switching to offline proof.
 
 * Final acceptance checklist
 
-- [ ] Twenty-minute continuous performance transport with imported audio and synthesis.
-- [ ] At least four scene languages, layering, phrase-aware transitions and editable signal mappings.
-- [ ] Demonstrate at least eight live pattern edits, eight visual cues/transitions,
+- [X] Twenty-minute continuous performance transport with imported audio and synthesis.
+- [X] At least four scene languages, layering, phrase-aware transitions and editable signal mappings.
+- [X] Demonstrate at least eight live pattern edits, eight visual cues/transitions,
       three expressive macro gestures, two breakdown/drop pairs, an undo, and
       snapshot recall. These are minimum exercise counts, not a scripted arrangement.
-- [ ] Deliberate invalid BL and GLSL edits preserve the current performance.
-- [ ] Timing/frame/resource targets measured with hardware/browser and method stated;
+- [X] Deliberate invalid BL and GLSL edits preserve the current performance.
+- [X] Timing/frame/resource targets measured with hardware/browser and method stated;
       any misses are reported and resolved or remain explicit blockers.
-- [ ] Bounded recording includes actual imported/live sound and corresponding stage.
-- [ ] Source, cursor and all panes survive clean unuse; no owned resources remain.
-- [ ] Package/editor tests green and default-presentation equivalence check unchanged.
-- [ ] Uncut recording, compact phone outputs, screenshots, snapshot, manifest and
+- [X] Bounded recording includes actual imported/live sound and corresponding stage.
+- [X] Source, cursor and all panes survive clean unuse; no owned resources remain.
+- [X] Package/editor tests green and default-presentation equivalence check unchanged.
+- [X] Uncut recording, compact phone outputs, screenshots, snapshot, manifest and
       reproduction instructions delivered; full outputs decode successfully.
-- [ ] Compatibility docs distinguish implemented APIs, planned features and limitations.
-- [ ] All implementation slices committed with exact staged scope and validation.
+- [X] Compatibility docs distinguish implemented APIs, planned features and limitations.
+- [X] All implementation slices committed with exact staged scope and validation.
+
+- [ ] Corrected twenty-minute automated soak passes all original timing gates.
+- [ ] Performed-set frame p95 <=40 ms and silent-probe maximum <=15 ms.
 
 * Boundaries and later work
 
@@ -372,3 +376,57 @@ drift to hardware or claim scheduler/sample probes establish physical playback
 quality. Native audio-clock/wall-clock rates are being added to diagnostics.
 P8/P10 remain open until the measured timing failures are resolved or explicitly
 reported as blockers. The performed set and downloadable evidence follow.
+
+* Final implementation and proof checkpoint 2026-10-08
+
+The three workstreams are implemented and demonstrated. Continuous transport,
+independent scene layers/transitions and stem/deck mappings, atomic revisions,
+seeded patterns, undo/redo, snapshots/local audio references, controller adapter,
+bounded capture, partial-take recovery and diagnostics live in the independent
+package. No JVM, SuperCollider or upstream runtime was introduced. The final
+studio/error/recovery fixes and standalone playable patch are in ad2b09d.
+
+A separate agent-operated twenty-minute actual recording completed at source
+commit d653019. Ten accepted pattern edits, thirteen launches, all four gestures,
+three breaks/four drops, two imports, undo/redo and two recalls are timestamped.
+Invalid BL and GLSL were rejected during playback. Rapid requests may coalesce;
+counts are accepted requests, not necessarily separate audible revisions. The
+set runner records controls but contains no musical action script. No offline
+render substitutes for the live proof. Short 75-second rehearsals are retained
+as debugging evidence; the separate ten-minute rehearsal was superseded by the
+longer automated twenty-minute run, which failed and is explicitly retained.
+
+Latest performed-set metrics: zero missed scheduler steps; native-clock/wall
+rate .99524; frame interval p95 50 ms (FAIL <=40 ms), .283% intervals >100 ms
+(PASS <1%); graphics submission p95 41.45 ms (PASS <=50 ms); corrected silent
+sample probe p95 .049 ms (PASS <=5 ms), maximum 34.64 ms (FAIL <=15 ms); heap
+growth +4.40% between last equivalent five-minute checkpoints (PASS <10%).
+Peak voices31, final GL programs5/targets3, staging namespaces0 and storage
+backlog0. These measure browser scheduling/probe submission, not physical
+speaker/display latency or absence of hardware underruns. System pressure is
+recorded but not established as the cause. All original thresholds are retained.
+
+P8/P10 reliability acceptance remains OPEN: frame pacing, worst probe onset,
+and a passing corrected automated soak are the next work. Functional milestone
+and evidence delivery are complete, not a production reliability release. No
+worker architecture rewrite was made without supporting profiling evidence.
+Post-set UI/error/recovery fixes have shorter regression coverage only.
+
+Final checks:26 package tests,73 vendored-editor tests,23 default-presentation
+variants (checker unchanged),19 continuous browser checks,24 legacy browser
+checks and standalone-patch C-Enter/clean-unuse drive. GPU loss and synthetic MIDI
+are recovery/adapter tests, not physical controller or mobile endurance claims.
+
+Actual capture1200.48sec; raw176.4MB is kept locally. Uncut phone MP432.1MB;
+three-minute highlight7.6MB; AAC14.8MB; MP319.1MB; four approximately five-minute
+MP4 parts around8MB. Full outputs decode successfully. Full phone movie retains
+the original timeline/level; highlight and listening copies have labelled gain
+and fades. Listening copies reset encoded audio timestamps (1194.9sec), so they
+are editorial derivatives rather than uninterrupted-clock proof. Original release
+is performed; a final manual fade attempted after capture cutoff is not included.
+
+Evidence:spikes/pelagic/proof/performance/{set,soak,example,legacy}; set/media.json
+contains sizes/hashes/decode results, set/summary.json counts/limits, verification.json
+final checks. Large media are ignored local artifacts, not Git blobs; scripts
+reproduce their production. Standalone example:spikes/pelagic/live-set.bl.org.
+User guide and download/screenshot links:spikes/pelagic/performance.bl.md.

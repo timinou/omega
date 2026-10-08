@@ -1,0 +1,263 @@
+{
+  "capture": "actual live mix and stage; original and full phone video uncut and without level edits",
+  "packetTimeline": {
+    "duration": 1200.4579999999999,
+    "streams": {
+      "0": {
+        "packets": 30234,
+        "durationSumSeconds": 30.193000000013917,
+        "endSeconds": 1200.377,
+        "positiveTimestampDeviationsSeconds": 1170.184000000579,
+        "positiveTimestampDeviations": 30233
+      },
+      "1": {
+        "packets": 19915,
+        "durationSumSeconds": 1194.8999999993969,
+        "endSeconds": 1200.4579999999999,
+        "positiveTimestampDeviationsSeconds": 29.388000000215868,
+        "positiveTimestampDeviations": 5485
+      }
+    },
+    "interpretation": "Positive timestamp deviations are not a dropout count: negative deviations may overlap them. Video packet durations are container hints, not held-frame durations. Audio duration sums describe the encoded sample stream; its wall-clock span can differ."
+  },
+  "highlight": {
+    "startSeconds": 1020,
+    "durationSeconds": 180,
+    "editorialChanges": "3 dB gain, last 10 seconds audio fade, last 2 seconds video fade"
+  },
+  "listeningCopies": {
+    "files": [
+      "pelagic-live.m4a",
+      "pelagic-live.mp3"
+    ],
+    "editorialChanges": "continuous encoded audio samples with timestamps reset, 3 dB gain and 12-second ending fade",
+    "fadeStartSeconds": 1182.8999999993969
+  },
+  "parts": {
+    "method": "Full phone video split at keyframes near five-minute boundaries; copied streams, local timestamps reset",
+    "segments": [
+      {
+        "file": "pelagic-part-00.mp4",
+        "startSeconds": 0.0,
+        "endSeconds": 300.333333
+      },
+      {
+        "file": "pelagic-part-01.mp4",
+        "startSeconds": 300.333333,
+        "endSeconds": 602.25
+      },
+      {
+        "file": "pelagic-part-02.mp4",
+        "startSeconds": 602.25,
+        "endSeconds": 900.791667
+      },
+      {
+        "file": "pelagic-part-03.mp4",
+        "startSeconds": 900.791667,
+        "endSeconds": 1200.5
+      }
+    ]
+  },
+  "files": {
+    "spikes/pelagic/proof/performance/set/live.webm": {
+      "bytes": 176374894,
+      "sha256": "8066ae98971a68b97b2284420ae001a04faa53f8e4fe6635912f30e06b5d4ebf",
+      "duration": 1200.4579999999999,
+      "streams": [
+        {
+          "codec_type": "video",
+          "codec_name": "vp8",
+          "width": 1280,
+          "height": 720,
+          "sample_rate": null,
+          "channels": null
+        },
+        {
+          "codec_type": "audio",
+          "codec_name": "opus",
+          "width": null,
+          "height": null,
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "fullDecode": "passed"
+    },
+    "spikes/pelagic/proof/performance/set/mobile/pelagic-full.mp4": {
+      "bytes": 32075657,
+      "sha256": "2c3abeb19e45e6a95007b31a1a38de535f7ba9ebc0c734b822a5fab7e62eb616",
+      "duration": 1200.457333,
+      "streams": [
+        {
+          "codec_type": "video",
+          "codec_name": "h264",
+          "width": 480,
+          "height": 270,
+          "sample_rate": null,
+          "channels": null
+        },
+        {
+          "codec_type": "audio",
+          "codec_name": "aac",
+          "width": null,
+          "height": null,
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "fullDecode": "passed"
+    },
+    "spikes/pelagic/proof/performance/set/mobile/pelagic-highlight.mp4": {
+      "bytes": 7575892,
+      "sha256": "8211762fe844e8070249a3d444579484748ac197a1e74384f736e9bf3108fc7b",
+      "duration": 180.0,
+      "streams": [
+        {
+          "codec_type": "video",
+          "codec_name": "h264",
+          "width": 640,
+          "height": 360,
+          "sample_rate": null,
+          "channels": null
+        },
+        {
+          "codec_type": "audio",
+          "codec_name": "aac",
+          "width": null,
+          "height": null,
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "fullDecode": "passed"
+    },
+    "spikes/pelagic/proof/performance/set/mobile/pelagic-live.m4a": {
+      "bytes": 14767915,
+      "sha256": "44ec3f72548c52d9d30f5080937cb6722fd4c517d4c83d6be81fd2a9e4a7ba6e",
+      "duration": 1194.9,
+      "streams": [
+        {
+          "codec_type": "audio",
+          "codec_name": "aac",
+          "width": null,
+          "height": null,
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "fullDecode": "passed"
+    },
+    "spikes/pelagic/proof/performance/set/mobile/pelagic-live.mp3": {
+      "bytes": 19119405,
+      "sha256": "502f7749c030e3b634f6a646271588eba99205c8511ba48559c68b9fd1e1178b",
+      "duration": 1194.9,
+      "streams": [
+        {
+          "codec_type": "audio",
+          "codec_name": "mp3",
+          "width": null,
+          "height": null,
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "fullDecode": "passed"
+    },
+    "spikes/pelagic/proof/performance/set/mobile/pelagic-part-00.mp4": {
+      "bytes": 7332737,
+      "sha256": "e53d80c0bd97078693e74db845e157d16156afc35773fe122e3282ec81cdde65",
+      "duration": 300.25,
+      "streams": [
+        {
+          "codec_type": "video",
+          "codec_name": "h264",
+          "width": 480,
+          "height": 270,
+          "sample_rate": null,
+          "channels": null
+        },
+        {
+          "codec_type": "audio",
+          "codec_name": "aac",
+          "width": null,
+          "height": null,
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "fullDecode": "passed"
+    },
+    "spikes/pelagic/proof/performance/set/mobile/pelagic-part-01.mp4": {
+      "bytes": 8099031,
+      "sha256": "a28092879106442c56f302d30c81935696fb6db3a9c51795558313d3663c197b",
+      "duration": 301.916667,
+      "streams": [
+        {
+          "codec_type": "video",
+          "codec_name": "h264",
+          "width": 480,
+          "height": 270,
+          "sample_rate": null,
+          "channels": null
+        },
+        {
+          "codec_type": "audio",
+          "codec_name": "aac",
+          "width": null,
+          "height": null,
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "fullDecode": "passed"
+    },
+    "spikes/pelagic/proof/performance/set/mobile/pelagic-part-02.mp4": {
+      "bytes": 8217639,
+      "sha256": "aaf03566f5f90a3d871a136791e1cae345bfadcf53614ff1d81d1d90379d4bd8",
+      "duration": 298.541667,
+      "streams": [
+        {
+          "codec_type": "video",
+          "codec_name": "h264",
+          "width": 480,
+          "height": 270,
+          "sample_rate": null,
+          "channels": null
+        },
+        {
+          "codec_type": "audio",
+          "codec_name": "aac",
+          "width": null,
+          "height": null,
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "fullDecode": "passed"
+    },
+    "spikes/pelagic/proof/performance/set/mobile/pelagic-part-03.mp4": {
+      "bytes": 8430588,
+      "sha256": "fef1c9c7673935d3c82aab5f5e7851e306ac52304c6758d18e3f1e27c2ee787c",
+      "duration": 299.749,
+      "streams": [
+        {
+          "codec_type": "video",
+          "codec_name": "h264",
+          "width": 480,
+          "height": 270,
+          "sample_rate": null,
+          "channels": null
+        },
+        {
+          "codec_type": "audio",
+          "codec_name": "aac",
+          "width": null,
+          "height": null,
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "fullDecode": "passed"
+    }
+  }
+}

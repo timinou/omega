@@ -34,7 +34,7 @@ value = {
     'countMethod': 'Accepted edit requests, not a claim that every rapid/coalesced request produced a separate audible revision. The initial demo evaluation is excluded.',
     'status': report['status'], 'gates': report['gates'], 'metrics': report['metrics'],
     'heapGrowthPercent': report['heapGrowthPercent'], 'assets': assets,
-    'capture': report['take'],
+    'capture': {k: report['take'].get(k) for k in ['schema', 'version', 'id', 'chunks', 'bytes', 'mime', 'duration', 'error', 'capture', 'browser', 'sampleRate']},
     'ending': 'Release gesture and ambient ending are in the original. An attempted manual fader fade arrived after the capture cutoff and is not part of the recording. Listening copies and highlight have explicitly labelled editorial fades.',
     'loudness': {
         'method': 'ffmpeg ebur128 true-peak analysis; native WebM and pre-encode listening master',

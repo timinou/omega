@@ -1,0 +1,489 @@
+[
+  {
+    "elapsed": 6.175,
+    "command": {
+      "op": "edit",
+      "source": "(av/session (av/gesture :release) (av/launch :bathymetry {:transition :dissolve :beats 16}) (av/visual {:intensity 0.85 :feedback 0.16}))"
+    },
+    "result": {
+      "id": 2,
+      "ok": true,
+      "revision": 2,
+      "targetBeat": 20,
+      "edits": 3
+    }
+  },
+  {
+    "elapsed": 49.004,
+    "command": {
+      "op": "edit",
+      "source": "(o/definst voice [freq 440 amp 0.036 dur 3.2]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/mix [(o/sin-osc freq) (* 0.18 (o/sin-osc (* freq 2.01)))])))\n(def metro (o/metronome 122))\n(av/session\n  (av/pattern :melody 16\n    (o/play\n      (o/at (metro 0) (voice :freq (o/midi->hz 74)))\n      (o/at (metro 5.5) (voice :freq (o/midi->hz 69)))\n      (o/at (metro 10) (voice :freq (o/midi->hz 77)))\n      (o/at (metro 14.5) (voice :freq (o/midi->hz 76)))))\n  (av/visual {:intensity 0.9 :feedback 0.2}))"
+    },
+    "result": {
+      "id": 3,
+      "ok": true,
+      "revision": 3,
+      "targetBeat": 104,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 49.142,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "snapshot",
+        "name": "descent"
+      }
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 133.508,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "snapshot",
+        "name": "descent"
+      }
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 134.776,
+    "command": {
+      "op": "edit",
+      "source": "(av/session (av/gesture :build) (av/launch :current {:transition :crossfade :beats 16}) (av/variation {:density 0.8 :seed 61}) (av/visual {:intensity 1.05 :feedback 0.1}))"
+    },
+    "result": {
+      "id": 4,
+      "ok": true,
+      "revision": 4,
+      "targetBeat": 280,
+      "edits": 4
+    }
+  },
+  {
+    "elapsed": 253.66,
+    "command": {
+      "op": "edit",
+      "source": "(o/definst voice [freq 440 amp 0.05 dur 1.2]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/mix [(o/sin-osc freq) (* 0.18 (o/sin-osc (* freq 2.01)))])))\n(def metro (o/metronome 122))\n(av/session\n  (av/pattern :melody 8\n    (o/play\n      (o/at (metro 0) (voice :freq (o/midi->hz 74)))\n      (o/at (metro 1.5) (voice :freq (o/midi->hz 69)))\n      (o/at (metro 3) (voice :freq (o/midi->hz 76)))\n      (o/at (metro 4) (voice :freq (o/midi->hz 77)))\n      (o/at (metro 6.5) (voice :freq (o/midi->hz 72)))))\n  (av/gesture :drop) (av/launch :current {:transition :dissolve :beats 4}) (av/visual {:intensity 1.1 :feedback 0.1}))"
+    },
+    "result": {
+      "id": 5,
+      "ok": true,
+      "revision": 5,
+      "targetBeat": 516,
+      "edits": 4
+    }
+  },
+  {
+    "elapsed": 254.471,
+    "command": {
+      "op": "shot",
+      "name": "studio-current"
+    },
+    "result": {
+      "ok": true,
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/set/studio-current.jpg"
+    }
+  },
+  {
+    "elapsed": 276.257,
+    "command": {
+      "op": "import",
+      "deck": "a",
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/assets/deep-field.wav"
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 276.395,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "snapshot",
+        "name": "home"
+      }
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 351.817,
+    "command": {
+      "op": "edit",
+      "source": "(o/definst voice [freq 440 amp 0.095 dur 0.23]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/mix [(o/sin-osc freq) (* 0.12 (o/sin-osc (* freq 2.0)))])))\n(def metro (o/metronome 122))\n(av/session\n  (av/pattern :bass 4\n    (o/play\n      (o/at (metro 0.5) (voice :freq (o/midi->hz 38)))\n      (o/at (metro 1.5) (voice :freq (o/midi->hz 38)))\n      (o/at (metro 2.5) (voice :freq (o/midi->hz 33)))\n      (o/at (metro 3.5) (voice :freq (o/midi->hz 36)))))\n  (av/variation {:density 1 :seed 93}) (av/visual {:intensity 1.15 :symmetry 6}))"
+    },
+    "result": {
+      "id": 6,
+      "ok": true,
+      "revision": 6,
+      "targetBeat": 712,
+      "edits": 3
+    }
+  },
+  {
+    "elapsed": 414.165,
+    "command": {
+      "op": "edit",
+      "source": "(o/definst voice [freq 440 amp 0.047 dur 1.0]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/mix [(o/sin-osc freq) (* 0.18 (o/sin-osc (* freq 2.01)))])))\n(def metro (o/metronome 122))\n(av/session\n  (av/pattern :melody 8\n    (o/play\n      (o/at (metro 0) (voice :freq (o/midi->hz 74)))\n      (o/at (metro 1.5) (voice :freq (o/midi->hz 77)))\n      (o/at (metro 2.75) (voice :freq (o/midi->hz 81)))\n      (o/at (metro 4) (voice :freq (o/midi->hz 76)))\n      (o/at (metro 5.5) (voice :freq (o/midi->hz 77)))\n      (o/at (metro 7) (voice :freq (o/midi->hz 72)))))\n  (av/launch :cathedral {:transition :iris :beats 8}) (av/layer :afterglow 0.18) (av/visual {:symmetry 8 :intensity 1.2 :feedback 0.12}))"
+    },
+    "result": {
+      "id": 7,
+      "ok": true,
+      "revision": 7,
+      "targetBeat": 840,
+      "edits": 4
+    }
+  },
+  {
+    "elapsed": 458.789,
+    "command": {
+      "op": "edit",
+      "source": "(o/definst voice [freq 440 amp 0.043 dur 0.75]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/mix [(o/sin-osc freq) (* 0.18 (o/sin-osc (* freq 2.01)))])))\n(def metro (o/metronome 122))\n(av/session\n  (av/pattern :melody 8\n    (o/play\n      (o/at (metro 0) (voice :freq (o/midi->hz 74)))\n      (o/at (metro 1) (voice :freq (o/midi->hz 77)))\n      (o/at (metro 2.5) (voice :freq (o/midi->hz 81)))\n      (o/at (metro 4) (voice :freq (o/midi->hz 84)))\n      (o/at (metro 5.5) (voice :freq (o/midi->hz 81)))\n      (o/at (metro 6.5) (voice :freq (o/midi->hz 76)))))\n  (av/scene :cathedral {:shader \"// Original live-set variation: folded chromatic architecture.\\nuniform float iBeat;\\nuniform float iZoom;\\nuniform float iIntensity;\\nuniform float iSymmetry;\\nuniform float iFeedback;\\nuniform float iPalette;\\n#define PI 3.14159265359\\nfloat edge(float d,float w){return w/(abs(d)+w);}\\nmat2 turn(float a){return mat2(cos(a),-sin(a),sin(a),cos(a));}\\nvec3 ink(float p){return .55+.45*cos(6.28318*(vec3(.03,.28,.55)+p));}\\nvoid mainImage(out vec4 c,in vec2 coord){\\n vec2 uv=(coord-.5*iResolution.xy)/iResolution.y;\\n float low=iAudioBass,hit=iAudioOnset,mid=iAudioMid,t=iGlobalTime;\\n vec2 p=turn(t*.06+floor(iBeat/16.)*.16)*uv*(1.-iZoom-low*.12);\\n float r=length(p),a=atan(p.y,p.x),n=max(3.,iSymmetry);\\n float fold=abs(mod(a+PI/n,2.*PI/n)-PI/n);\\n vec2 k=r*vec2(cos(fold),sin(fold));\\n vec3 light=vec3(0.);\\n for(int j=0;j<8;j++){\\n  float f=float(j),z=fract(f/8.+t*.052),radius=.06+z*z*.88;\\n  float d=k.x-radius-.05*sin(k.y*13.+t*.4+f);\\n  vec3 col=ink(f*.105+t*.008+iPalette*.3);\\n  light+=col*pow(edge(d,.0016+.003*hit),1.7)*(.3+z)*(.3+low*1.8);\\n  light+=col*edge(k.y-k.x*(.22+.06*sin(t*.3+f)),.0012)*edge(r-radius,.025)*mid*1.3;\\n }\\n float spoke=edge(sin(a*n+sin(r*10.-t)*.18),.015)*smoothstep(.08,.3,r);\\n light+=vec3(.05,.85,.9)*spoke*(.08+iAudioHigh*.45);\\n light*=1.-smoothstep(.65,.95,r);\\n light=1.-exp(-light*(iIntensity+.3));\\n light=mix(light,texture2D(iChannel1,coord/iResolution.xy).rgb,clamp(iFeedback,0.,.6));\\n c=vec4(light,1.);\\n}\\n\" :mappings {:zoom {:signal [:stem :bass :level] :amount 0.18}}}) (av/launch :cathedral {:transition :iris :beats 8}) (av/variation {:density 0.85 :seed 117}) (av/visual {:intensity 1.25 :symmetry 8 :feedback 0.12}))"
+    },
+    "result": {
+      "id": 8,
+      "ok": true,
+      "revision": 8,
+      "targetBeat": 928,
+      "edits": 5
+    }
+  },
+  {
+    "elapsed": 497.07,
+    "command": {
+      "op": "shot",
+      "name": "studio-prism"
+    },
+    "result": {
+      "ok": true,
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/set/studio-prism.jpg"
+    }
+  },
+  {
+    "elapsed": 497.616,
+    "command": {
+      "op": "edit",
+      "source": "(av/session (av/gesture :break) (av/launch :afterglow {:transition :iris :beats 16}) (av/layer :bathymetry 0.22) (av/visual {:intensity 0.9 :feedback 0.24}))"
+    },
+    "result": {
+      "id": 9,
+      "ok": true,
+      "revision": 9,
+      "targetBeat": 1008,
+      "edits": 4
+    }
+  },
+  {
+    "elapsed": 524.245,
+    "command": {
+      "op": "edit",
+      "source": "(av/configure {:filter 1.2}"
+    },
+    "result": {
+      "id": 10,
+      "ok": false,
+      "error": "[object Object]"
+    }
+  },
+  {
+    "elapsed": 524.968,
+    "command": {
+      "op": "edit",
+      "source": "(av/session (av/configure {:master 0.12}) (t/start \"void main(){not-a-shader;}\"))"
+    },
+    "result": {
+      "id": 11,
+      "ok": false,
+      "error": "ERROR: 0:1: 'not' : undeclared identifier\nERROR: 0:1: 'a' : undeclared identifier\nERROR: 0:1: 'shader' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 575.615,
+    "command": {
+      "op": "shot",
+      "name": "studio-rejected"
+    },
+    "result": {
+      "ok": true,
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/set/studio-rejected.jpg"
+    }
+  },
+  {
+    "elapsed": 576.062,
+    "command": {
+      "op": "edit",
+      "source": "(av/session (av/gesture :build) (av/visual {:intensity 1.05 :feedback 0.15}) (av/variation {:density 0.9 :seed 139}))"
+    },
+    "result": {
+      "id": 12,
+      "ok": true,
+      "revision": 10,
+      "targetBeat": 1168,
+      "edits": 3
+    }
+  },
+  {
+    "elapsed": 607.48,
+    "command": {
+      "op": "edit",
+      "source": "(o/definst voice [freq 440 amp 0.043 dur 0.6]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/mix [(o/sin-osc freq) (* 0.18 (o/sin-osc (* freq 2.01)))])))\n(def metro (o/metronome 122))\n(av/session\n  (av/pattern :melody 8\n    (o/play\n      (o/at (metro 0) (voice :freq (o/midi->hz 74)))\n      (o/at (metro 0.75) (voice :freq (o/midi->hz 77)))\n      (o/at (metro 1.5) (voice :freq (o/midi->hz 81)))\n      (o/at (metro 2.5) (voice :freq (o/midi->hz 84)))\n      (o/at (metro 3.5) (voice :freq (o/midi->hz 81)))\n      (o/at (metro 4.5) (voice :freq (o/midi->hz 77)))\n      (o/at (metro 6) (voice :freq (o/midi->hz 76)))\n      (o/at (metro 7.5) (voice :freq (o/midi->hz 72)))))\n  (av/gesture :drop) (av/launch :cathedral {:transition :iris :beats 4}) (av/layer :bathymetry 0.18) (av/visual {:symmetry 10 :intensity 1.4 :feedback 0.16}))"
+    },
+    "result": {
+      "id": 13,
+      "ok": true,
+      "revision": 11,
+      "targetBeat": 1232,
+      "edits": 5
+    }
+  },
+  {
+    "elapsed": 686.023,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "snapshot",
+        "name": "peak"
+      }
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 686.305,
+    "command": {
+      "op": "shot",
+      "name": "studio-drop"
+    },
+    "result": {
+      "ok": true,
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/set/studio-drop.jpg"
+    }
+  },
+  {
+    "elapsed": 737.017,
+    "command": {
+      "op": "edit",
+      "source": "(av/session (av/gesture :break) (av/configure {:deck-b 0}) (av/pattern-stop :bass) (av/launch :afterglow {:transition :dissolve :beats 4}))"
+    },
+    "result": {
+      "id": 14,
+      "ok": true,
+      "revision": 12,
+      "targetBeat": 1496,
+      "edits": 4
+    }
+  },
+  {
+    "elapsed": 742.189,
+    "command": {
+      "op": "import",
+      "deck": "b",
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/assets/current-loop.wav"
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 742.315,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "snapshot",
+        "name": "sample-entry"
+      }
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 742.462,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "recall",
+        "name": "sample-entry"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 13,
+      "targetBeat": 1508,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 742.843,
+    "command": {
+      "op": "edit",
+      "source": "(o/definst voice [freq 440 amp 0.038 dur 0.8]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/mix [(o/sin-osc freq) (* 0.18 (o/sin-osc (* freq 2.01)))])))\n(def metro (o/metronome 122))\n(av/session\n  (av/pattern :melody 8\n    (o/play\n      (o/at (metro 0) (voice :freq (o/midi->hz 74)))\n      (o/at (metro 1.5) (voice :freq (o/midi->hz 77)))\n      (o/at (metro 3) (voice :freq (o/midi->hz 79)))\n      (o/at (metro 4.5) (voice :freq (o/midi->hz 81)))\n      (o/at (metro 6) (voice :freq (o/midi->hz 76)))\n      (o/at (metro 7.5) (voice :freq (o/midi->hz 72)))))\n  (av/scene :current {:shader \"// Original live-set variation: interference printed on moving water.\\nuniform float iBeat;\\nuniform float iZoom;\\nuniform float iIntensity;\\nuniform float iFeedback;\\nuniform float iPalette;\\nmat2 turn(float a){return mat2(cos(a),-sin(a),sin(a),cos(a));}\\nvoid mainImage(out vec4 c,in vec2 coord){\\n vec2 uv=(coord-.5*iResolution.xy)/iResolution.y;\\n float t=iGlobalTime,low=iAudioBass,mid=iAudioMid,hit=iAudioOnset;\\n vec2 p=uv*(1.-iZoom-low*.1);\\n vec2 q=turn(.35*sin(t*.07))*p;\\n float bend=.09*sin(q.x*7.+t*.3)+.07*sin(q.x*12.-t*.18);\\n float carrier=sin((q.y+bend)*110.+t*.8);\\n vec2 v=turn(-.22+t*.012)*p;\\n float cross=sin((v.y+.06*sin(v.x*11.+t*.2))*104.-t*.7);\\n float printA=pow(max(0.,carrier),14.);\\n float printB=pow(max(0.,cross),14.);\\n float envelope=.28+.72*exp(-abs(p.y)*1.6);\\n vec3 light=vec3(.04,.86,.83)*printA*(.18+mid)*envelope;\\n light+=vec3(1.,.18,.3)*printB*(.1+low*.9)*envelope;\\n float ripples=pow(max(0.,sin(length(p)*86.-t*2.-low*5.)),28.);\\n light+=vec3(.6,.3,1.)*ripples*hit*.3;\\n light*=1.-smoothstep(.35,1.,length(p));\\n light=1.-exp(-light*(iIntensity+1.));\\n light=mix(light,light.brg,clamp(iPalette,0.,1.));\\n light=mix(light,texture2D(iChannel1,coord/iResolution.xy).rgb,clamp(iFeedback,0.,.6));\\n c=vec4(light,1.);\\n}\\n\" :mappings {:zoom {:signal [:deck :b :bass] :amount 0.18}}}) (av/gesture :drop) (av/configure {:deck-b 0.85}) (av/launch :current {:transition :dissolve :beats 4}) (av/layer nil 0) (av/visual {:intensity 1.2 :palette 0.15 :feedback 0.1}))"
+    },
+    "result": {
+      "id": 15,
+      "ok": true,
+      "revision": 14,
+      "targetBeat": 1508,
+      "edits": 7
+    }
+  },
+  {
+    "elapsed": 833.252,
+    "command": {
+      "op": "shot",
+      "name": "studio-undertow"
+    },
+    "result": {
+      "ok": true,
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/set/studio-undertow.jpg"
+    }
+  },
+  {
+    "elapsed": 833.533,
+    "command": {
+      "op": "edit",
+      "source": "(o/definst voice [freq 440 amp 0.028 dur 0.35]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/lpf (o/saw freq) 1100)))\n(def metro (o/metronome 122))\n(av/session\n  (av/pattern :melody 8\n    (o/play\n      (o/at (metro 0) (voice :freq (o/midi->hz 62)))\n      (o/at (metro 0.75) (voice :freq (o/midi->hz 65)))\n      (o/at (metro 1.5) (voice :freq (o/midi->hz 69)))\n      (o/at (metro 2.75) (voice :freq (o/midi->hz 67)))\n      (o/at (metro 4) (voice :freq (o/midi->hz 62)))\n      (o/at (metro 5.5) (voice :freq (o/midi->hz 60)))\n      (o/at (metro 6.5) (voice :freq (o/midi->hz 64)))))\n  (av/configure {:deck-b 1 :filter 0.9 :master 0.8}) (av/launch :cathedral {:transition :crossfade :beats 8}) (av/layer :current 0.16) (av/visual {:intensity 1.25 :symmetry 8 :feedback 0.1}))"
+    },
+    "result": {
+      "id": 16,
+      "ok": true,
+      "revision": 15,
+      "targetBeat": 1692,
+      "edits": 5
+    }
+  },
+  {
+    "elapsed": 898.059,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "undo"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 16,
+      "targetBeat": 1824,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 904.15,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "redo"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 17,
+      "targetBeat": 1836,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 931.711,
+    "command": {
+      "op": "edit",
+      "source": "(av/session (av/gesture :break) (av/configure {:deck-b 0}) (av/launch :afterglow {:transition :iris :beats 16}) (av/layer :bathymetry 0.25) (av/visual {:intensity 0.85 :feedback 0.28}))"
+    },
+    "result": {
+      "id": 17,
+      "ok": true,
+      "revision": 18,
+      "targetBeat": 1892,
+      "edits": 5
+    }
+  },
+  {
+    "elapsed": 932.181,
+    "command": {
+      "op": "shot",
+      "name": "studio-breakdown"
+    },
+    "result": {
+      "ok": true,
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/set/studio-breakdown.jpg"
+    }
+  },
+  {
+    "elapsed": 1019.924,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "recall",
+        "name": "home"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 19,
+      "targetBeat": 2072,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 1020.233,
+    "command": {
+      "op": "edit",
+      "source": "(o/definst voice [freq 440 amp 0.043 dur 0.9]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/mix [(o/sin-osc freq) (* 0.18 (o/sin-osc (* freq 2.01)))])))\n(def metro (o/metronome 122))\n(av/session\n  (av/pattern :melody 8\n    (o/play\n      (o/at (metro 0) (voice :freq (o/midi->hz 74)))\n      (o/at (metro 1.5) (voice :freq (o/midi->hz 81)))\n      (o/at (metro 2.75) (voice :freq (o/midi->hz 77)))\n      (o/at (metro 4) (voice :freq (o/midi->hz 84)))\n      (o/at (metro 5.5) (voice :freq (o/midi->hz 81)))\n      (o/at (metro 7) (voice :freq (o/midi->hz 76)))))\n  (av/scene :cathedral {:shader \"// Original live-set variation: folded chromatic architecture.\\nuniform float iBeat;\\nuniform float iZoom;\\nuniform float iIntensity;\\nuniform float iSymmetry;\\nuniform float iFeedback;\\nuniform float iPalette;\\n#define PI 3.14159265359\\nfloat edge(float d,float w){return w/(abs(d)+w);}\\nmat2 turn(float a){return mat2(cos(a),-sin(a),sin(a),cos(a));}\\nvec3 ink(float p){return .55+.45*cos(6.28318*(vec3(.03,.28,.55)+p));}\\nvoid mainImage(out vec4 c,in vec2 coord){\\n vec2 uv=(coord-.5*iResolution.xy)/iResolution.y;\\n float low=iAudioBass,hit=iAudioOnset,mid=iAudioMid,t=iGlobalTime;\\n vec2 p=turn(t*.06+floor(iBeat/16.)*.16)*uv*(1.-iZoom-low*.12);\\n float r=length(p),a=atan(p.y,p.x),n=max(3.,iSymmetry);\\n float fold=abs(mod(a+PI/n,2.*PI/n)-PI/n);\\n vec2 k=r*vec2(cos(fold),sin(fold));\\n vec3 light=vec3(0.);\\n for(int j=0;j<8;j++){\\n  float f=float(j),z=fract(f/8.+t*.052),radius=.06+z*z*.88;\\n  float d=k.x-radius-.05*sin(k.y*13.+t*.4+f);\\n  vec3 col=ink(f*.105+t*.008+iPalette*.3);\\n  light+=col*pow(edge(d,.0016+.003*hit),1.7)*(.3+z)*(.3+low*1.8);\\n  light+=col*edge(k.y-k.x*(.22+.06*sin(t*.3+f)),.0012)*edge(r-radius,.025)*mid*1.3;\\n }\\n float spoke=edge(sin(a*n+sin(r*10.-t)*.18),.015)*smoothstep(.08,.3,r);\\n light+=vec3(.05,.85,.9)*spoke*(.08+iAudioHigh*.45);\\n light*=1.-smoothstep(.65,.95,r);\\n light=1.-exp(-light*(iIntensity+.3)*2.2);\\n light=mix(light,texture2D(iChannel1,coord/iResolution.xy).rgb,clamp(iFeedback,0.,.6));\\n c=vec4(light,1.);\\n}\\n\" :mappings {:zoom {:signal [:stem :bass :level] :amount 0.18}}}) (av/gesture :drop) (av/launch :cathedral {:transition :iris :beats 8}) (av/layer :afterglow 0.14) (av/visual {:intensity 1.65 :symmetry 8 :feedback 0.08}))"
+    },
+    "result": {
+      "id": 18,
+      "ok": true,
+      "revision": 20,
+      "targetBeat": 2072,
+      "edits": 6
+    }
+  },
+  {
+    "elapsed": 1080.366,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "snapshot",
+        "name": "return"
+      }
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 1080.803,
+    "command": {
+      "op": "shot",
+      "name": "studio-return"
+    },
+    "result": {
+      "ok": true,
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/set/studio-return.jpg"
+    }
+  },
+  {
+    "elapsed": 1170.583,
+    "command": {
+      "op": "edit",
+      "source": "(o/definst voice [freq 440 amp 0.033 dur 2.8]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/mix [(o/sin-osc freq) (* 0.18 (o/sin-osc (* freq 2.01)))])))\n(def metro (o/metronome 122))\n(av/session\n  (av/pattern :melody 16\n    (o/play\n      (o/at (metro 0) (voice :freq (o/midi->hz 74)))\n      (o/at (metro 4) (voice :freq (o/midi->hz 77)))\n      (o/at (metro 8.5) (voice :freq (o/midi->hz 69)))\n      (o/at (metro 14) (voice :freq (o/midi->hz 62)))))\n  (av/gesture :release) (av/launch :afterglow {:transition :crossfade :beats 8}) (av/layer :bathymetry 0.12) (av/visual {:intensity 0.7 :feedback 0.22}) (av/configure {:space 0.68 :echo 0.43}))"
+    },
+    "result": {
+      "id": 19,
+      "ok": true,
+      "revision": 21,
+      "targetBeat": 2376,
+      "edits": 6
+    }
+  }
+]

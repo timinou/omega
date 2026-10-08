@@ -1,0 +1,76 @@
+{
+  "url": "http://127.0.0.1:8812/?use=pelagic&layout=pelagic&file=spikes/pelagic/demo.bl.org",
+  "status": "passed",
+  "checks": [
+    "independent package",
+    "real editor keyboard evaluation",
+    "four shader scenes",
+    "playback",
+    "bar-quantized edit",
+    "live node controls",
+    "nested session rollback",
+    "bad shader rollback",
+    "bad BL rollback",
+    "crossfade",
+    "EQ",
+    "stem mute",
+    "movement cue",
+    "offline synthesis",
+    "sample decode",
+    "BPM sync",
+    "cue",
+    "loop",
+    "jog",
+    "sample-only visual response",
+    "live audiovisual capture",
+    "closed audio context",
+    "shader disposal",
+    "exact source restoration"
+  ],
+  "stats": {
+    "playing": true,
+    "audioTime": 9.568,
+    "nextStep": 542,
+    "lastEvaluation": {
+      "id": 5,
+      "ok": false,
+      "error": "undefined var: pelagic.live.session5/missing-variable"
+    },
+    "evalCount": 5,
+    "voices": 14,
+    "context": "running",
+    "frames": 289,
+    "recording": false,
+    "patterns": [],
+    "pending": 0,
+    "mode": "finite",
+    "time": 66.22081967213114,
+    "beat": 134.649,
+    "revision": 0,
+    "phase": "ACTIVE",
+    "resources": {
+      "voices": 14,
+      "peakVoices": 21,
+      "triggered": 90,
+      "nodes": 213,
+      "buses": 5,
+      "intents": 89
+    },
+    "gpu": {
+      "programs": 2,
+      "targets": 3,
+      "renderSize": null,
+      "outputSize": [
+        774,
+        314
+      ],
+      "transition": false
+    },
+    "diagnostics": {
+      "missed": 0,
+      "ticks": 358,
+      "longTasks": 6
+    }
+  },
+  "pageErrors": []
+}

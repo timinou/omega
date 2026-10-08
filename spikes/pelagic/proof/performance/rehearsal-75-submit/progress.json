@@ -1,0 +1,103 @@
+{
+  "kind": "soak",
+  "requestedSeconds": 75,
+  "url": "http://127.0.0.1:8812/?use=pelagic&layout=pelagic&file=spikes/pelagic/demo.bl.org",
+  "sourceCommit": "220ae5713142d3ca5b003f1c2372dcad04156816",
+  "checkpoints": [
+    {
+      "elapsed": 0.0,
+      "heapBytes": 7841284,
+      "stats": {
+        "playing": true,
+        "nextStep": 21,
+        "lastEvaluation": {
+          "id": 1,
+          "ok": true,
+          "revision": 1,
+          "targetBeat": 4,
+          "edits": 2
+        },
+        "evalCount": 1,
+        "voices": 10,
+        "context": "running",
+        "frames": 60,
+        "recording": true,
+        "patterns": [
+          "melody"
+        ],
+        "pending": 0,
+        "mode": "performance",
+        "time": 2.203333333333333,
+        "beat": 4.4801111111111105,
+        "revision": 1,
+        "phase": "ACTIVE",
+        "resources": {
+          "voices": 10,
+          "peakVoices": 10,
+          "triggered": 10,
+          "nodes": 166,
+          "buses": 2,
+          "intents": 10
+        },
+        "gpu": {
+          "programs": 2,
+          "targets": 3,
+          "transition": false
+        },
+        "diagnostics": {
+          "missed": 0,
+          "ticks": 73,
+          "longTasks": 6
+        }
+      },
+      "metrics": {
+        "elapsedSeconds": 3.316199999988079,
+        "missedEvents": 0,
+        "schedulerTicks": 73,
+        "longTasks": 6,
+        "frameP95": 78,
+        "frameP99": 278,
+        "framesOver100Percent": 4.545454545454546,
+        "avSubmitP95Ms": 22.786885245901445,
+        "avSamples": 1,
+        "activationMaxMs": 1,
+        "renderMaxMs": 37.59999996423721,
+        "compileP95": 242.0999999642372,
+        "resources": {
+          "voices": 10,
+          "peakVoices": 10,
+          "triggered": 10,
+          "nodes": 166,
+          "buses": 2,
+          "intents": 10
+        },
+        "gpu": {
+          "programs": 2,
+          "targets": 3,
+          "transition": false
+        },
+        "storageTransactions": 0,
+        "history": 1,
+        "namespaces": 0,
+        "recording": {
+          "bytes": 0,
+          "pendingBytes": 0,
+          "chunks": 0,
+          "error": null
+        },
+        "audioTiming": {
+          "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+          "samples": 0,
+          "p95Ms": null,
+          "maxMs": null,
+          "ready": true,
+          "error": null
+        },
+        "avTiming": "visual activation samples the same audio clock; physical output latency is not measured"
+      }
+    }
+  ],
+  "actions": [],
+  "errors": [],
+  "renderer": "ANGLE (AMD, AMD Radeon 860M Graphics (radeonsi krackan1 ACO), OpenGL ES 3.2)"
+}

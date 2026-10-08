@@ -29,10 +29,12 @@ if '--check-only' not in sys.argv:
  ff('-i',source,'-vn','-af',listeningFilter,'-c:a','aac','-b:a','96k','-movflags','+faststart',mobile/'pelagic-live.m4a')
  ff('-i',source,'-vn','-af',listeningFilter,'-c:a','libmp3lame','-b:a','128k',mobile/'pelagic-live.mp3')
  ff('-ss','1020','-i',source,'-t','180','-vf','scale=640:360,fps=24,fade=t=out:st=178:d=2','-c:v','libx264','-preset','medium','-crf','31','-maxrate','240k','-bufsize','480k','-threads','2','-pix_fmt','yuv420p','-c:a','aac','-b:a','112k','-af','volume=3dB,afade=t=out:st=170:d=10','-movflags','+faststart',mobile/'pelagic-highlight.mp4')
-files=[source,*sorted(mobile.glob('*'))]
+ ff('-i',mobile/'pelagic-full.mp4','-map','0','-c','copy','-f','segment','-segment_time','300','-segment_format','mp4','-segment_format_options','movflags=+faststart','-reset_timestamps','1','-segment_list',mobile/'parts.csv',mobile/'pelagic-part-%02d.mp4')
+files=[source,*sorted(path for path in mobile.glob('*') if path.suffix in ['.mp4','.m4a','.mp3'])]
 manifest={'capture':'actual live mix and stage; original and full phone video uncut and without level edits','packetTimeline':timeline,
  'highlight':{'startSeconds':1020,'durationSeconds':180,'editorialChanges':'3 dB gain, last 10 seconds audio fade, last 2 seconds video fade'},
- 'listeningCopies':{'files':['pelagic-live.m4a','pelagic-live.mp3'],'editorialChanges':'continuous audio samples (timestamp gaps closed), 3 dB gain and 12-second ending fade','fadeStartSeconds':fadeStart},'files':{}}
+ 'listeningCopies':{'files':['pelagic-live.m4a','pelagic-live.mp3'],'editorialChanges':'continuous encoded audio samples with timestamps reset, 3 dB gain and 12-second ending fade','fadeStartSeconds':fadeStart},
+ 'parts':{'method':'Full phone video split at keyframes near five-minute boundaries; copied streams, local timestamps reset','segments':[{'file':row[0],'startSeconds':float(row[1]),'endSeconds':float(row[2])} for row in csv.reader((mobile/'parts.csv').open())] if (mobile/'parts.csv').exists() else []},'files':{}}
 for path in files:
  probe=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_format','-show_streams','-of','json',str(path)]))
  subprocess.run(['ffmpeg','-v','error','-threads','2','-i',str(path),'-f','null','-'],check=True)

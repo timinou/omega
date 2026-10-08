@@ -1,0 +1,1748 @@
+{
+  "kind": "soak",
+  "requestedSeconds": 75,
+  "url": "http://127.0.0.1:8812/?use=pelagic&layout=pelagic&file=spikes/pelagic/demo.bl.org",
+  "sourceCommit": "220ae5713142d3ca5b003f1c2372dcad04156816",
+  "checkpoints": [
+    {
+      "elapsed": 0.0,
+      "heapBytes": 7841284,
+      "stats": {
+        "playing": true,
+        "nextStep": 21,
+        "lastEvaluation": {
+          "id": 1,
+          "ok": true,
+          "revision": 1,
+          "targetBeat": 4,
+          "edits": 2
+        },
+        "evalCount": 1,
+        "voices": 10,
+        "context": "running",
+        "frames": 60,
+        "recording": true,
+        "patterns": [
+          "melody"
+        ],
+        "pending": 0,
+        "mode": "performance",
+        "time": 2.203333333333333,
+        "beat": 4.4801111111111105,
+        "revision": 1,
+        "phase": "ACTIVE",
+        "resources": {
+          "voices": 10,
+          "peakVoices": 10,
+          "triggered": 10,
+          "nodes": 166,
+          "buses": 2,
+          "intents": 10
+        },
+        "gpu": {
+          "programs": 2,
+          "targets": 3,
+          "transition": false
+        },
+        "diagnostics": {
+          "missed": 0,
+          "ticks": 73,
+          "longTasks": 6
+        }
+      },
+      "metrics": {
+        "elapsedSeconds": 3.316199999988079,
+        "missedEvents": 0,
+        "schedulerTicks": 73,
+        "longTasks": 6,
+        "frameP95": 78,
+        "frameP99": 278,
+        "framesOver100Percent": 4.545454545454546,
+        "avSubmitP95Ms": 22.786885245901445,
+        "avSamples": 1,
+        "activationMaxMs": 1,
+        "renderMaxMs": 37.59999996423721,
+        "compileP95": 242.0999999642372,
+        "resources": {
+          "voices": 10,
+          "peakVoices": 10,
+          "triggered": 10,
+          "nodes": 166,
+          "buses": 2,
+          "intents": 10
+        },
+        "gpu": {
+          "programs": 2,
+          "targets": 3,
+          "transition": false
+        },
+        "storageTransactions": 0,
+        "history": 1,
+        "namespaces": 0,
+        "recording": {
+          "bytes": 0,
+          "pendingBytes": 0,
+          "chunks": 0,
+          "error": null
+        },
+        "audioTiming": {
+          "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+          "samples": 0,
+          "p95Ms": null,
+          "maxMs": null,
+          "ready": true,
+          "error": null
+        },
+        "avTiming": "visual activation samples the same audio clock; physical output latency is not measured"
+      }
+    },
+    {
+      "elapsed": 75.287,
+      "heapBytes": 8407932,
+      "stats": {
+        "playing": true,
+        "nextStep": 528,
+        "lastEvaluation": {
+          "id": 5,
+          "ok": true,
+          "revision": 4,
+          "targetBeat": 120,
+          "edits": 2
+        },
+        "evalCount": 5,
+        "voices": 27,
+        "context": "running",
+        "frames": 2267,
+        "recording": true,
+        "patterns": [
+          "melody"
+        ],
+        "pending": 0,
+        "mode": "performance",
+        "time": 64.48333333333333,
+        "beat": 131.11611111111006,
+        "revision": 4,
+        "phase": "ACTIVE",
+        "resources": {
+          "voices": 27,
+          "peakVoices": 32,
+          "triggered": 440,
+          "nodes": 346,
+          "buses": 6,
+          "intents": 256
+        },
+        "gpu": {
+          "programs": 2,
+          "targets": 3,
+          "transition": false
+        },
+        "diagnostics": {
+          "missed": 0,
+          "ticks": 2810,
+          "longTasks": 28
+        }
+      },
+      "metrics": {
+        "elapsedSeconds": 78.40839999997615,
+        "missedEvents": 0,
+        "schedulerTicks": 2811,
+        "longTasks": 28,
+        "frameP95": 61,
+        "frameP99": 80,
+        "framesOver100Percent": 0.3827751196172249,
+        "avSubmitP95Ms": 53.60655737652564,
+        "avSamples": 4,
+        "activationMaxMs": 25.400000035762787,
+        "renderMaxMs": 15.800000011920929,
+        "compileP95": 242.0999999642372,
+        "resources": {
+          "voices": 27,
+          "peakVoices": 32,
+          "triggered": 440,
+          "nodes": 346,
+          "buses": 6,
+          "intents": 256
+        },
+        "gpu": {
+          "programs": 2,
+          "targets": 3,
+          "transition": false
+        },
+        "storageTransactions": 0,
+        "history": 4,
+        "namespaces": 0,
+        "recording": {
+          "bytes": 10756866,
+          "pendingBytes": 0,
+          "chunks": 37,
+          "error": null
+        },
+        "audioTiming": {
+          "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+          "samples": 84,
+          "p95Ms": 0.01946721316059552,
+          "maxMs": 0.020491803340405568,
+          "ready": true,
+          "error": null
+        },
+        "avTiming": "visual activation samples the same audio clock; physical output latency is not measured"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "elapsed": 20.215,
+      "command": {
+        "op": "eval",
+        "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 37})]})"
+      },
+      "result": {
+        "ok": true,
+        "revision": 2,
+        "targetBeat": 44,
+        "edits": 2
+      }
+    },
+    {
+      "elapsed": 20.312,
+      "command": {
+        "op": "eval",
+        "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+      },
+      "result": {
+        "ok": false,
+        "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+      }
+    },
+    {
+      "elapsed": 45.137,
+      "command": {
+        "op": "eval",
+        "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 38})]})"
+      },
+      "result": {
+        "ok": true,
+        "revision": 3,
+        "targetBeat": 80,
+        "edits": 2
+      }
+    },
+    {
+      "elapsed": 45.172,
+      "command": {
+        "op": "request",
+        "request": {
+          "kind": "snapshot",
+          "name": "soak-home"
+        }
+      },
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "elapsed": 70.144,
+      "command": {
+        "op": "eval",
+        "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 39})]})"
+      },
+      "result": {
+        "ok": true,
+        "revision": 4,
+        "targetBeat": 120,
+        "edits": 2
+      }
+    }
+  ],
+  "errors": [],
+  "renderer": "ANGLE (AMD, AMD Radeon 860M Graphics (radeonsi krackan1 ACO), OpenGL ES 3.2)",
+  "take": {
+    "schema": "omega.pelagic.take",
+    "version": 1,
+    "id": "eb913d8c-2ffc-4a3a-b02f-dfc787b1b961",
+    "chunks": 38,
+    "bytes": 10839005,
+    "mime": "video/webm;codecs=vp9,opus",
+    "duration": 75.77080000001192,
+    "error": null,
+    "session": {
+      "schema": "omega.pelagic",
+      "version": 1,
+      "state": {
+        "assets": {},
+        "config": {
+          "bass": true,
+          "bpm": 122,
+          "crossfade": 0.5,
+          "deck-a": 0.9,
+          "deck-b": 0.9,
+          "echo": 0.38,
+          "eq-a-high": 0,
+          "eq-a-low": 0,
+          "eq-a-mid": 0,
+          "eq-b-high": 0,
+          "eq-b-low": 0,
+          "eq-b-mid": 0,
+          "filter": 1,
+          "freeze": false,
+          "hat": true,
+          "kick": true,
+          "master": 0.82,
+          "melody": true,
+          "scene": -1,
+          "snare": true,
+          "space": 0.52,
+          "swing": 0.16
+        },
+        "patterns": {
+          "melody": {
+            "beats": 4,
+            "kind": "pattern",
+            "plan": {
+              "bundles": [
+                {
+                  "kind": "bundle",
+                  "time": 0,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.07,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 2.6,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.24,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.07,
+                        "dur": 2.6,
+                        "freq": 587.3295358348153
+                      },
+                      "synth": "glass"
+                    }
+                  ]
+                },
+                {
+                  "kind": "bundle",
+                  "time": 737.7049180327868,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.07,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 2.6,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.24,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.07,
+                        "dur": 2.6,
+                        "freq": 440
+                      },
+                      "synth": "glass"
+                    }
+                  ]
+                },
+                {
+                  "kind": "bundle",
+                  "time": 1229.5081967213114,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.07,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 2.6,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.24,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.07,
+                        "dur": 2.6,
+                        "freq": 659.2551138257401
+                      },
+                      "synth": "glass"
+                    }
+                  ]
+                }
+              ],
+              "kind": "play"
+            },
+            "stem": "melody"
+          }
+        },
+        "scenes": {},
+        "variation": {
+          "density": 1,
+          "seed": 39,
+          "transpose": 0
+        },
+        "visual": {
+          "beats": 4,
+          "feedback": 0.08,
+          "intensity": 1,
+          "mix": 0.25,
+          "overlay": null,
+          "palette": 0,
+          "scene": "afterglow",
+          "symmetry": 6,
+          "transition": "dissolve"
+        }
+      },
+      "snapshots": {
+        "soak-home": {
+          "assets": {},
+          "config": {
+            "bass": true,
+            "bpm": 122,
+            "crossfade": 0.5,
+            "deck-a": 0.9,
+            "deck-b": 0.9,
+            "echo": 0.38,
+            "eq-a-high": 0,
+            "eq-a-low": 0,
+            "eq-a-mid": 0,
+            "eq-b-high": 0,
+            "eq-b-low": 0,
+            "eq-b-mid": 0,
+            "filter": 1,
+            "freeze": false,
+            "hat": true,
+            "kick": true,
+            "master": 0.82,
+            "melody": true,
+            "scene": -1,
+            "snare": true,
+            "space": 0.52,
+            "swing": 0.16
+          },
+          "patterns": {
+            "melody": {
+              "beats": 4,
+              "kind": "pattern",
+              "plan": {
+                "bundles": [
+                  {
+                    "kind": "bundle",
+                    "time": 0,
+                    "voices": [
+                      {
+                        "graph": {
+                          "inputs": [
+                            {
+                              "default": 0.07,
+                              "key": "amp",
+                              "ugen": "param"
+                            },
+                            {
+                              "envelope": {
+                                "attack": 0.008,
+                                "envelope": "perc",
+                                "release": {
+                                  "default": 2.6,
+                                  "key": "dur",
+                                  "ugen": "param"
+                                }
+                              },
+                              "options": {},
+                              "ugen": "env-gen"
+                            },
+                            {
+                              "inputs": [
+                                {
+                                  "freq": {
+                                    "default": 440,
+                                    "key": "freq",
+                                    "ugen": "param"
+                                  },
+                                  "ugen": "sin-osc"
+                                },
+                                {
+                                  "inputs": [
+                                    0.24,
+                                    {
+                                      "freq": {
+                                        "inputs": [
+                                          {
+                                            "default": 440,
+                                            "key": "freq",
+                                            "ugen": "param"
+                                          },
+                                          2.01
+                                        ],
+                                        "ugen": "mul"
+                                      },
+                                      "ugen": "sin-osc"
+                                    }
+                                  ],
+                                  "ugen": "mul"
+                                }
+                              ],
+                              "ugen": "add"
+                            }
+                          ],
+                          "ugen": "mul"
+                        },
+                        "kind": "voice",
+                        "params": {
+                          "amp": 0.07,
+                          "dur": 2.6,
+                          "freq": 587.3295358348153
+                        },
+                        "synth": "glass"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "bundle",
+                    "time": 737.7049180327868,
+                    "voices": [
+                      {
+                        "graph": {
+                          "inputs": [
+                            {
+                              "default": 0.07,
+                              "key": "amp",
+                              "ugen": "param"
+                            },
+                            {
+                              "envelope": {
+                                "attack": 0.008,
+                                "envelope": "perc",
+                                "release": {
+                                  "default": 2.6,
+                                  "key": "dur",
+                                  "ugen": "param"
+                                }
+                              },
+                              "options": {},
+                              "ugen": "env-gen"
+                            },
+                            {
+                              "inputs": [
+                                {
+                                  "freq": {
+                                    "default": 440,
+                                    "key": "freq",
+                                    "ugen": "param"
+                                  },
+                                  "ugen": "sin-osc"
+                                },
+                                {
+                                  "inputs": [
+                                    0.24,
+                                    {
+                                      "freq": {
+                                        "inputs": [
+                                          {
+                                            "default": 440,
+                                            "key": "freq",
+                                            "ugen": "param"
+                                          },
+                                          2.01
+                                        ],
+                                        "ugen": "mul"
+                                      },
+                                      "ugen": "sin-osc"
+                                    }
+                                  ],
+                                  "ugen": "mul"
+                                }
+                              ],
+                              "ugen": "add"
+                            }
+                          ],
+                          "ugen": "mul"
+                        },
+                        "kind": "voice",
+                        "params": {
+                          "amp": 0.07,
+                          "dur": 2.6,
+                          "freq": 440
+                        },
+                        "synth": "glass"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "bundle",
+                    "time": 1229.5081967213114,
+                    "voices": [
+                      {
+                        "graph": {
+                          "inputs": [
+                            {
+                              "default": 0.07,
+                              "key": "amp",
+                              "ugen": "param"
+                            },
+                            {
+                              "envelope": {
+                                "attack": 0.008,
+                                "envelope": "perc",
+                                "release": {
+                                  "default": 2.6,
+                                  "key": "dur",
+                                  "ugen": "param"
+                                }
+                              },
+                              "options": {},
+                              "ugen": "env-gen"
+                            },
+                            {
+                              "inputs": [
+                                {
+                                  "freq": {
+                                    "default": 440,
+                                    "key": "freq",
+                                    "ugen": "param"
+                                  },
+                                  "ugen": "sin-osc"
+                                },
+                                {
+                                  "inputs": [
+                                    0.24,
+                                    {
+                                      "freq": {
+                                        "inputs": [
+                                          {
+                                            "default": 440,
+                                            "key": "freq",
+                                            "ugen": "param"
+                                          },
+                                          2.01
+                                        ],
+                                        "ugen": "mul"
+                                      },
+                                      "ugen": "sin-osc"
+                                    }
+                                  ],
+                                  "ugen": "mul"
+                                }
+                              ],
+                              "ugen": "add"
+                            }
+                          ],
+                          "ugen": "mul"
+                        },
+                        "kind": "voice",
+                        "params": {
+                          "amp": 0.07,
+                          "dur": 2.6,
+                          "freq": 659.2551138257401
+                        },
+                        "synth": "glass"
+                      }
+                    ]
+                  }
+                ],
+                "kind": "play"
+              },
+              "stem": "melody"
+            }
+          },
+          "scenes": {},
+          "variation": {
+            "density": 1,
+            "seed": 37,
+            "transpose": 0
+          },
+          "visual": {
+            "beats": 4,
+            "feedback": 0.08,
+            "intensity": 1,
+            "mix": 0.25,
+            "overlay": null,
+            "palette": 0,
+            "scene": "current",
+            "symmetry": 6,
+            "transition": "crossfade"
+          }
+        }
+      },
+      "assets": []
+    },
+    "events": [
+      {
+        "kind": "play",
+        "audioTime": 0.05333333333333334,
+        "beat": 0,
+        "mode": "performance"
+      },
+      {
+        "kind": "queued",
+        "audioTime": 0.35733333333333334,
+        "beat": 0.4568222222222223,
+        "revision": 1,
+        "targetBeat": 4
+      },
+      {
+        "kind": "evaluate",
+        "audioTime": 0.3626666666666667,
+        "beat": 0.4676666666666668,
+        "edits": 2,
+        "source": "#+TITLE: PELAGIC \u00b7 a live audiovisual descent\n\n* The performance\nA quiet signal becomes a current.\nThe current becomes a cathedral.\nThe cathedral dissolves into light.\n\nPlay on the stage, or type g p.\nC-Enter evaluates this live buffer.\ng s stops; g v opens the stage.\n\n* Overtone / Beam Lisp\nChange the notes, the envelope,\nor the groove. Evaluate. The new\npattern enters on the next bar.\n\n#+begin_src beam-lisp :id lanterns\n(o/definst glass\n  [freq 440 amp 0.07 dur 2.6]\n  (* amp\n     (o/env-gen (o/perc 0.008 dur))\n     (o/mix\n       [(o/sin-osc freq)\n        (* 0.24 (o/sin-osc (* freq 2.01)))])))\n\n(def metro (o/metronome 122))\n\n(av/session\n  (av/configure {:space 0.52 :echo 0.38})\n  (av/pattern :melody 4\n    (o/play\n      (o/at (metro 0)\n        (glass :freq (o/midi->hz (o/note :D5))))\n      (o/at (metro 1.5)\n        (glass :freq (o/midi->hz (o/note :A4))))\n      (o/at (metro 2.5)\n        (glass :freq (o/midi->hz (o/note :E5)))))))\n#+end_src\n\n* Shadertone\nThe stage is a GLSL fragment shader.\niGlobalTime / iResolution / iMouse\niOvertoneVolume / iChannel0 (FFT + wave)\niChannel1 (the previous frame)\n\nAdd a begin_src glsl block here.\nC-Enter hot-swaps a valid shader.\nA broken shader keeps the last image.\n\n* Two decks\nA is the atmospheric harmonic field.\nB is the pulse and melodic fragments.\nEqual-power crossfade; three-band EQ;\nfilter, space, echo, swing and master.\n\nImport local audio into either deck.\nSet the source BPM to sync it.\nCUE / SET / beat loops / quarter-second jog.\nMovement buttons jump on the shared clock.\nREC saves the live audio + shader.\nWAV exports the original score.\n\n* Leave no trace\n:(ed/unuse \"pelagic\")\n"
+      },
+      {
+        "kind": "armed",
+        "audioTime": 1.7973333333333332,
+        "beat": 3.3848222222222217,
+        "revision": 1,
+        "time": 2.099879781420765
+      },
+      {
+        "kind": "record-start",
+        "audioTime": 1.856,
+        "beat": 3.504111111111111,
+        "id": "eb913d8c-2ffc-4a3a-b02f-dfc787b1b961"
+      },
+      {
+        "kind": "active",
+        "audioTime": 2.1173333333333333,
+        "beat": 4.035488888888889,
+        "revision": 1
+      },
+      {
+        "kind": "queued",
+        "audioTime": 19.82133333333333,
+        "beat": 40.03362222222222,
+        "revision": 2,
+        "targetBeat": 44
+      },
+      {
+        "kind": "evaluate",
+        "audioTime": 19.84,
+        "beat": 40.071577777777776,
+        "edits": 2,
+        "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 37})]})"
+      },
+      {
+        "kind": "rejected",
+        "audioTime": 19.914666666666665,
+        "beat": 40.2234,
+        "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+      },
+      {
+        "kind": "armed",
+        "audioTime": 21.450666666666667,
+        "beat": 43.3466,
+        "revision": 2,
+        "time": 21.77201092896168
+      },
+      {
+        "kind": "active",
+        "audioTime": 21.773333333333333,
+        "beat": 44.002688888889026,
+        "revision": 2
+      },
+      {
+        "kind": "queued",
+        "audioTime": 38.432,
+        "beat": 77.87531111111124,
+        "revision": 3,
+        "targetBeat": 80
+      },
+      {
+        "kind": "evaluate",
+        "audioTime": 38.44533333333333,
+        "beat": 77.90242222222236,
+        "edits": 2,
+        "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 38})]})"
+      },
+      {
+        "kind": "snapshot",
+        "audioTime": 38.477333333333334,
+        "beat": 77.96748888888902,
+        "name": "soak-home"
+      },
+      {
+        "kind": "armed",
+        "audioTime": 39.141333333333336,
+        "beat": 79.31762222222235,
+        "revision": 3,
+        "time": 39.47692896174869
+      },
+      {
+        "kind": "active",
+        "audioTime": 39.48266666666667,
+        "beat": 80.01166666666656,
+        "revision": 3
+      },
+      {
+        "kind": "queued",
+        "audioTime": 58.49333333333333,
+        "beat": 118.66668888888877,
+        "revision": 4,
+        "targetBeat": 120
+      },
+      {
+        "kind": "evaluate",
+        "audioTime": 58.528,
+        "beat": 118.73717777777766,
+        "edits": 2,
+        "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 39})]})"
+      },
+      {
+        "kind": "armed",
+        "audioTime": 58.922666666666665,
+        "beat": 119.53966666666655,
+        "revision": 4,
+        "time": 59.14906010929014
+      },
+      {
+        "kind": "active",
+        "audioTime": 59.192,
+        "beat": 120.08731111111005,
+        "revision": 4
+      },
+      {
+        "kind": "record-stop",
+        "audioTime": 64.74933333333334,
+        "beat": 131.38722222222117,
+        "take": {
+          "id": "eb913d8c-2ffc-4a3a-b02f-dfc787b1b961",
+          "chunks": 38,
+          "bytes": 10839005,
+          "mime": "video/webm;codecs=vp9,opus",
+          "duration": 75.77080000001192,
+          "error": null
+        }
+      }
+    ],
+    "diagnostics": {
+      "elapsedSeconds": 78.58339999997615,
+      "missedEvents": 0,
+      "schedulerTicks": 2814,
+      "longTasks": 29,
+      "frameP95": 61,
+      "frameP99": 80,
+      "framesOver100Percent": 0.38204393505253104,
+      "avSubmitP95Ms": 53.60655737652564,
+      "avSamples": 4,
+      "activationMaxMs": 25.400000035762787,
+      "renderMaxMs": 40.5,
+      "compileP95": 242.0999999642372,
+      "resources": {
+        "voices": 27,
+        "peakVoices": 32,
+        "triggered": 442,
+        "nodes": 347,
+        "buses": 6,
+        "intents": 256
+      },
+      "gpu": {
+        "programs": 2,
+        "targets": 3,
+        "transition": false
+      },
+      "storageTransactions": 0,
+      "history": 4,
+      "namespaces": 0,
+      "recording": null,
+      "audioTiming": {
+        "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+        "samples": 84,
+        "p95Ms": 0.01946721316059552,
+        "maxMs": 0.020491803340405568,
+        "ready": true,
+        "error": null
+      },
+      "avTiming": "visual activation samples the same audio clock; physical output latency is not measured"
+    },
+    "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "sampleRate": 48000
+  },
+  "metrics": {
+    "elapsedSeconds": 78.65419999998808,
+    "missedEvents": 0,
+    "schedulerTicks": 2817,
+    "longTasks": 29,
+    "frameP95": 61,
+    "frameP99": 80,
+    "framesOver100Percent": 0.38167938931297707,
+    "avSubmitP95Ms": 53.60655737652564,
+    "avSamples": 4,
+    "activationMaxMs": 25.400000035762787,
+    "renderMaxMs": 40.5,
+    "compileP95": 242.0999999642372,
+    "resources": {
+      "voices": 27,
+      "peakVoices": 32,
+      "triggered": 442,
+      "nodes": 347,
+      "buses": 6,
+      "intents": 256
+    },
+    "gpu": {
+      "programs": 2,
+      "targets": 3,
+      "transition": false
+    },
+    "storageTransactions": 0,
+    "history": 4,
+    "namespaces": 0,
+    "recording": null,
+    "audioTiming": {
+      "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+      "samples": 84,
+      "p95Ms": 0.01946721316059552,
+      "maxMs": 0.020491803340405568,
+      "ready": true,
+      "error": null
+    },
+    "avTiming": "visual activation samples the same audio clock; physical output latency is not measured"
+  },
+  "session": {
+    "schema": "omega.pelagic",
+    "version": 1,
+    "state": {
+      "assets": {},
+      "config": {
+        "bass": true,
+        "bpm": 122,
+        "crossfade": 0.5,
+        "deck-a": 0.9,
+        "deck-b": 0.9,
+        "echo": 0.38,
+        "eq-a-high": 0,
+        "eq-a-low": 0,
+        "eq-a-mid": 0,
+        "eq-b-high": 0,
+        "eq-b-low": 0,
+        "eq-b-mid": 0,
+        "filter": 1,
+        "freeze": false,
+        "hat": true,
+        "kick": true,
+        "master": 0.82,
+        "melody": true,
+        "scene": -1,
+        "snare": true,
+        "space": 0.52,
+        "swing": 0.16
+      },
+      "patterns": {
+        "melody": {
+          "beats": 4,
+          "kind": "pattern",
+          "plan": {
+            "bundles": [
+              {
+                "kind": "bundle",
+                "time": 0,
+                "voices": [
+                  {
+                    "graph": {
+                      "inputs": [
+                        {
+                          "default": 0.07,
+                          "key": "amp",
+                          "ugen": "param"
+                        },
+                        {
+                          "envelope": {
+                            "attack": 0.008,
+                            "envelope": "perc",
+                            "release": {
+                              "default": 2.6,
+                              "key": "dur",
+                              "ugen": "param"
+                            }
+                          },
+                          "options": {},
+                          "ugen": "env-gen"
+                        },
+                        {
+                          "inputs": [
+                            {
+                              "freq": {
+                                "default": 440,
+                                "key": "freq",
+                                "ugen": "param"
+                              },
+                              "ugen": "sin-osc"
+                            },
+                            {
+                              "inputs": [
+                                0.24,
+                                {
+                                  "freq": {
+                                    "inputs": [
+                                      {
+                                        "default": 440,
+                                        "key": "freq",
+                                        "ugen": "param"
+                                      },
+                                      2.01
+                                    ],
+                                    "ugen": "mul"
+                                  },
+                                  "ugen": "sin-osc"
+                                }
+                              ],
+                              "ugen": "mul"
+                            }
+                          ],
+                          "ugen": "add"
+                        }
+                      ],
+                      "ugen": "mul"
+                    },
+                    "kind": "voice",
+                    "params": {
+                      "amp": 0.07,
+                      "dur": 2.6,
+                      "freq": 587.3295358348153
+                    },
+                    "synth": "glass"
+                  }
+                ]
+              },
+              {
+                "kind": "bundle",
+                "time": 737.7049180327868,
+                "voices": [
+                  {
+                    "graph": {
+                      "inputs": [
+                        {
+                          "default": 0.07,
+                          "key": "amp",
+                          "ugen": "param"
+                        },
+                        {
+                          "envelope": {
+                            "attack": 0.008,
+                            "envelope": "perc",
+                            "release": {
+                              "default": 2.6,
+                              "key": "dur",
+                              "ugen": "param"
+                            }
+                          },
+                          "options": {},
+                          "ugen": "env-gen"
+                        },
+                        {
+                          "inputs": [
+                            {
+                              "freq": {
+                                "default": 440,
+                                "key": "freq",
+                                "ugen": "param"
+                              },
+                              "ugen": "sin-osc"
+                            },
+                            {
+                              "inputs": [
+                                0.24,
+                                {
+                                  "freq": {
+                                    "inputs": [
+                                      {
+                                        "default": 440,
+                                        "key": "freq",
+                                        "ugen": "param"
+                                      },
+                                      2.01
+                                    ],
+                                    "ugen": "mul"
+                                  },
+                                  "ugen": "sin-osc"
+                                }
+                              ],
+                              "ugen": "mul"
+                            }
+                          ],
+                          "ugen": "add"
+                        }
+                      ],
+                      "ugen": "mul"
+                    },
+                    "kind": "voice",
+                    "params": {
+                      "amp": 0.07,
+                      "dur": 2.6,
+                      "freq": 440
+                    },
+                    "synth": "glass"
+                  }
+                ]
+              },
+              {
+                "kind": "bundle",
+                "time": 1229.5081967213114,
+                "voices": [
+                  {
+                    "graph": {
+                      "inputs": [
+                        {
+                          "default": 0.07,
+                          "key": "amp",
+                          "ugen": "param"
+                        },
+                        {
+                          "envelope": {
+                            "attack": 0.008,
+                            "envelope": "perc",
+                            "release": {
+                              "default": 2.6,
+                              "key": "dur",
+                              "ugen": "param"
+                            }
+                          },
+                          "options": {},
+                          "ugen": "env-gen"
+                        },
+                        {
+                          "inputs": [
+                            {
+                              "freq": {
+                                "default": 440,
+                                "key": "freq",
+                                "ugen": "param"
+                              },
+                              "ugen": "sin-osc"
+                            },
+                            {
+                              "inputs": [
+                                0.24,
+                                {
+                                  "freq": {
+                                    "inputs": [
+                                      {
+                                        "default": 440,
+                                        "key": "freq",
+                                        "ugen": "param"
+                                      },
+                                      2.01
+                                    ],
+                                    "ugen": "mul"
+                                  },
+                                  "ugen": "sin-osc"
+                                }
+                              ],
+                              "ugen": "mul"
+                            }
+                          ],
+                          "ugen": "add"
+                        }
+                      ],
+                      "ugen": "mul"
+                    },
+                    "kind": "voice",
+                    "params": {
+                      "amp": 0.07,
+                      "dur": 2.6,
+                      "freq": 659.2551138257401
+                    },
+                    "synth": "glass"
+                  }
+                ]
+              }
+            ],
+            "kind": "play"
+          },
+          "stem": "melody"
+        }
+      },
+      "scenes": {},
+      "variation": {
+        "density": 1,
+        "seed": 39,
+        "transpose": 0
+      },
+      "visual": {
+        "beats": 4,
+        "feedback": 0.08,
+        "intensity": 1,
+        "mix": 0.25,
+        "overlay": null,
+        "palette": 0,
+        "scene": "afterglow",
+        "symmetry": 6,
+        "transition": "dissolve"
+      }
+    },
+    "snapshots": {
+      "soak-home": {
+        "assets": {},
+        "config": {
+          "bass": true,
+          "bpm": 122,
+          "crossfade": 0.5,
+          "deck-a": 0.9,
+          "deck-b": 0.9,
+          "echo": 0.38,
+          "eq-a-high": 0,
+          "eq-a-low": 0,
+          "eq-a-mid": 0,
+          "eq-b-high": 0,
+          "eq-b-low": 0,
+          "eq-b-mid": 0,
+          "filter": 1,
+          "freeze": false,
+          "hat": true,
+          "kick": true,
+          "master": 0.82,
+          "melody": true,
+          "scene": -1,
+          "snare": true,
+          "space": 0.52,
+          "swing": 0.16
+        },
+        "patterns": {
+          "melody": {
+            "beats": 4,
+            "kind": "pattern",
+            "plan": {
+              "bundles": [
+                {
+                  "kind": "bundle",
+                  "time": 0,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.07,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 2.6,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.24,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.07,
+                        "dur": 2.6,
+                        "freq": 587.3295358348153
+                      },
+                      "synth": "glass"
+                    }
+                  ]
+                },
+                {
+                  "kind": "bundle",
+                  "time": 737.7049180327868,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.07,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 2.6,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.24,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.07,
+                        "dur": 2.6,
+                        "freq": 440
+                      },
+                      "synth": "glass"
+                    }
+                  ]
+                },
+                {
+                  "kind": "bundle",
+                  "time": 1229.5081967213114,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.07,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 2.6,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.24,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.07,
+                        "dur": 2.6,
+                        "freq": 659.2551138257401
+                      },
+                      "synth": "glass"
+                    }
+                  ]
+                }
+              ],
+              "kind": "play"
+            },
+            "stem": "melody"
+          }
+        },
+        "scenes": {},
+        "variation": {
+          "density": 1,
+          "seed": 37,
+          "transpose": 0
+        },
+        "visual": {
+          "beats": 4,
+          "feedback": 0.08,
+          "intensity": 1,
+          "mix": 0.25,
+          "overlay": null,
+          "palette": 0,
+          "scene": "current",
+          "symmetry": 6,
+          "transition": "crossfade"
+        }
+      }
+    },
+    "assets": []
+  },
+  "events": [
+    {
+      "kind": "play",
+      "audioTime": 0.05333333333333334,
+      "beat": 0,
+      "mode": "performance"
+    },
+    {
+      "kind": "queued",
+      "audioTime": 0.35733333333333334,
+      "beat": 0.4568222222222223,
+      "revision": 1,
+      "targetBeat": 4
+    },
+    {
+      "kind": "evaluate",
+      "audioTime": 0.3626666666666667,
+      "beat": 0.4676666666666668,
+      "edits": 2,
+      "source": "#+TITLE: PELAGIC \u00b7 a live audiovisual descent\n\n* The performance\nA quiet signal becomes a current.\nThe current becomes a cathedral.\nThe cathedral dissolves into light.\n\nPlay on the stage, or type g p.\nC-Enter evaluates this live buffer.\ng s stops; g v opens the stage.\n\n* Overtone / Beam Lisp\nChange the notes, the envelope,\nor the groove. Evaluate. The new\npattern enters on the next bar.\n\n#+begin_src beam-lisp :id lanterns\n(o/definst glass\n  [freq 440 amp 0.07 dur 2.6]\n  (* amp\n     (o/env-gen (o/perc 0.008 dur))\n     (o/mix\n       [(o/sin-osc freq)\n        (* 0.24 (o/sin-osc (* freq 2.01)))])))\n\n(def metro (o/metronome 122))\n\n(av/session\n  (av/configure {:space 0.52 :echo 0.38})\n  (av/pattern :melody 4\n    (o/play\n      (o/at (metro 0)\n        (glass :freq (o/midi->hz (o/note :D5))))\n      (o/at (metro 1.5)\n        (glass :freq (o/midi->hz (o/note :A4))))\n      (o/at (metro 2.5)\n        (glass :freq (o/midi->hz (o/note :E5)))))))\n#+end_src\n\n* Shadertone\nThe stage is a GLSL fragment shader.\niGlobalTime / iResolution / iMouse\niOvertoneVolume / iChannel0 (FFT + wave)\niChannel1 (the previous frame)\n\nAdd a begin_src glsl block here.\nC-Enter hot-swaps a valid shader.\nA broken shader keeps the last image.\n\n* Two decks\nA is the atmospheric harmonic field.\nB is the pulse and melodic fragments.\nEqual-power crossfade; three-band EQ;\nfilter, space, echo, swing and master.\n\nImport local audio into either deck.\nSet the source BPM to sync it.\nCUE / SET / beat loops / quarter-second jog.\nMovement buttons jump on the shared clock.\nREC saves the live audio + shader.\nWAV exports the original score.\n\n* Leave no trace\n:(ed/unuse \"pelagic\")\n"
+    },
+    {
+      "kind": "armed",
+      "audioTime": 1.7973333333333332,
+      "beat": 3.3848222222222217,
+      "revision": 1,
+      "time": 2.099879781420765
+    },
+    {
+      "kind": "record-start",
+      "audioTime": 1.856,
+      "beat": 3.504111111111111,
+      "id": "eb913d8c-2ffc-4a3a-b02f-dfc787b1b961"
+    },
+    {
+      "kind": "active",
+      "audioTime": 2.1173333333333333,
+      "beat": 4.035488888888889,
+      "revision": 1
+    },
+    {
+      "kind": "queued",
+      "audioTime": 19.82133333333333,
+      "beat": 40.03362222222222,
+      "revision": 2,
+      "targetBeat": 44
+    },
+    {
+      "kind": "evaluate",
+      "audioTime": 19.84,
+      "beat": 40.071577777777776,
+      "edits": 2,
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 37})]})"
+    },
+    {
+      "kind": "rejected",
+      "audioTime": 19.914666666666665,
+      "beat": 40.2234,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    },
+    {
+      "kind": "armed",
+      "audioTime": 21.450666666666667,
+      "beat": 43.3466,
+      "revision": 2,
+      "time": 21.77201092896168
+    },
+    {
+      "kind": "active",
+      "audioTime": 21.773333333333333,
+      "beat": 44.002688888889026,
+      "revision": 2
+    },
+    {
+      "kind": "queued",
+      "audioTime": 38.432,
+      "beat": 77.87531111111124,
+      "revision": 3,
+      "targetBeat": 80
+    },
+    {
+      "kind": "evaluate",
+      "audioTime": 38.44533333333333,
+      "beat": 77.90242222222236,
+      "edits": 2,
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 38})]})"
+    },
+    {
+      "kind": "snapshot",
+      "audioTime": 38.477333333333334,
+      "beat": 77.96748888888902,
+      "name": "soak-home"
+    },
+    {
+      "kind": "armed",
+      "audioTime": 39.141333333333336,
+      "beat": 79.31762222222235,
+      "revision": 3,
+      "time": 39.47692896174869
+    },
+    {
+      "kind": "active",
+      "audioTime": 39.48266666666667,
+      "beat": 80.01166666666656,
+      "revision": 3
+    },
+    {
+      "kind": "queued",
+      "audioTime": 58.49333333333333,
+      "beat": 118.66668888888877,
+      "revision": 4,
+      "targetBeat": 120
+    },
+    {
+      "kind": "evaluate",
+      "audioTime": 58.528,
+      "beat": 118.73717777777766,
+      "edits": 2,
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 39})]})"
+    },
+    {
+      "kind": "armed",
+      "audioTime": 58.922666666666665,
+      "beat": 119.53966666666655,
+      "revision": 4,
+      "time": 59.14906010929014
+    },
+    {
+      "kind": "active",
+      "audioTime": 59.192,
+      "beat": 120.08731111111005,
+      "revision": 4
+    },
+    {
+      "kind": "record-stop",
+      "audioTime": 64.74933333333334,
+      "beat": 131.38722222222117,
+      "take": {
+        "id": "eb913d8c-2ffc-4a3a-b02f-dfc787b1b961",
+        "chunks": 38,
+        "bytes": 10839005,
+        "mime": "video/webm;codecs=vp9,opus",
+        "duration": 75.77080000001192,
+        "error": null
+      }
+    }
+  ],
+  "duration": 76.03561498201452,
+  "unuse": "source retained; audio closed; graphics disposed",
+  "gates": {
+    "duration": true,
+    "audioDeadlines": true,
+    "frameP95": false,
+    "frameLongIntervals": true,
+    "AVSubmit": false,
+    "sampleProbe": true,
+    "boundedResources": true,
+    "boundedRecording": true
+  },
+  "status": "needs-review"
+}

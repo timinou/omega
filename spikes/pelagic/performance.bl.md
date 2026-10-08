@@ -10,6 +10,11 @@ Build and open the [existing studio](pelagic.bl.md#run-it), then press **PERFORM
 (or `g P`). **Play the descent** still plays the original finite composition.
 Continuous mode retains its opening and then cycles the developing middle acts;
 it does not stop at bar 64. Code, gestures and scenes can change its direction.
+The complete [standalone live patch](live-set.bl.org) needs no audio imports:
+open it with `?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org`,
+press **PERFORM**, then **C-Enter**.
+
+![The standalone patch in the actual editor](proof/performance/example/studio.jpg)
 
 ## Three implemented workstreams
 
@@ -108,6 +113,9 @@ contributes zero. Onset is an amplitude attack estimate, not beat detection.
 Targets are zoom, accent, intensity, symmetry, feedback and palette. Controls are
 clamped. Muting a stem removes its onset contribution. `iChannel0` remains the
 FFT/wave texture; `iChannel1` is that layer's preceding frame.
+`t/start` changes the fallback shader. A scene with its own `:shader` keeps that
+shader; edit its `av/scene` definition to replace it. Both sources are validated,
+so an invalid fallback cannot silently pass just because a custom scene is active.
 
 ## Sessions and recording
 
@@ -126,8 +134,12 @@ automatically. Larger takes stay local for explicit recovery/export, and the
 proof runner exports each stored chunk in order without assembling the whole
 recording in JavaScript memory. Explicit browser download may assemble a Blob;
 recording itself does not retain the full take in RAM. **RECOVER LAST TAKE** can
-recover the latest completed take in the same browser profile. Storage quota
-errors remain visible; recovery cannot promise chunks that were never written.
+recover the latest completed or journaled partial take in the same browser
+profile. An initial journal precedes chunk writes and is updated after each
+committed chunk; a crash may lose the current unwritten two-second chunk.
+Quota errors remain visible and partial downloads are labelled accordingly.
+Recovery cannot promise chunks that were never written or a journal when storage
+failed before its initial write. IndexedDB is local browser storage, not a backup.
 **SCORE WAV** exports the original composition with current mixer settings,
 not a live take.
 
@@ -159,8 +171,9 @@ Continuous mode schedules one second ahead; quantized edits target a boundary
 beyond that horizon. This provides headroom for source/shader preparation and
 can add a bar of waiting compared with the finite score.
 
-An AudioWorklet receives silent sample-onset probes scheduled by the same
-AudioContext as kicks. It measures the browser sample timeline. Expected time travels in a second,
+An AudioWorklet receives separate silent sample-onset probes scheduled by the same
+AudioContext as kicks. It measures those probe graphs on the browser sample
+timeline, not the onset of the audible kick graph. Expected time travels in a second,
 silent audio channel, avoiding asynchronous message-order associations; Float32
 quantization is below .125 ms at twenty minutes. Cancelled probes cancel with
 their voice. Neither that
@@ -182,8 +195,12 @@ headphone prelisten, arbitrary UGen parity or portable embedded sample archive.
 spikes/pelagic/build.sh
 node --test spikes/pelagic/test/*.test.mjs
 python spikes/pelagic/test/performance-browser.py
+python spikes/pelagic/test/live-example.py
+PELAGIC_PROOF=spikes/pelagic/proof/performance/legacy python spikes/pelagic/test/browser.py
 python spikes/pelagic/test/run-live.py --kind soak --seconds 1200 --port 8813
 python spikes/pelagic/test/run-live.py --kind set --seconds 1200 --port 8814
+python spikes/pelagic/test/publish-set.py
+python spikes/pelagic/test/summarize-set.py
 ```
 
 Use an offline editor on 8812; never use the running world on 8790. The set runner
@@ -192,3 +209,81 @@ requests, imports and screenshots. The soak runner's actions are deterministic.
 Each writes source commit, browser/GPU facts, timestamped actions, session values,
 checkpoints, gates and cleanup evidence. A failed gate produces `needs-review`
 and a nonzero exit; it must be reported as such.
+
+For set imports, `test/make-set-assets.py` makes an original seamless D-minor
+field and extracts an eight-beat loop from our own score. The latter requires
+the score WAV produced by `test/film.py`. These are the only imported sound
+sources in this proof. Hashes are in [summary.json](proof/performance/set/summary.json).
+The exported [session](proof/performance/set/session.pelagic.json) contains local
+asset references; regenerate/import the matching files before recalling its
+sample-dependent snapshots. Media files remain local ignored artifacts, with
+sizes, hashes and complete-decode results in the [media manifest](proof/performance/set/media.json).
+
+## Performed proof and remaining gates
+
+The distinct agent-operated set recorded **20:00.48** of the actual live canvas
+and mix, at source commit `d653019`. Its action log contains ten accepted live
+pattern edits, thirteen visual launches, all four gestures, three breaks/four
+drops, two imported files, undo/redo, two snapshot recalls, and deliberately
+rejected BL and GLSL. Rapid edits can coalesce; these are accepted-request counts,
+not a claim that every request produced a distinct audible revision. This was
+operated through the real editor, with C-Enter source evaluation; the set runner
+does not contain a prerecorded musical arrangement.
+
+The [raw report](proof/performance/set/report.json) and
+[summary](proof/performance/set/summary.json) keep the status **needs-review**.
+On Chromium/ANGLE with AMD Radeon 860M, 48 kHz audio, 1280×720 capture and
+960×540 scene geometry:
+
+| Measurement | Result | Target / status |
+| --- | ---: | --- |
+| Missed scheduler steps | 0 | 0, pass |
+| Native audio-clock / wall-clock rate | 0.99524 | 0.99–1.01, pass |
+| Frame interval p95 | 50 ms | ≤40 ms, **open** |
+| Frame intervals over 100 ms | 0.283% | <1%, pass |
+| Revision to graphics submission p95 | 41.45 ms | ≤50 ms, pass |
+| Silent sample-probe p95 / maximum | 0.049 / 34.64 ms | ≤5 / ≤15 ms, **maximum open** |
+| Heap growth, last two five-minute checkpoints | 4.40% | <10%, pass |
+| Peak voices / final programs / render targets | 31 / 5 / 3 | bounded, pass |
+| Final staging namespaces / storage backlog | 0 / 0 | bounded, pass |
+
+The earlier [twenty-minute stress soak](proof/performance/soak/report.json)
+failed more gates and remains retained. Its old sample-pairing measurement was
+defective; the [erratum](proof/performance/soak/errata.json) identifies that defect
+without discarding independent frame/scheduling failures. Subsequent fixes stop
+silent voice graphs earlier, encode sample timestamps in the audio path, and
+reduce UI/history work. The performed set measures those fixes, but does not
+establish a passing corrected automated soak. These are explicit reliability
+blockers, not a production-release claim. Recorded system pressure is context,
+not proof of the failures' cause. Browser-clock deviations and encoded sample
+duration also mean this evidence does not prove uninterrupted physical output.
+
+Final UI/error/partial-recovery changes are committed in `ad2b09d`; they have
+shorter functional coverage, not another twenty-minute claim. Final validation:
+**26 package tests, 73 editor tests, 23 unchanged presentation variants, 19
+performance browser checks, 24 legacy browser checks**, plus the standalone
+patch/C-Enter/unuse drive. See [verification](proof/performance/verification.json).
+
+## Watch and listen on a phone
+
+- [Three-minute highlight, 7.6 MB](proof/performance/set/mobile/pelagic-highlight.mp4)
+- [Full uncut phone video, 32.1 MB](proof/performance/set/mobile/pelagic-full.mp4)
+- [AAC listening copy, 14.8 MB](proof/performance/set/mobile/pelagic-live.m4a)
+- [MP3 alternative, 19.1 MB](proof/performance/set/mobile/pelagic-live.mp3)
+- Five-minute video downloads: [1](proof/performance/set/mobile/pelagic-part-00.mp4),
+  [2](proof/performance/set/mobile/pelagic-part-01.mp4),
+  [3](proof/performance/set/mobile/pelagic-part-02.mp4),
+  [4](proof/performance/set/mobile/pelagic-part-03.mp4) (about 8 MB each).
+
+The full video preserves the original timeline and mix. The highlight is an
+excerpt at 17:00–20:00, with 3 dB gain and ending fades. Listening copies reset
+audio timestamps to continuous encoded samples (19:54.9), add 3 dB gain and a
+twelve-second fade; they are labelled mastered derivatives. The native capture
+measures −21.1 LUFS / −4.7 dBFS true peak; the pre-encode listening master measures
+−18.1 LUFS / −1.6 dBFS true peak. The original includes the performed release and
+ambient ending; an attempted final manual fader fade arrived after capture ended.
+Every delivered media file passes complete decoding.
+
+![Bright return during the live set](proof/performance/set/studio-return.jpg)
+![Undertow during the live set](proof/performance/set/studio-undertow.jpg)
+![Actual editor after removing the package](proof/performance/example/unused.jpg)

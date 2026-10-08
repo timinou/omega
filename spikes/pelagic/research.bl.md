@@ -147,3 +147,7 @@ waveform from the rendered soundtrack, keeping picture and score aligned even
 when software WebGL cannot maintain realtime frame rates.
 
 Measured results and reproducible proof are in [`pelagic.bl.md`](pelagic.bl.md).
+The later [performance guide](performance.bl.md) documents continuous transport,
+the independent `av/*` extension APIs, scene mappings, bounded capture and the
+twenty-minute set's measured reliability limits. These additions do not make the
+vendored Overtone/Shadertone reference trees executable browser runtimes.
