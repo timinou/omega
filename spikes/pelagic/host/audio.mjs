@@ -55,9 +55,10 @@ export class AudioEngine {
       const filter=c.createBiquadFilter(); filter.type='lowpass'; filter.Q.value=.45;
       const duck=c.createGain(), gain=c.createGain();
       input.connect(low); low.connect(mid); mid.connect(high); high.connect(filter); filter.connect(duck); duck.connect(gain); gain.connect(this.mix);
-      this.decks[key]={input,low,mid,high,filter,duck,gain};
+      const analyser=c.createAnalyser();analyser.fftSize=2048;analyser.smoothingTimeConstant=.18;gain.connect(analyser);
+      this.decks[key]={input,low,mid,high,filter,duck,gain,analyser};
     }
-    this.buses=new Map();this.intents=[];this.peakVoices=0;this.triggered=0;
+    this.tapBuffers=new Map();this.buses=new Map();this.intents=[];this.peakVoices=0;this.triggered=0;
     this.noise=new Map(); this.configure(this.config,0);
   }
   impulse(seconds,seed) {
@@ -125,6 +126,11 @@ export class AudioEngine {
       const intent=this.intents.findLast(x=>x.stem===b.stem&&x.time<=time);
       out[b.stem]={level:Math.min(1,prior.level+f.volume*10*fade),onset:Math.max(prior.onset,
         this.config[b.stem]===false?0:(intent?Math.exp(-Math.max(0,time-intent.time)*12)*intent.velocity*fade:0)),pitch:intent?.pitch||0};
+    }
+    for(const [key,analyser] of [...Object.entries(this.decks).map(([key,d])=>['deck-'+key,d.analyser]),['master',this.analyser]]){
+      if(!this.tapBuffers.has(key))this.tapBuffers.set(key,{fft:new Uint8Array(1024),wave:new Uint8Array(2048)});
+      const {fft,wave}=this.tapBuffers.get(key);analyser.getByteFrequencyData(fft);analyser.getByteTimeDomainData(wave);
+      const f=audioFeatures(fft,wave,{sampleRate:this.ctx.sampleRate});out[key]={...f,level:Math.min(1,f.volume*10),pitch:0};
     }
     return out;
   }

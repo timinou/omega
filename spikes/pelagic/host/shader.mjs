@@ -67,7 +67,7 @@ export class ShaderStage {
     if(this.disposed||!this.program)return;
     const g=this.gl,c=this.canvas;
     const w=width||Math.max(2,Math.round(c.clientWidth*Math.min(devicePixelRatio||1,1)*.8)),h=height||Math.max(2,Math.round(c.clientHeight*Math.min(devicePixelRatio||1,1)*.8));
-    if(c.width!==w||c.height!==h){c.width=w;c.height=h;g.bindTexture(g.TEXTURE_2D,this.previous);g.texImage2D(g.TEXTURE_2D,0,g.RGB,w,h,0,g.RGB,g.UNSIGNED_BYTE,null);}
+    if(!target&&(c.width!==w||c.height!==h)){c.width=w;c.height=h;g.bindTexture(g.TEXTURE_2D,this.previous);g.texImage2D(g.TEXTURE_2D,0,g.RGB,w,h,0,g.RGB,g.UNSIGNED_BYTE,null);}
     let volume=0;
     if(analyser){analyser.getByteFrequencyData(this.fft);analyser.getByteTimeDomainData(this.wave);
       for(let i=0;i<this.wave.length;i++){const x=(this.wave[i]-128)/128;volume+=x*x;}volume=Math.sqrt(volume/this.wave.length);
@@ -81,9 +81,9 @@ export class ShaderStage {
     this.uniform('iResolution',[w,h,1]);this.uniform('iGlobalTime',time);this.uniform('iTime',time);
     this.uniform('iOvertoneVolume',volume);this.uniform('iBeat',beat);this.uniform('iScene',scene);this.uniform('iEnergy',energy);this.uniform('iAccent',accent);
     this.uniform('iAudioBass',Math.max(this.features.bass,(signals.bass?.level||0)*1.5));this.uniform('iAudioMid',this.features.mid);
-    this.uniform('iAudioHigh',this.features.high);this.uniform('iAudioOnset',Math.max(this.features.onset,signals.kick?.onset||0));
+    this.uniform('iAudioHigh',this.features.high);this.uniform('iAudioOnset',Math.max(this.features.onset,signals.kick?.onset||0,controls.accent||0));
     for(const key of ['kick','bass','hat','snare','melody','atmosphere'])this.uniform('iStem'+key[0].toUpperCase()+key.slice(1),signals[key]?.level||0);
-    this.uniform('iIntensity',controls.intensity??1);this.uniform('iSymmetry',controls.symmetry??6);
+    this.uniform('iZoom',controls.zoom||0);this.uniform('iIntensity',controls.intensity??1);this.uniform('iSymmetry',controls.symmetry??6);
     this.uniform('iPalette',controls.palette??0);this.uniform('iFeedback',controls.feedback??0);
     this.uniform('iMouse',this.mouse);const now=new Date();this.uniform('iDate',[now.getFullYear(),now.getMonth()+1,now.getDate(),now.getHours()*3600+now.getMinutes()*60+now.getSeconds()]);
     const tl=g.getUniformLocation(this.program,'iChannelTime[0]');if(tl)g.uniform1fv(tl,[time,time,time,time]);

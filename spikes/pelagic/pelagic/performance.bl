@@ -7,7 +7,7 @@
    "drop" {:filter 1.25 :space 0.28 :echo 0.22 :kick true :bass true :hat true :snare true}
    "release" {:filter 0.5 :space 0.65 :echo 0.4 :kick false :bass false :hat false :snare false}})
 (defn initial []
-  {:serial 0 :revision 0 :current {:config score/defaults :patterns {} :scenes {}
+  {:serial 0 :revision 0 :current {:config score/defaults :patterns {} :scenes {} :assets {}
     :visual {:scene "current" :overlay nil :mix 0.25 :transition "dissolve" :beats 4
              :intensity 1 :symmetry 6 :feedback 0.08 :palette 0}
     :variation {:seed 37 :density 1 :transpose 0}}
@@ -28,7 +28,8 @@
       (= kind :commit) (reduce edit state (:edits request))
       (= kind :configure) (update state :config merge (:values request))
       (= kind :pattern) (assoc-in state [:patterns (keyword (:stem request))] request)
-      (= kind :pattern-stop) (update state :patterns dissoc (keyword (:stem request)))
+      (= kind :pattern-stop) (assoc-in state [:patterns (keyword (:stem request))]
+        {:kind :pattern :stem (:stem request) :beats 1 :plan {:kind :play :bundles []}})
       (= kind :variation) (update state :variation merge (:values request))
       (= kind :scene) (assoc-in state [:scenes (keyword (:name request))] (:value request))
       (= kind :launch) (update state :visual merge (:options request) {:scene (:name request)})

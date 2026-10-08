@@ -1,11 +1,11 @@
 // Bounded browser IO. Session revisions contain hashes, not embedded audio.
 export class LocalStore {
-  constructor(){this.pending=0;this.db=null;this.closed=false;}
+  constructor(){this.pending=0;this.db=null;this.closed=false;this.opening=null;}
   async open(){
-    if(this.closed)throw new Error('Storage closed');if(this.db)return this.db;
-    return this.db=await new Promise((resolve,reject)=>{const request=indexedDB.open('omega-pelagic',1);
+    if(this.closed)throw new Error('Storage closed');if(this.db)return this.db;if(this.opening)return this.opening;
+    return this.opening=new Promise((resolve,reject)=>{const request=indexedDB.open('omega-pelagic',1);
       request.onupgradeneeded=()=>{for(const name of ['assets','chunks','takes'])request.result.createObjectStore(name);};
-      request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+      request.onsuccess=()=>{if(this.closed){request.result.close();reject(new Error('Storage closed'));return;}this.db=request.result;resolve(this.db);};request.onerror=()=>reject(request.error);});
   }
   async op(store,mode,run){
     const db=await this.open();if(this.closed)throw new Error('Storage closed');this.pending++;
@@ -22,7 +22,7 @@ export class LocalStore {
 export class LiveTake {
   constructor(store,stream,options={}){
     this.store=store;this.stream=stream;this.id=crypto.randomUUID();this.count=0;this.bytes=0;this.pendingBytes=0;this.error=null;
-    const mime=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(x=>MediaRecorder.isTypeSupported(x));
+    const mime=['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm'].find(x=>MediaRecorder.isTypeSupported(x));
     this.mime=mime;this.recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:options.bitRate||1200000,audioBitsPerSecond:128000});
     this.writes=Promise.resolve();this.started=performance.now();this.stopped=null;
     this.recorder.ondataavailable=event=>{

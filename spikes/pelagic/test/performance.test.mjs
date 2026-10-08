@@ -35,3 +35,13 @@ test('macro gestures mute the rhythm and restore a drop as one revision',()=>{
  m=activate(stage(m,{kind:'gesture',name:'drop'}));
  assert.equal(plain(m).current.config.kick,true);assert.equal(plain(m).current.visual.intensity,1.35);
 });
+
+test('stopping a lane suppresses its default score and snapshots keep asset references',()=>{
+ let m=P.d_initial();
+ const state={...plain(m).current,assets:{a:{deck:'a',hash:'a'.repeat(64),bpm:122,cue:0,loopBeats:8}}};
+ m=m.assoc(R.kw('current'),bl(state));m=P.d_snapshot(m,'with-audio');
+ m=activate(stage(m,{kind:'pattern-stop',stem:'melody'}));
+ assert.deepEqual(plain(m).current.patterns.melody.plan.bundles,[]);
+ assert.ok(plain(m).current.patterns.melody);
+ m=activate(P.d_recall(m,'with-audio'));assert.equal(plain(m).current.assets.a.hash,'a'.repeat(64));
+});

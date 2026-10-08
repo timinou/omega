@@ -8,6 +8,7 @@ uniform float iStemKick;
 uniform float iStemBass;
 uniform float iStemMelody;
 uniform float iIntensity;
+uniform float iZoom;
 uniform float iSymmetry;
 uniform float iPalette;
 uniform float iFeedback;
@@ -31,12 +32,13 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
  float cut=floor(b/16.);
  float turn=mod(cut,4.)*PI*.5;
  // Beat clock arranges cuts; the camera punch requires actual bass/onset energy.
- vec2 p=rot(turn+.035*sin(t*.2))*(uv*(1.-.16*bass)-vec2(hit*.018,0.));
+ vec2 p=rot(turn+.035*sin(t*.2))*(uv*(1.-.16*bass-clamp(iZoom,0.,.5))-vec2(hit*.018,0.));
  float r=length(p),a=atan(p.y,p.x);
  vec3 cyan=vec3(.05,.95,.86),hot=vec3(1.,.16,.32),gold=vec3(1.,.68,.16);
  vec3 violet=vec3(.52,.22,1.);
  vec3 color=vec3(.003,.008,.018);
  // I. Bathymetry: engraved topographic interference, then ripples from the kick.
+ if(w0>.001){
  vec2 q=p+vec2(.18*sin(t*.12),.1*cos(t*.16));
  float dist=length(q*vec2(1.,1.22));
  float terrain=dist+.05*sin(q.x*8.+t*.24)*sin(q.y*7.-t*.18);
@@ -45,8 +47,10 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
  opening+=spectrum(a/6.28+t*.014)*line(dist-(.18+bass*.23),.003)*(.4+bass);
  opening+=hot*line(q.y-.09*sin(q.x*12.+t+mid*5.),.0018)*(.12+mid);
  color+=opening*w0;
+ }
  // II. Current: a perspective tunnel of offset, alternating cyan/coral portals.
  // Different widths and broken segments give a club-video rhythm, rather than a screensaver orbit.
+ if(w1>.001){
  vec3 tunnel=vec3(0.);
  for(int j=0;j<12;j++){
   float fj=float(j),z=fract(fj/12.+t*.105),scale=.07+z*z*1.9;
@@ -62,8 +66,10 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
  vec2 rails=vec2(abs(p.x),abs(p.y));
  tunnel+=gold*line(rails.y-.19-.35*rails.x,.0018)*(.2+hi*1.7);
  color+=tunnel*w1;
+ }
  // III. Cathedral: a kinetic, folded light mandala with spectral petal edges.
  // Every four bars the symmetry flips between six and eight, with an eight-beat iris.
+ if(w2>.001){
  float petals=mix(iSymmetry,iSymmetry+2.,mod(cut,2.));
  float fold=abs(mod(a+PI/petals+floor(b/8.)*.12,2.*PI/petals)-PI/petals);
  vec2 k=vec2(cos(fold),sin(fold))*r;
@@ -79,7 +85,9 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
  }
  cathedral+=cyan*line(k.y-k.x*.12,.0015)*smoothstep(.12,.35,r)*(1.-smoothstep(.65,.85,r))*(.2+hi*2.);
  color+=cathedral*w2;
+ }
  // IV. Afterglow: violet ribbon echoes. A late reprise tightens the ribbons again.
+ if(w3>.001){
  vec3 after=vec3(0.);
  for(int j=0;j<9;j++){
   float fj=float(j),phase=t*.3+fj*.36;
@@ -88,6 +96,7 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
  }
  after+=hot*line(r-(.28+.13*sin(a*3.+t*.3)+bass*.08),.002)*(.2+mid);
  color+=after*w3;
+ }
  // Audible frequencies become a segmented radial spectrogram, not a decorative clock.
  float band=texture2D(iChannel0,vec2(.002+pow(abs(a)/PI,2.)*.35,.25)).r;
  float ring=.43+.15*band;

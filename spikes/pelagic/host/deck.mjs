@@ -1,7 +1,15 @@
 // Optional local-file deck. Beat-synced playback, cue/jog, loop and nudge.
 export class SampleDeck {
-  constructor(engine,key){this.engine=engine;this.key=key;this.bpm=engine.config.bpm;this.cue=0;this.loopBeats=0;this.offset=0;this.started=0;this.running=false;}
-  async load(file){this.stop();this.buffer=await this.engine.ctx.decodeAudioData(await file.arrayBuffer());this.name=file.name;this.cue=0;this.offset=0;return {name:this.name,duration:this.buffer.duration};}
+  constructor(engine,key){this.engine=engine;this.key=key;this.bpm=engine.config.bpm;this.cue=0;this.loopBeats=0;this.offset=0;this.started=0;this.running=false;this.generation=0;this.disposed=false;}
+  async load(file){const generation=++this.generation,buffer=await this.engine.ctx.decodeAudioData(await file.arrayBuffer());
+    if(this.disposed||generation!==this.generation)throw new Error('Audio import superseded');
+    this.stop();this.buffer=buffer;this.name=file.name;this.cue=0;this.offset=0;return {name:this.name,duration:this.buffer.duration};}
+  install(value,time=this.engine.ctx.currentTime,run=false){
+    const previous=this.source;if(previous){previous.onended=()=>previous.disconnect();try{previous.stop(time);}catch{}this.source=null;}
+    this.running=false;this.buffer=value.buffer;this.hash=value.hash;this.name=value.name;this.bpm=value.bpm;this.cue=value.cue||0;this.offset=value.offset??this.cue;this.loopBeats=value.loopBeats||0;
+    if(run&&this.buffer)this.play(time);
+  }
+
   rate(){return this.engine.config.bpm/this.bpm*(this.nudge||1);}
   position(){if(!this.running)return this.offset;let p=this.offset+(this.engine.ctx.currentTime-this.started)*this.rate();if(this.loopBeats){const length=60/this.bpm*this.loopBeats;p=this.cue+((p-this.cue)%length+length)%length;}return Math.min(this.buffer?.duration||0,Math.max(0,p));}
   play(time=this.engine.ctx.currentTime){if(!this.buffer)return;this.stop(false);const c=this.engine.ctx,s=c.createBufferSource();s.buffer=this.buffer;s.playbackRate.value=this.rate();
@@ -20,5 +28,5 @@ export class SampleDeck {
     case 'clear':this.stop();this.buffer=null;this.name=null;break;
     default:throw new Error('Unknown deck operation '+op);}}
   configure(){if(this.source)this.source.playbackRate.setTargetAtTime(this.rate(),this.engine.ctx.currentTime,.02);}
-  dispose(){this.stop();this.buffer=null;}
+  dispose(){this.disposed=true;++this.generation;this.stop();this.buffer=null;}
 }

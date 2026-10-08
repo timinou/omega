@@ -23,7 +23,7 @@ export function performanceControls(shadow,api){
   if(b.dataset.command)return; // Existing real-editor command dispatcher handles preview.
   guard(async()=>{
    if(b.hasAttribute('data-perform'))api.perform();
-   else if(b.dataset.action)api.request({kind:b.dataset.action});
+   else if(b.dataset.action)await api.request({kind:b.dataset.action});
    else if(b.dataset.launch)send({kind:'launch',name:b.dataset.launch,options:{transition:$('[data-transition]').value,beats:+$('[data-transition-beats]').value}});
    else if(b.dataset.gesture)send({kind:'gesture',name:b.dataset.gesture});
    else if(b.hasAttribute('data-save-snapshot'))api.request({kind:'snapshot',name:$('[data-snapshot-name]').value});
@@ -40,7 +40,7 @@ export function performanceControls(shadow,api){
   if(x.dataset.visual)send({kind:'visual',values:{[x.dataset.visual]:+x.value}});
   else if(x.dataset.variation)send({kind:'variation',values:{[x.dataset.variation]:+x.value}});
   else if(x.hasAttribute('data-layer'))send({kind:'layer',name:x.value||null,mix:.3});
-  else if(x.hasAttribute('data-snapshots')&&x.value)api.request({kind:'recall',name:x.value});
+  else if(x.hasAttribute('data-snapshots')&&x.value)await api.request({kind:'recall',name:x.value});
   else if(x.hasAttribute('data-open-session')&&x.files[0])await api.load(JSON.parse(await x.files[0].text()));
  }));
  return {update(model,stats){
