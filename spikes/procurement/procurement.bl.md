@@ -171,3 +171,16 @@ presentation equivalence check (no bad variants). The source-level package drive
 covers owned prompt submission, frame-wide unload and package-layer identity;
 the actual UI screenshots show use, reuse, browser observation, decision history
 and unload. Explicit unuse remains respected on a subsequent file visit.
+
+## Slice 2 — everyday decisions, cited reviews and honest partial runs
+
+Approved scope and future deferrals: [NEXT-SLICES.md](NEXT-SLICES.md).
+Implementation, screenshots, real-editor drive evidence and actual model outcomes:
+[proof/slice2/README.md](proof/slice2/README.md).
+The compact desk, original-page evidence layout, assigned blockers, scoped browser
+shelf and persistent checkpoint lifecycle are package-owned and unload together.
+Contracts: 41 passing; vendored editor drive/package/frame/host tests: 72 passing;
+unchanged default-presentation equivalence: no bad variants. Actual unload leaves
+one pane, no procurement state/package and no PDF iframe. Two unsteered paid Flash
+discovery runs stayed bounded but failed to publish; autonomous discovery remains
+an unmet acceptance criterion, explicitly recorded with raw proofs.
