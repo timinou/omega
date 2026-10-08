@@ -39,7 +39,8 @@
 (defn note [n]
   (cond (nil? n) nil (number? n) n
     :else (let [s (upper-case (if (keyword? n) (name n) n))
-                oct (parse-long (subs s (dec (count s))))
+                oct (get {"0" 0 "1" 1 "2" 2 "3" 3 "4" 4 "5" 5 "6" 6 "7" 7 "8" 8 "9" 9}
+                         (subs s (dec (count s))))
                 pc (get pitch-classes (subs s 0 (dec (count s))))]
             (if (and (some? pc) (some? oct)) (+ (* 12 (inc oct)) pc)
               (throw (str "Unknown note: " s))))))

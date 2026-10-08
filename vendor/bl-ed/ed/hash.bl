@@ -1,0 +1,21 @@
+; Stable browser document IDs, independent of a compiler's optional prelude.
+; FNV-1a over UTF-16 units, matching the editor's existing JS string hash.
+(ns ed.hash)
+(defn- xor-unit [value unit]
+  (loop [a value b unit place 1 result 0]
+    (if (= b 0) (+ result (* place a))
+      (recur (quot a 2) (quot b 2) (* place 2)
+             (+ result (if (= (mod a 2) (mod b 2)) 0 place))))))
+(defn- mix-unit [value unit]
+  (let [x (xor-unit value unit)]
+    ; 0x01000193 = 2^24 + 403. Keep intermediate products below 2^53,
+    ; so the old numeric JS target and exact-number targets agree too.
+    (mod (+ (* x 403) (* (mod x 256) 16777216)) 4294967296)))
+(defn string-hash [text]
+  (let [h (reduce (fn [h cp]
+                    (if (< cp 65536) (mix-unit h cp)
+                      (let [n (- cp 65536)]
+                        (mix-unit (mix-unit h (+ 55296 (quot n 1024)))
+                                  (+ 56320 (mod n 1024))))))
+                  2166136261 (unicode/characters_to_list text))]
+    (if (>= h 2147483648) (- h 4294967296) h)))

@@ -1,21 +1,19 @@
 import * as R from '../../out/rt.mjs';
 import * as Score from '../../out/pelagic.score.mjs';
-import * as Live from '../../out/pelagic.live.mjs';
 import * as Performance from '../../out/pelagic.performance.mjs';
 import {errorText} from './errors.mjs';
 import {LocalStore,LiveTake,validateSession} from './storage.mjs';
 import {performanceControls} from './controls.mjs';
 import {SceneStage} from './scenes.mjs';
-import * as Tone from '../../out/pelagic.shadertone.mjs';
+import * as Bridge from '../../out/pelagic.bridge.mjs';
+import {conversions,download,setText,audioContext,readText} from './values.mjs';
 import {AudioEngine,plain,validateGraph,wav} from './audio.mjs';
 import {ShaderStage} from './shader.mjs';
 import {SampleDeck} from './deck.mjs';
 import {soundtrackAnalysis} from './analysis.mjs';
+const toBL=conversions(R);
 const defaults=plain(Score.d_defaults),movements=plain(Score.d_movements);
-const toBL=x=>Array.isArray(x)?R.vecFromArray(x.map(toBL)):x&&typeof x==='object'?R.hashMap(...Object.entries(x).flatMap(([k,v])=>[R.kw(k),toBL(v)])):x;
 const moduleURL=name=>new URL(name,import.meta.url);
-function download(data,name,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([data],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-function setText(node,value){const text=String(value);if(node.textContent!==text)node.textContent=text;}
 function blocks(source){const result=[];const re=/^#\+begin_src\s+(\S+)[^\n]*\n([\s\S]*?)^#\+end_src\s*$/gmi;let m;while((m=re.exec(source)))result.push({language:m[1].toLowerCase(),code:m[2]});
   if(!result.length && source.trim())result.push({language:'beam-lisp',code:source});return result;}
 export function createHost(api) {
@@ -32,18 +30,17 @@ export function createHost(api) {
   const views=new Set(),files=new Map(),decks={},urls=new Set(), handles=new Map(),offlineRenders=new Set();
   const notice=(message,playingValue=playing)=>{if(disposed)return;for(const v of views)v.status(message);api.dispatch({type:'pelagic/status',message,playing:playingValue});};
   const alive=()=>{if(disposed)throw new Error('Package was unloaded');};
-  function unlock(){alive();if(!ctx){ctx=new AudioContext({latencyHint:'interactive'});ctxWall=performance.now();audio=new AudioEngine(ctx,config);audio.startTelemetry(moduleURL('timing-worklet.mjs'));for(const key of ['a','b'])decks[key]=new SampleDeck(audio,key);}ctx.resume();return audio;}
-  async function sources(){if(!sourcePromise)sourcePromise=Promise.all(['pelagic.glsl','overtone.bl'].map(async f=>{const r=await fetch(moduleURL(f));if(!r.ok)throw new Error('Cannot load '+f);return r.text();}));return sourcePromise;}
+  function unlock(){alive();if(!ctx){ctx=audioContext();ctxWall=performance.now();audio=new AudioEngine(ctx,config);audio.startTelemetry(moduleURL('timing-worklet.mjs'));for(const key of ['a','b'])decks[key]=new SampleDeck(audio,key);}ctx.resume();return audio;}
+  async function sources(){if(!sourcePromise)sourcePromise=Promise.all(['pelagic.glsl','overtone.bl'].map(f=>readText(moduleURL(f))));return sourcePromise;}
   async function vm(){
     if(readyVM)return readyVM;
     const language=await api.language(),[,source]=await sources();alive();if(!language)throw new Error('Beam Lisp language failed to load');
     language.Env.declare_ns("pelagic.overtone");language.Env.in_ns("pelagic.overtone");
     language.evalString(source.replace("(ns pelagic.overtone)",""));
     for(const ns of ['overtone.live','shadertone.tone','av'])language.Env.declare_ns(ns);
-    const names=['sin-osc','saw','pulse','lf-tri','white-noise','pink-noise','mix','lpf','hpf','rlpf','pan2','env-gen','perc','adsr','line','x-line','FREE','midi->hz','note','scale','chord','beat-ms','metronome','definst','defsynth','at','ctl','kill','stop','out','play'];
-    for(const name of names)language.Env.intern('overtone.live',name,language.Env['fetch!']('pelagic.overtone',name));
-    for(const [name,f] of Object.entries({start:Tone.d_start,stop:Tone.d_stop,uniform:Tone.d_uniform}))language.Env.intern('shadertone.tone',name,f);
-    for(const [name,f] of Object.entries(Object.fromEntries(['configure','pattern','session','perform','cue','commit','scene','launch','layer','visual','variation','gesture','pattern-stop','undo','redo','snapshot','recall','cancel','pause','resume','panic'].map(n=>[n,Live['d_'+n.replaceAll('-','_')]]))))language.Env.intern('av',name,f);
+    for(const name of Bridge.d_overtone_names)language.Env.intern('overtone.live',name,language.Env['fetch!']('pelagic.overtone',name));
+    for(const [ns,bindings] of Bridge.d_live_bindings.entries())
+      for(const [name,value] of bindings.entries())language.Env.intern(ns,name,value);
     readyVM=language;return language;
   }
   const revisionID=()=>model.get(R.kw('revision'));

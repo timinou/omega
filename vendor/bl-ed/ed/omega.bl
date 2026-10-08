@@ -19,6 +19,7 @@
 
 (ns ed.omega
   (:require [ed.text :as t]
+            [ed.hash :as hash]
             [ed.core :as c]
             [ed.org :as org]
             [ed.docs :as docs]
@@ -71,7 +72,7 @@
       (let [ref (reference-at (t/line (:text ed) (inc (:from nxt))))]
         (when ref (assoc ref :row (inc (:from nxt)) :span nxt))))))
 
-(defn digest [s] (str (mod (hash (trim (str s))) 4294967296)))
+(defn digest [s] (str (mod (hash/string-hash (trim (str s))) 4294967296)))
 
 (defn- write-reference
   "`ed` with `#+RESULTS: <bid>` / `: <ref>` written after block b (in place
@@ -93,7 +94,7 @@
         id (header-id l)]
     (if (some? id)
       [ed id]
-      (let [nid (str "task-" (mod (hash (str (:from b) (block-body ed b))) 100000))
+      (let [nid (str "task-" (mod (hash/string-hash (str (:from b) (block-body ed b))) 100000))
             ed2 (c/apply-edits ed [[[(:from b) (count l)] [(:from b) (count l)] (str " :id " nid)]]
                                (fn [_ end] (c/primary ed)) nil)]
         [ed2 nid]))))

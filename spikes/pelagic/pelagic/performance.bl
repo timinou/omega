@@ -20,7 +20,7 @@
   (let [x (mod (+ (* (+ index 1) 16807) (* (+ seed 1) 48271)) 2147483647)
         y (mod (* x 48271) 2147483647)]
     (< (/ y 2147483647.0) density)))
-(defn bounded [xs n] (vec (take-last n xs)))
+(defn bounded [xs n] (vec (drop (max 0 (- (count xs) n)) xs)))
 (defn edit [state request]
   (let [kind (keyword (:kind request))]
     (cond

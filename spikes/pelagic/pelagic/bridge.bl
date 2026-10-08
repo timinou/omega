@@ -1,0 +1,14 @@
+; Pure declaration of the public live-code vocabulary; no generated JS names.
+(ns pelagic.bridge (:require [pelagic.live :as live] [pelagic.shadertone :as tone]))
+(def overtone-names
+  ["sin-osc" "saw" "pulse" "lf-tri" "white-noise" "pink-noise" "mix" "lpf" "hpf"
+   "rlpf" "pan2" "env-gen" "perc" "adsr" "line" "x-line" "FREE" "midi->hz" "note"
+   "scale" "chord" "beat-ms" "metronome" "definst" "defsynth" "at" "ctl" "kill" "stop" "out" "play"])
+(def live-bindings
+  {"shadertone.tone" {"start" tone/start "stop" tone/stop "uniform" tone/uniform}
+   "av" {"configure" live/configure "pattern" live/pattern "session" live/session
+         "perform" live/perform "cue" live/cue "commit" live/commit "scene" live/scene
+         "launch" live/launch "layer" live/layer "visual" live/visual "variation" live/variation
+         "gesture" live/gesture "pattern-stop" live/pattern-stop "undo" live/undo "redo" live/redo
+         "snapshot" live/snapshot "recall" live/recall "cancel" live/cancel "pause" live/pause
+         "resume" live/resume "panic" live/panic}})

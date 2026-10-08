@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import * as R from '../../../vendor/bl-ed/web/out/rt.mjs';
+import {imp} from './paths.mjs';
+const R=await imp('rt');
 import {errorText} from '../host/errors.mjs';
 test('structured reader diagnostics retain their useful message and location',()=>{
  const diagnostic=R.hashMap(R.kw('msg'),'collection never closed',R.kw('line'),3,R.kw('kind'),R.kw('unterminated-collection'));

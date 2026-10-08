@@ -184,3 +184,10 @@ no clipping. The opening stays quiet and the pulse opens the dynamic range.
 The completed MP4 has H.264 video at 960×540 / 24 fps and stereo AAC audio;
 the full file decodes without errors. [Media metadata](proof/club/media.json),
 [render provenance](proof/club/film.json), and [decode check](proof/club/decode.log).
+
+## Optional local compilation
+
+Run `spikes/pelagic/build.sh --local` to invoke PELAGIC's `env.bl` bundle task.
+It packages this same editor/package with the browser compiler and local document
+storage, for static hosting and offline reload. See [local compilation](local.bl.md)
+for setup, native BL browser interop and the static-browser proof.

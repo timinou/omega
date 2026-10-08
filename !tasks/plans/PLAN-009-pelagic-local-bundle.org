@@ -1,0 +1,45 @@
+#+TITLE: Optional local PELAGIC compilation
+#+DATE: 2026-10-08
+#+STATUS: complete
+
+* Scope
+Build a self-contained static PELAGIC + real bl-ed application. The compiler,
+reader, editor, package, shaders and patch ship together; no Omega world or
+BEAM server at runtime. Keep Omega's normal compiler pin/build untouched.
+Use a PELAGIC env.bl task, not a new task language or generic package builder.
+
+* Implementation
+- Separate compiler pin 26073421, one JS compilation and isolated output.
+- Annotated pelagic.browser owns conversions and browser utility IO; pure
+  pelagic.bridge owns live namespace bindings. Retain native DSP/GL engines.
+- Generic optional document services in the real editor host; local IndexedDB
+  documents with atomic revision checks, recovery and revision history.
+- Bundle boots the SAME bl-package through ed/pkg and frame layouts.
+- Offline asset cache; no remote dependencies; optional static HTTP hosting.
+
+* Proof
+Package and vendored-editor drive tests, unchanged presentation equivalence,
+static browser drive with /api requests prohibited, live BL evaluation, sound,
+save/reload recovery and exact unuse screenshots. No port 8790 writes.
+
+* Current evidence
+- Final installed-launcher build with pin 26073421 passed: 41 JS modules,
+  2,562,016 static bytes, 581,805-byte ZIP; ZIP integrity checked.
+- Corrected compiler self-build: all 363 sources, zero failures.
+- Final PELAGIC contracts/native boundary: 27/27 passed.
+- Final vendored-editor tests against local output: 73/73 passed.
+- Legacy PELAGIC contracts: 26 passed, local-only boundary skipped.
+- Existing vendored-editor tests: 73/73 passed.
+- Unchanged presentation checker: 23 variants, no mismatches.
+- Final static browser drive: 11/11 passed, zero API requests/errors;
+  audio/live evaluation, local revisions/save failure/reload, offline reload,
+  exact package unuse and real-editor screenshots recorded in proof/local.
+- First installed-launcher build exposed a compiler collision with a normal
+  BEAM function named set!. Upstream fix 26073421 restricts JS assignment
+  interception to the JS target/annotated namespace and adds a regression.
+  Pinned history is on upstream branch pelagic-local-interop; the tested fix
+  is also committed to upstream main as 407a87d7.
+- Focused upstream native-interop regression: 21/21 checks passed.
+- Older-pin scratch build passed: portable UTF-16 hashes, reverse search,
+  package layout/ownership and live bindings.
+- Proof and reproduction commands: spikes/pelagic/local.bl.md.

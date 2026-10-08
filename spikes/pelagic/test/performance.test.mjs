@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import * as R from '../../../vendor/bl-ed/web/out/rt.mjs';
-import * as P from '../../../vendor/bl-ed/web/out/pelagic.performance.mjs';
+import {imp} from './paths.mjs';
+const [R,P]=await Promise.all(['rt','pelagic.performance'].map(imp));
 import {plain} from '../host/audio.mjs';
 const bl=x=>Array.isArray(x)?R.vecFromArray(x.map(bl)):x&&typeof x==='object'?R.hashMap(...Object.entries(x).flatMap(([k,v])=>[R.kw(k),bl(v)])):x;
 const stage=(m,...edits)=>P.d_stage(m,bl(edits));

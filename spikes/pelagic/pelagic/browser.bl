@@ -1,0 +1,23 @@
+; The browser boundary is explicit and stays outside the pure editor/package.
+(ns ^:js pelagic.browser)
+(defn to-js [value] (bl->js value))
+(defn to-bl [value] (js->bl value :keywordize-keys true))
+(defn set-text [node value]
+  (let [text (js/String value)]
+    (when-not (= (.-textContent node) text) (set! (.-textContent node) text))))
+(defn download [data filename media-type]
+  (let [anchor (.createElement js/document "a")
+        blob (js/Blob. #js [data] #js {:type media-type})
+        url (.createObjectURL js/URL blob)]
+    (set! (.-href anchor) url)
+    (set! (.-download anchor) filename)
+    (.click anchor)
+    (js/setTimeout (fn [] (.revokeObjectURL js/URL url)) 1000)))
+(defn audio-context []
+  (js/AudioContext. #js {:latencyHint "interactive"}))
+(defn read-text [url]
+  (.then (js/fetch url)
+    (fn [response]
+      (if (.-ok response)
+        (.text response)
+        (throw (js/Error. (str "Cannot load " url)))))))

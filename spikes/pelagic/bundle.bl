@@ -1,0 +1,67 @@
+; Run with the PELAGIC env.bl: `bl bundle`. One VM, one compiler, one runtime.
+(ns pelagic.build-local (:require [bl.js :as js]))
+(def here (Path/expand (BeamLisp/cwd)))
+(def root (Path/expand (str here "/../..")))
+(def dist (str here "/dist"))
+(def output (str dist "/local"))
+(def stage (str dist "/.local-" (System/unique_integer (list :positive))))
+(defn copy! [from to]
+  (File/mkdir_p! (Path/dirname to))
+  (File/cp! from to))
+(defn copy-files! [from to suffixes]
+  (doseq [name (File/ls! from)]
+    (when (some (fn [suffix] (ends-with? name suffix)) suffixes)
+      (copy! (str from "/" name) (str to "/" name)))))
+(when (and (File/exists? output) (not (File/regular? (str output "/.pelagic-local"))))
+  (throw (ex-info "Refusing to replace an unmarked local output directory" {:path output})))
+(File/mkdir_p! stage)
+(try
+  (println "PELAGIC: compiling editor, language and package together")
+  (let [result (js/build! "pelagic.bundle"
+                 {:paths (list (str root "/vendor/bl-ed") here)
+                  :stub "lower" :with "reader" :host "run,eval-ed,eval-cells"
+                  :out (str stage "/out")})]
+    ; Compatibility entrypoints let the same real editor and package host work
+    ; with the new compiler's ns/ layout, without copying a second runtime.
+    (doseq [module (:modules result)]
+      (let [alias (str stage "/out/" module ".mjs")]
+        (when-not (File/exists? alias)
+          (File/write! alias (str "export * from './ns/" module ".mjs';\n")))))
+    (File/write! (str stage "/build.json")
+      (str "{\"name\":\"pelagic-local\",\"compiler\":\"26073421\",\"modules\":" (count (:modules result)) "}\n")))
+  (copy-files! (str root "/vendor/bl-ed/web") stage [".mjs" ".css"])
+  (File/write! (str stage "/index.html")
+    (replace-str (File/read! (str root "/vendor/bl-ed/web/index.html"))
+             "./host.mjs" "./local/boot.mjs"))
+  (copy! (str root "/vendor/bl-ed/web/welcome.bl.org") (str stage "/welcome.bl.org"))
+  (copy-files! (str here "/local") (str stage "/local") [".mjs"])
+  (copy-files! (str here "/host") (str stage "/pkg/pelagic") [".mjs" ".css"])
+  (copy-files! (str here "/shaders") (str stage "/pkg/pelagic") [".glsl"])
+  (copy! (str here "/pelagic/overtone.bl") (str stage "/pkg/pelagic/overtone.bl"))
+  (doseq [name ["live-set.bl.org" "demo.bl.org"]]
+    (copy! (str here "/" name) (str stage "/" name)))
+  (let [boot (Path/dirname (BeamLisp.Loader/source_path "core"))]
+    (doseq [name ["core.bl" "sugar.bl"]]
+      (copy! (str boot "/" name) (str stage "/out/src/priv/boot/" name))))
+  (File/write! (str stage "/pkg/pelagic.mjs")
+    "export {d_bl_package as package} from '../out/pelagic.main.mjs';\nexport {createHost} from './pelagic/host.mjs';\n")
+  (File/write! (str stage "/pkg/pelagic/values.mjs")
+    (str "// Browser IO and conversions are compiled annotated Beam Lisp.\n"
+         "import * as B from '../../out/pelagic.browser.mjs';\n"
+         "import {requireNamespace} from '../../out/interop.mjs';\n"
+         "const browser=requireNamespace('pelagic.browser');\n"
+         "export const plain=browser['to-js'],download=browser.download,setText=browser['set-text'],audioContext=browser['audio-context'],readText=browser['read-text'];\n"
+         "export function conversions(){return B.d_to_bl;}\n"))
+  (File/write! (str stage "/.pelagic-local") "PELAGIC optional local bundle\n")
+  ; Asset manifest and worker are generated from exactly this compilation.
+  (let [script (str here "/local/cache-build.mjs")
+        result (System/cmd "node" (list script stage))]
+    (when-not (= 0 (erlang/element 2 result))
+      (throw (ex-info (erlang/element 1 result) {}))))
+  (when (File/exists? output) (File/rm_rf! output))
+  (File/rename! stage output)
+  (let [archive (System/cmd "python3" (list "-m" "zipfile" "-c" (str dist "/pelagic-local.zip") output))]
+    (when-not (= 0 (erlang/element 2 archive))
+      (throw (ex-info (erlang/element 1 archive) {}))))
+  (println (str "PELAGIC: " output " (static files; no BEAM runtime server)"))
+  (finally (when (File/exists? stage) (File/rm_rf! stage))))

@@ -267,7 +267,7 @@
    would clobber someone else's is refused; after a refusal (:stale) the next
    C-s sends the newer rev on purpose — an explicit overwrite."
   [ed]
-  (if (true? (get-in ed [:doc :read-only?]))
+  (if (= true (get-in ed [:doc :read-only?]))
     (c/message ed (str (:path ed) " is a read-only view"))
     (-> ed
         (c/effect {:kind :save :path (:path ed) :text (t/to-string (:text ed)) :rev (:rev ed)
@@ -369,7 +369,7 @@
           [pr pc] p
           rows (if (pos? dir)
                  (concat (range pr n) (range 0 (inc pr)))
-                 (concat (range pr -1 -1) (range (dec n) (dec pr) -1)))]
+                 (concat (reverse (range 0 (inc pr))) (reverse (range pr n))))]
       (some (fn [[k r]]
               (let [cols (matches-in-line (t/line tx r) needle)
                     wrapped? (or (and (pos? dir) (< r pr)) (and (neg? dir) (> r pr)) (and (= r pr) (> k 0)))

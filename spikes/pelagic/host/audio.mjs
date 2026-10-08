@@ -1,14 +1,7 @@
 import {audioFeatures} from './features.mjs';
 // Web Audio interpreter for pure BL UGen graphs. No score/pattern logic here.
-export function plain(x) {
-  if (x?.constructor?.name === "Flt") return x.v;
-  if (x?.entries && x.constructor?.name === 'HMap') {
-    return Object.fromEntries([...x.entries()].map(([k,v]) => [k.fq ?? String(k), plain(v)]));
-  }
-  if (x?.toArray) return x.toArray().map(plain);
-  if (x?.fq) return x.fq;
-  return x;
-}
+import {plain} from './values.mjs';
+export {plain} from './values.mjs';
 export function random(seed = 1) {
   let n = seed >>> 0;
   return () => { n ^= n << 13; n ^= n >>> 17; n ^= n << 5; return (n >>> 0) / 4294967296; };

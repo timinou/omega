@@ -199,6 +199,8 @@ export function presentationCommand(value) {
 }
 
 async function main() {
+// Optional embedding service: read/save documents locally without HTTP APIs.
+const documents = globalThis.BL_DOCUMENTS || null;
 let M, F;                                   // ed.main / ed.frame, imported in parallel with the first fetches
 
 const K = R.kw;
@@ -364,8 +366,8 @@ function setLoading(pane, path) {
   refreshChrome();
 }
 async function fetchDoc(path, signal) {
-  const r = await fetch("/api/doc?path=" + encodeURIComponent(path), { signal });
-  const j = await r.json();
+  const j = documents ? await documents.read(path, signal)
+    : await (await fetch("/api/doc?path=" + encodeURIComponent(path), { signal })).json();
   if (j.ok) j.packageEvents = await Promise.all(documentPackages(j.text, { loaded: fr ? new Set([...(get(ed$(), "packages") || [])].map(p => get(p, "name"))) : new Set(), suppressed: documentSuppressed }).map(async name => ({ name, event: await loadPackage(name) })));
   return j;
 }
@@ -407,7 +409,7 @@ window.addEventListener("pagehide", () => {
   for (const e of effects) {
     if (get(e, "kind") !== K("intent")) continue;
     const body = { intent: get(e, "intent"), args: { ...toJS(get(e, "args")), client: clientId, "client-seq": ++clientSequence } };
-    navigator.sendBeacon("/api/intent", new Blob([JSON.stringify(body)], { type: "application/json" }));
+    if (!documents) navigator.sendBeacon("/api/intent", new Blob([JSON.stringify(body)], { type: "application/json" }));
   }
 });
 window.addEventListener("pageshow", event => {
@@ -418,6 +420,7 @@ window.addEventListener("pageshow", event => {
 const assetUploads = new Map();
 const assetPreviews = new Map();
 async function storeAsset(url, data) {
+  if (documents) throw new Error("Local image storage is unavailable in this embedding");
   const task = (async () => {
     const r = await postJSON("/api/assets", { name: url.split("/").pop(), data });
     const j = await r.json();
@@ -443,13 +446,14 @@ async function perform(eff) {
     loadDoc(get(e, "path"), true, get(e, "goto"), pane);
   } else if (kind === "intent") {
     try {
+      if (documents) throw new Error("World intents are unavailable in this embedding");
       const r = await postJSON("/api/intent", { intent: get(e, "intent"), args: { ...toJS(get(e, "args")), client: clientId, "client-seq": ++clientSequence } });
       const j = await r.json();
       dispatchP(ev(K("type"), K("intent-result"), K("ok?"), j.ok === true, K("message"), j.message || null,
                   K("data"), toBL(j), K("then"), get(e, "then"), K("block"), get(e, "block"), K("path"), get(e, "path")));
       watchCards(true);
     } catch (err) {
-      dispatchP(ev(K("type"), K("intent-result"), K("ok?"), false, K("message"), "no omega world — run bin/bl-ed"));
+      dispatchP(ev(K("type"), K("intent-result"), K("ok?"), false, K("message"), documents ? err.message : "no omega world — run bin/bl-ed"));
     }
   } else if (kind === "save") {
     const body = { path: get(e, "path"), text: get(e, "text"), base: get(e, "base"), client: clientId, "client-seq": ++clientSequence };
@@ -460,14 +464,18 @@ async function perform(eff) {
         dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), false, K("message"), "Image not saved — paste it again to retry"));
         return;
       }
-      const r = await postJSON("/api/save", body);
-      const j = await r.json();
-      dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), r.ok && j.ok === true, K("message"), j.message || "",
+      const r = documents ? null : await postJSON("/api/save", body);
+      const j = documents ? await documents.save(body) : await r.json();
+      dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), (documents || r.ok) && j.ok === true, K("message"), j.message || "",
                   K("conflict?"), j.conflict === true, K("doc-rev"), j.rev || null, K("text"), j.text ?? null, K("submitted-text"), body.text));
     } catch (err) {
-      // no server (opened as a static page): fall back to a download
-      download(body.path.split("/").pop(), body.text);
-      dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), true, K("message"), "downloaded"));
+      if (documents) {
+        dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), false, K("message"), "Local save failed: " + err.message + "; draft retained."));
+      } else {
+        // no server (opened as a static page): fall back to a download
+        download(body.path.split("/").pop(), body.text);
+        dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), true, K("message"), "downloaded"));
+      }
     }
   } else if (kind === "await-language") {
     const token = get(e, "token");
@@ -478,6 +486,12 @@ async function perform(eff) {
         : ev(K("type"), K("language-failed"), K("token"), token, K("message"), r.message)),
     });
   } else if (kind === "eval-cell") {
+    if (documents) {
+      try { const vm = await lang.start(); if (!vm) throw new Error("Language unavailable");
+        dispatchP(ev(K("type"), K("eval-result"), K("id"), get(e,"id"), K("text"), R.printStr(vm.evalString(get(e,"text")))));
+      } catch (err) { dispatchP(ev(K("type"), K("eval-result"), K("id"), get(e,"id"), K("text"), err.message || String(err))); }
+      return;
+    }
     try {
       const r = await fetch("/api/eval", { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ path: get(e, "path"), id: get(e, "id"), text: get(e, "text") }) });
@@ -488,6 +502,7 @@ async function perform(eff) {
       dispatchP(ev(K("type"), K("eval-result"), K("id"), get(e, "id"), K("text"), "no evaluation server — run `bl run apps/bl-ed/serve.bl`"));
     }
   } else if (kind === "place") {
+    if (documents) { dispatchP(ev(K("type"), K("placements"), K("cells"), R.EMPTY_MAP)); return; }
     // where each cell may run (system.place on the BEAM): local cells then
     // evaluate in the page; no server → no placements, every cell goes there
     try {
@@ -528,6 +543,7 @@ async function perform(eff) {
 
 const watchers = new Map();       // key → {path, since, alive}
 function watch(key, path, since, onChange) {
+  if (documents) return;
   const cur = watchers.get(key);
   if (cur && cur.path === path) return;
   if (cur) cur.alive = false;
@@ -570,6 +586,7 @@ function watchDocs() {
 
 let cardIds = "";
 async function loadCards(path) {
+  if (documents) return;
   const r = await fetch("/api/doc?path=" + encodeURIComponent(path));
   const j = await r.json();
   if (j.ok) for (const pane of F.d_editor_ids(fr)) dispatch(ev(K("type"), K("cards"), K("data"), toBL(j.data || []), K("pane"), pane));
@@ -1251,7 +1268,7 @@ const withTimeout = (p, ms, what) => {
 };
 
 async function loadInitial() {
-  const path = new URLSearchParams(location.search).get("file");
+  const path = new URLSearchParams(location.search).get("file") || documents?.initialPath;
   let notice = null;
   if (path) {
     const controller = new AbortController();
@@ -1283,8 +1300,8 @@ echo.textContent = "Loading editor…";
 panesEl.setAttribute("aria-busy", "true");
 sink.focus();                               // keys typed during boot are queued, not lost
 const params = new URLSearchParams(location.search);
-const wantLayout = params.get("layout");
-const uses = (params.get("use") || "").split(",").filter(Boolean);
+const wantLayout = params.get("layout") || documents?.layout;
+const uses = (params.get("use") || documents?.packages?.join(",") || "").split(",").filter(Boolean);
 const [mods, init, useEvents] = await Promise.all([
   Promise.all([import("./out/ed.main.mjs"), import("./out/ed.frame.mjs"), document.fonts?.ready]),
   loadInitial(),

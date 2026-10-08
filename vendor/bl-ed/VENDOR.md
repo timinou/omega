@@ -265,3 +265,24 @@ model supplies `:package`, rather than requiring every package to register the
 same `:host` view name. This keeps independent package views composable. The
 procurement evidence pane uses this generic host boundary; its PDF DOM/resource
 lifecycle lives entirely in the procurement package.
+
+## Optional local document embedding (PELAGIC local compilation, 2026-10-08)
+
+`web/host.mjs` accepts an optional `globalThis.BL_DOCUMENTS` service with
+`read(path, signal)` and `save({path,text,base})`, plus optional `initialPath`,
+`packages` and `layout` defaults. The ordinary HTTP-backed host remains the default.
+Local embeddings skip server revision polling, place cells locally and evaluate
+cells through the same page language. Unsupported world intents and image storage
+report errors without HTTP requests. Local save failures retain the draft.
+The service is generic; PELAGIC's IndexedDB implementation stays under
+`spikes/pelagic/local`. The optional compilation uses the real editor and package
+host, with compatibility entrypoints over the new compiler's `out/ns` modules.
+
+The local compilation also exposed optional-prelude dependencies. `ed.commands`
+and `ed.docs` use explicit equality to test true. `ed.hash` provides the existing
+browser FNV-1a string digest as portable BL; `ed.omega` uses it instead of an
+implicit `hash` whose BEAM/old-JS implementations differed. UTF-16 units and
+signed 32-bit results preserve existing browser document IDs. PELAGIC's bounded
+history and pitch parsing likewise use explicit finite-vector and digit logic.
+Reverse search uses ascending ranges plus `reverse`, which both pinned JS
+compilers support, preserving its wraparound behavior.

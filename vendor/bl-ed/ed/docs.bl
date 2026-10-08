@@ -22,7 +22,7 @@
   (let [p (str path) i (index-of p ":")]
     (and (some? i) (> i 0) (nil? (index-of (subs p 0 i) "/")) (nil? (index-of (subs p 0 i) ".")))))
 
-(defn read-only? [ed] (true? (get-in ed [:doc :read-only?])))
+(defn read-only? [ed] (= true (get-in ed [:doc :read-only?])))
 
 (defn index-objects
   "{row obj} for a document's objects."
@@ -146,7 +146,7 @@
   "Apply a :doc event."
   [ed ev new-editor]
   (let [same? (= (:path ev) (:path ed))
-        meta {:rev (:rev ev) :read-only? (true? (:read-only? ev)) :title (:title ev) :data (:data ev)}]
+        meta {:rev (:rev ev) :read-only? (= true (:read-only? ev)) :title (:title ev) :data (:data ev)}]
     (cond
       ; a refresh of the shown document: read-only views follow the world;
       ; a writable one follows only when the human has nothing unsaved

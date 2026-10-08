@@ -1,0 +1,17 @@
+; Check changed portable sources with Omega's normal pinned compiler, in scratch.
+; From Omega's root: bin/bl run spikes/pelagic/test/legacy-build.bl
+(ns pelagic.legacy-build-proof (:require [bl.js :as js]))
+(let [root (File/cwd!)
+      scratch (str (System/tmp_dir!) "/pelagic-legacy-" (System/unique_integer (list :positive)))
+      src (str scratch "/src") out (str scratch "/out")]
+  (File/mkdir_p! src)
+  (try
+    (File/write! (str src "/legacy.bl")
+      "(ns legacy (:require [ed.frame] [pelagic.main] [pelagic.bridge]))\n")
+    (js/build! "legacy" {:paths (list src (str root "/vendor/bl-ed") (str root "/spikes/pelagic"))
+                         :host "run,eval-ed,eval-cells" :out out})
+    (let [r (System/cmd "node" (list "spikes/pelagic/test/legacy-static.mjs" out))]
+      (when-not (= 0 (erlang/element 2 r))
+        (throw (ex-info (erlang/element 1 r) {})))
+      (println (erlang/element 1 r)))
+    (finally (File/rm_rf! scratch))))
