@@ -13,7 +13,7 @@ const manager=new Sessions(process.env.BROWSER_STATE_ROOT || root + '.private');
 await manager.init();
 const upstream='http://127.0.0.1:8796';
 const procurement=new Procurement(root,upstream);
-procurement.sessions=async()=>Array.from(manager.sessions.values(),s=>({id:s.id,status:s.status,mode:s.mode,control:s.control,task:s.task,auth:s.auth,profile:s.profile,frameAt:s.frameAt,url:s.url}));
+procurement.sessions=async()=>Array.from(manager.sessions.values(),s=>({id:s.id,status:s.status,mode:s.mode,control:s.control,task:s.task,auth:s.auth,profile:s.profile,frameAt:s.frameAt||s.artifacts?.findLast(a=>a.kind==='screenshot')?.at,url:s.url}));
 await recover(procurement);
 const json=(res,status,body)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(body));};
 async function body(req) {
