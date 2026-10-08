@@ -1,0 +1,226 @@
+#+TITLE: Omega — session outcomes, blind spots and closure
+#+DATE: 2026-10-08
+#+STARTUP: overview
+#+TODO: ITEM REVIEW | DONE
+
+* Scope and interpretation
+Audit cutoff: 2026-10-08T19:00:52.185678+00:00; boot: 2026-10-04T15:13:42+00:00.
+Includes top-level Spell conversations worked on or resumed this uptime, including
+recently closed ones, and Codex conversations with actual recorded activity this
+uptime, including archived sessions. Eleven Spell records have only resumed/touched
+metadata this uptime; their substantive conclusions predate it. Those are labelled
+individually. Nested agent transcripts and old test-session archival alone are not
+new independent project work. Existing historical session recommendations are
+reconciled against later conversations and current checked-in evidence where stated.
+
+A = close as-is: delivered scope/evidence or a superseded/empty thread; an existing
+follow-up may still be open. B = close after capture: conclusions and pending work
+are now recorded here, so the conversation need not remain open. Neither means all
+product work is finished. C = keep active: current work or this audit still needs
+a checkpoint. No session was archived, no window closed, no service stopped, no
+implementation changed and no pre-existing task state was changed by this audit.
+Current Niri window liveness is unknown: its CLI fails with GLIBC_2.44 missing.
+
+This is an ownership/handoff map, not fresh end-to-end release verification.
+Conversation claims are labelled as such; repository receipts can supersede them.
+Keep private corpora, credentials and invoice bodies out of this document.
+
+* Consolidation policy — packages remain in place
+Spikes and packages are the intended Omega development model. Consolidation means
+shared contracts, discoverable entrypoints, compatible composition and clear proof
+boundaries. It does NOT mean moving code out of spikes/, graduating packages into
+another tree or requiring a monolithic production application before closure.
+Contract: [[file:/home/user/code/undefine/omega/research/domain/interface/packages.bl.md][Package contract]];
+[[file:/home/user/code/undefine/omega/research/domain/interface/frames.bl.md][Layouts and panes]];
+[[file:/home/user/code/undefine/omega/research/domain/synthesis/how-it-fits.bl.md][Architecture synthesis]].
+
+| Package/area | Implemented evidence | Remaining boundary |
+| Workbench/places | [[file:/home/user/code/undefine/omega/spikes/workspace/workbench.bl.md][Six-slice workbench guide]] | Scripted model is the documented demonstration; a real adapter is a separate slice |
+| Browser/procurement | [[file:/home/user/code/undefine/omega/spikes/browser/browser.bl.md][Browser lifecycle]], [[file:/home/user/code/undefine/omega/spikes/browser/procurement.bl.md][Live research limits]] | Remote provider proposed; candidate retention, auth/resource ownership and generic concurrent execution need proof |
+| DWIM | [[file:/home/user/code/undefine/omega/spikes/dwim/dwim.bl.md][Use/unuse and navigation proof]] | Owned files still dirty/untracked; wrapped-line and broader search/peek vision deferred |
+| PELAGIC | [[file:/home/user/code/undefine/omega/spikes/pelagic/performance.bl.md][Performed set and evidence]] | Timing targets missed; corrected final-source soak, physical device coverage remain |
+| Clipboard/images | Commit1de1c14 and43-test conversation receipt | Scope delivered; compose via ordinary packages |
+| Reader/macros/performance | [[file:/home/user/code/undefine/omega/!tasks/plans/PLAN-007-implement-smooth-loading-and-scrolling-w.org][PLAN-007]], [[file:/home/user/code/undefine/omega/!tasks/follow-ups/FUP-013-reduce-cold-long-transcript-reads-and-sc.org][FUP-013]] | Cold long reads and precise projection invalidation remain |
+
+** ITEM Package composition acceptance, without relocation
+Record package dependencies, required generic editor seams, command/key precedence,
+owned editor state, host effects and load/unload lifecycle in the existing package
+documents. Prove use/unuse/reuse in multiple panes, draft/selection preservation,
+default-presentation equivalence and interaction between workbench, browser, DWIM
+and images. Distinguish unusing presentation from terminating owned browser/task
+resources; the existing browser guide explicitly requires resource closure.
+Acceptance is composable behavior and evidence, not a new directory structure.
+
+** ITEM Record sandbox/checkpoint choices rather than preserve a waiting terminal
+[[file:/home/user/code/undefine/omega/!tasks/plans/PLAN-003-omega-in-bl-ed-design-to-clarity-task-ce.org][PLAN-003]], [[file:/home/user/code/undefine/omega/!tasks/features/FEAT-005-w1b-omega-vcs-history-protocol-jj-and-na.org][FEAT-005]], [[file:/home/user/code/undefine/omega/!tasks/follow-ups/FUP-009-live-image-time-travel-for-beam-lisp-pro.org][FUP-009]] retain
+VM ownership, checkpoint/reload policy, filesystem/network floor, state restore,
+pin authority and effects lineage. Select the unanswered CP/SB/IN questions from
+the synthesis; do not turn a recommendation into an already-approved choice.
+
+** ITEM Research view and candidate lifecycle
+Separate raw lead/candidate from verified opportunity and decision. Decide whether
+discovery automatically retains incomplete candidates. Preserve company/opportunity/
+requirement/task selection across intention-based views and source-to-judgment links.
+The assisted live procurement run and source coverage limitations are not unattended
+reliability or tender-eligibility proof. No new candidate schema is declared shipped.
+
+** ITEM Browser-target interop and mobile experience
+JS↔BL namespace declarations are proposed; installNamespace/dispose exists as a
+first step. Preserve dirty upstream JS/repl/interop/test files before deleting any
+worktree. One declaration should govern static compilation, live evaluation and
+JS callers, including arity, exact values, callback ownership and async completion.
+Phone layout reuses existing commands/layouts and preserves drafts/selection.
+Pairing, authentication, reconnect/acknowledgment and notifications are independent
+capabilities; a responsive screenshot is not remote execution proof.
+
+** ITEM Checkpoint DWIM and retain PELAGIC reliability gaps
+At audit, DWIM, its task/proof files and several shared editor files are untracked
+or modified. Delivered prose is not a semantic commit; preserve owned changes
+without sweeping another package's edits. [[file:/home/user/code/undefine/omega/!tasks/plans/PLAN-008-pelagic-playable-av-instrument.org][PLAN-008]] stays open:
+frame p95 measured50ms against40ms and onset34.6ms against15ms. Reproduce a corrected
+soak on the final source. Media are ignored local artifacts with reproduction
+scripts; closing a conversation must not imply they are committed Git blobs.
+
+** Existing follow-ups remain the owners
+[[file:/home/user/code/undefine/omega/!tasks/follow-ups/FUP-001-cut-over-to-upstream-loom-desktop-once-l.org][FUP-001]], [[file:/home/user/code/undefine/omega/!tasks/follow-ups/FUP-011-bl-ed-ux-slice-follow-ups-reload-flag-ov.org][FUP-011]], [[file:/home/user/code/undefine/omega/!tasks/follow-ups/FUP-013-reduce-cold-long-transcript-reads-and-sc.org][FUP-013]] own pin/
+reload adoption, timeline/navigation/effects polish and read performance. Recheck
+old missing-command claims against current workbench; js-actors is already merged.
+The Codex permission investigation belongs to the Operations map, not Omega code.
+
+* Session closure ledger
+** A — my friend. please. can you imagine how easy it could be to copy an image and then paste it into an omega buffer and it shows up nicely? how would
+:PROPERTIES:
+:SESSION_ID: 01a1179a-cdec-7760-9c67-721f84f76d15
+:HARNESS: codex
+:SCOPE: uptime_activity
+:CLOSURE_BATCH: A
+:CUSTOM_ID: session-01a1179a-cdec-7760-9c67-721f84f76d15
+:END:
+Source: [[file:/home/user/.codex/archived_sessions/rollout-2026-10-07T18-23-03-01a1179a-cdec-7760-9c67-721f84f76d15.jsonl][Conversation transcript]]
+Conclusion: Clipboard image package/assets/folding committed1de1c14; isolated build43 tests passed.
+Pending / boundary: No additional work needed to preserve this conversation.
+Already archived in Codex at snapshot; pending product work remains as stated.
+
+** A — look at the tool and maybe even start your own instance and use `npx agent-browser` to drive it. find out about the design of the Agent Command C
+:PROPERTIES:
+:SESSION_ID: 01a11787-23c3-75c3-82e6-6b310953104b
+:HARNESS: codex
+:SCOPE: uptime_activity
+:CLOSURE_BATCH: A
+:CUSTOM_ID: session-01a11787-23c3-75c3-82e6-6b310953104b
+:END:
+Source: [[file:/home/user/.codex/sessions/2026/10/07/rollout-2026-10-07T18-01-35-01a11787-23c3-75c3-82e6-6b310953104b.jsonl][Conversation transcript]]
+Conclusion: Workbench six slices committed with guide, screenshots and drive proofs; scripted-adapter limitation already explicit.
+Pending / boundary: A real provider/mobile access can be a new package slice; do not require moving or graduating the existing package before closing its delivered scope.
+
+** B — look up kernel.sh and understand i would like to be able to see when tasks open a headless browser, and i would like some .bl.org syntax, similar
+:PROPERTIES:
+:SESSION_ID: 01a1179b-a08f-77c1-9ce0-e5b8d3bc422e
+:HARNESS: codex
+:SCOPE: uptime_activity
+:CLOSURE_BATCH: B
+:CUSTOM_ID: session-01a1179b-a08f-77c1-9ce0-e5b8d3bc422e
+:END:
+Source: [[file:/home/user/.codex/sessions/2026/10/07/rollout-2026-10-07T18-23-57-01a1179b-a08f-77c1-9ce0-e5b8d3bc422e.jsonl][Conversation transcript]]
+Conclusion: Browser/procurement package exists; candidate retention and intention-based views remain a decision.
+Pending / boundary: Keep incomplete discovery in candidate inbox separate from qualified decisions; design shared object/view continuity. Remote provider is proposed; headful switch restarts browser; retained auth and explicit resource teardown need composition acceptance.
+
+** B — Okay, so this is a prototype exploration, and I want you to deeply, deeply, deeply research and do the full prototype implemented on its own as a
+:PROPERTIES:
+:SESSION_ID: 01a118a3-1f73-7d80-bf51-ee1e26a50c8a
+:HARNESS: codex
+:SCOPE: uptime_activity
+:CLOSURE_BATCH: B
+:CUSTOM_ID: session-01a118a3-1f73-7d80-bf51-ee1e26a50c8a
+:END:
+Source: [[file:/home/user/.codex/sessions/2026/10/07/rollout-2026-10-07T23-11-46-01a118a3-1f73-7d80-bf51-ee1e26a50c8a.jsonl][Conversation transcript]]
+Conclusion: Pelagic playable20-minute package delivered; measured timing limits still fail.
+Pending / boundary: PLAN-008: corrected final-source soak, frame p9550ms versus40ms and onset34.6ms versus15ms remain open. Physical MIDI/mobile endurance are unproved; keep ignored media reproducible. No code relocation is needed.
+
+** B — Could the bl-Ed pelagic run fully on the javascript target?
+:PROPERTIES:
+:SESSION_ID: 01a11cd1-ad80-7141-99c7-f9718d1f7da5
+:HARNESS: codex
+:SCOPE: uptime_activity
+:CLOSURE_BATCH: B
+:CUSTOM_ID: session-01a11cd1-ad80-7141-99c7-f9718d1f7da5
+:END:
+Source: [[file:/home/user/.codex/sessions/2026/10/08/rollout-2026-10-08T18-41-05-01a11cd1-ad80-7141-99c7-f9718d1f7da5.jsonl][Conversation transcript]]
+Conclusion: Browser-target/JS↔BL interop design proposes explicit namespace contracts; only installNamespace/dispose step exists.
+Pending / boundary: Preserve uncommitted upstream JS/repl/interop/tests. Design declarations shared by compiler/evaluator/JS callers, arities/exact value conversion, callback lifetime and async completion. runtime.provide/require syntax is proposed, not a shipped API.
+
+** B — Yo, I have one question. So basically, I would like you to look at the different options there are that people use to control their coding harnes
+:PROPERTIES:
+:SESSION_ID: 01a11cda-5789-74f3-b734-9615d6497ef8
+:HARNESS: codex
+:SCOPE: uptime_activity
+:CLOSURE_BATCH: B
+:CUSTOM_ID: session-01a11cda-5789-74f3-b734-9615d6497ef8
+:END:
+Source: [[file:/home/user/.codex/sessions/2026/10/08/rollout-2026-10-08T18-50-33-01a11cda-5789-74f3-b734-9615d6497ef8.jsonl][Conversation transcript]]
+Conclusion: Mobile places/workbench experience is a design proposal, not remote implementation.
+Pending / boundary: Add composable phone layout with preserved drafts/selection, exact plan/changes navigation and connection/ack state. Pairing/auth/reconnect/push and real adapter are separate verified slices; reuse commands rather than fork UI behavior.
+
+** B — Building Beam-Lisp AI Coding Harness
+:PROPERTIES:
+:SESSION_ID: 15950b96c19ed4f1
+:HARNESS: spell
+:SCOPE: uptime_metadata_only
+:CLOSURE_BATCH: B
+:CUSTOM_ID: session-15950b96c19ed4f1
+:END:
+Source: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-01T10-18-31-559Z_15950b96c19ed4f1.jsonl][Conversation transcript]]
+Conclusion: Earlier Omega harness/task persistence delivered; loom-desktop pin integration and temp pressure were open.
+Pending / boundary: Reconcile FUP-001 against current pinned editor before reopening merge work. Preserve task/world persistence and resource ownership; host temp pressure belongs to Operations, not package relocation.
+Existing owners: [[file:/home/user/code/undefine/omega/!tasks/follow-ups/FUP-001-cut-over-to-upstream-loom-desktop-once-l.org][FUP-001]].
+
+** B — Omega Config System Design for BL-ed
+:PROPERTIES:
+:SESSION_ID: 159824fd6c1be22c
+:HARNESS: spell
+:SCOPE: prior_open_roster
+:CLOSURE_BATCH: B
+:CUSTOM_ID: session-159824fd6c1be22c
+:END:
+Source: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-03T20-04-56-880Z_159824fd6c1be22c.jsonl][Conversation transcript]]
+Conclusion: Architecture synthesis and sandbox/checkpoint questions await decisions.
+Pending / boundary: PLAN-003/FEAT-005/FUP-009: record selected checkpoint/reload/VM/jail policy, preserve rejected alternatives, then bounded slices. Implementations already in later packages supersede stale gap claims; kernel floor and per-task effects remain distinct.
+Existing owners: [[file:/home/user/code/undefine/omega/!tasks/features/FEAT-005-w1b-omega-vcs-history-protocol-jj-and-na.org][FEAT-005]], [[file:/home/user/code/undefine/omega/!tasks/follow-ups/FUP-009-live-image-time-travel-for-beam-lisp-pro.org][FUP-009]], [[file:/home/user/code/undefine/omega/!tasks/plans/PLAN-003-omega-in-bl-ed-design-to-clarity-task-ce.org][PLAN-003]].
+
+** B — Omega Config System Design for BL-ed
+:PROPERTIES:
+:SESSION_ID: 15992c6b7bd3ff06
+:HARNESS: spell
+:SCOPE: uptime_activity
+:CLOSURE_BATCH: B
+:CUSTOM_ID: session-15992c6b7bd3ff06
+:END:
+Source: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T15-15-53-455Z_15992c6b7bd3ff06.jsonl][Conversation transcript]]
+Conclusion: Task timeline how-to delivered; small navigation and effect visibility gaps identified.
+Pending / boundary: FUP-011: turn timestamps, open-by-id, footprint confirmation and effects provenance. Recheck current workbench before implementing old missing-command claims; js-actors integration is already complete.
+Existing owners: [[file:/home/user/code/undefine/omega/!tasks/bugs/BUG-004-beam-lisp-upstream-reader-end-offset-sho.org][BUG-004]], [[file:/home/user/code/undefine/omega/!tasks/features/FEAT-013-ux-slice-s1-bl-doc-spans-task-block-id-a.org][FEAT-013]], [[file:/home/user/code/undefine/omega/!tasks/features/FEAT-014-ux-slice-s2-omega-bridge-open-say-answer.org][FEAT-014]], [[file:/home/user/code/undefine/omega/!tasks/features/FEAT-018-provider-taskid-a-task-as-a-livebook-re.org][FEAT-018]], [[file:/home/user/code/undefine/omega/!tasks/follow-ups/FUP-011-bl-ed-ux-slice-follow-ups-reload-flag-ov.org][FUP-011]], [[file:/home/user/code/undefine/omega/!tasks/plans/PLAN-003-omega-in-bl-ed-design-to-clarity-task-ce.org][PLAN-003]].
+
+** B — DWIM Navigation Through Folded Outlines
+:PROPERTIES:
+:SESSION_ID: 159a49419f9fc1db
+:HARNESS: spell
+:SCOPE: uptime_activity
+:CLOSURE_BATCH: B
+:CUSTOM_ID: session-159a49419f9fc1db
+:END:
+Source: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-05T12-00-21-630Z_159a49419f9fc1db.jsonl][Conversation transcript]]
+Conclusion: DWIM removable package delivered and documented, but source/proof/task files remain untracked/dirty at audit.
+Pending / boundary: Checkpoint the owned DWIM/package/editor support with its use/unuse proof; wrapped-line movement and selection/search/peek vision stay deferred in place. Do not stage another session’s editor changes.
+
+** A — Interface Reader Macros for Tasks
+:PROPERTIES:
+:SESSION_ID: 159967db0c6fdff3
+:HARNESS: spell
+:SCOPE: uptime_activity
+:CLOSURE_BATCH: A
+:CUSTOM_ID: session-159967db0c6fdff3
+:END:
+Source: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-04T19-35-34-193Z_159967db0c6fdff3.jsonl][Conversation transcript]]
+Conclusion: Smooth-loading macro package committed3344112; FUP-013 already owns cold long-transcript budget.
+Pending / boundary: Backend changes require owner restart to be adopted; historical source proof does not identify a current live server.
+Existing owners: [[file:/home/user/code/undefine/omega/!tasks/follow-ups/FUP-013-reduce-cold-long-transcript-reads-and-sc.org][FUP-013]].
