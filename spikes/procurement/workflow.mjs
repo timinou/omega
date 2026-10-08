@@ -38,7 +38,7 @@ export class Workflow {
   if(!['met','unknown','not-met'].includes(a.verdict)||!String(a.fact||'').trim())throw Error('A review needs a verdict and reason');
   if(a.verdict==='met'&&!a.file)throw Error('A met verdict needs retained company evidence');
   if(a.file)await this.evidence(a.desk,a.file);
-  const before=structuredClone(r);Object.assign(r,{verdict:a.verdict,fact:a.fact,profileEvidence:a.file||r.profileEvidence||null,reviewedAt:at,reviewer:'local-user'});
+  const before=structuredClone(r);Object.assign(r,{verdict:a.verdict,fact:a.fact,profileEvidence:a.file||r.profileEvidence||null,reviewedAt:at,reviewer:'local-operator'});
   s.history.push({type:'requirement/reviewed',at,id:o.id,index:a.index,beforeRequirement:before,afterRequirement:structuredClone(r)});
   o.updated=at;
  } else throw Error('Unknown workflow action');
@@ -50,6 +50,7 @@ export class Workflow {
  const base=path.basename(r.document,'.txt').toLowerCase();let pdf=null;
  const walk=async(dir)=>{for(const f of await fs.readdir(dir,{withFileTypes:true}).catch(()=>[])){const file=path.join(dir,f.name);if(f.isDirectory())await walk(file);else if(f.isFile()&&path.extname(file).toLowerCase()==='.pdf'&&path.basename(file,'.pdf').toLowerCase()===base)pdf=file;}};await walk(path.join(this.p.dir(s.id),'dce'));
  const src=pdf&&n?`/procurement/artifact/${s.id}/${path.relative(this.p.dir(s.id),pdf).split(path.sep).map(encodeURIComponent).join('/')}#page=${n}`:null;
- return {text:[`#+TITLE: Requirement ${Number(index)+1} · ${o.title}`,'',`VERDICT: ${r.verdict.toUpperCase()}`,`Reviewed: ${r.reviewedAt||'Not confirmed by a person'}`,'','* Requirement',r.requirement,'','* Company evidence',r.fact,r.profileEvidence||'No retained company evidence attached.','','* Citation',`${r.document} · ${r.page}`,'','* Retained page excerpt',excerpt||'Exact PDF page could not be resolved. Open the full source; no excerpt was guessed.'].join('\n'),data:{desk:s.id,opportunity:id,requirement:Number(index),source:src,sourceLabel:`${path.basename(r.document)} · ${r.page}`,excerpt:excerpt||'No exact page excerpt available.'}};
+ const offset=excerpt&&/qlik/i.test(r.requirement)?Math.max(0,excerpt.toLowerCase().indexOf('qlik')-400):0;const preview=excerpt?excerpt.slice(offset,offset+1600):null;
+ return {text:[`#+TITLE: Requirement ${Number(index)+1} · ${o.title}`,'',`VERDICT: ${r.verdict.toUpperCase()}`,`Reviewed: ${r.reviewedAt||'Not confirmed by a person'}`,'','* Requirement',r.requirement,'','* Company evidence',r.fact,r.profileEvidence||'No retained company evidence attached.','','* Citation',`${r.document} · ${r.page}`,'','* Retained page excerpt',preview||'Exact PDF page could not be resolved. Open the full source; no excerpt was guessed.'].join('\n'),data:{desk:s.id,opportunity:id,requirement:Number(index),source:src,sourceLabel:`${path.basename(r.document)} · ${r.page}`,excerpt:excerpt||'No exact page excerpt available.'}};
  }
 }

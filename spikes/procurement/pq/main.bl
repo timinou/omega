@@ -30,13 +30,16 @@
   :label (get-in ed [:doc :data :sourceLabel]) :excerpt (get-in ed [:doc :data :excerpt])})
 
 (defn adopt [ed]
+ (if (and (starts-with? (str (:path ed)) "procurement:")
+          (or (ends-with? (str (:path ed)) "/queue") (ends-with? (str (:path ed)) "/activity") (some? (index-of (str (:path ed)) "/requirements/"))))
+  ed
  (if-let [id (desk-id ed)]
   (let [old (get-in ed [:pkg-state "procurement" :desk]) was-review (get-in ed [:pkg-state "procurement" :review?])
         ed (assoc-in (assoc-in ed [:pkg-state "procurement" :desk] id) [:pkg-state "procurement" :review?] (some? (get-in ed [:doc :data :requirement])))]
    (cond
     (some? (get-in ed [:doc :data :requirement])) (assoc ed :frame/layout (review-layout id (opportunity-id ed)))
     (or was-review (header ed "#+PROCUREMENT_DESK:") (and old (not= old id))) (assoc ed :frame/layout (layout id))
-    :else ed)) ed))
+    :else ed)) ed)))
 (defn intent [ed verb args]
  (c/effect ed {:kind :intent :intent (str "procurement/" verb) :args args :then :visit-path}))
 (defn run [ed operation]
@@ -113,7 +116,9 @@
      [(p/line-mark r [(button (subs line (+ 2 (index-of line "][")) (- (count line) 2)) :procurement/follow)] (str (:key o) r))]
      (wrapped (:ed ctx) r (str (:key o) r) line :prose))))) (range (:from o) (:to o)))))
 (defn queue-card [o ctx]
- (p/head-card (:key o) "focus" (wrapped (:ed ctx) (:from o) (:key o) (t/line (:text (:ed ctx)) (:from o)) :strong)))
+ (p/head-card (:key o) "focus"
+  (mapcat (fn [r] (wrapped (:ed ctx) r (str (:key o) r) (t/line (:text (:ed ctx)) r) (if (= r (:from o)) :strong :prose)))
+   (range (:from o) (:to o)))))
 (defn doc-actions [o ctx next]
  (let [ed (:ed ctx) virtual? (narrow-provider? ed)]
   (p/stack (concat
@@ -133,7 +138,7 @@
 (defn render [ed]
  (when (or (header ed "#+PROCUREMENT_DESK:") (starts-with? (str (:path ed)) "procurement:"))
   (p/render (assoc om/default-presentation :fill? false :readtable (into [decision-entry br/browser-entry] (:readtable om/default-presentation))
-   :table (assoc (:table om/default-presentation) :procurement/decision decision-card :omega/browser-block br/present-browser :procurement/opportunity queue-card :procurement/requirement queue-card :procurement/work queue-card :omega/task prose :prose prose)
+   :table (assoc (:table om/default-presentation) :procurement/decision decision-card :omega/browser-block br/present-browser :procurement/opportunity queue-card :procurement/requirement queue-card :procurement/work prose :omega/task prose :prose prose)
    :around [{:type :doc :fn doc-actions}]) ed)))
 (defn open [ed]
  (if-let [id (opportunity-id ed)] (docs/visit ed (str "desks/" (desk-id ed) "/opportunity-" id ".bl.org")) ed))

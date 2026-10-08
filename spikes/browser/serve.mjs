@@ -13,7 +13,7 @@ const manager=new Sessions(process.env.BROWSER_STATE_ROOT || root + '.private');
 await manager.init();
 const upstream='http://127.0.0.1:8796';
 const procurement=new Procurement(root,upstream);
-procurement.sessions=async()=>Array.from(manager.sessions.values(),s=>({id:s.id,status:s.status,mode:s.mode,control:s.control,task:s.task,auth:s.auth,profile:s.profile,frameAt:s.frameAt}));
+procurement.sessions=async()=>Array.from(manager.sessions.values(),s=>({id:s.id,status:s.status,mode:s.mode,control:s.control,task:s.task,auth:s.auth,profile:s.profile,frameAt:s.frameAt,url:s.url}));
 await recover(procurement);
 const json=(res,status,body)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(body));};
 async function body(req) {
@@ -86,7 +86,7 @@ const server=http.createServer(async(req,res)=>{
     if(u.pathname==='/browser/tool' && req.method==='POST') {
       const b=await body(req);
       if(!validId(b.task))throw Error('Invalid task ID');browserTask=b.task;
-      await procurement.budget(b.task,b.action);
+      await procurement.budget(b.task,b.action,b.args?.[0]);
       const verbs=new Set(['open','snapshot','links','eval','click','fill','get','scroll','download']);
       if(!verbs.has(b.action) || !Array.isArray(b.args) || !b.args.every(x=>typeof x==='string'))throw Error('Invalid browser operation');
       if(b.action==='download'){
@@ -109,6 +109,7 @@ const server=http.createServer(async(req,res)=>{
         if(['click','fill','scroll'].includes(b.action))await manager.capture(s);
         manager.event(s,'model/browser-operation',{action:b.action});return result;
       });
+      if(['open','click'].includes(b.action)){const snapshot=result?.snapshot||await fs.readFile(path.join(s.dir,s.artifacts.findLast(a=>a.kind==='snapshot').name),'utf8');const evidence=await procurement.retainSource(b.task,s.id,s.url,snapshot);if(b.action==='open')result.evidence=evidence;}
       await procurement.browserEvent(b.task,s.id);
       return json(res,200,{ok:true,result});
     }

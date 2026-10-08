@@ -35,3 +35,10 @@ test('evidence layout keeps a namespaced source view and unload restores a singl
  fr=F.d_handle(fr,key(':'));for(const ch of '(ed/unuse "procurement")')fr=F.d_handle(fr,ev(K('type'),K('text'),K('text'),ch));fr=F.d_handle(fr,key('Enter'));
  assert.equal(get(get(fr,'layout'),'name'),'single');assert.equal(F.d_editor_ids(fr).cnt,1);
 });
+
+test('sidebar arrivals cannot replace the evidence layout inherited from its focused editor',()=>{
+ const data=ev(K('desk'),'second',K('opportunity'),'notice',K('requirement'),0);
+ const ed=use(M.d_boot('Review','procurement:second/review/notice/0').assoc(K('doc'),ev(K('data'),data)));
+ const sidebar=ed.assoc(K('path'),'procurement:second/requirements/notice').assoc(K('doc'),ev(K('data'),ev(K('desk'),'second')));
+ assert.equal(P.d_adopt(sidebar),sidebar);
+});
