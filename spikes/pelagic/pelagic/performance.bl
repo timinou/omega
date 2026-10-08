@@ -1,0 +1,70 @@
+; Musical policy is pure data. Browser resources/timestamps never enter history.
+(ns pelagic.performance (:require [pelagic.score :as score]))
+(def scene-names ["bathymetry" "current" "cathedral" "afterglow"])
+(def gestures
+  {"build" {:filter 0.7 :space 0.5 :echo 0.38 :kick true :bass true :hat true :snare false}
+   "break" {:filter 0.65 :space 0.62 :echo 0.45 :kick false :bass false :hat false :snare false}
+   "drop" {:filter 1.25 :space 0.28 :echo 0.22 :kick true :bass true :hat true :snare true}
+   "release" {:filter 0.5 :space 0.65 :echo 0.4 :kick false :bass false :hat false :snare false}})
+(defn initial []
+  {:serial 0 :revision 0 :current {:config score/defaults :patterns {} :scenes {}
+    :visual {:scene "current" :overlay nil :mix 0.25 :transition "dissolve" :beats 4
+             :intensity 1 :symmetry 6 :feedback 0.08 :palette 0}
+    :variation {:seed 37 :density 1 :transpose 0}}
+   :past [] :future [] :pending nil :snapshots {}})
+(defn boundary [beat quantum horizon]
+  (* quantum (inc (quot (+ beat horizon) quantum))))
+(defn score-index [index]
+  (if (< index 1024) index (+ 256 (mod (- index 1024) 512))))
+(defn chance [index seed density]
+  (let [x (mod (+ (* (+ index 1) 16807) (* (+ seed 1) 48271)) 2147483647)
+        y (mod (* x 48271) 2147483647)]
+    (< (/ y 2147483647.0) density)))
+(defn bounded [xs n] (vec (take-last n xs)))
+(defn edit [state request]
+  (let [kind (keyword (:kind request))]
+    (cond
+      (= kind :session) (reduce edit state (:edits request))
+      (= kind :commit) (reduce edit state (:edits request))
+      (= kind :configure) (update state :config merge (:values request))
+      (= kind :pattern) (assoc-in state [:patterns (keyword (:stem request))] request)
+      (= kind :pattern-stop) (update state :patterns dissoc (keyword (:stem request)))
+      (= kind :variation) (update state :variation merge (:values request))
+      (= kind :scene) (assoc-in state [:scenes (keyword (:name request))] (:value request))
+      (= kind :launch) (update state :visual merge (:options request) {:scene (:name request)})
+      (= kind :layer) (update state :visual merge {:overlay (:name request) :mix (:mix request)})
+      (= kind :visual) (update state :visual merge (:values request))
+      (= kind :shader) (assoc-in state [:visual :shader] (:source request))
+      (= kind :uniform) (assoc-in state [:visual :uniforms (keyword (:name request))] (:value request))
+      (= kind :gesture) (let [g (get gestures (:name request))]
+        (if g (-> state (update :config merge g)
+                     (assoc-in [:visual :intensity] (if (= "drop" (:name request)) 1.35 0.8)))
+          (throw "Unknown performance gesture")))
+      :else (throw (str "Not a reversible edit: " kind)))))
+(defn stage [model edits]
+  (let [id (inc (:serial model))
+        base (if (:pending model) (get-in model [:pending :state]) (:current model))
+        state (reduce edit base edits)]
+    (assoc model :serial id :pending {:id id :state state :history "normal"})))
+(defn activate [model id]
+  (let [p (:pending model)]
+    (if (= id (:id p))
+      (-> model (assoc :revision id :current (:state p) :pending nil)
+          (assoc :past (if (= "normal" (:history p)) (bounded (conj (:past model) (:current model)) 32) (:past p)))
+          (assoc :future (if (= "normal" (:history p)) [] (:future p)))) model)))
+(defn cancel [model] (assoc model :pending nil))
+(defn history [model direction]
+  (let [undo? (= direction "undo") source (if undo? (:past model) (:future model))
+        id (inc (:serial model))]
+    (if (empty? source) (throw (str "Nothing to " direction))
+      (assoc model :serial id :pending {:id id :state (last source) :history direction
+        :past (if undo? (vec (butlast source)) (bounded (conj (:past model) (:current model)) 32))
+        :future (if undo? (bounded (conj (:future model) (:current model)) 32) (vec (butlast source)))}))))
+(defn snapshot [model nm]
+  (if (or (contains? (:snapshots model) (keyword nm)) (< (count (:snapshots model)) 16))
+    (assoc-in model [:snapshots (keyword nm)] (:current model))
+    (throw "Snapshot limit is 16; overwrite or remove a named snapshot")))
+(defn recall [model nm]
+  (if-let [state (get-in model [:snapshots (keyword nm)])]
+    (let [id (inc (:serial model))] (assoc model :serial id :pending {:id id :state state :history "normal"}))
+    (throw (str "Missing snapshot: " nm))))

@@ -4,6 +4,7 @@ here=$(cd "$(dirname "$0")" && pwd -P)
 root=$(cd "$here/../.." && pwd -P)
 out="$root/vendor/bl-ed/web/out"
 "$root/bin/bl" js build pelagic.main -p "$root/vendor/bl-ed" -p "$here" --host run,eval-ed,eval-cells --out "$out"
+"$root/bin/bl" js build pelagic.performance -p "$here" --host run,eval-ed,eval-cells --out "$out"
 "$root/bin/bl" js build pelagic.live -p "$here" --host run,eval-ed,eval-cells --out "$out"
 "$root/bin/bl" js build pelagic.shadertone -p "$here" --host run,eval-ed,eval-cells --out "$out"
 pkg="$root/vendor/bl-ed/web/pkg"

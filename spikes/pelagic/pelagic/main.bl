@@ -30,6 +30,7 @@
       (let [new (assoc-in ed [:pkg-state "pelagic" k] v)] (send new :configure (state new))) ed)))
 (defn intercept [ed ev]
   (cond
+    (= :pelagic/request (:type ev)) (send ed :request (:request ev))
     (= :pelagic/control (:type ev)) (settings ed ev)
     (= :pelagic/sample (:type ev)) (send ed :sample ev)
     (= :pelagic/deck (:type ev)) (send ed :deck ev)
@@ -47,11 +48,13 @@
 (def bl-package
   {:name "pelagic" :doc "Overtone-shaped live sound, Shadertone shaders and a two-deck narrative performance."
    :commands {:pelagic/play {:doc "Play the four-movement score" :run play}
+              :pelagic/perform {:doc "Start continuous performance" :run (fn [ed] (send ed :perform (state ed)))}
+              :pelagic/panic {:doc "Stop voices and cancel pending edits" :run (fn [ed] (send ed :request {:kind "panic"}))}
               :pelagic/stop {:doc "Stop all voices" :run stop}
               :pelagic/eval {:doc "Evaluate live Beam Lisp / GLSL blocks" :run evaluate}
               :pelagic/stage {:doc "Show live source and stage" :run (fn [ed] (assoc ed :frame/layout stage))}
               :pelagic/cinema {:doc "Enlarge the stage" :run (fn [ed] (assoc ed :frame/layout cinema))}}
-   :keys {:normal {"g p" :pelagic/play "g s" :pelagic/stop "g e" :pelagic/eval "g v" :pelagic/stage}}
+   :keys {:normal {"g p" :pelagic/play "g P" :pelagic/perform "g !" :pelagic/panic "g s" :pelagic/stop "g e" :pelagic/eval "g v" :pelagic/stage}}
    :intercept intercept :on-unuse leave
    :on-event (fn [_ ed ev] (if (= :session-leave (:type ev)) (leave ed) ed))
    :provides {:layouts {"pelagic" stage "pelagic-cinema" cinema}
