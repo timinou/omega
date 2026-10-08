@@ -30,3 +30,14 @@ test('session schema rejects unsupported versions, missing state and malformed a
  assert.throws(()=>validateSession({...value,state:{}}),/Incomplete/);
  assert.throws(()=>validateSession({...value,assets:[{deck:'a',hash:'bad',bpm:120}]}),/reference/);
 });
+
+test('a quota failure after a committed chunk retains a discoverable partial take',async()=>{
+ const rows=new Map(),store={put:async(s,k,v)=>{if(s==='chunks'&&k.endsWith(':1'))throw new Error('quota exceeded');rows.set(s+':'+k,v);},get:async(s,k)=>rows.get(s+':'+k)};
+ const take=new LiveTake(store,stream()).start();
+ take.recorder.emit(new Blob(['first']));take.recorder.emit(new Blob(['second']));
+ await assert.rejects(take.stop(),/quota/);
+ const id=rows.get('takes:latest'),info=rows.get('takes:'+id);
+ assert.equal(id,take.id);assert.equal(info.chunks,1);assert.equal(info.complete,false);
+ assert.equal(await (await take.blob({allowPartial:true})).text(),'first');
+ assert.equal(take.pendingBytes,0);
+});

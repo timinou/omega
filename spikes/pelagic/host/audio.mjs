@@ -252,7 +252,7 @@ export class AudioEngine {
   kill(id){const v=this.voices.get(id);if(v){v.level.gain.setTargetAtTime(0,this.ctx.currentTime,.005);for(const s of v.sources){try{s.stop(this.ctx.currentTime+.03);}catch{}}}}
   stop(){for(const id of this.voices.keys())this.kill(id);}
   dispose(){if(this.disposed)return;this.disposed=true;if(this.probe){this.probe.port.onmessage=null;this.probe.disconnect();this.probe.port.close();}this.stop();for(const v of this.voices.values()){for(const s of v.sources)s.onended=null;v.owned.forEach(n=>n.disconnect());}
-    for(const b of this.buses.values()){b.gain.disconnect();b.analyser.disconnect();}this.buses.clear();this.intents=[];for(const d of Object.values(this.decks))Object.values(d).forEach(n=>n.disconnect());
+    for(const b of this.buses.values()){b.gain.disconnect();b.analyser.disconnect();}this.buses.clear();this.intents=[];this.noise.clear();this.tapBuffers.clear();this.reverb.buffer=null;for(const d of Object.values(this.decks))Object.values(d).forEach(n=>n.disconnect());
     for(const n of [this.mix,this.dry,this.delay,this.feedback,this.echo,this.delayFilter,this.reverb,this.wet,this.compressor,this.output,this.analyser])n.disconnect();this.voices.clear();}
 }
 export function wav(buffer) {

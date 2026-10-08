@@ -1,0 +1,33 @@
+#+TITLE: PELAGIC Performance 002
+
+* Play
+Use the PELAGIC package and its source/stage layout.
+Press PERFORM, then C-Enter. Edit the notes below and evaluate again.
+This patch needs no imported files. It installs the bright prism from the
+performed set over the original native rhythm and harmonic field.
+
+* Live patch
+#+begin_src beam-lisp
+(o/definst voice [freq 440 amp 0.043 dur 0.9]
+  (* amp (o/env-gen (o/perc 0.008 dur)) (o/mix [(o/sin-osc freq) (* 0.18 (o/sin-osc (* freq 2.01)))])))
+(def metro (o/metronome 122))
+(av/session
+  (av/configure {:master 0.78 :swing 0.12})
+  (av/pattern :melody 8
+    (o/play
+      (o/at (metro 0) (voice :freq (o/midi->hz 74)))
+      (o/at (metro 1.5) (voice :freq (o/midi->hz 81)))
+      (o/at (metro 2.75) (voice :freq (o/midi->hz 77)))
+      (o/at (metro 4) (voice :freq (o/midi->hz 84)))
+      (o/at (metro 5.5) (voice :freq (o/midi->hz 81)))
+      (o/at (metro 7) (voice :freq (o/midi->hz 76)))))
+  (av/scene :cathedral {:shader "// Original live-set variation: folded chromatic architecture.\nuniform float iBeat;\nuniform float iZoom;\nuniform float iIntensity;\nuniform float iSymmetry;\nuniform float iFeedback;\nuniform float iPalette;\n#define PI 3.14159265359\nfloat edge(float d,float w){return w/(abs(d)+w);}\nmat2 turn(float a){return mat2(cos(a),-sin(a),sin(a),cos(a));}\nvec3 ink(float p){return .55+.45*cos(6.28318*(vec3(.03,.28,.55)+p));}\nvoid mainImage(out vec4 c,in vec2 coord){\n vec2 uv=(coord-.5*iResolution.xy)/iResolution.y;\n float low=iAudioBass,hit=iAudioOnset,mid=iAudioMid,t=iGlobalTime;\n vec2 p=turn(t*.06+floor(iBeat/16.)*.16)*uv*(1.-iZoom-low*.12);\n float r=length(p),a=atan(p.y,p.x),n=max(3.,iSymmetry);\n float fold=abs(mod(a+PI/n,2.*PI/n)-PI/n);\n vec2 k=r*vec2(cos(fold),sin(fold));\n vec3 light=vec3(0.);\n for(int j=0;j<8;j++){\n  float f=float(j),z=fract(f/8.+t*.052),radius=.06+z*z*.88;\n  float d=k.x-radius-.05*sin(k.y*13.+t*.4+f);\n  vec3 col=ink(f*.105+t*.008+iPalette*.3);\n  light+=col*pow(edge(d,.0016+.003*hit),1.7)*(.3+z)*(.3+low*1.8);\n  light+=col*edge(k.y-k.x*(.22+.06*sin(t*.3+f)),.0012)*edge(r-radius,.025)*mid*1.3;\n }\n float spoke=edge(sin(a*n+sin(r*10.-t)*.18),.015)*smoothstep(.08,.3,r);\n light+=vec3(.05,.85,.9)*spoke*(.08+iAudioHigh*.45);\n light*=1.-smoothstep(.65,.95,r);\n light=1.-exp(-light*(iIntensity+.3)*2.2);\n light=mix(light,texture2D(iChannel1,coord/iResolution.xy).rgb,clamp(iFeedback,0.,.6));\n c=vec4(light,1.);\n}\n" :mappings {:zoom {:signal [:stem :bass :level] :amount 0.18}}}) (av/gesture :drop) (av/launch :cathedral {:transition :iris :beats 8}) (av/layer :afterglow 0.14) (av/visual {:intensity 1.65 :symmetry 8 :feedback 0.08}))
+#+end_src
+
+* Perform
+Use BUILD / BREAK / DROP / RELEASE and the four scene buttons.
+UNDO restores the complete preceding revision, including its patterns and scene.
+Save a home snapshot before exploring; recall it to return at a bar boundary.
+Import audio into either deck for a local-file DJ handoff.
+REC captures the actual live mix and stage into bounded local storage.
+g ! is panic. g s stops. :(ed/unuse "pelagic") returns the original editor.

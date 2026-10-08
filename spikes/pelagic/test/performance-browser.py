@@ -18,6 +18,7 @@ with sync_playwright() as p:
  def active(result):
   if result.get('revision'):page.wait_for_function(q+f'.stats().revision==={result["revision"]}',timeout=15000)
  page.get_by_role('button',name='▶ PERFORM',exact=True).click();page.wait_for_function(q+'.stats().mode==="performance"')
+ page.wait_for_function('document.querySelector(".view-host .view-body").shadowRoot.querySelector(".app").classList.contains("performing")');assert not page.get_by_role('combobox',name='Visual scene',exact=True).is_visible()
  done('continuous transport starts')
  page.locator('#input-sink').focus();page.keyboard.press('Control+Enter')
  page.wait_for_function(q+'.stats().patterns.includes("melody")',timeout=30000)
@@ -25,8 +26,13 @@ with sync_playwright() as p:
  result=evaluate('(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :iris :beats 4}) (av/configure {:space 0.6})]})')
  old=page.evaluate(q+'.stats().revision');assert old<result['revision'];active(result)
  assert page.evaluate(q+'.model().current.visual.scene')=='cathedral'
+ page.wait_for_function('document.querySelector(".view-host .view-body").shadowRoot.querySelector("[data-launch=cathedral]").classList.contains("active")')
  assert page.evaluate(q+'.config().space')==.6;done('audio and scene activate as one quantized revision')
+ bad=page.evaluate('(source)=>'+q+'.evaluate(source)','(av/configure {:space 0.1}');assert not bad['ok'] and bad['error']!='[object Object]'
+ done('invalid BL keeps the performance and reports a readable diagnostic')
  evaluate('(av/snapshot :home)');saved=page.evaluate(q+'.session()')
+ result=evaluate('(av/scene :cathedral {:shader \"void main(){gl_FragColor=vec4(0.0,0.2,0.3,1.0);}\"})');active(result)
+ done('editing the active scene definition prepares its transition')
  old=page.evaluate(q+'.stats().revision')
  bad=page.evaluate(q+'''.evaluate('(av/session (av/configure {:space 0.1}) (t/start "void main(){broken;}"))')''')
  assert not bad['ok'];assert page.evaluate(q+'.stats().revision')==old;assert page.evaluate(q+'.config().space')==.6
@@ -68,7 +74,7 @@ with sync_playwright() as p:
  assert page.evaluate(q+'.shader().disposed') is False;done('GPU loss pauses and restores the stage')
  page.evaluate('window.oldEngine='+q+'.engine();window.oldShader='+q+'.shader()')
  page.locator('#input-sink').focus();page.keyboard.press(':');page.keyboard.insert_text('(ed/unuse "pelagic")');page.keyboard.press('Enter')
- page.wait_for_function('window.oldEngine.ctx.state==="closed"');assert page.evaluate('window.oldEngine.disposed&&window.oldShader.disposed')
+ page.wait_for_function('window.oldEngine.ctx.state==="closed"');assert page.evaluate('window.oldEngine.disposed&&window.oldShader.disposed&&window.oldEngine.noise.size===0&&window.oldEngine.reverb.buffer===null')
  assert page.evaluate('window.blEd.R.printStr(window.blEd.state().get(window.blEd.K("text")))')==before
  page.screenshot(path=str(PROOF/'unused.jpg'),type='jpeg',quality=85);done('exact unuse and resource disposal')
  assert not errors,errors

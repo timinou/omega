@@ -1,3 +1,4 @@
+import {errorText} from './errors.mjs';
 export function performanceControls(shadow,api){
  const container=document.createElement('section');container.className='performance-controls';
  container.innerHTML=`<div class="performance-row"><button data-perform>▶ PERFORM</button><button data-action="pause">PAUSE</button><button data-action="resume">RESUME</button><button data-action="undo">UNDO</button><button data-action="redo">REDO</button><button data-action="cancel">CANCEL</button><button data-action="panic">PANIC</button><span class="revision" aria-live="polite">ACTIVE · REV 0</span></div>
@@ -6,7 +7,7 @@ export function performanceControls(shadow,api){
  <details><summary>SESSION / MAPPINGS / DIAGNOSTICS</summary><div class="performance-row"><input data-snapshot-name value="home" aria-label="Snapshot name"><button data-save-snapshot>SAVE SNAPSHOT</button><select data-snapshots aria-label="Saved snapshots"><option value="">RECALL…</option></select><button data-save-session>SAVE SESSION</button><label class="file-label">OPEN SESSION<input data-open-session type="file" accept=".json"></label><button data-command="pelagic/preview">PREVIEW CODE</button><button data-midi>MIDI LEARN</button><select data-midi-target aria-label="MIDI target"><option value="crossfade">CROSSFADE</option><option value="filter">FILTER</option><option value="space">SPACE</option><option value="echo">ECHO</option><option value="master">MASTER</option><option value="intensity">VISUAL INTENSITY</option><option value="feedback">FEEDBACK</option><option value="palette">PALETTE</option></select></div>
  <div class="performance-row"><label>DENSITY<input aria-label="Pattern density" data-variation="density" type="range" min="0" max="1" step=".05" value="1"></label><label>TRANSPOSE<input aria-label="Pattern transposition" data-variation="transpose" type="number" min="-24" max="24" value="0"></label><label>FEEDBACK<input aria-label="Visual feedback" data-visual="feedback" type="range" min="0" max=".7" step=".02" value=".08"></label><button data-save-take>RECOVER LAST TAKE</button></div><pre class="diagnostics"></pre></details>`;
  shadow.querySelector('.transport').after(container);
- const $=selector=>container.querySelector(selector),guard=fn=>Promise.resolve().then(fn).catch(e=>api.notice('Edit rejected · '+(e.message||e)));
+ const $=selector=>container.querySelector(selector),guard=fn=>Promise.resolve().then(fn).catch(e=>api.notice('Edit rejected · '+errorText(e)));
  const send=edit=>api.request({kind:'commit',quantize:$('[data-quantize]').value,edits:[edit]});
  let midi=null,learning=false;const bindings=new Map(),listeners=new Map();
  const receive=e=>{
@@ -44,11 +45,16 @@ export function performanceControls(shadow,api){
   else if(x.hasAttribute('data-open-session')&&x.files[0])await api.load(JSON.parse(await x.files[0].text()));
  }));
  return {update(model,stats){
-  $('.revision').textContent=stats.phase+' · REV '+model.revision+(stats.targetBeat!==undefined?' → BEAT '+stats.targetBeat:'');
+  const performing=model.mode==='performance';container.closest('.app').classList.toggle('performing',performing);
+ $('[data-perform]').classList.toggle('active',performing&&model.playing);$('[data-perform]').disabled=performing&&model.playing;
+ $('[data-action="pause"]').disabled=!model.playing;$('[data-action="resume"]').disabled=model.playing;
+ container.querySelectorAll('[data-launch]').forEach(button=>button.classList.toggle('active',performing&&button.dataset.launch===model.visual?.scene));
+ for(const role of ['visual','variation'])container.querySelectorAll('[data-'+role+']').forEach(input=>{const value=model[role]?.[input.dataset[role]];if(value!==undefined&&container.getRootNode().activeElement!==input)input.value=value;});
+ $('.revision').textContent=stats.phase+' · REV '+model.revision+(stats.targetBeat!==undefined?' → BEAT '+stats.targetBeat:'');
   $('[data-action="undo"]').disabled=!model.past.length;$('[data-action="redo"]').disabled=!model.future.length;
   const snapshots=Object.keys(model.snapshots);if($('[data-snapshots]').dataset.names!==snapshots.join(',')){
    $('[data-snapshots]').replaceChildren(new Option('RECALL…',''),...snapshots.map(n=>new Option(n,n)));$('[data-snapshots]').dataset.names=snapshots.join(',');
   }
   $('.diagnostics').textContent=JSON.stringify(stats,null,2);
- },dispose(){for(const [input,fn] of listeners)input.removeEventListener('midimessage',fn);if(midi)midi.onstatechange=null;listeners.clear();container.remove();},receive,bindings};
+ },dispose(){for(const [input,fn] of listeners)input.removeEventListener('midimessage',fn);if(midi)midi.onstatechange=null;listeners.clear();bindings.clear();container.remove();},receive,bindings};
 }

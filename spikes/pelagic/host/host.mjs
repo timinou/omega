@@ -2,6 +2,7 @@ import * as R from '../../out/rt.mjs';
 import * as Score from '../../out/pelagic.score.mjs';
 import * as Live from '../../out/pelagic.live.mjs';
 import * as Performance from '../../out/pelagic.performance.mjs';
+import {errorText} from './errors.mjs';
 import {LocalStore,LiveTake,validateSession} from './storage.mjs';
 import {performanceControls} from './controls.mjs';
 import {SceneStage} from './scenes.mjs';
@@ -14,6 +15,7 @@ const defaults=plain(Score.d_defaults),movements=plain(Score.d_movements);
 const toBL=x=>Array.isArray(x)?R.vecFromArray(x.map(toBL)):x&&typeof x==='object'?R.hashMap(...Object.entries(x).flatMap(([k,v])=>[R.kw(k),toBL(v)])):x;
 const moduleURL=name=>new URL(name,import.meta.url);
 function download(data,name,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([data],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function setText(node,value){const text=String(value);if(node.textContent!==text)node.textContent=text;}
 function blocks(source){const result=[];const re=/^#\+begin_src\s+(\S+)[^\n]*\n([\s\S]*?)^#\+end_src\s*$/gmi;let m;while((m=re.exec(source)))result.push({language:m[1].toLowerCase(),code:m[2]});
   if(!result.length && source.trim())result.push({language:'beam-lisp',code:source});return result;}
 export function createHost(api) {
@@ -45,7 +47,7 @@ export function createHost(api) {
     readyVM=language;return language;
   }
   const revisionID=()=>model.get(R.kw('revision'));
-  const controlModel=()=>({revision:revisionID(),past:{length:model.get(R.kw('past')).cnt},future:{length:model.get(R.kw('future')).cnt},
+  const controlModel=()=>({mode,playing,visual:active.visual,variation:active.variation,revision:revisionID(),past:{length:model.get(R.kw('past')).cnt},future:{length:model.get(R.kw('future')).cnt},
     snapshots:Object.fromEntries([...model.get(R.kw('snapshots')).entries()].map(([key])=>[key.fq??String(key),true]))});
   function current(){if(!ctx||!playing)return {time:pausedTime,beat:pausedBeat};
     const beat=beatOrigin+Math.max(0,ctx.currentTime-origin)*config.bpm/60;return {time:timeOrigin+Math.max(0,ctx.currentTime-origin),beat};}
@@ -159,7 +161,7 @@ export function createHost(api) {
     if(continuous){for(const v of views)v.shader?.setState?.(active,pausedBeat);}else for(const v of views){if(v.shader){v.shader.visual=null;v.shader.transition=null;v.shader.compile(shaderSource||v.shader.baseSource);}}
     for(const v of views)v.shader?.reset?.();
     for(const d of Object.values(decks))if(d.buffer){d.offset=d.cue;d.play(origin);}
-    clearInterval(timer);timer=setInterval(()=>{try{schedule();}catch(e){stop();notice(e?.message||String(e),false);}},25);schedule();log('play',{mode});notice(continuous?'Continuous performance · audio clock locked':'Audio clock locked · 64 bars / four movements');
+    clearInterval(timer);timer=setInterval(()=>{try{schedule();}catch(e){stop();notice(errorText(e),false);}},25);schedule();log('play',{mode});notice(continuous?'Continuous performance · audio clock locked':'Audio clock locked · 64 bars / four movements');
   }
   function stop(){const position=current();pausedTime=position.time;pausedBeat=position.beat;playing=false;clearInterval(timer);timer=null;audio?.stop();for(const d of Object.values(decks))d.stop();}
   function pause(){pausedBeat=current().beat;stop();cancelRevision();nextStep=Math.ceil(pausedBeat*4);log('pause');}
@@ -268,7 +270,7 @@ export function createHost(api) {
       log('evaluate',{edits:all.length,source:source.slice(0,12000)});
       notice(options.preview?'Preview valid · no changes applied':playing?'Live edit staged · next boundary':'Live definitions ready · press Play');
       return {...result,edits:all.length};
-    }catch(e){const error=e?.message||String(e);notice('Edit rejected · '+error);log('rejected',{error});return {ok:false,error};}
+    }catch(e){const error=errorText(e);notice('Edit rejected · '+error);log('rejected',{error});return {ok:false,error};}
     finally{
       language.Env.in_ns('user');
       for(const name of defined){language.Env.delete_key(new R.Tup([ns,name]));for(const role of ['link','meta','refer','import'])language.Env.delete_key(new R.Tup([R.kw(role),ns,name]));}
@@ -336,8 +338,8 @@ export function createHost(api) {
   }
   async function exportTake(){
     if(!lastTake){const id=await store.get('takes','latest');if(!id)throw new Error('No saved take yet');const info=await store.get('takes',id);
-      const chunks=[];for(let i=0;i<info.chunks;i++){const chunk=await store.get('chunks',id+':'+i);if(!chunk)throw new Error('Missing recording chunk');chunks.push(chunk);}download(new Blob(chunks,{type:info.mime}),'pelagic-live.webm',info.mime);return;}
-    download(await lastTake.blob(),'pelagic-live.webm',lastTake.mime);
+      const chunks=[];for(let i=0;i<Math.max(info.chunks+2,2);i++){const chunk=await store.get('chunks',id+':'+i);if(!chunk){if(i<info.chunks)throw new Error('Missing recording chunk');break;}chunks.push(chunk);}if(!chunks.length)throw new Error('No recording chunks stored yet');download(new Blob(chunks,{type:info.mime}),info.complete===false?'pelagic-live-partial.webm':'pelagic-live.webm',info.mime);return;}
+    download(await lastTake.blob({allowPartial:!!lastTake.error}),lastTake.error?'pelagic-live-partial.webm':'pelagic-live.webm',lastTake.mime);
   }
   async function stopRecording({save=true}={}){
     if(!recording)return lastTake?await lastTake.stop():null;
@@ -355,10 +357,12 @@ export function createHost(api) {
     const estimate=await navigator.storage?.estimate?.();alive();
     if(estimate?.quota&&estimate.quota-estimate.usage<32*1024*1024)throw new Error('Less than 32 MB recording storage available');
     const v=[...views][0];if(!v?.canvas)throw new Error('Open the stage to record');
+    if(typeof v.canvas.captureStream!=='function'||typeof MediaRecorder==='undefined')throw new Error('Live recording is unavailable in this browser');
+    if(v.shader.gl.isContextLost())throw new Error('Restore the stage before recording');
     const dest=ctx.createMediaStreamDestination();audio.output.connect(dest);
     const now=current();v.shader.draw({time:now.time,beat:now.beat,width:1280,height:720,analyser:audio?.analyser,signals:audio?.signals()||{}});
     const video=v.canvas.captureStream(30),stream=new MediaStream([...video.getVideoTracks(),...dest.stream.getAudioTracks()]);
-    recording=new LiveTake(store,stream);recording.capture={width:1280,height:720,requestedFPS:30,geometryScale:.75};recording.dest=dest;recording.start();log('record-start',{id:recording.id});notice('Recording live mix + stage · chunks saved incrementally');
+    try{const take=new LiveTake(store,stream);take.capture={width:1280,height:720,requestedFPS:30,geometryScale:.75};take.dest=dest;take.start();recording=take;}catch(error){audio.output.disconnect(dest);stream.getTracks().forEach(track=>track.stop());throw error;}log('record-start',{id:recording.id});notice('Recording live mix + stage · chunks saved incrementally');
     }finally{recordPreparing=false;}
   }
   function report(){const total=diagnostics.frameHistogram.reduce((a,b)=>a+b,0),q=f=>{let sum=0;for(let i=0;i<diagnostics.frameHistogram.length;i++){sum+=diagnostics.frameHistogram[i];if(sum>=total*f)return i;}return 0;};
@@ -395,9 +399,9 @@ export function createHost(api) {
       diagnostics.render.push(performance.now()-drawStarted);if(diagnostics.render.length>256)diagnostics.render.shift();
       if(avExpected!==null){diagnostics.av.push(Math.max(0,(ctx.currentTime-avExpected)*1000));if(diagnostics.av.length>4096)diagnostics.av.shift();avExpected=null;}
       if(announcement!==null){const id=announcement;announcement=null;setTimeout(()=>{if(!disposed){ack('ACTIVE');for(const view of views)view.status('Revision '+id+' active');}},0);}
-      const m=mode==='performance'?movements[Math.max(0,['bathymetry','current','cathedral','afterglow'].indexOf(active.visual.scene))]:movements[act];$('.caption h1').textContent=m.name;$('.caption p').textContent=m.subtitle;$('.caption .act').textContent=['I / THE DESCENT','II / THE PULSE','III / THE OPENING','IV / THE RETURN'][act];
-      $('[data-time]').textContent=String(Math.floor(time/60)).padStart(2,'0')+':'+String(Math.floor(time%60)).padStart(2,'0');$('[data-bar]').textContent=`BAR ${String(Math.floor(bar)+1).padStart(2,'0')} · ${config.bpm} BPM`;
-      shadow.querySelectorAll('[data-cue]').forEach(b=>b.classList.toggle('current',+b.dataset.cue===act));
+      const selected=mode==='performance'?['bathymetry','current','cathedral','afterglow'].indexOf(active.visual.scene):act,m=movements[Math.max(0,selected)];setText($('.caption h1'),selected<0?active.visual.scene.toUpperCase():m.name);setText($('.caption p'),selected<0?'a live scene':m.subtitle);setText($('.caption .act'),selected<0?'LIVE / CUSTOM SCENE':['I / THE DESCENT','II / THE PULSE','III / THE OPENING','IV / THE RETURN'][selected]);
+      setText($('[data-time]'),String(Math.floor(time/60)).padStart(2,'0')+':'+String(Math.floor(time%60)).padStart(2,'0'));setText($('[data-bar]'),`BAR ${String(Math.floor(bar)+1).padStart(2,'0')} · ${config.bpm} BPM`);
+      if(mode!=='performance')shadow.querySelectorAll('[data-cue]').forEach(b=>b.classList.toggle('current',+b.dataset.cue===act));
       for(const key of ['a','b'])$(`[data-meter="${key}"]`).style.width=Math.min(100,(v.shader?.volume||0)*400*config['deck-'+key])+'%';
     }
     function frame(){if(dead||disposed)return;if(!root.isConnected){raf=requestAnimationFrame(frame);return;}
@@ -406,10 +410,10 @@ export function createHost(api) {
       const now=current();if(ctx)applyRevision();if(config.freeze||v.frozen){freezeTime??=now.time;}else freezeTime=null;
       if(!contextLost&&((!config.freeze&&!v.frozen&&(playing||(audio?.voices.size||0)>0||Object.values(decks).some(d=>d.running))) || v.shader?.frames===0))renderAt(freezeTime??now.time,{beat:now.beat});
       raf=requestAnimationFrame(frame);
-      for(const key of ['a','b']){const button=$(`[data-deck-op="play"][data-deck-key="${key}"]`);button.classList.toggle('active',!!decks[key]?.running);button.textContent=decks[key]?.running?'Ⅱ':'▶';}
+      for(const key of ['a','b']){const button=$(`[data-deck-op="play"][data-deck-key="${key}"]`);button.classList.toggle('active',!!decks[key]?.running);setText(button,decks[key]?.running?'Ⅱ':'▶');}
       if(stamp-lastControls>500){controls.update(controlModel(),{phase:revision?(revision.armed?'ARMED':'QUEUED'):'ACTIVE',targetBeat:revision?.beat,mode,...report()});lastControls=stamp;}
       if(recording?.error)stopRecording({save:false}).catch(e=>notice('Recording stopped · '+e.message));
-      const rec=$('[data-record]');rec.classList.toggle('recording',!!recording);rec.textContent=recording?'■ SAVE REC':'● REC';
+      const rec=$('[data-record]');rec.classList.toggle('recording',!!recording);setText(rec,recording?'■ SAVE REC':'● REC');
     }
     shadow.addEventListener('click',e=>{
       e.stopPropagation();const b=e.target.closest('button');if(!b)return;
@@ -437,7 +441,7 @@ export function createHost(api) {
   }
   return {mount,async effect(e){alive();switch(e.op){case 'play':configure(e.args);play();break;case 'stop':stop();notice('All voices stopped',false);break;
     case 'perform':configure(e.args);play(0,true);break;
-    case 'request':try{request(e.args);}catch(error){notice('Edit rejected · '+error.message);}break;
+    case 'request':try{request(e.args);}catch(error){notice('Edit rejected · '+errorText(error));}break;
     case 'configure':configure(e.args);break;case 'cue':play(e.args.bar,mode==='performance');break;
     case 'evaluate':unlock();await evaluate(e.args.source,{preview:!!e.args.preview});break;
     case 'sample':{unlock();const {token,deck}=e.args,file=files.get(token);files.delete(token);if(!file)throw new Error('Audio file expired');const hash=await store.asset(file);alive();const result=await decks[deck].load(file);decks[deck].hash=hash;alive();log('asset',{deck,hash,name:file.name});notice(`Deck ${deck.toUpperCase()} · ${result.name} · set its source BPM, then play`);break;}

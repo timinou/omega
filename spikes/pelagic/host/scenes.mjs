@@ -21,6 +21,8 @@ export class SceneStage extends ShaderStage {
   compile(source){this.baseSource=source;const c=this.cached(source);this.activate(c,true);return true;}
   validateState(state){
     const visual=state.visual;
+    if(typeof visual.scene!=='string')throw new Error('Primary scene must have a name');
+    if(visual.shader)this.cached(visual.shader);
     for(const name of [visual.scene,visual.overlay].filter(Boolean)) {
       if(!NAMES.includes(name)&&!state.scenes[name])throw new Error('Unknown scene '+name);
       this.cached(state.scenes[name]?.shader||visual.shader||this.baseSource);
@@ -30,11 +32,12 @@ export class SceneStage extends ShaderStage {
   }
   prune(extra=[]){
     const protectedSources=new Set([this.baseSource,this.source]);
-    for(const state of [this.visual,this.transition?.from,...extra])if(state){protectedSources.add(state.visual.shader);for(const name of [state.visual.scene,state.visual.overlay])protectedSources.add(state.scenes[name]?.shader);}
+    for(const state of [this.visual,this.transition?.from,...extra])if(state)for(const name of [state.visual.scene,state.visual.overlay].filter(Boolean))protectedSources.add(state.scenes[name]?.shader||state.visual.shader||this.baseSource);
     for(const [source,c] of this.pool)if(this.pool.size>10&&!protectedSources.has(source)){this.gl.deleteProgram(c.program);this.pool.delete(source);}
   }
   setState(state,beat){
-    if(this.visual&&JSON.stringify(this.visual.visual)!==JSON.stringify(state.visual))this.transition={from:this.visual,start:beat,end:beat+state.visual.beats};
+    const signature=s=>JSON.stringify([s.visual,...[s.visual.scene,s.visual.overlay].filter(Boolean).map(name=>s.scenes[name])]);
+    if(this.visual&&signature(this.visual)!==signature(state))this.transition={from:this.visual,start:beat,end:beat+state.visual.beats};
     this.visual=state;this.prune();
   }
   reset(){this.transition=null;const g=this.gl;for(const target of this.targets){g.bindTexture(g.TEXTURE_2D,target.previous);g.texImage2D(g.TEXTURE_2D,0,g.RGB,1,1,0,g.RGB,g.UNSIGNED_BYTE,new Uint8Array([0,0,0]));}this.size='';}
