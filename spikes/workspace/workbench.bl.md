@@ -267,3 +267,42 @@ still passes all 36 variants.
 - [Package unloaded](proof/53-polished-package-unloaded.png).
 - [Rail task switch keeps the working plan](proof/54-rail-switch-keeps-working-plan.png).
 - [Pending reply survives a refused task switch](proof/55-task-switch-preserves-reply-draft.png).
+
+## Slice 6 — readable at either desktop width
+
+Task, thread, artifact and place headings adapt to the pane's character width.
+Wide panes retain present's larger question face; narrow panes use a bold editor
+face and compact row height. Prose wraps independently, leaving room for the
+actual question and its answer controls. This is a presenter policy; the
+underlying text, object positions, reader and default presentation are unchanged.
+
+`test/desk-browser.py --port 8804 --slice 6` passed on the fresh isolated root
+`/tmp/omega-workbench-review-final`. It checks title bounds in the actual browser,
+records both desktop widths, opens the named command menu, verifies both seeded
+boards remain untouched and unloads the package. No browser errors occurred.
+The final complete drive suite passes 172 tests and the unchanged presentation
+checker passes all 36 variants.
+
+- [Compact plan and conversation](proof/56-adaptive-compact-plan-and-conversation.png).
+- [Wide working board and conversation](proof/57-final-working-board-and-conversation.png).
+- [Discoverable named actions](proof/58-final-discoverable-actions.png).
+- [Underlying editor after unload](proof/59-final-presentation-unloaded.png).
+
+The earlier folder-first UI now has an attention rail, a retained conversation,
+and an optional working-text pane. The implementation uses present's readtables,
+ISA/presenter lookup, around advice, cards, source marks, folding and docked
+composer. DWIM consumes its presented navigation rows and reveal function.
+Pointer controls dispatch the same named commands as shortcuts. Files, plans,
+checklists and task references remain editable source documents throughout.
+
+The review instance runs at:
+
+```text
+http://127.0.0.1:8804/?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench&layout=desk
+```
+
+Its model is the offline scripted board demonstration. The retained cwd,
+references, publication and task execution use real host providers and shared
+buffers. Install a production model through the documented `:step` adapter.
+Browser tours accept slices 1–6; slices 1–5 need fresh roots because they create
+or edit work. Slice 6 leaves the seeded task/file contents intact.

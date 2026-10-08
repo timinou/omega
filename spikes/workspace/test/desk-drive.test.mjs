@@ -101,7 +101,7 @@ test('folder task creation carries the actual directory and headings wrap withou
  const V=await load('ws.views');const original=P.d_use(M.d_boot('#+TITLE: This is a long title for an editable board\n\n* TODO Ship\n','work:omega/board.bl.org'),W.d_bl_package);
  const wide=original.assoc(K('view'),g(original,'view').assoc(K('cols'),100));const narrow=original.assoc(K('view'),g(original,'view').assoc(K('cols'),35));
  const ws=g(V.d_artifact,'focus-of')(wide,null),ns=g(V.d_artifact,'focus-of')(narrow,null);assert.notEqual(R.printStr(ws),R.printStr(ns));
- assert.ok(g((await load('pp.present')).d_screen_of(V.d_artifact,narrow),'slots').toArray().length>g((await load('pp.present')).d_screen_of(V.d_artifact,wide),'slots').toArray().length);
+ assert.equal(V.d_headline_size(narrow),1);assert.equal(V.d_headline_size(wide),2);
  assert.equal(R.printStr(g(narrow,'text')),R.printStr(g(wide,'text')));
 });
 

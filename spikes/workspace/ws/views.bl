@@ -9,10 +9,11 @@
 (defn- clipped [s n] (let [s (str (or s ""))] (if (> (count s) n) (str (subs s 0 (dec n)) "…") s)))
 (defn button [label command doc] {:text (str " " label " ") :kind :strong :command command :doc doc})
 (defn measure [ed] (max 12 (- (or (get-in ed [:view :cols]) 80) 7)))
+(defn headline-size [ed] (if (< (measure ed) 40) 1 2))
 (defn wrapped [ed r key words kind size]
   (let [width (if (= 2 size) (max 12 (quot (measure ed) 2)) (measure ed))
         lines (vec (mapcat (fn [s] (conv/wrap s width)) (split (str words) "\n")))]
-    (map-indexed (fn [i words] (p/line-mark r [{:text words :kind kind}] (str key "/" i) {:size size :role kind})) lines)))
+    (map-indexed (fn [i words] (p/line-mark r [{:text words :kind (if (and (= kind :question) (= 1 size)) :strong kind)}] (str key "/" i) {:size size :role kind})) lines)))
 (defn finished? [ed] (contains? #{"done" "failed" "cancelled"} (get-in ed [:doc :data :task-status])))
 (defn task-header
   "Around advice retains conversation threads and its docked composer."
@@ -21,7 +22,7 @@
         home (button "g H  Plan / home" :desk/home "Open the anchored plan")
         refs (button "g r  References" :desk/references "Inspect this task's inputs, outputs and context")]
     (p/stack (concat
-      (wrapped ed 0 "desk/task/title" (or (:task-title d) (title ed)) :question 2)
+      (wrapped ed 0 "desk/task/title" (or (:task-title d) (title ed)) :question (headline-size ed))
       [(mark 1 "desk/task/context" [{:text (str (if (:ask d) "⚑ Needs you" (or (:task-status d) "Task")) "  ·  " (:place d)) :kind :who}
                                    {:text (str "  ·  " (:task-id d)) :kind :meta}] :meta)
        (mark 1 "desk/task/folder" (if (:folder d)
@@ -57,7 +58,7 @@
         who (trim (join "" (map :text (filter (fn [s] (= :who (:kind s))) (:segs head)))))
         rest-kids (map (fn [mk] (if (= "ask" (:tone mk)) (question-card ctx mk) mk)) (rest (:kids content)))]
     (assoc content :kids (vec (concat
-      (wrapped (:ed ctx) (:src head) (:key head) words :question (or (:size head) 1))
+      (wrapped (:ed ctx) (:src head) (:key head) words :question (if (< (measure (:ed ctx)) 40) 1 (or (:size head) 1)))
       [(mark (:src head) (str (:key head) "/who") [{:text who :kind :who}] :meta)] rest-kids)))))
 (defn composer-head [o ctx next]
   (let [ed (:ed ctx) dock (next o ctx) card (first (:kids dock)) head (first (:kids card))
@@ -114,7 +115,7 @@
         done (count (filter (fn [h] (contains? #{:done "DONE"} (:todo h))) outline))
         editing-title? (and (= :insert (:mode ed)) (= 0 (first (c/cursor ed))))]
     (p/stack (concat
-      (if editing-title? [(p/text-mark 0)] (wrapped ed 0 "artifact/title" (title ed) :question 2))
+      (if editing-title? [(p/text-mark 0)] (wrapped ed 0 "artifact/title" (title ed) :question (headline-size ed)))
       [(mark 1 "artifact/path" [{:text (clipped (str path " · " (if (c/dirty? ed) "unpublished edits" "saved")) (measure ed)) :kind :meta}] :meta)
        (mark 1 "artifact/progress" [{:text (if (pos? (+ todo done)) (str todo " open · " done " complete    Enter toggles a checklist item") "Text is your working surface") :kind :who}] :meta)
        (mark 1 "artifact/actions" [(button "i Edit" :insert "Edit the same source document")
@@ -136,7 +137,7 @@
 (defn place-doc [o ctx]
   (let [ed (:ed ctx) d (get-in ed [:doc :data]) folder? (starts-with? (str (:path ed)) "folder:")]
     (p/stack (concat
-      (wrapped ed 0 "place/title" (title ed) :question 2)
+      (wrapped ed 0 "place/title" (title ed) :question (headline-size ed))
       [(mark 1 "place/identity" [{:text (str (if folder? "FOLDER  " "PLACE  ") (or (:place d) (:path ed))) :kind :label}] :meta)
        (mark 2 "place/directory" [{:text (clipped (str "Directory · " (or (:root d) "inherited / logical")) (measure ed)) :kind :meta}] :meta)
        (mark 3 "place/actions" [(button "n New task" :desk/new "Create a task in this place")
