@@ -1,0 +1,25 @@
+✔ latest visit wins: an older slow answer never overwrites a newer one (8.298801ms)
+✔ a stale ERROR is dropped; the newest request's error is shown (1.3141ms)
+✔ superseded requests are aborted (0.776285ms)
+✔ a background refresh never supersedes a foreground visit, nor lands on another path (9.267238ms)
+✔ a visit supersedes an in-flight refresh of the same pane (4.199645ms)
+✔ a disposed pane's answer is dropped (1.675612ms)
+✔ memoFrame renders once per frame value (1.21348ms)
+✔ language: sync hooks never return a Promise; honest status, retry after failure (28.796943ms)
+✔ awaitLanguage: answers ready once; failure carries the message; a vanished pane gets nothing (2.022617ms)
+✔ easing is elapsed-time based: 60/120/144 Hz settle alike and cover the distance (2.703071ms)
+✔ one 60 Hz frame covers the former 32 % (0.566118ms)
+✔ reduced motion and trackpad deltas apply directly, with no easing (0.288074ms)
+✔ wheel vs trackpad classification (0.221769ms)
+✔ pane disposal: apply→false drops the glide; drop() cancels the frame (0.398803ms)
+✔ packageUrl: bare names resolve under ./pkg (1.358954ms)
+✔ task navigation preserves package and theme bootstrap parameters on reload (0.829605ms)
+✔ presentation actions accept command names, including qualified keywords, without executable text (0.769241ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 308.958784

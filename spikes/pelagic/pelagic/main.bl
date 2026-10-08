@@ -1,0 +1,58 @@
+(ns pelagic.main (:require [ed.core :as c] [ed.text :as t] [pelagic.score :as score]))
+(def stage {:name "pelagic" :doc "Live source beside the audiovisual stage."
+            :panes [{:id :main :doc :linked :width [:fr 78]}
+                    {:id :stage :view [:host :main] :width [:fr 160]}]
+            :links [] :focus :main})
+(def cinema {:name "pelagic-cinema" :doc "A larger stage with a narrow live source pane."
+             :panes [{:id :main :doc :linked :width [:ch 36]}
+                     {:id :stage :view [:host :main] :width :fill}]
+             :links [] :focus :main})
+(defn state [ed] (merge score/defaults (get-in ed [:pkg-state "pelagic"])))
+(defn send [ed op args]
+  (c/effect ed {:kind :package-host :package "pelagic" :op op :args args}))
+(defn play [ed]
+  (-> ed (assoc-in [:pkg-state "pelagic" :playing] true)
+      (send :play (state ed)) (c/message "PELAGIC · launching the descent")))
+(defn stop [ed]
+  (-> ed (assoc-in [:pkg-state "pelagic" :playing] false)
+      (send :stop {}) (c/message "PELAGIC · stopped")))
+(defn evaluate [ed]
+  (send ed :evaluate {:source (t/to-string (:text ed))}))
+(defn settings [ed ev]
+  (let [k (keyword (:control ev)) v (:value ev)
+        ranges {:bpm [60 180] :swing [0 0.45] :crossfade [0 1] :filter [0.15 2]
+                :space [0 0.9] :echo [0 0.7] :master [0 1] :deck-a [0 1] :deck-b [0 1] :scene [-1 3]
+                :eq-a-low [-18 12] :eq-a-mid [-18 12] :eq-a-high [-18 12]
+                :eq-b-low [-18 12] :eq-b-mid [-18 12] :eq-b-high [-18 12]}
+        bounds (get ranges k)
+        v (if bounds (max (first bounds) (min (second bounds) v)) v)]
+    (if (or bounds (contains? #{:kick :bass :hat :snare :melody :freeze} k))
+      (let [new (assoc-in ed [:pkg-state "pelagic" k] v)] (send new :configure (state new))) ed)))
+(defn intercept [ed ev]
+  (cond
+    (= :pelagic/control (:type ev)) (settings ed ev)
+    (= :pelagic/sample (:type ev)) (send ed :sample ev)
+    (= :pelagic/deck (:type ev)) (send ed :deck ev)
+    (= :pelagic/export (:type ev)) (send ed :export {})
+    (= :pelagic/record (:type ev)) (send ed :record {})
+    (= :pelagic/cue (:type ev)) (send ed :cue {:bar (* 16 (max 0 (min 3 (:movement ev))))})
+    (= :pelagic/status (:type ev)) (-> ed
+       (assoc-in [:pkg-state "pelagic" :playing] (:playing ev))
+       (c/message (:message ev)))
+    (and (= :key (:type ev)) (= "C-Enter" (:key ev))
+         (contains? #{:normal :insert} (:mode ed))) (evaluate ed)
+    :else nil))
+(defn leave [ed]
+  (if (get-in ed [:pkg-state "pelagic" :playing]) (stop ed) ed))
+(def bl-package
+  {:name "pelagic" :doc "Overtone-shaped live sound, Shadertone shaders and a two-deck narrative performance."
+   :commands {:pelagic/play {:doc "Play the four-movement score" :run play}
+              :pelagic/stop {:doc "Stop all voices" :run stop}
+              :pelagic/eval {:doc "Evaluate live Beam Lisp / GLSL blocks" :run evaluate}
+              :pelagic/stage {:doc "Show live source and stage" :run (fn [ed] (assoc ed :frame/layout stage))}
+              :pelagic/cinema {:doc "Enlarge the stage" :run (fn [ed] (assoc ed :frame/layout cinema))}}
+   :keys {:normal {"g p" :pelagic/play "g s" :pelagic/stop "g e" :pelagic/eval "g v" :pelagic/stage}}
+   :intercept intercept :on-unuse leave
+   :on-event (fn [_ ed ev] (if (= :session-leave (:type ev)) (leave ed) ed))
+   :provides {:layouts {"pelagic" stage "pelagic-cinema" cinema}
+              :views {:host (fn [ed] {:package "pelagic" :state (state ed)})}}})

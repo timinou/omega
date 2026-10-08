@@ -1,0 +1,6 @@
+; Pure Shadertone-style requests. Host owns WebGL, textures and hot swapping.
+(ns pelagic.shadertone)
+(defn start [source & options]
+  {:kind :shader :source source :options (apply hash-map options)})
+(defn stop [] {:kind :shader-stop})
+(defn uniform [nm value] {:kind :uniform :name nm :value value})

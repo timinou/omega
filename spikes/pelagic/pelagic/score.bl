@@ -1,0 +1,74 @@
+; PELAGIC — an original four-movement score. All musical choices are BL.
+(ns pelagic.score (:require [pelagic.overtone :as o]))
+
+(def tide (o/instrument tide [freq 146.83 amp 0.07 pan 0 dur 8 cutoff 900]
+  (o/pan2 (* amp (o/env-gen (o/adsr 1.8 1 0.65 3.8))
+    (o/rlpf (o/mix [(o/saw freq) (o/saw (* freq 1.003))
+                    (* 0.5 (o/sin-osc (* freq 0.5)))]) cutoff 0.6)) pan)))
+(def kick (o/instrument kick [amp 0.8 dur 0.38]
+  (* amp (o/env-gen (o/perc 0.002 dur)) (o/sin-osc (o/x-line 165 46 0.075)))))
+(def bass (o/instrument bass [freq 73.42 amp 0.18 dur 0.55 cutoff 550]
+  (* amp (o/env-gen (o/perc 0.012 dur))
+     (o/lpf (o/mix [(o/sin-osc freq) (* 0.35 (o/saw freq))]) cutoff))))
+(def hat (o/instrument hat [amp 0.05 dur 0.09 pan 0.3]
+  (o/pan2 (* amp (o/env-gen (o/perc 0.002 dur)) (o/hpf (o/white-noise) 7500)) pan)))
+(def snare (o/instrument snare [amp 0.11 dur 0.24]
+  (* amp (o/env-gen (o/perc 0.005 dur))
+     (o/mix [(o/hpf (o/pink-noise) 1400) (* 0.3 (o/sin-osc 185))]))))
+(def lantern (o/instrument lantern [freq 587.33 amp 0.09 pan 0 dur 2.7]
+  (o/pan2 (* amp (o/env-gen (o/perc 0.006 dur))
+     (o/mix [(o/sin-osc freq) (* 0.36 (o/sin-osc (* freq 2.003)))
+             (* 0.12 (o/sin-osc (* freq 3.99)))])) pan)))
+(def air (o/instrument air [amp 0.025 dur 9 cutoff 1200 pan 0]
+  (o/pan2 (* amp (o/env-gen (o/adsr 2 1 0.55 4))
+     (o/lpf (o/pink-noise) cutoff)) pan)))
+(def movements
+  [{:name "BATHYMETRY" :subtitle "a signal beneath the surface" :start 0 :end 16 :color "#85d6d7"}
+   {:name "CURRENT" :subtitle "the water remembers a pulse" :start 16 :end 32 :color "#7ad8df"}
+   {:name "CATHEDRAL" :subtitle "architecture made of resonance" :start 32 :end 48 :color "#ebbf80"}
+   {:name "AFTERGLOW" :subtitle "everything returns as light" :start 48 :end 64 :color "#b5a5e2"}])
+(def defaults {:bpm 122 :swing 0.16 :crossfade 0.5 :filter 1.0 :space 0.38
+               :deck-a 0.9 :deck-b 0.9 :kick true :bass true :hat true :snare true :melody true
+               :scene -1 :freeze false :echo 0.28 :master 0.82})
+(def roots [50 46 53 48])
+(def harmonies [[:minor9 50] [:major9 46] [:major9 53] [:sus2 48]])
+(defn movement [bar] (nth movements (min 3 (quot bar 16))))
+(defn harmony [bar]
+  (let [[quality root] (nth harmonies (mod (quot bar 4) 4))] (o/chord root quality)))
+(defn event [voice deck] (assoc voice :deck deck))
+(defn step
+  "A sixteenth-note → voices. One deterministic score for live and export."
+  [index config]
+  (let [bar (quot index 16) pos (mod index 16) act (quot bar 16)
+        root (nth roots (mod (quot bar 4) 4)) notes (harmony bar)
+        breakdown (or (and (>= bar 28) (< bar 32)) (and (>= bar 52) (< bar 56)))
+        rhythmic (and (>= bar 8) (< bar 60) (not breakdown))
+        energy (cond (< bar 8) 0.0 (< bar 16) 0.65 breakdown 0.25 (= act 1) 0.85 (= act 2) 1.0 :else 0.8)
+        c (merge defaults config)
+        pads (when (= 0 (mod index 64))
+               (mapv (fn [n] (event (tide :freq (o/midi->hz n) :amp 0.032
+                  :pan (/ (- (mod n 7) 3) 4.0) :dur 6.9 :cutoff (+ 600 (* 850 energy))) "a")) notes))
+        melody? (and (:melody c) (or (= pos 0) (= pos 6) (= pos 10)
+                                   (and (= act 2) (contains? #{2 8 14} pos))))
+        n (+ 12 (nth notes (mod (+ (quot index 8) (quot bar 2)) (count notes))))]
+    (vec (concat pads
+      (when (= 0 (mod index 128)) [(event (air :dur 12 :amp 0.05 :cutoff (+ 800 (* 600 energy))) "a")])
+      (when melody? [(event (lantern :freq (o/midi->hz n) :amp (if (< bar 8) 0.055 0.085)
+                                :pan (if (even? index) -0.4 0.4)) "b")])
+      (when (and rhythmic (:kick c) (= 0 (mod pos 4)))
+        [(event (kick :amp (* 0.82 energy)) "b")])
+      (when (and rhythmic (:bass c) (contains? #{2 6 10 14} pos))
+        [(event (bass :freq (o/midi->hz (- root (if (= pos 11) 5 12))) :amp (* 0.20 energy)
+                      :dur 0.23 :cutoff (+ 450 (* 1000 energy))) "b")])
+      (when (and rhythmic (:hat c) (or (= 2 (mod pos 4)) (and (= act 2) (odd? pos))))
+        [(event (hat :amp (* energy (if (= 2 (mod pos 4)) 0.105 0.034))
+                    :dur (if (= 2 (mod pos 4)) 0.16 0.045) :pan (if (even? pos) 0.42 -0.35)) "b")])
+      (when (and rhythmic (:snare c) (contains? #{4 12} pos))
+        [(event (snare :amp (* 0.18 energy) :dur 0.16) "b")])
+      (when (and (:hat c) (>= bar 8) (< bar 60) (= 3 (mod bar 4)) (>= pos 12))
+        [(event (hat :amp (* 0.04 (+ 1 (/ (- pos 12) 4.0))) :dur 0.045 :pan -0.3) "b")])))))
+(defn timeline [config]
+  (let [c (merge defaults config)]
+    (mapv (fn [i] {:time (+ (o/beat-ms (/ i 4.0) (:bpm c))
+                                (if (odd? i) (* (:swing c) (o/beat-ms 0.25 (:bpm c))) 0))
+                   :voices (step i c)}) (range 1024))))

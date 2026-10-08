@@ -1,0 +1,64 @@
+#+TITLE: PELAGIC · a live audiovisual descent
+
+* The performance
+A quiet signal becomes a current.
+The current becomes a cathedral.
+The cathedral dissolves into light.
+
+Play on the stage, or type g p.
+C-Enter evaluates this live buffer.
+g s stops; g v opens the stage.
+
+* Overtone / Beam Lisp
+Change the notes, the envelope,
+or the groove. Evaluate. The new
+pattern enters on the next bar.
+
+#+begin_src beam-lisp :id lanterns
+(o/definst glass
+  [freq 440 amp 0.07 dur 2.6]
+  (* amp
+     (o/env-gen (o/perc 0.008 dur))
+     (o/mix
+       [(o/sin-osc freq)
+        (* 0.24 (o/sin-osc (* freq 2.01)))])))
+
+(def metro (o/metronome 122))
+
+(av/session
+  (av/configure {:space 0.52 :echo 0.38})
+  (av/pattern :melody 4
+    (o/play
+      (o/at (metro 0)
+        (glass :freq (o/midi->hz (o/note :D5))))
+      (o/at (metro 1.5)
+        (glass :freq (o/midi->hz (o/note :A4))))
+      (o/at (metro 2.5)
+        (glass :freq (o/midi->hz (o/note :E5)))))))
+#+end_src
+
+* Shadertone
+The stage is a GLSL fragment shader.
+iGlobalTime / iResolution / iMouse
+iOvertoneVolume / iChannel0 (FFT + wave)
+iChannel1 (the previous frame)
+
+Add a begin_src glsl block here.
+C-Enter hot-swaps a valid shader.
+A broken shader keeps the last image.
+
+* Two decks
+A is the atmospheric harmonic field.
+B is the pulse and melodic fragments.
+Equal-power crossfade; three-band EQ;
+filter, space, echo, swing and master.
+
+Import local audio into either deck.
+Set the source BPM to sync it.
+CUE / SET / beat loops / quarter-second jog.
+Movement buttons jump on the shared clock.
+REC saves the live audio + shader.
+WAV exports the original score.
+
+* Leave no trace
+:(ed/unuse "pelagic")

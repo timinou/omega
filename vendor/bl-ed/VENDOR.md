@@ -222,6 +222,30 @@ so a contextual answer can target its actual object without losing the draft.
 Workbench guards commands that would replace an owned prompt; the offline slice
 4 tour answers a real task while drafting, then retains that draft as a follow-up.
 
+### 2026-10-07 — optional package-owned browser resources (PELAGIC spike)
+
+`web/package-hosts.mjs` is a generic lifetime adapter for a loader module's
+optional `createHost(api)` export. Imports remain inert. Instances are created
+lazily by `:package-host` effects or `:host` view models, scoped to an active
+package name, and disposed on unuse/page leave. View mounts have separate
+update/dispose lifetimes. Generation checks reject a late answer from an old
+instance even after the same package name is used again. The ordinary package
+map remains the only BL extension contract.
+
+`web/host.mjs` registers factories from loaders, routes package effects and view
+models, reconciles resources before effects and after pane removal, and exposes
+the existing self-hosted language through the adapter. Plain host events convert
+type/command/pane vocabulary to keywords. Tagged runtime floats convert to JSON
+numbers at the IO boundary. `theme.css` bounds generic host views to their pane;
+all package content and styling remain inside an owned shadow root.
+
+No audio, shader, performance or Omega domain knowledge enters `ed.*` or these
+host adapters. The package and its Web Audio/WebGL implementation live entirely
+in `spikes/pelagic`. Verification: ten package/resource tests, all 72 vendored
+editor tests (with BLED_ROOT set to the Beam Lisp fixture checkout), and the
+unchanged presentation checker. Real-editor playback/evaluation/DJ controls,
+recording and use/unuse resource proof: `spikes/pelagic/pelagic.bl.md`.
+
 Card watches include references from every visible editor pane and deliver card
 refreshes to each pane. A retained plan therefore updates task status while its
 conversation has focus, rather than waiting for focus to return to the plan.

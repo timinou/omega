@@ -1,0 +1,107 @@
+; Browser-target Overtone subset. Graphs and timed messages are ordinary data.
+; Contracts derived from vendored overtone/music/{pitch,rhythm}.clj,
+; studio/inst.clj and sc/{synth,server}.clj. See ../research.bl.md.
+(ns pelagic.overtone)
+
+(defn param [key default] {:ugen :param :key key :default default})
+(defn sin-osc [freq] {:ugen :sin-osc :freq freq})
+(defn saw [freq] {:ugen :saw :freq freq})
+(defn pulse [freq] {:ugen :pulse :freq freq})
+(defn lf-tri [freq] {:ugen :lf-tri :freq freq})
+(defn white-noise [] {:ugen :white-noise})
+(defn pink-noise [] {:ugen :pink-noise})
+(defn mul [& xs] {:ugen :mul :inputs (vec xs)})
+(defn add [& xs] {:ugen :add :inputs (vec xs)})
+(defn sub [a b] {:ugen :sub :inputs [a b]})
+(defn div [a b] {:ugen :div :inputs [a b]})
+(defn mix [xs] {:ugen :add :inputs (vec xs)})
+(defn lpf [in freq] {:ugen :lpf :in in :freq freq})
+(defn hpf [in freq] {:ugen :hpf :in in :freq freq})
+(defn rlpf [in freq rq] {:ugen :rlpf :in in :freq freq :rq rq})
+(defn pan2 [in pan] {:ugen :pan2 :in in :pan pan})
+(defn perc
+  ([] (perc 0.01 1.0))
+  ([attack release] {:envelope :perc :attack attack :release release}))
+(defn adsr [attack decay sustain release]
+  {:envelope :adsr :attack attack :decay decay :sustain sustain :release release})
+(defn env-gen [envelope & options]
+  {:ugen :env-gen :envelope envelope :options (apply hash-map options)})
+(defn line [from to dur] {:ugen :line :from from :to to :dur dur})
+(defn x-line [from to dur] {:ugen :x-line :from from :to to :dur dur})
+(def FREE :free)
+
+(defn midi->hz [n]
+  (let [semitone 1.0594630943592953 d (- n 69)]
+    (if (>= d 0) (reduce * 440.0 (repeat d semitone))
+      (reduce / 440.0 (repeat (- d) semitone)))))
+(def pitch-classes {"C" 0 "C#" 1 "DB" 1 "D" 2 "D#" 3 "EB" 3 "E" 4 "F" 5
+                    "F#" 6 "GB" 6 "G" 7 "G#" 8 "AB" 8 "A" 9 "A#" 10 "BB" 10 "B" 11})
+(defn note [n]
+  (cond (nil? n) nil (number? n) n
+    :else (let [s (upper-case (if (keyword? n) (name n) n))
+                oct (parse-long (subs s (dec (count s))))
+                pc (get pitch-classes (subs s 0 (dec (count s))))]
+            (if (and (some? pc) (some? oct)) (+ (* 12 (inc oct)) pc)
+              (throw (str "Unknown note: " s))))))
+(def SCALE {:major [0 2 4 5 7 9 11 12] :minor [0 2 3 5 7 8 10 12]
+            :dorian [0 2 3 5 7 9 10 12] :minor-pentatonic [0 3 5 7 10 12]})
+(def CHORD {:major [0 4 7] :minor [0 3 7] :minor7 [0 3 7 10] :minor9 [0 3 7 10 14]
+            :major7 [0 4 7 11] :major9 [0 4 7 11 14] :sus2 [0 2 7] :sus4 [0 5 7]})
+(defn scale [root quality]
+  (if-let [intervals (get SCALE quality)] (mapv (fn [i] (+ (note root) i)) intervals)
+    (throw (str "Unsupported scale: " quality))))
+(defn chord [root quality]
+  (if-let [intervals (get CHORD quality)] (mapv (fn [i] (+ (note root) i)) intervals)
+    (throw (str "Unsupported chord: " quality))))
+(defn beat-ms ([bpm] (beat-ms 1 bpm)) ([beats bpm] (* (/ 60000.0 bpm) beats)))
+(defn metronome
+  "Pure score clock: zero-argument beat is 0; timestamps are relative ms."
+  [bpm]
+  (fn ([] 0) ([beat] (if (= :bpm beat) bpm (beat-ms beat bpm)))))
+
+(defn parameter-map [defaults args]
+  (loop [xs args names (map first defaults) out (into {} defaults)]
+    (cond (empty? xs) out
+          (keyword? (first xs))
+          (do (when (odd? (count xs)) (throw "Instrument keyword arguments need values"))
+              (when (some (fn [k] (not (contains? out k))) (map first (partition 2 xs)))
+                (throw "Unknown instrument parameter"))
+              (merge out (apply hash-map xs)))
+          (empty? names) (throw "Too many positional instrument arguments")
+          :else (recur (rest xs) (rest names) (assoc out (first names) (first xs))))))
+(defn instantiate [nm defaults graph args]
+  {:kind :voice :synth nm :params (parameter-map defaults args) :graph graph})
+
+; Arithmetic in a UGen body creates graph operators, as Overtone's overloaded
+; arithmetic does. Rewrite only call heads, recursively; preserve bindings.
+(defn- graph-form [form]
+  (cond
+    (seq? form) (let [head (first form)
+                      op (cond (= head '*) 'pelagic.overtone/mul (= head '+) 'pelagic.overtone/add
+                               (= head '-) 'pelagic.overtone/sub (= head '/) 'pelagic.overtone/div
+                               :else head)]
+                  (apply list op (map graph-form (rest form))))
+    (vector? form) (mapv graph-form form)
+    (map? form) (into {} (map (fn [[k v]] [k (graph-form v)]) form))
+    :else form))
+(defn- inst-form [nm params body]
+  (do (when (or (not (vector? params)) (odd? (count params)))
+        (throw "Instrument parameters need a vector of name/default pairs"))
+  (let [pairs (partition 2 params)
+        defaults (mapv (fn [[k v]] [(keyword (name k)) v]) pairs)
+        bindings (vec (mapcat (fn [[k v]] [k (list 'pelagic.overtone/param (keyword (name k)) v)]) pairs))]
+    (list 'def nm
+      (list 'let bindings
+        (list 'let ['graph (graph-form (last body))]
+          (list 'fn ['& 'args]
+            (list 'pelagic.overtone/instantiate (name nm) defaults 'graph 'args))))))))
+(defmacro definst [nm params & body] (inst-form nm params body))
+(defmacro defsynth [nm params & body] (inst-form nm params body))
+(defn at [time & voices] {:kind :bundle :time time :voices (vec voices)})
+(defn ctl [voice & params] {:kind :ctl :voice voice :params (apply hash-map params)})
+(defn kill [voice] {:kind :kill :voice voice})
+(defn stop [] {:kind :stop})
+(defn out [_bus signal] signal)
+(defn play [& bundles] {:kind :play :bundles (vec bundles)})
+
+(defmacro instrument [nm params & body] (nth (inst-form nm params body) 2))

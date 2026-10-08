@@ -26,6 +26,7 @@
 
 import { documentPackages } from "./document-packages.mjs";
 import * as R from "./out/rt.mjs";
+import { packageHosts } from "./package-hosts.mjs";
 
 // ─── primitives ────────────────────────────────────────────────────────────
 
@@ -277,8 +278,10 @@ function settle() {
   const [fr2, effects] = F.d_take_effects(fr).toArray();
   fr = fr2;
   syncDocumentPackages();
+  syncPackageHosts();
   for (const e of effects) perform(e);
   draw();
+  syncPackageHosts();
   return effects.length;
 }
 
@@ -306,13 +309,19 @@ function toBL(x) {
   return x;
 }
 function toJS(x) {
+  if (x instanceof R.Flt) return x.v;
   if (x instanceof R.HMap) { const o = {}; for (const [k, v] of x.entries()) o[k instanceof R.Kw ? k.fq : String(k)] = toJS(v); return o; }
   if (x instanceof R.Vec) return x.toArray().map(toJS);
   if (x instanceof R.Kw) return x.fq;
   return x;
 }
 const postJSON = (url, body) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-
+const pkgHosts = packageHosts({ dispatch: e => {
+  let event = toBL(e);
+  for (const k of ["type", "command", "pane"]) if (typeof e[k] === "string") event = event.assoc(K(k), K(e[k]));
+  dispatch(event);
+}, toBL, toJS,
+  language: () => lang.start() });
 const documentAutoUsed = new Set(), documentSuppressed = new Set();
 let previousPackageNames = new Set();
 function syncDocumentPackages() {
@@ -320,6 +329,14 @@ function syncDocumentPackages() {
   for (const id of F.d_editor_ids(fr)) for (const pkg of get(F.d_editor(fr, id), "packages") || []) names.add(get(pkg, "name"));
   for (const name of previousPackageNames) if (!names.has(name)) documentSuppressed.add(name);
   previousPackageNames = names;
+}
+function syncPackageHosts() {
+  const names = new Set();
+  for (const id of F.d_editor_ids(fr)) {
+    const ed = F.d_editor(fr, id);
+    for (const p of get(ed, "packages") || []) names.add(get(p, "name"));
+  }
+  pkgHosts.sync(names);
 }
 
 // an event for the pane that asked (a host answer carries {:pane id} back)
@@ -383,6 +400,7 @@ function applyDoc(j, path, visit, goto, pane) {
 
 // A generic leave event lets packages release host resources without IO in BL.
 window.addEventListener("pagehide", () => {
+  pkgHosts.dispose();
   if (!fr) return;
   for (const pane of F.d_editor_ids(fr)) fr = F.d_handle(fr, ev(K("type"), K("session-leave"), K("pane"), pane));
   const [next, effects] = F.d_take_effects(fr).toArray(); fr = next;
@@ -415,7 +433,10 @@ async function perform(eff) {
   const e = eff;
   const dispatchP = (x) => dispatch(toPane(pane, x));
   const kind = get(e, "kind").name;
-  if (kind === "asset-store") {
+  if (kind === "package-host") {
+    try { await pkgHosts.effect(get(e, "package"), toJS(e)); }
+    catch (err) { dispatchP(ev(K("type"), K("eval-result"), K("id"), "package-host", K("text"), err.message)); }
+  } else if (kind === "asset-store") {
     try { await storeAsset(get(e, "url"), get(e, "data")); }
     catch (err) { dispatchP(ev(K("type"), K("asset-error"), K("message"), "Image not saved: " + err.message + " — paste again to retry")); }
   } else if (kind === "visit") {
@@ -489,6 +510,7 @@ async function perform(eff) {
     try {
       const mod = await withTimeout(import(new URL(url, location.href).href), 15000, url);
       const p = mod.package ?? mod.d_bl_package;
+      if (p) pkgHosts.register(get(typeof p === "function" ? p() : p, "name"), mod.createHost);
       dispatchP(ev(K("type"), K("use"), K("package"), typeof p === "function" ? p() : p, K("message"), p ? null : url + " exports no `package`"));
     } catch (err) {
       dispatchP(ev(K("type"), K("use"), K("package"), null, K("message"), "cannot load " + url + ": " + err.message));
@@ -730,7 +752,14 @@ const viewPainters = {
     if (dom.lens.style.cssText !== css) dom.lens.style.cssText = css;
   },
 };
-function paintView(dom, p) { const f = viewPainters[get(p, "view-kind").name]; if (f) f(dom, p); }
+function paintView(dom, p) {
+  if (get(p, "view-kind") === K("host")) {
+    const model = toJS(get(p, "view"));
+    if (model?.package) pkgHosts.paint(model.package, dom.body, model, get(p, "of").name);
+    return;
+  }
+  const f = viewPainters[get(p, "view-kind").name]; if (f) f(dom, p);
+}
 function minimapSlotAt(root, clientY) {
   const k = +root.dataset.k, ys = JSON.parse(root.dataset.ys || "[]");
   const y = (clientY - root.querySelector(".view-body").getBoundingClientRect().top) / k;
@@ -1243,6 +1272,7 @@ async function loadPackage(name) {
   try {
     const mod = await withTimeout(import(new URL(url, location.href).href), 15000, url);
     const p = mod.package ?? mod.d_bl_package;
+    if (p) pkgHosts.register(get(typeof p === "function" ? p() : p, "name"), mod.createHost);
     return ev(K("type"), K("use"), K("package"), typeof p === "function" ? p() : p, K("message"), p ? null : url + " exports no `package`");
   } catch (err) {
     return ev(K("type"), K("use"), K("package"), null, K("message"), "cannot load " + url + ": " + err.message);

@@ -1,0 +1,7 @@
+; Live performance edits are data, committed by the host on a bar boundary.
+(ns pelagic.live)
+(defn configure [values] {:kind :configure :values values})
+(defn pattern [stem beats plan] {:kind :pattern :stem stem :beats beats :plan plan})
+(defn session [& edits] {:kind :session :edits (vec edits)})
+(defn perform [] {:kind :perform})
+(defn cue [movement] {:kind :cue :movement movement})
