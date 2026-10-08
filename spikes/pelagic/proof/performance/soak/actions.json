@@ -1,0 +1,1219 @@
+[
+  {
+    "elapsed": 20.162,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 37})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 2,
+      "targetBeat": 44,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 20.295,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+    },
+    "result": {
+      "ok": false,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 45.335,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 38})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 3,
+      "targetBeat": 92,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 45.711,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "snapshot",
+        "name": "soak-home"
+      }
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 70.222,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 39})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 4,
+      "targetBeat": 136,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 95.303,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :crossfade :beats 4}) (av/variation {:density 0.75 :seed 40})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 5,
+      "targetBeat": 180,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 96.261,
+    "command": {
+      "op": "import",
+      "deck": "a",
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/fixture.wav"
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 120.239,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :iris :beats 4}) (av/variation {:density 1 :seed 41})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 6,
+      "targetBeat": 232,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 120.33,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "break"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 7,
+      "targetBeat": 232
+    }
+  },
+  {
+    "elapsed": 145.149,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :dissolve :beats 4}) (av/variation {:density 0.75 :seed 42})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 8,
+      "targetBeat": 280,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 145.401,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+    },
+    "result": {
+      "ok": false,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 145.496,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "drop"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 9,
+      "targetBeat": 280
+    }
+  },
+  {
+    "elapsed": 145.536,
+    "command": {
+      "op": "clear",
+      "deck": "a"
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 170.341,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 43})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 10,
+      "targetBeat": 328,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 195.205,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 44})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 11,
+      "targetBeat": 372,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 195.398,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "undo"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 12,
+      "targetBeat": 372,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 220.177,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 45})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 13,
+      "targetBeat": 420,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 220.277,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "recall",
+        "name": "soak-home"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 14,
+      "targetBeat": 420,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 245.122,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :crossfade :beats 4}) (av/variation {:density 0.75 :seed 46})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 15,
+      "targetBeat": 464,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 245.493,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/scene :rehearsal {:shader \"// PELAGIC / CURRENT CLUB \\u2014 original audio-reactive vector light choreography.\\n// Geometry is driven by measured sound. The transport only chooses/edit-cuts scenes.\\nuniform float iBeat;\\nuniform float iScene;\\nuniform float iEnergy;\\nuniform float iAccent;\\nuniform float iStemKick;\\nuniform float iStemBass;\\nuniform float iStemMelody;\\nuniform float iIntensity;\\nuniform float iZoom;\\nuniform float iSymmetry;\\nuniform float iPalette;\\nuniform float iFeedback;\\n#define PI 3.14159265359\\nmat2 rot(float a){float s=sin(a),c=cos(a);return mat2(c,-s,s,c);}\\nfloat hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\\nfloat line(float d,float width){return width/(abs(d)+width);}\\nvec3 spectrum(float x){return .55+.45*cos(6.28318*(vec3(.03,.23,.53)+x));}\\nfloat box(vec2 p,vec2 s){vec2 q=abs(p)-s;return length(max(q,0.))+min(max(q.x,q.y),0.);}\\nvoid mainImage(out vec4 fragColor,in vec2 fragCoord){\\n vec2 uv=(fragCoord-.5*iResolution.xy)/iResolution.y;\\n float t=iGlobalTime,b=iBeat;\\n float bass=iAudioBass,mid=iAudioMid,hi=iAudioHigh,hit=iAudioOnset;\\n bass=max(bass,iStemBass);mid=max(mid,iStemMelody);\\n float sound=clamp(iOvertoneVolume*9.,0.,1.);\\n // Exactly one of four visual languages, with slow crossfades around act changes.\\n float scene=clamp(iScene,0.,3.);\\n float w0=1.-smoothstep(.65,1.,scene);\\n float w2=smoothstep(1.65,2.,scene)*(1.-smoothstep(2.65,3.,scene));\\n float w3=smoothstep(2.65,3.,scene),w1=1.-w0-w2-w3;\\n float cut=floor(b/16.);\\n float turn=mod(cut,4.)*PI*.5;\\n // Beat clock arranges cuts; the camera punch requires actual bass/onset energy.\\n vec2 p=rot(turn+.035*sin(t*.2))*(uv*(1.-.16*bass-clamp(iZoom,0.,.5))-vec2(hit*.018,0.));\\n float r=length(p),a=atan(p.y,p.x);\\n vec3 cyan=vec3(.05,.95,.86),hot=vec3(1.,.16,.32),gold=vec3(1.,.68,.16);\\n vec3 violet=vec3(.52,.22,1.);\\n vec3 color=vec3(.003,.008,.018);\\n // I. Bathymetry: engraved topographic interference, then ripples from the kick.\\n if(w0>.001){\\n vec2 q=p+vec2(.18*sin(t*.12),.1*cos(t*.16));\\n float dist=length(q*vec2(1.,1.22));\\n float terrain=dist+.05*sin(q.x*8.+t*.24)*sin(q.y*7.-t*.18);\\n float contour=abs(fract(terrain*(13.+bass*4.)-t*.16)-.5);\\n vec3 opening=cyan*pow(line(contour,.014+.013*mid),2.)*(.16+.8*sound);\\n opening+=spectrum(a/6.28+t*.014)*line(dist-(.18+bass*.23),.003)*(.4+bass);\\n opening+=hot*line(q.y-.09*sin(q.x*12.+t+mid*5.),.0018)*(.12+mid);\\n color+=opening*w0;\\n }\\n // II. Current: a perspective tunnel of offset, alternating cyan/coral portals.\\n // Different widths and broken segments give a club-video rhythm, rather than a screensaver orbit.\\n if(w1>.001){\\n vec3 tunnel=vec3(0.);\\n for(int j=0;j<12;j++){\\n  float fj=float(j),z=fract(fj/12.+t*.105),scale=.07+z*z*1.9;\\n  vec2 v=rot(.18*sin(t*.28+fj*.35)+.16*bass*sin(fj))*p;\\n  float d=box(v,vec2(scale,scale*.62));\\n  float edge=line(d,.0015+.0025*z+.004*hit);\\n  float segments=.35+.65*step(-.15,sin(atan(v.y,v.x)*6.+fj+floor(b/2.)));\\n  vec3 ink=mix(cyan,hot,step(.5,fract(fj*.5)));\\n  tunnel+=ink*pow(edge,1.7)*z*(.55+bass*1.4)*segments;\\n  // Broad planes refract the kick; restrained filled regions preserve contrast.\\n  tunnel+=ink*exp(-abs(d)*35.)*.045*z*bass;\\n }\\n vec2 rails=vec2(abs(p.x),abs(p.y));\\n tunnel+=gold*line(rails.y-.19-.35*rails.x,.0018)*(.2+hi*1.7);\\n color+=tunnel*w1;\\n }\\n // III. Cathedral: a kinetic, folded light mandala with spectral petal edges.\\n // Every four bars the symmetry flips between six and eight, with an eight-beat iris.\\n if(w2>.001){\\n float petals=mix(iSymmetry,iSymmetry+2.,mod(cut,2.));\\n float fold=abs(mod(a+PI/petals+floor(b/8.)*.12,2.*PI/petals)-PI/petals);\\n vec2 k=vec2(cos(fold),sin(fold))*r;\\n vec3 cathedral=vec3(0.);\\n for(int j=0;j<7;j++){\\n  float fj=float(j),rr=.10+fj*.092+bass*.085;\\n  float petal=rr+(.055+.06*mid)*cos(a*petals+t*.32+fj*.8);\\n  float edge=line(r-petal,.0018+.002*hit);\\n  vec3 ink=mix(gold,hot,.5+.5*sin(fj*.7+t*.1));\\n  cathedral+=ink*pow(edge,1.6)*(.3+sound+mid*.8);\\n  float blade=box(rot(.42+sin(t*.3+fj)*.14)*vec2(k.x-rr,k.y),vec2(.05+mid*.035,.006+hi*.006));\\n  cathedral+=spectrum(fj*.11+t*.01)*line(blade,.0018)*(.3+mid);\\n }\\n cathedral+=cyan*line(k.y-k.x*.12,.0015)*smoothstep(.12,.35,r)*(1.-smoothstep(.65,.85,r))*(.2+hi*2.);\\n color+=cathedral*w2;\\n }\\n // IV. Afterglow: violet ribbon echoes. A late reprise tightens the ribbons again.\\n if(w3>.001){\\n vec3 after=vec3(0.);\\n for(int j=0;j<9;j++){\\n  float fj=float(j),phase=t*.3+fj*.36;\\n  float ribbon=p.y-.25*sin(p.x*(3.+bass*2.)+phase)-.032*(fj-4.);\\n  after+=mix(violet,cyan,fj/10.)*pow(line(ribbon,.0025+.003*mid),1.8)*(.25+sound);\\n }\\n after+=hot*line(r-(.28+.13*sin(a*3.+t*.3)+bass*.08),.002)*(.2+mid);\\n color+=after*w3;\\n }\\n // Audible frequencies become a segmented radial spectrogram, not a decorative clock.\\n float band=texture2D(iChannel0,vec2(.002+pow(abs(a)/PI,2.)*.35,.25)).r;\\n float ring=.43+.15*band;\\n float dashed=step(.25,fract(a*36./PI));\\n color+=mix(cyan,gold,w2)*line(r-ring,.0015)*dashed*sound*.48;\\n // Treble reveals tiny indexed tiles and point-like sparks; silence removes both.\\n vec2 cell=floor((p+1.)*48.);\\n vec2 local=fract((p+1.)*48.)-.5;\\n float seed=hash(cell+floor(b*2.));\\n float sparks=step(1.-hi*.055,seed)*pow(max(0.,1.-length(local)*2.),7.);\\n color+=vec3(.7,.94,1.)*sparks*hi*3.;\\n // A measured onset opens four corner brackets instead of washing out the whole frame.\\n vec2 corner=abs(uv)-vec2(.77,.38);\\n float bracket=min(abs(corner.x)+max(0.,abs(corner.y)-.035),abs(corner.y)+max(0.,abs(corner.x)-.035));\\n color+=hot*line(bracket,.0012)*hit*2.;\\n // Filmic contrast and dark margins; no automatic full-screen strobe.\\n color*=1.-.45*smoothstep(.35,1.1,r);\\n color=1.-exp(-color*1.35*iIntensity);\\n color=mix(color,color.gbr,clamp(iPalette,0.,1.));\\n color=mix(color,texture2D(iChannel1,fragCoord/iResolution.xy).rgb,clamp(iFeedback,0.,.7));\\n color=pow(max(color,0.),vec3(.9));\\n color+=(hash(fragCoord+floor(t*24.))-.5)*.004;\\n fragColor=vec4(color,1.);\\n}\\n\\n// prepared during live rehearsal\\n\" :mappings {:zoom {:signal [:stem :bass :level] :amount 0.2}}}) (av/launch :rehearsal))"
+    },
+    "result": {
+      "ok": true,
+      "revision": 16,
+      "targetBeat": 464,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 270.286,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :iris :beats 4}) (av/variation {:density 1 :seed 47})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 17,
+      "targetBeat": 512,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 270.456,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+    },
+    "result": {
+      "ok": false,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 295.356,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :dissolve :beats 4}) (av/variation {:density 0.75 :seed 48})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 18,
+      "targetBeat": 556,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 295.516,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "break"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 19,
+      "targetBeat": 560
+    }
+  },
+  {
+    "elapsed": 320.315,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 49})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 20,
+      "targetBeat": 608,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 320.434,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "drop"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 21,
+      "targetBeat": 608
+    }
+  },
+  {
+    "elapsed": 345.193,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 50})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 22,
+      "targetBeat": 652,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 370.302,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 51})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 23,
+      "targetBeat": 696,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 395.289,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :crossfade :beats 4}) (av/variation {:density 0.75 :seed 52})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 24,
+      "targetBeat": 740,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 395.462,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+    },
+    "result": {
+      "ok": false,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 397.075,
+    "command": {
+      "op": "import",
+      "deck": "a",
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/fixture.wav"
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 420.348,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :iris :beats 4}) (av/variation {:density 1 :seed 53})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 25,
+      "targetBeat": 788,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 445.207,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :dissolve :beats 4}) (av/variation {:density 0.75 :seed 54})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 26,
+      "targetBeat": 836,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 445.319,
+    "command": {
+      "op": "clear",
+      "deck": "a"
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 470.316,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 55})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 27,
+      "targetBeat": 880,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 470.472,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "break"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 28,
+      "targetBeat": 880
+    }
+  },
+  {
+    "elapsed": 495.157,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 56})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 29,
+      "targetBeat": 928,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 495.268,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "drop"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 30,
+      "targetBeat": 928
+    }
+  },
+  {
+    "elapsed": 495.44,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "undo"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 31,
+      "targetBeat": 928,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 520.158,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 57})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 32,
+      "targetBeat": 976,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 520.442,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+    },
+    "result": {
+      "ok": false,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 520.549,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "recall",
+        "name": "soak-home"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 33,
+      "targetBeat": 976,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 545.369,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :crossfade :beats 4}) (av/variation {:density 0.75 :seed 58})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 34,
+      "targetBeat": 1020,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 545.537,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/scene :rehearsal {:shader \"// PELAGIC / CURRENT CLUB \\u2014 original audio-reactive vector light choreography.\\n// Geometry is driven by measured sound. The transport only chooses/edit-cuts scenes.\\nuniform float iBeat;\\nuniform float iScene;\\nuniform float iEnergy;\\nuniform float iAccent;\\nuniform float iStemKick;\\nuniform float iStemBass;\\nuniform float iStemMelody;\\nuniform float iIntensity;\\nuniform float iZoom;\\nuniform float iSymmetry;\\nuniform float iPalette;\\nuniform float iFeedback;\\n#define PI 3.14159265359\\nmat2 rot(float a){float s=sin(a),c=cos(a);return mat2(c,-s,s,c);}\\nfloat hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\\nfloat line(float d,float width){return width/(abs(d)+width);}\\nvec3 spectrum(float x){return .55+.45*cos(6.28318*(vec3(.03,.23,.53)+x));}\\nfloat box(vec2 p,vec2 s){vec2 q=abs(p)-s;return length(max(q,0.))+min(max(q.x,q.y),0.);}\\nvoid mainImage(out vec4 fragColor,in vec2 fragCoord){\\n vec2 uv=(fragCoord-.5*iResolution.xy)/iResolution.y;\\n float t=iGlobalTime,b=iBeat;\\n float bass=iAudioBass,mid=iAudioMid,hi=iAudioHigh,hit=iAudioOnset;\\n bass=max(bass,iStemBass);mid=max(mid,iStemMelody);\\n float sound=clamp(iOvertoneVolume*9.,0.,1.);\\n // Exactly one of four visual languages, with slow crossfades around act changes.\\n float scene=clamp(iScene,0.,3.);\\n float w0=1.-smoothstep(.65,1.,scene);\\n float w2=smoothstep(1.65,2.,scene)*(1.-smoothstep(2.65,3.,scene));\\n float w3=smoothstep(2.65,3.,scene),w1=1.-w0-w2-w3;\\n float cut=floor(b/16.);\\n float turn=mod(cut,4.)*PI*.5;\\n // Beat clock arranges cuts; the camera punch requires actual bass/onset energy.\\n vec2 p=rot(turn+.035*sin(t*.2))*(uv*(1.-.16*bass-clamp(iZoom,0.,.5))-vec2(hit*.018,0.));\\n float r=length(p),a=atan(p.y,p.x);\\n vec3 cyan=vec3(.05,.95,.86),hot=vec3(1.,.16,.32),gold=vec3(1.,.68,.16);\\n vec3 violet=vec3(.52,.22,1.);\\n vec3 color=vec3(.003,.008,.018);\\n // I. Bathymetry: engraved topographic interference, then ripples from the kick.\\n if(w0>.001){\\n vec2 q=p+vec2(.18*sin(t*.12),.1*cos(t*.16));\\n float dist=length(q*vec2(1.,1.22));\\n float terrain=dist+.05*sin(q.x*8.+t*.24)*sin(q.y*7.-t*.18);\\n float contour=abs(fract(terrain*(13.+bass*4.)-t*.16)-.5);\\n vec3 opening=cyan*pow(line(contour,.014+.013*mid),2.)*(.16+.8*sound);\\n opening+=spectrum(a/6.28+t*.014)*line(dist-(.18+bass*.23),.003)*(.4+bass);\\n opening+=hot*line(q.y-.09*sin(q.x*12.+t+mid*5.),.0018)*(.12+mid);\\n color+=opening*w0;\\n }\\n // II. Current: a perspective tunnel of offset, alternating cyan/coral portals.\\n // Different widths and broken segments give a club-video rhythm, rather than a screensaver orbit.\\n if(w1>.001){\\n vec3 tunnel=vec3(0.);\\n for(int j=0;j<12;j++){\\n  float fj=float(j),z=fract(fj/12.+t*.105),scale=.07+z*z*1.9;\\n  vec2 v=rot(.18*sin(t*.28+fj*.35)+.16*bass*sin(fj))*p;\\n  float d=box(v,vec2(scale,scale*.62));\\n  float edge=line(d,.0015+.0025*z+.004*hit);\\n  float segments=.35+.65*step(-.15,sin(atan(v.y,v.x)*6.+fj+floor(b/2.)));\\n  vec3 ink=mix(cyan,hot,step(.5,fract(fj*.5)));\\n  tunnel+=ink*pow(edge,1.7)*z*(.55+bass*1.4)*segments;\\n  // Broad planes refract the kick; restrained filled regions preserve contrast.\\n  tunnel+=ink*exp(-abs(d)*35.)*.045*z*bass;\\n }\\n vec2 rails=vec2(abs(p.x),abs(p.y));\\n tunnel+=gold*line(rails.y-.19-.35*rails.x,.0018)*(.2+hi*1.7);\\n color+=tunnel*w1;\\n }\\n // III. Cathedral: a kinetic, folded light mandala with spectral petal edges.\\n // Every four bars the symmetry flips between six and eight, with an eight-beat iris.\\n if(w2>.001){\\n float petals=mix(iSymmetry,iSymmetry+2.,mod(cut,2.));\\n float fold=abs(mod(a+PI/petals+floor(b/8.)*.12,2.*PI/petals)-PI/petals);\\n vec2 k=vec2(cos(fold),sin(fold))*r;\\n vec3 cathedral=vec3(0.);\\n for(int j=0;j<7;j++){\\n  float fj=float(j),rr=.10+fj*.092+bass*.085;\\n  float petal=rr+(.055+.06*mid)*cos(a*petals+t*.32+fj*.8);\\n  float edge=line(r-petal,.0018+.002*hit);\\n  vec3 ink=mix(gold,hot,.5+.5*sin(fj*.7+t*.1));\\n  cathedral+=ink*pow(edge,1.6)*(.3+sound+mid*.8);\\n  float blade=box(rot(.42+sin(t*.3+fj)*.14)*vec2(k.x-rr,k.y),vec2(.05+mid*.035,.006+hi*.006));\\n  cathedral+=spectrum(fj*.11+t*.01)*line(blade,.0018)*(.3+mid);\\n }\\n cathedral+=cyan*line(k.y-k.x*.12,.0015)*smoothstep(.12,.35,r)*(1.-smoothstep(.65,.85,r))*(.2+hi*2.);\\n color+=cathedral*w2;\\n }\\n // IV. Afterglow: violet ribbon echoes. A late reprise tightens the ribbons again.\\n if(w3>.001){\\n vec3 after=vec3(0.);\\n for(int j=0;j<9;j++){\\n  float fj=float(j),phase=t*.3+fj*.36;\\n  float ribbon=p.y-.25*sin(p.x*(3.+bass*2.)+phase)-.032*(fj-4.);\\n  after+=mix(violet,cyan,fj/10.)*pow(line(ribbon,.0025+.003*mid),1.8)*(.25+sound);\\n }\\n after+=hot*line(r-(.28+.13*sin(a*3.+t*.3)+bass*.08),.002)*(.2+mid);\\n color+=after*w3;\\n }\\n // Audible frequencies become a segmented radial spectrogram, not a decorative clock.\\n float band=texture2D(iChannel0,vec2(.002+pow(abs(a)/PI,2.)*.35,.25)).r;\\n float ring=.43+.15*band;\\n float dashed=step(.25,fract(a*36./PI));\\n color+=mix(cyan,gold,w2)*line(r-ring,.0015)*dashed*sound*.48;\\n // Treble reveals tiny indexed tiles and point-like sparks; silence removes both.\\n vec2 cell=floor((p+1.)*48.);\\n vec2 local=fract((p+1.)*48.)-.5;\\n float seed=hash(cell+floor(b*2.));\\n float sparks=step(1.-hi*.055,seed)*pow(max(0.,1.-length(local)*2.),7.);\\n color+=vec3(.7,.94,1.)*sparks*hi*3.;\\n // A measured onset opens four corner brackets instead of washing out the whole frame.\\n vec2 corner=abs(uv)-vec2(.77,.38);\\n float bracket=min(abs(corner.x)+max(0.,abs(corner.y)-.035),abs(corner.y)+max(0.,abs(corner.x)-.035));\\n color+=hot*line(bracket,.0012)*hit*2.;\\n // Filmic contrast and dark margins; no automatic full-screen strobe.\\n color*=1.-.45*smoothstep(.35,1.1,r);\\n color=1.-exp(-color*1.35*iIntensity);\\n color=mix(color,color.gbr,clamp(iPalette,0.,1.));\\n color=mix(color,texture2D(iChannel1,fragCoord/iResolution.xy).rgb,clamp(iFeedback,0.,.7));\\n color=pow(max(color,0.),vec3(.9));\\n color+=(hash(fragCoord+floor(t*24.))-.5)*.004;\\n fragColor=vec4(color,1.);\\n}\\n\\n// prepared during live rehearsal\\n\" :mappings {:zoom {:signal [:stem :bass :level] :amount 0.2}}}) (av/launch :rehearsal))"
+    },
+    "result": {
+      "ok": true,
+      "revision": 35,
+      "targetBeat": 1020,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 570.536,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :iris :beats 4}) (av/variation {:density 1 :seed 59})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 36,
+      "targetBeat": 1068,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 595.239,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :dissolve :beats 4}) (av/variation {:density 0.75 :seed 60})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 37,
+      "targetBeat": 1112,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 620.275,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 61})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 38,
+      "targetBeat": 1160,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 645.208,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 62})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 39,
+      "targetBeat": 1204,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 645.418,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+    },
+    "result": {
+      "ok": false,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 645.688,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "break"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 40,
+      "targetBeat": 1204
+    }
+  },
+  {
+    "elapsed": 670.36,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 63})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 41,
+      "targetBeat": 1252,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 670.525,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "drop"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 42,
+      "targetBeat": 1256
+    }
+  },
+  {
+    "elapsed": 695.318,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :crossfade :beats 4}) (av/variation {:density 0.75 :seed 64})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 43,
+      "targetBeat": 1300,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 696.234,
+    "command": {
+      "op": "import",
+      "deck": "a",
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/fixture.wav"
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 720.415,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :iris :beats 4}) (av/variation {:density 1 :seed 65})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 44,
+      "targetBeat": 1348,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 745.326,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :dissolve :beats 4}) (av/variation {:density 0.75 :seed 66})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 45,
+      "targetBeat": 1392,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 745.49,
+    "command": {
+      "op": "clear",
+      "deck": "a"
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 770.441,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 67})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 46,
+      "targetBeat": 1440,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 770.756,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+    },
+    "result": {
+      "ok": false,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 795.419,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 68})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 47,
+      "targetBeat": 1484,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 795.699,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "undo"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 48,
+      "targetBeat": 1484,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 820.604,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 69})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 49,
+      "targetBeat": 1532,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 820.945,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "break"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 50,
+      "targetBeat": 1532
+    }
+  },
+  {
+    "elapsed": 821.06,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "recall",
+        "name": "soak-home"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 51,
+      "targetBeat": 1532,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 845.127,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :crossfade :beats 4}) (av/variation {:density 0.75 :seed 70})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 52,
+      "targetBeat": 1576,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 845.222,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "drop"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 53,
+      "targetBeat": 1576
+    }
+  },
+  {
+    "elapsed": 845.576,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/scene :rehearsal {:shader \"// PELAGIC / CURRENT CLUB \\u2014 original audio-reactive vector light choreography.\\n// Geometry is driven by measured sound. The transport only chooses/edit-cuts scenes.\\nuniform float iBeat;\\nuniform float iScene;\\nuniform float iEnergy;\\nuniform float iAccent;\\nuniform float iStemKick;\\nuniform float iStemBass;\\nuniform float iStemMelody;\\nuniform float iIntensity;\\nuniform float iZoom;\\nuniform float iSymmetry;\\nuniform float iPalette;\\nuniform float iFeedback;\\n#define PI 3.14159265359\\nmat2 rot(float a){float s=sin(a),c=cos(a);return mat2(c,-s,s,c);}\\nfloat hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\\nfloat line(float d,float width){return width/(abs(d)+width);}\\nvec3 spectrum(float x){return .55+.45*cos(6.28318*(vec3(.03,.23,.53)+x));}\\nfloat box(vec2 p,vec2 s){vec2 q=abs(p)-s;return length(max(q,0.))+min(max(q.x,q.y),0.);}\\nvoid mainImage(out vec4 fragColor,in vec2 fragCoord){\\n vec2 uv=(fragCoord-.5*iResolution.xy)/iResolution.y;\\n float t=iGlobalTime,b=iBeat;\\n float bass=iAudioBass,mid=iAudioMid,hi=iAudioHigh,hit=iAudioOnset;\\n bass=max(bass,iStemBass);mid=max(mid,iStemMelody);\\n float sound=clamp(iOvertoneVolume*9.,0.,1.);\\n // Exactly one of four visual languages, with slow crossfades around act changes.\\n float scene=clamp(iScene,0.,3.);\\n float w0=1.-smoothstep(.65,1.,scene);\\n float w2=smoothstep(1.65,2.,scene)*(1.-smoothstep(2.65,3.,scene));\\n float w3=smoothstep(2.65,3.,scene),w1=1.-w0-w2-w3;\\n float cut=floor(b/16.);\\n float turn=mod(cut,4.)*PI*.5;\\n // Beat clock arranges cuts; the camera punch requires actual bass/onset energy.\\n vec2 p=rot(turn+.035*sin(t*.2))*(uv*(1.-.16*bass-clamp(iZoom,0.,.5))-vec2(hit*.018,0.));\\n float r=length(p),a=atan(p.y,p.x);\\n vec3 cyan=vec3(.05,.95,.86),hot=vec3(1.,.16,.32),gold=vec3(1.,.68,.16);\\n vec3 violet=vec3(.52,.22,1.);\\n vec3 color=vec3(.003,.008,.018);\\n // I. Bathymetry: engraved topographic interference, then ripples from the kick.\\n if(w0>.001){\\n vec2 q=p+vec2(.18*sin(t*.12),.1*cos(t*.16));\\n float dist=length(q*vec2(1.,1.22));\\n float terrain=dist+.05*sin(q.x*8.+t*.24)*sin(q.y*7.-t*.18);\\n float contour=abs(fract(terrain*(13.+bass*4.)-t*.16)-.5);\\n vec3 opening=cyan*pow(line(contour,.014+.013*mid),2.)*(.16+.8*sound);\\n opening+=spectrum(a/6.28+t*.014)*line(dist-(.18+bass*.23),.003)*(.4+bass);\\n opening+=hot*line(q.y-.09*sin(q.x*12.+t+mid*5.),.0018)*(.12+mid);\\n color+=opening*w0;\\n }\\n // II. Current: a perspective tunnel of offset, alternating cyan/coral portals.\\n // Different widths and broken segments give a club-video rhythm, rather than a screensaver orbit.\\n if(w1>.001){\\n vec3 tunnel=vec3(0.);\\n for(int j=0;j<12;j++){\\n  float fj=float(j),z=fract(fj/12.+t*.105),scale=.07+z*z*1.9;\\n  vec2 v=rot(.18*sin(t*.28+fj*.35)+.16*bass*sin(fj))*p;\\n  float d=box(v,vec2(scale,scale*.62));\\n  float edge=line(d,.0015+.0025*z+.004*hit);\\n  float segments=.35+.65*step(-.15,sin(atan(v.y,v.x)*6.+fj+floor(b/2.)));\\n  vec3 ink=mix(cyan,hot,step(.5,fract(fj*.5)));\\n  tunnel+=ink*pow(edge,1.7)*z*(.55+bass*1.4)*segments;\\n  // Broad planes refract the kick; restrained filled regions preserve contrast.\\n  tunnel+=ink*exp(-abs(d)*35.)*.045*z*bass;\\n }\\n vec2 rails=vec2(abs(p.x),abs(p.y));\\n tunnel+=gold*line(rails.y-.19-.35*rails.x,.0018)*(.2+hi*1.7);\\n color+=tunnel*w1;\\n }\\n // III. Cathedral: a kinetic, folded light mandala with spectral petal edges.\\n // Every four bars the symmetry flips between six and eight, with an eight-beat iris.\\n if(w2>.001){\\n float petals=mix(iSymmetry,iSymmetry+2.,mod(cut,2.));\\n float fold=abs(mod(a+PI/petals+floor(b/8.)*.12,2.*PI/petals)-PI/petals);\\n vec2 k=vec2(cos(fold),sin(fold))*r;\\n vec3 cathedral=vec3(0.);\\n for(int j=0;j<7;j++){\\n  float fj=float(j),rr=.10+fj*.092+bass*.085;\\n  float petal=rr+(.055+.06*mid)*cos(a*petals+t*.32+fj*.8);\\n  float edge=line(r-petal,.0018+.002*hit);\\n  vec3 ink=mix(gold,hot,.5+.5*sin(fj*.7+t*.1));\\n  cathedral+=ink*pow(edge,1.6)*(.3+sound+mid*.8);\\n  float blade=box(rot(.42+sin(t*.3+fj)*.14)*vec2(k.x-rr,k.y),vec2(.05+mid*.035,.006+hi*.006));\\n  cathedral+=spectrum(fj*.11+t*.01)*line(blade,.0018)*(.3+mid);\\n }\\n cathedral+=cyan*line(k.y-k.x*.12,.0015)*smoothstep(.12,.35,r)*(1.-smoothstep(.65,.85,r))*(.2+hi*2.);\\n color+=cathedral*w2;\\n }\\n // IV. Afterglow: violet ribbon echoes. A late reprise tightens the ribbons again.\\n if(w3>.001){\\n vec3 after=vec3(0.);\\n for(int j=0;j<9;j++){\\n  float fj=float(j),phase=t*.3+fj*.36;\\n  float ribbon=p.y-.25*sin(p.x*(3.+bass*2.)+phase)-.032*(fj-4.);\\n  after+=mix(violet,cyan,fj/10.)*pow(line(ribbon,.0025+.003*mid),1.8)*(.25+sound);\\n }\\n after+=hot*line(r-(.28+.13*sin(a*3.+t*.3)+bass*.08),.002)*(.2+mid);\\n color+=after*w3;\\n }\\n // Audible frequencies become a segmented radial spectrogram, not a decorative clock.\\n float band=texture2D(iChannel0,vec2(.002+pow(abs(a)/PI,2.)*.35,.25)).r;\\n float ring=.43+.15*band;\\n float dashed=step(.25,fract(a*36./PI));\\n color+=mix(cyan,gold,w2)*line(r-ring,.0015)*dashed*sound*.48;\\n // Treble reveals tiny indexed tiles and point-like sparks; silence removes both.\\n vec2 cell=floor((p+1.)*48.);\\n vec2 local=fract((p+1.)*48.)-.5;\\n float seed=hash(cell+floor(b*2.));\\n float sparks=step(1.-hi*.055,seed)*pow(max(0.,1.-length(local)*2.),7.);\\n color+=vec3(.7,.94,1.)*sparks*hi*3.;\\n // A measured onset opens four corner brackets instead of washing out the whole frame.\\n vec2 corner=abs(uv)-vec2(.77,.38);\\n float bracket=min(abs(corner.x)+max(0.,abs(corner.y)-.035),abs(corner.y)+max(0.,abs(corner.x)-.035));\\n color+=hot*line(bracket,.0012)*hit*2.;\\n // Filmic contrast and dark margins; no automatic full-screen strobe.\\n color*=1.-.45*smoothstep(.35,1.1,r);\\n color=1.-exp(-color*1.35*iIntensity);\\n color=mix(color,color.gbr,clamp(iPalette,0.,1.));\\n color=mix(color,texture2D(iChannel1,fragCoord/iResolution.xy).rgb,clamp(iFeedback,0.,.7));\\n color=pow(max(color,0.),vec3(.9));\\n color+=(hash(fragCoord+floor(t*24.))-.5)*.004;\\n fragColor=vec4(color,1.);\\n}\\n\\n// prepared during live rehearsal\\n\" :mappings {:zoom {:signal [:stem :bass :level] :amount 0.2}}}) (av/launch :rehearsal))"
+    },
+    "result": {
+      "ok": true,
+      "revision": 54,
+      "targetBeat": 1576,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 870.442,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :iris :beats 4}) (av/variation {:density 1 :seed 71})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 55,
+      "targetBeat": 1624,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 895.407,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :dissolve :beats 4}) (av/variation {:density 0.75 :seed 72})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 56,
+      "targetBeat": 1668,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 895.731,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+    },
+    "result": {
+      "ok": false,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 920.498,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 73})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 57,
+      "targetBeat": 1716,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 945.389,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 74})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 58,
+      "targetBeat": 1764,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 970.474,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 75})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 59,
+      "targetBeat": 1812,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 995.214,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :crossfade :beats 4}) (av/variation {:density 0.75 :seed 76})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 60,
+      "targetBeat": 1856,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 995.462,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "break"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 61,
+      "targetBeat": 1856
+    }
+  },
+  {
+    "elapsed": 996.561,
+    "command": {
+      "op": "import",
+      "deck": "a",
+      "file": "/home/user/code/undefine/omega/spikes/pelagic/proof/performance/fixture.wav"
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 1020.959,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :iris :beats 4}) (av/variation {:density 1 :seed 77})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 62,
+      "targetBeat": 1908,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 1021.46,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+    },
+    "result": {
+      "ok": false,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 1021.677,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "drop"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 63,
+      "targetBeat": 1908
+    }
+  },
+  {
+    "elapsed": 1045.495,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :dissolve :beats 4}) (av/variation {:density 0.75 :seed 78})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 64,
+      "targetBeat": 1952,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 1045.66,
+    "command": {
+      "op": "clear",
+      "deck": "a"
+    },
+    "result": {
+      "ok": true
+    }
+  },
+  {
+    "elapsed": 1070.2,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :crossfade :beats 4}) (av/variation {:density 1 :seed 79})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 65,
+      "targetBeat": 2000,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 1095.404,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :iris :beats 4}) (av/variation {:density 0.75 :seed 80})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 66,
+      "targetBeat": 2044,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 1095.972,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "undo"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 67,
+      "targetBeat": 2044,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 1120.286,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :current {:transition :dissolve :beats 4}) (av/variation {:density 1 :seed 81})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 68,
+      "targetBeat": 2088,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 1120.438,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "recall",
+        "name": "soak-home"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 69,
+      "targetBeat": 2088,
+      "missing": []
+    }
+  },
+  {
+    "elapsed": 1145.229,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :cathedral {:transition :crossfade :beats 4}) (av/variation {:density 0.75 :seed 82})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 70,
+      "targetBeat": 2132,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 1145.464,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/configure {:space 0.1}) (t/start \"void main(){bad;}\"))"
+    },
+    "result": {
+      "ok": false,
+      "error": "ERROR: 0:1: 'bad' : undeclared identifier\n"
+    }
+  },
+  {
+    "elapsed": 1145.784,
+    "command": {
+      "op": "eval",
+      "source": "(av/session (av/scene :rehearsal {:shader \"// PELAGIC / CURRENT CLUB \\u2014 original audio-reactive vector light choreography.\\n// Geometry is driven by measured sound. The transport only chooses/edit-cuts scenes.\\nuniform float iBeat;\\nuniform float iScene;\\nuniform float iEnergy;\\nuniform float iAccent;\\nuniform float iStemKick;\\nuniform float iStemBass;\\nuniform float iStemMelody;\\nuniform float iIntensity;\\nuniform float iZoom;\\nuniform float iSymmetry;\\nuniform float iPalette;\\nuniform float iFeedback;\\n#define PI 3.14159265359\\nmat2 rot(float a){float s=sin(a),c=cos(a);return mat2(c,-s,s,c);}\\nfloat hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\\nfloat line(float d,float width){return width/(abs(d)+width);}\\nvec3 spectrum(float x){return .55+.45*cos(6.28318*(vec3(.03,.23,.53)+x));}\\nfloat box(vec2 p,vec2 s){vec2 q=abs(p)-s;return length(max(q,0.))+min(max(q.x,q.y),0.);}\\nvoid mainImage(out vec4 fragColor,in vec2 fragCoord){\\n vec2 uv=(fragCoord-.5*iResolution.xy)/iResolution.y;\\n float t=iGlobalTime,b=iBeat;\\n float bass=iAudioBass,mid=iAudioMid,hi=iAudioHigh,hit=iAudioOnset;\\n bass=max(bass,iStemBass);mid=max(mid,iStemMelody);\\n float sound=clamp(iOvertoneVolume*9.,0.,1.);\\n // Exactly one of four visual languages, with slow crossfades around act changes.\\n float scene=clamp(iScene,0.,3.);\\n float w0=1.-smoothstep(.65,1.,scene);\\n float w2=smoothstep(1.65,2.,scene)*(1.-smoothstep(2.65,3.,scene));\\n float w3=smoothstep(2.65,3.,scene),w1=1.-w0-w2-w3;\\n float cut=floor(b/16.);\\n float turn=mod(cut,4.)*PI*.5;\\n // Beat clock arranges cuts; the camera punch requires actual bass/onset energy.\\n vec2 p=rot(turn+.035*sin(t*.2))*(uv*(1.-.16*bass-clamp(iZoom,0.,.5))-vec2(hit*.018,0.));\\n float r=length(p),a=atan(p.y,p.x);\\n vec3 cyan=vec3(.05,.95,.86),hot=vec3(1.,.16,.32),gold=vec3(1.,.68,.16);\\n vec3 violet=vec3(.52,.22,1.);\\n vec3 color=vec3(.003,.008,.018);\\n // I. Bathymetry: engraved topographic interference, then ripples from the kick.\\n if(w0>.001){\\n vec2 q=p+vec2(.18*sin(t*.12),.1*cos(t*.16));\\n float dist=length(q*vec2(1.,1.22));\\n float terrain=dist+.05*sin(q.x*8.+t*.24)*sin(q.y*7.-t*.18);\\n float contour=abs(fract(terrain*(13.+bass*4.)-t*.16)-.5);\\n vec3 opening=cyan*pow(line(contour,.014+.013*mid),2.)*(.16+.8*sound);\\n opening+=spectrum(a/6.28+t*.014)*line(dist-(.18+bass*.23),.003)*(.4+bass);\\n opening+=hot*line(q.y-.09*sin(q.x*12.+t+mid*5.),.0018)*(.12+mid);\\n color+=opening*w0;\\n }\\n // II. Current: a perspective tunnel of offset, alternating cyan/coral portals.\\n // Different widths and broken segments give a club-video rhythm, rather than a screensaver orbit.\\n if(w1>.001){\\n vec3 tunnel=vec3(0.);\\n for(int j=0;j<12;j++){\\n  float fj=float(j),z=fract(fj/12.+t*.105),scale=.07+z*z*1.9;\\n  vec2 v=rot(.18*sin(t*.28+fj*.35)+.16*bass*sin(fj))*p;\\n  float d=box(v,vec2(scale,scale*.62));\\n  float edge=line(d,.0015+.0025*z+.004*hit);\\n  float segments=.35+.65*step(-.15,sin(atan(v.y,v.x)*6.+fj+floor(b/2.)));\\n  vec3 ink=mix(cyan,hot,step(.5,fract(fj*.5)));\\n  tunnel+=ink*pow(edge,1.7)*z*(.55+bass*1.4)*segments;\\n  // Broad planes refract the kick; restrained filled regions preserve contrast.\\n  tunnel+=ink*exp(-abs(d)*35.)*.045*z*bass;\\n }\\n vec2 rails=vec2(abs(p.x),abs(p.y));\\n tunnel+=gold*line(rails.y-.19-.35*rails.x,.0018)*(.2+hi*1.7);\\n color+=tunnel*w1;\\n }\\n // III. Cathedral: a kinetic, folded light mandala with spectral petal edges.\\n // Every four bars the symmetry flips between six and eight, with an eight-beat iris.\\n if(w2>.001){\\n float petals=mix(iSymmetry,iSymmetry+2.,mod(cut,2.));\\n float fold=abs(mod(a+PI/petals+floor(b/8.)*.12,2.*PI/petals)-PI/petals);\\n vec2 k=vec2(cos(fold),sin(fold))*r;\\n vec3 cathedral=vec3(0.);\\n for(int j=0;j<7;j++){\\n  float fj=float(j),rr=.10+fj*.092+bass*.085;\\n  float petal=rr+(.055+.06*mid)*cos(a*petals+t*.32+fj*.8);\\n  float edge=line(r-petal,.0018+.002*hit);\\n  vec3 ink=mix(gold,hot,.5+.5*sin(fj*.7+t*.1));\\n  cathedral+=ink*pow(edge,1.6)*(.3+sound+mid*.8);\\n  float blade=box(rot(.42+sin(t*.3+fj)*.14)*vec2(k.x-rr,k.y),vec2(.05+mid*.035,.006+hi*.006));\\n  cathedral+=spectrum(fj*.11+t*.01)*line(blade,.0018)*(.3+mid);\\n }\\n cathedral+=cyan*line(k.y-k.x*.12,.0015)*smoothstep(.12,.35,r)*(1.-smoothstep(.65,.85,r))*(.2+hi*2.);\\n color+=cathedral*w2;\\n }\\n // IV. Afterglow: violet ribbon echoes. A late reprise tightens the ribbons again.\\n if(w3>.001){\\n vec3 after=vec3(0.);\\n for(int j=0;j<9;j++){\\n  float fj=float(j),phase=t*.3+fj*.36;\\n  float ribbon=p.y-.25*sin(p.x*(3.+bass*2.)+phase)-.032*(fj-4.);\\n  after+=mix(violet,cyan,fj/10.)*pow(line(ribbon,.0025+.003*mid),1.8)*(.25+sound);\\n }\\n after+=hot*line(r-(.28+.13*sin(a*3.+t*.3)+bass*.08),.002)*(.2+mid);\\n color+=after*w3;\\n }\\n // Audible frequencies become a segmented radial spectrogram, not a decorative clock.\\n float band=texture2D(iChannel0,vec2(.002+pow(abs(a)/PI,2.)*.35,.25)).r;\\n float ring=.43+.15*band;\\n float dashed=step(.25,fract(a*36./PI));\\n color+=mix(cyan,gold,w2)*line(r-ring,.0015)*dashed*sound*.48;\\n // Treble reveals tiny indexed tiles and point-like sparks; silence removes both.\\n vec2 cell=floor((p+1.)*48.);\\n vec2 local=fract((p+1.)*48.)-.5;\\n float seed=hash(cell+floor(b*2.));\\n float sparks=step(1.-hi*.055,seed)*pow(max(0.,1.-length(local)*2.),7.);\\n color+=vec3(.7,.94,1.)*sparks*hi*3.;\\n // A measured onset opens four corner brackets instead of washing out the whole frame.\\n vec2 corner=abs(uv)-vec2(.77,.38);\\n float bracket=min(abs(corner.x)+max(0.,abs(corner.y)-.035),abs(corner.y)+max(0.,abs(corner.x)-.035));\\n color+=hot*line(bracket,.0012)*hit*2.;\\n // Filmic contrast and dark margins; no automatic full-screen strobe.\\n color*=1.-.45*smoothstep(.35,1.1,r);\\n color=1.-exp(-color*1.35*iIntensity);\\n color=mix(color,color.gbr,clamp(iPalette,0.,1.));\\n color=mix(color,texture2D(iChannel1,fragCoord/iResolution.xy).rgb,clamp(iFeedback,0.,.7));\\n color=pow(max(color,0.),vec3(.9));\\n color+=(hash(fragCoord+floor(t*24.))-.5)*.004;\\n fragColor=vec4(color,1.);\\n}\\n\\n// prepared during live rehearsal\\n\" :mappings {:zoom {:signal [:stem :bass :level] :amount 0.2}}}) (av/launch :rehearsal))"
+    },
+    "result": {
+      "ok": true,
+      "revision": 71,
+      "targetBeat": 2132,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 1170.322,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :afterglow {:transition :iris :beats 4}) (av/variation {:density 1 :seed 83})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 72,
+      "targetBeat": 2184,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 1170.478,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "break"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 73,
+      "targetBeat": 2184
+    }
+  },
+  {
+    "elapsed": 1195.156,
+    "command": {
+      "op": "eval",
+      "source": "(av/commit {:quantize :bar :edits [(av/launch :bathymetry {:transition :dissolve :beats 4}) (av/variation {:density 0.75 :seed 84})]})"
+    },
+    "result": {
+      "ok": true,
+      "revision": 74,
+      "targetBeat": 2232,
+      "edits": 2
+    }
+  },
+  {
+    "elapsed": 1195.266,
+    "command": {
+      "op": "request",
+      "request": {
+        "kind": "gesture",
+        "name": "drop"
+      }
+    },
+    "result": {
+      "ok": true,
+      "revision": 75,
+      "targetBeat": 2232
+    }
+  }
+]

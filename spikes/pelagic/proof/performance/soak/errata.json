@@ -1,0 +1,8 @@
+{
+  "report": "report.json",
+  "status": "failed rehearsal retained without altering its measured values",
+  "knownMeasurementDefect": "The old timing worklet paired samples with an asynchronous FIFO of expected times. Delayed messages could shift the pairing. Its large sample-probe delays are invalid evidence of actual onset latency.",
+  "independentFailures": ["67 missed scheduler steps", "108 ms frame interval p95", "143.2 ms revision graphics submission p95"],
+  "subsequentCorrections": ["Expected timestamps travel in a second silent audio channel", "Cancelled pilots share voice disposal", "One-second continuous scheduling horizon", "Percussion voices end when their envelopes finish", "UI acknowledgements no longer convert the full revision history"],
+  "interpretation": "Resource and storage bounds passed, but this run does not establish release reliability for the corrected implementation. The performed-set report measures the subsequent source revision."
+}

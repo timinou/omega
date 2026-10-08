@@ -147,10 +147,23 @@ painting does not delay the first changed visual frame. Diagnostics count missed
 scheduler steps, whole-run frame interval distributions, revision-to-first-draw
 submission delay, voice/node/program counts, history and namespace sizes, storage
 backlog and post-GC heap checkpoints. Startup and deliberate GC pauses remain
-in the reported measurements.
+in the reported measurements. The diagnostics also expose native audio-clock
+progress against wall time, sample rate and browser output-latency estimates.
+A normal minimal-clock probe does not guarantee that the full DSP/graphics
+workload keeps wall time. Percussion graphs now stop at their envelope end;
+ADSR graphs retain their gate and release, while shared effect tails continue.
+UI updates read compact revision counts and snapshot names rather than repeatedly
+converting the complete history.
+
+Continuous mode schedules one second ahead; quantized edits target a boundary
+beyond that horizon. This provides headroom for source/shader preparation and
+can add a bar of waiting compared with the finite score.
 
 An AudioWorklet receives silent sample-onset probes scheduled by the same
-AudioContext as kicks. It measures the browser sample timeline. Neither that
+AudioContext as kicks. It measures the browser sample timeline. Expected time travels in a second,
+silent audio channel, avoiding asynchronous message-order associations; Float32
+quantization is below .125 ms at twenty minutes. Cancelled probes cancel with
+their voice. Neither that
 probe nor the graphics submission measurement measures physical speaker/display
 latency or proves an absence of device underruns. Physical MIDI hardware and
 mobile sustained-performance testing are outside this proof; the MIDI adapter

@@ -17,9 +17,9 @@ function download(data,name,type){const a=document.createElement('a'),url=URL.cr
 function blocks(source){const result=[];const re=/^#\+begin_src\s+(\S+)[^\n]*\n([\s\S]*?)^#\+end_src\s*$/gmi;let m;while((m=re.exec(source)))result.push({language:m[1].toLowerCase(),code:m[2]});
   if(!result.length && source.trim())result.push({language:'beam-lisp',code:source});return result;}
 export function createHost(api) {
-  let config={...defaults},ctx=null,audio=null,timer=null,playing=false,nextStep=0,nextTime=0,origin=0,beatOrigin=0,disposed=false;
+  let config={...defaults},ctx=null,ctxWall=0,audio=null,timer=null,playing=false,nextStep=0,nextTime=0,origin=0,beatOrigin=0,disposed=false;
   const store=new LocalStore();let lastTake=null,restoreGeneration=0,recordPreparing=false,lastEvaluation=null,evalCount=0;
-  let model=Performance.d_initial(),active=plain(model).current,scheduled=active,revision=null,mode='finite',pausedBeat=0,pausedTime=0,timeOrigin=0,evaluation=0;
+  let model=Performance.d_initial(),active=plain(model.get(R.kw('current'))),scheduled=active,revision=null,mode='finite',pausedBeat=0,pausedTime=0,timeOrigin=0,evaluation=0;
   const ownedNamespaces=new Set();
   const events=[],diagnostics={ticks:0,missed:0,late:[],frames:[],longTasks:0,compiles:[],frameHistogram:new Uint32Array(1001),av:[],activation:[],render:[],started:performance.now()};
   let lastFrame=0,syncing=false,avExpected=null,announcement=null;
@@ -30,7 +30,7 @@ export function createHost(api) {
   const views=new Set(),files=new Map(),decks={},urls=new Set(), handles=new Map(),offlineRenders=new Set();
   const notice=(message,playingValue=playing)=>{if(disposed)return;for(const v of views)v.status(message);api.dispatch({type:'pelagic/status',message,playing:playingValue});};
   const alive=()=>{if(disposed)throw new Error('Package was unloaded');};
-  function unlock(){alive();if(!ctx){ctx=new AudioContext({latencyHint:'interactive'});audio=new AudioEngine(ctx,config);audio.startTelemetry(moduleURL('timing-worklet.mjs'));for(const key of ['a','b'])decks[key]=new SampleDeck(audio,key);}ctx.resume();return audio;}
+  function unlock(){alive();if(!ctx){ctx=new AudioContext({latencyHint:'interactive'});ctxWall=performance.now();audio=new AudioEngine(ctx,config);audio.startTelemetry(moduleURL('timing-worklet.mjs'));for(const key of ['a','b'])decks[key]=new SampleDeck(audio,key);}ctx.resume();return audio;}
   async function sources(){if(!sourcePromise)sourcePromise=Promise.all(['pelagic.glsl','overtone.bl'].map(async f=>{const r=await fetch(moduleURL(f));if(!r.ok)throw new Error('Cannot load '+f);return r.text();}));return sourcePromise;}
   async function vm(){
     if(readyVM)return readyVM;
@@ -44,7 +44,9 @@ export function createHost(api) {
     for(const [name,f] of Object.entries(Object.fromEntries(['configure','pattern','session','perform','cue','commit','scene','launch','layer','visual','variation','gesture','pattern-stop','undo','redo','snapshot','recall','cancel','pause','resume','panic'].map(n=>[n,Live['d_'+n.replaceAll('-','_')]]))))language.Env.intern('av',name,f);
     readyVM=language;return language;
   }
-  const thisModel=()=>model;
+  const revisionID=()=>model.get(R.kw('revision'));
+  const controlModel=()=>({revision:revisionID(),past:{length:model.get(R.kw('past')).cnt},future:{length:model.get(R.kw('future')).cnt},
+    snapshots:Object.fromEntries([...model.get(R.kw('snapshots')).entries()].map(([key])=>[key.fq??String(key),true]))});
   function current(){if(!ctx||!playing)return {time:pausedTime,beat:pausedBeat};
     const beat=beatOrigin+Math.max(0,ctx.currentTime-origin)*config.bpm/60;return {time:timeOrigin+Math.max(0,ctx.currentTime-origin),beat};}
   function applyConfig(values){for(const [control,value] of Object.entries(values))api.dispatch({type:"pelagic/control",control,value});}
@@ -58,8 +60,8 @@ export function createHost(api) {
 
   }
   function ack(phase){
-    api.dispatch({type:'pelagic/revision',phase,revision:plain(model).revision,config:active.config});
-    for(const v of views)v.revision?.(phase,plain(model).revision,revision?.beat);
+    api.dispatch({type:'pelagic/revision',phase,revision:revisionID(),config:active.config});
+    for(const v of views)v.revision?.(phase,revisionID(),revision?.beat);
   }
   function disarm(){
     if(revision?.armed){
@@ -73,21 +75,22 @@ export function createHost(api) {
   }
   function applyRevision(){
     if(!revision?.armed||ctx.currentTime+0.0001<revision.time)return;
-    const activationStarted=performance.now(),r=revision;if(!playing)installAssets(r,ctx.currentTime);model=Performance.d_activate(model,r.id);active=plain(model).current;
+    const activationStarted=performance.now(),r=revision;if(!playing)installAssets(r,ctx.currentTime);model=Performance.d_activate(model,r.id);active=plain(model.get(R.kw('current')));
     timeOrigin=playing?current().time-Math.max(0,ctx.currentTime-r.time):pausedTime;beatOrigin=r.beat;origin=r.time;config={...active.config};scheduled=active;patterns=new Map(Object.entries(active.patterns));
     revision=null;pending=[];audio?.configure(config,r.time);
     for(const v of views){v.shader?.setState?.(active,r.beat);v.frozen=false;}
     avExpected=r.time;log('active',{revision:r.id});announcement=r.id;if(!playing){ack('ACTIVE');announcement=null;}diagnostics.activation.push(performance.now()-activationStarted);if(diagnostics.activation.length>256)diagnostics.activation.shift();
   }
+  const lookAhead=()=>mode==='performance'?1:.35;
   function queueModel(candidate,quantize='bar',preview=false,assetChanges=null){
-    const value=plain(candidate),state=value.pending?.state;
+    const value={pending:plain(candidate.get(R.kw('pending')))},state=value.pending?.state;
     if(!state)throw new Error('No pending performance state');
     validateState(state);for(const v of views)v.shader?.validateState?.(state);
     if(preview)return {ok:true,preview:true};
     const inheritedAssets=revision?.originalAssetChanges||[];disarm();++restoreGeneration;
     model=candidate;scheduled=active;
     const quantum=quantize==='beat'?1:quantize==='phrase'?16:4;
-    const beat=playing?Performance.d_boundary(current().beat,quantum,.5*config.bpm/60):pausedBeat;
+    const beat=playing?Performance.d_boundary(current().beat,quantum,(lookAhead()+.15)*config.bpm/60):pausedBeat;
     revision={id:value.pending.id,beat,state,assetChanges:assetChanges??inheritedAssets,originalAssetChanges:assetChanges??inheritedAssets,armed:!playing,time:ctx?.currentTime||0};pending=[revision];
     log('queued',{revision:revision.id,targetBeat:beat});ack(playing?'QUEUED':'ARMED');
     if(!playing)applyRevision();return {ok:true,revision:value.pending.id,targetBeat:beat};
@@ -121,7 +124,7 @@ export function createHost(api) {
       const skip=Math.ceil((ctx.currentTime-nextTime)/(60/scheduled.config.bpm/4));diagnostics.missed+=skip;
       log('resync',{skipped:skip});nextStep+=skip;nextTime+=skip*60/scheduled.config.bpm/4;
     }
-    while(nextTime<ctx.currentTime+.35&&(mode==='performance'||nextStep<1024)){
+    while(nextTime<ctx.currentTime+lookAhead()&&(mode==='performance'||nextStep<1024)){
       if(revision&&!revision.armed&&nextStep/4>=revision.beat){
         revision.time=nextTime;revision.armed=true;scheduled=revision.state;
         audio.configure(scheduled.config,nextTime);installAssets(revision,nextTime);ack('ARMED');log('armed',{revision:revision.id,time:nextTime});
@@ -297,7 +300,7 @@ export function createHost(api) {
     const assets=Object.fromEntries(Object.entries(decks).filter(([,d])=>d.buffer&&d.hash).map(([deck,d])=>[deck,{deck,hash:d.hash,name:d.name,bpm:d.bpm,cue:d.cue,loopBeats:d.loopBeats}]));
     active={...active,assets};model=model.assoc(R.kw('current'),toBL(active));if(!revision)scheduled=active;
   }
-  function session(){syncAssets();return {schema:'omega.pelagic',version:1,state:active,snapshots:plain(model).snapshots,assets:Object.values(active.assets)};}
+  function session(){syncAssets();return {schema:'omega.pelagic',version:1,state:active,snapshots:plain(model.get(R.kw('snapshots'))),assets:Object.values(active.assets)};}
   async function prepareAssets(state){
     const changes=[],missing=[];
     for(const deck of ['a','b']){
@@ -315,7 +318,7 @@ export function createHost(api) {
   }
   function restoreSnapshot(name){return restoreCandidate(Performance.d_recall(Performance.d_cancel(model),name));}
   async function restoreCandidate(candidate){
-    const generation=++restoreGeneration,state=plain(candidate).pending.state;
+    const generation=++restoreGeneration,state=plain(candidate.get(R.kw('pending'))).state;
     const prepared=await prepareAssets(state);alive();if(generation!==restoreGeneration)throw new Error('Restore superseded');
     const result=queueModel(candidate,'bar',false,prepared.changes);if(prepared.missing.length)notice('Snapshot staged · relink missing audio: '+prepared.missing.join(', '));
     return {...result,missing:prepared.missing};
@@ -326,7 +329,7 @@ export function createHost(api) {
     for(const snapshot of Object.values(value.snapshots||{}))validateState(snapshot);
     for(const v of views){v.shader?.validateState?.(state);for(const snapshot of Object.values(value.snapshots||{}))v.shader?.validateState?.(snapshot);}
     const prepared=await prepareAssets(state);alive();if(generation!==restoreGeneration)throw new Error('Restore superseded');
-    const id=plain(model).serial+1,candidate=model.assoc(R.kw('serial'),id).assoc(R.kw('snapshots'),toBL(value.snapshots||{})).assoc(R.kw('pending'),toBL({id,state,history:'normal'}));
+    const id=model.get(R.kw('serial'))+1,candidate=model.assoc(R.kw('serial'),id).assoc(R.kw('snapshots'),toBL(value.snapshots||{})).assoc(R.kw('pending'),toBL({id,state,history:'normal'}));
     const result=queueModel(candidate,'bar',false,prepared.changes);
     log('session-load',{missing:prepared.missing});notice(prepared.missing.length?'Session staged · relink missing audio: '+prepared.missing.join(', '):'Session staged');
     return {...result,missing:prepared.missing};
@@ -340,7 +343,7 @@ export function createHost(api) {
     if(!recording)return lastTake?await lastTake.stop():null;
     const take=recording;recording=null;audio?.output.disconnect(take.dest);lastTake=take;
     const info=await take.stop();log('record-stop',{take:info});
-    const manifest={schema:'omega.pelagic.take',version:1,...info,session:session(),events:events.slice(),diagnostics:report(),browser:navigator.userAgent,sampleRate:ctx.sampleRate};
+    const manifest={schema:'omega.pelagic.take',version:1,...info,capture:take.capture,session:session(),events:events.slice(),diagnostics:report(),browser:navigator.userAgent,sampleRate:ctx.sampleRate};
     await store.put('takes',take.id,manifest);await store.put('takes','latest',take.id);
     if(save&&!disposed&&info.bytes<16*1024*1024)await exportTake();
     notice('Live take saved locally · '+Math.round(info.duration)+' seconds · '+(info.bytes/1e6).toFixed(1)+' MB');
@@ -353,18 +356,20 @@ export function createHost(api) {
     if(estimate?.quota&&estimate.quota-estimate.usage<32*1024*1024)throw new Error('Less than 32 MB recording storage available');
     const v=[...views][0];if(!v?.canvas)throw new Error('Open the stage to record');
     const dest=ctx.createMediaStreamDestination();audio.output.connect(dest);
+    const now=current();v.shader.draw({time:now.time,beat:now.beat,width:1280,height:720,analyser:audio?.analyser,signals:audio?.signals()||{}});
     const video=v.canvas.captureStream(30),stream=new MediaStream([...video.getVideoTracks(),...dest.stream.getAudioTracks()]);
-    recording=new LiveTake(store,stream);recording.dest=dest;recording.start();log('record-start',{id:recording.id});notice('Recording live mix + stage · chunks saved incrementally');
+    recording=new LiveTake(store,stream);recording.capture={width:1280,height:720,requestedFPS:30,geometryScale:.75};recording.dest=dest;recording.start();log('record-start',{id:recording.id});notice('Recording live mix + stage · chunks saved incrementally');
     }finally{recordPreparing=false;}
   }
   function report(){const total=diagnostics.frameHistogram.reduce((a,b)=>a+b,0),q=f=>{let sum=0;for(let i=0;i<diagnostics.frameHistogram.length;i++){sum+=diagnostics.frameHistogram[i];if(sum>=total*f)return i;}return 0;};
     const av=diagnostics.av.slice().sort((a,b)=>a-b);
     return {elapsedSeconds:(performance.now()-diagnostics.started)/1000,missedEvents:diagnostics.missed,schedulerTicks:diagnostics.ticks,longTasks:diagnostics.longTasks,
       frameP95:q(.95),frameP99:q(.99),framesOver100Percent:diagnostics.frameHistogram.slice(101).reduce((a,b)=>a+b,0)/Math.max(1,total)*100,
+      audioClock:ctx?{sampleRate:ctx.sampleRate,baseLatency:ctx.baseLatency,outputLatency:ctx.outputLatency,nativeSeconds:ctx.currentTime,wallSeconds:(performance.now()-ctxWall)/1000,rate:ctx.currentTime/Math.max(.001,(performance.now()-ctxWall)/1000)}:null,
       avSubmitP95Ms:av[Math.floor(av.length*.95)]??null,avSamples:av.length,
       activationMaxMs:Math.max(0,...diagnostics.activation),renderMaxMs:Math.max(0,...diagnostics.render),
       compileP95:diagnostics.compiles.slice().sort((a,b)=>a-b)[Math.floor(diagnostics.compiles.length*.95)]||0,
-      resources:audio?.resources(),gpu:[...views][0]?.shader?.resources?.(),storageTransactions:store.pending,history:plain(model).past.length,namespaces:ownedNamespaces.size,
+      resources:audio?.resources(),gpu:[...views][0]?.shader?.resources?.(),storageTransactions:store.pending,history:model.get(R.kw('past')).cnt,namespaces:ownedNamespaces.size,
       recording:recording?{bytes:recording.bytes,pendingBytes:recording.pendingBytes,chunks:recording.count,error:recording.error?.message}:null,
       audioTiming:audio?.timingReport(),avTiming:'visual activation samples the same audio clock; physical output latency is not measured'};}
   const deckHTML=key=>`<section class="deck" data-deck="${key}"><div class="deck-head"><span class="deck-title">${key.toUpperCase()} / ${key==='a'?'ATMOSPHERE':'PULSE'}</span><label class="file-label">＋ AUDIO<input type="file" accept="audio/*" data-file="${key}" aria-label="Load audio into deck ${key.toUpperCase()}"></label></div><div class="file-name" data-file-name="${key}">${key==='a'?'harmonic field / D minor':'deep-house pulse / melodic fragments'}</div><div class="deck-meta"><button data-deck-op="play" data-deck-key="${key}" title="Play/pause imported audio">▶</button><button data-deck-op="cue" data-deck-key="${key}">CUE</button><button data-deck-op="set-cue" data-deck-key="${key}" title="Set cue at current sample position">SET</button><button data-deck-op="jog" data-value="-0.25" data-deck-key="${key}" title="Jog back">−¼</button><button data-deck-op="jog" data-value="0.25" data-deck-key="${key}" title="Jog forward">＋¼</button><label>LOOP<select data-loop="${key}" aria-label="Deck ${key.toUpperCase()} loop"><option value="0">OFF</option><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label><label>BPM<input type="number" value="${defaults.bpm}" min="40" max="240" data-sample-bpm="${key}" aria-label="Deck ${key.toUpperCase()} source BPM"></label><button data-deck-op="clear" data-deck-key="${key}" title="Remove imported audio">×</button></div><div class="eq">${['low','mid','high'].map(b=>`<label>${b.toUpperCase()}<input type="range" min="-18" max="12" step=".5" value="0" data-control="eq-${key}-${b}" aria-label="Deck ${key.toUpperCase()} ${b} EQ"></label>`).join('')}</div><div class="level-row"><span>LEVEL</span><input type="range" min="0" max="1" step=".01" value=".9" data-control="deck-${key}" aria-label="Deck ${key.toUpperCase()} level"><div class="meter"><i data-meter="${key}"></i></div></div></section>`;
@@ -373,7 +378,7 @@ export function createHost(api) {
     shadow.innerHTML=`<link rel="stylesheet" href="${moduleURL('style.css')}"><div class="app"><header class="header"><div><div class="brand">PELAGIC</div><div class="edition">OMEGA / PERFORMANCE INSTRUMENT 002</div></div><div class="clock"><b data-time>00:00</b><span data-bar>BAR 01 · ${defaults.bpm} BPM</span></div></header><div class="visual"><canvas aria-label="Audio-reactive Pelagic shader"></canvas><div class="corner"><span class="live-dot"></span>PROCEDURAL / SOUND → LIGHT</div><div class="visual-actions"><button data-command="pelagic/eval">EVALUATE ↵</button><button data-freeze>FREEZE</button><button data-fullscreen aria-label="Fullscreen stage">⛶</button></div><div class="caption"><div class="act">I / THE DESCENT</div><h1>BATHYMETRY</h1><p>a signal beneath the surface</p></div></div><nav class="timeline" aria-label="Movement cues">${movements.map((m,i)=>`<button data-cue="${i}">${String(i+1).padStart(2,'0')} / ${m.name}<span>${String(i*16+1).padStart(2,'0')}—${(i+1)*16} BARS</span></button>`).join('')}</nav><div class="transport"><button class="primary" data-command="pelagic/play">▶ PLAY THE DESCENT</button><button data-command="pelagic/stop">■ STOP</button><label>BPM <input type="number" min="60" max="180" value="${defaults.bpm}" data-control="bpm" aria-label="Performance BPM"></label><label>SCENE <select data-control="scene" aria-label="Visual scene"><option value="-1">NARRATIVE</option>${movements.map((m,i)=>`<option value="${i}">${m.name}</option>`).join('')}</select></label><div class="spacer"></div><button data-record>● REC</button><button data-export title="Export original score, with current mixer settings">SCORE WAV ↗</button></div><div class="decks">${deckHTML('a')}${deckHTML('b')}</div><div class="mixer"><label>FILTER<input type="range" min=".15" max="2" step=".01" value="1" data-control="filter" aria-label="Master filter"></label><label>CROSSFADE<input type="range" min="0" max="1" step=".01" value=".5" data-control="crossfade" aria-label="Equal-power crossfade"><div class="cross-label"><span>ATMOSPHERE</span><span>PULSE</span></div></label><label>SPACE<input type="range" min="0" max=".9" step=".01" value=".45" data-control="space" aria-label="Reverb space"></label></div><div class="mixer"><label>SWING<input type="range" min="0" max=".45" step=".01" value=".12" data-control="swing" aria-label="Swing"></label><label>ECHO<input type="range" min="0" max=".7" step=".01" value=".32" data-control="echo" aria-label="Echo feedback"></label><label>MASTER<input type="range" min="0" max="1" step=".01" value=".72" data-control="master" aria-label="Master volume"></label></div><footer class="bottom"><div class="stems">${['kick','bass','hat','snare','melody'].map(s=>`<button class="active" data-stem="${s}">${s.toUpperCase()}</button>`).join('')}</div><div class="status" role="status">Ready · a four-movement descent / headphones welcome</div></footer></div>`;
     const $=s=>shadow.querySelector(s),canvas=$('canvas');let raf=0,dead=false,freezeTime=null,init=null,contextLost=false;
     let controls=null,lastControls=0,nextFrame=0;
-    const v={canvas,shader:null,frozen:false,revision(phase,id,targetBeat){controls?.update(plain(model),{phase,revision:id,targetBeat,...report()});},status(s){$('.status').textContent=s;$('.status').classList.toggle('error',s.startsWith('Edit rejected'));}};views.add(v);
+    const v={canvas,shader:null,frozen:false,revision(phase,id,targetBeat){controls?.update(controlModel(),{phase,revision:id,targetBeat,...report()});},status(s){$('.status').textContent=s;$('.status').classList.toggle('error',s.startsWith('Edit rejected'));}};views.add(v);
     controls=performanceControls(shadow,{request,notice,perform:()=>dispatch({type:'command',command:'pelagic/perform'}),
       mix:(control,value)=>dispatch({type:'pelagic/control',control,value}),
       save:()=>download(JSON.stringify(validateSession(session()),null,2),'pelagic-session.pelagic.json','application/json'),load:loadSession,take:exportTake});
@@ -402,7 +407,7 @@ export function createHost(api) {
       if(!contextLost&&((!config.freeze&&!v.frozen&&(playing||(audio?.voices.size||0)>0||Object.values(decks).some(d=>d.running))) || v.shader?.frames===0))renderAt(freezeTime??now.time,{beat:now.beat});
       raf=requestAnimationFrame(frame);
       for(const key of ['a','b']){const button=$(`[data-deck-op="play"][data-deck-key="${key}"]`);button.classList.toggle('active',!!decks[key]?.running);button.textContent=decks[key]?.running?'Ⅱ':'▶';}
-      if(stamp-lastControls>500){controls.update(plain(model),{phase:revision?(revision.armed?'ARMED':'QUEUED'):'ACTIVE',targetBeat:revision?.beat,mode,...report()});lastControls=stamp;}
+      if(stamp-lastControls>500){controls.update(controlModel(),{phase:revision?(revision.armed?'ARMED':'QUEUED'):'ACTIVE',targetBeat:revision?.beat,mode,...report()});lastControls=stamp;}
       if(recording?.error)stopRecording({save:false}).catch(e=>notice('Recording stopped · '+e.message));
       const rec=$('[data-record]');rec.classList.toggle('recording',!!recording);rec.textContent=recording?'■ SAVE REC':'● REC';
     }
@@ -422,9 +427,9 @@ export function createHost(api) {
       if(x.dataset.loop)dispatch({type:'pelagic/deck',deck:x.dataset.loop,op:'loop',value:+x.value});
       if(x.dataset.sampleBpm)dispatch({type:'pelagic/deck',deck:x.dataset.sampleBpm,op:'bpm',value:+x.value});});
     // Proof methods are attached to the owned DOM node, removed with the view.
-    root.pelagic={renderAt,renderAudio,evaluate,stats:()=>({playing,nextStep,lastEvaluation,evalCount,voices:audio?.voices.size||0,context:ctx?.state||'none',frames:v.shader?.frames||0,recording:!!recording,patterns:Object.keys(scheduled.patterns),pending:pending.length,mode,time:current().time,beat:current().beat,revision:plain(model).revision,phase:revision?(revision.armed?'ARMED':'QUEUED'):'ACTIVE',resources:audio?.resources(),gpu:v.shader?.resources?.(),diagnostics:{missed:diagnostics.missed,ticks:diagnostics.ticks,longTasks:diagnostics.longTasks}}),ready:()=>init,
+    root.pelagic={renderAt,renderAudio,evaluate,stats:()=>({playing,audioTime:ctx?.currentTime,nextStep,lastEvaluation,evalCount,voices:audio?.voices.size||0,context:ctx?.state||'none',frames:v.shader?.frames||0,recording:!!recording,patterns:Object.keys(scheduled.patterns),pending:pending.length,mode,time:current().time,beat:current().beat,revision:revisionID(),phase:revision?(revision.armed?'ARMED':'QUEUED'):'ACTIVE',resources:audio?.resources(),gpu:v.shader?.resources?.(),diagnostics:{missed:diagnostics.missed,ticks:diagnostics.ticks,longTasks:diagnostics.longTasks}}),ready:()=>init,
       request,session,loadSession,record,stopRecording,exportRecording:async writable=>{if(recording)await stopRecording({save:false});if(!lastTake)throw new Error('No take');await lastTake.exportTo(writable);},midi:()=>controls,model:()=>plain(model),events:()=>events.slice(),diagnostics:report,wav,soundtrackAnalysis,shader:()=>v.shader,engine:()=>audio,config:()=>({...config}),decks:()=>decks};
-    return {update(model){const state=model.state||defaults;if(state.revision===undefined||state.revision>=plain(thisModel()).revision)configure(state);
+    return {update(model){const state=model.state||defaults;if(state.revision===undefined||state.revision>=revisionID())configure(state);
       for(const [k,value] of Object.entries(state)){const el=$(`[data-control="${k}"]`);if(el&&shadow.activeElement!==el)el.value=value;}
       shadow.querySelectorAll('[data-stem]').forEach(b=>b.classList.toggle('active',!!config[b.dataset.stem]));$('[data-freeze]').classList.toggle('active',!!config.freeze);
       for(const key of ['a','b']){const name=decks[key]?.name;$(`[data-file-name="${key}"]`).textContent=name||(key==='a'?'harmonic field / D minor':'deep-house pulse / melodic fragments');}

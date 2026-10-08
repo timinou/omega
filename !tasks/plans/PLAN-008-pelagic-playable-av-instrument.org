@@ -1,5 +1,5 @@
 #+TITLE: PELAGIC: a playable audiovisual instrument and twenty-minute live set
-#+STATE: TODO
+#+STATE: DOING
 #+CUSTOM_ID: PLAN-008-pelagic-playable-av-instrument
 #+DATE: 2026-10-08
 
@@ -348,3 +348,27 @@ code instrument. No arbitrary runtime eval inside the audio rendering thread.
 
 Success is a playable, coherent and recoverable instrument demonstrated in a
 real sustained session. Another finite offline film alone does not satisfy it.
+
+* Implementation checkpoint 2026-10-08
+
+P1–P7 and the bounded capture/diagnostics work are implemented in independent
+PELAGIC sources. Commits: 813b98c (source checkpoint), d60fc2e (pure revisions),
+846527f (signals/compositor), 24717af (studio integration), 7e719df (asset recovery
+and bounded capture), e3ec273 (original live scene variations and media tools).
+See spikes/pelagic/performance.bl.md for implemented APIs, architecture and limits.
+
+The browser contract passes 17 checks. Package tests pass 24 checks, editor tests
+pass 73, and the unchanged presentation checker passes 23 variants. The first
+twenty-minute stress run completed but FAILED timing release gates: 67 missed
+steps, 108 ms frame interval p95, 143.2 ms visual submission p95. Bounded resources,
+recording backlog, final heap plateau and exact cleanup passed. Raw evidence is
+spikes/pelagic/proof/performance/soak/report.json. This remains failed evidence,
+not a release pass. Its old timing probe also misassociated delayed messages;
+a follow-up correction encodes expected timestamps in the silent audio path.
+
+Machine pressure is recorded separately. A minimal native clock probe progresses
+at wall rate; the sustained DSP/graphics workload does not. Do not attribute all
+drift to hardware or claim scheduler/sample probes establish physical playback
+quality. Native audio-clock/wall-clock rates are being added to diagnostics.
+P8/P10 remain open until the measured timing failures are resolved or explicitly
+reported as blockers. The performed set and downloadable evidence follow.

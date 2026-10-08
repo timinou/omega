@@ -1,0 +1,68 @@
+{
+  "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+  "method": "15-second wall/audio differences after one-second warmup; four minimal native contexts; no graphics or PELAGIC DSP",
+  "results": [
+    {
+      "options": {
+        "latencyHint": "interactive"
+      },
+      "sampleRate": 48000,
+      "baseLatency": 0.010666666666666666,
+      "outputLatency": 0.032,
+      "wallSeconds": 15.002,
+      "audioSeconds": 14.997333333333334,
+      "clockRate": 0.9996889303648402,
+      "outputTimestamp": {
+        "contextTime": 15.829176333333331,
+        "performanceTime": 16234.800000011921
+      }
+    },
+    {
+      "options": {
+        "latencyHint": "interactive",
+        "sampleRate": 44100
+      },
+      "sampleRate": 44100,
+      "baseLatency": 0.010680272108843538,
+      "outputLatency": 0.032,
+      "wallSeconds": 15.002199999988079,
+      "audioSeconds": 15.005895691609977,
+      "clockRate": 1.0002463433111077,
+      "outputTimestamp": {
+        "contextTime": 15.696582816326531,
+        "performanceTime": 16230.899999976158
+      }
+    },
+    {
+      "options": {
+        "latencyHint": "interactive",
+        "sampleRate": 48000
+      },
+      "sampleRate": 48000,
+      "baseLatency": 0.010666666666666666,
+      "outputLatency": 0.04,
+      "wallSeconds": 15.002300000011921,
+      "audioSeconds": 14.997333333333332,
+      "clockRate": 0.9996689396506812,
+      "outputTimestamp": {
+        "contextTime": 15.683871666666667,
+        "performanceTime": 16231.100000023842
+      }
+    },
+    {
+      "options": {
+        "latencyHint": "playback"
+      },
+      "sampleRate": 48000,
+      "baseLatency": 0.021333333333333333,
+      "outputLatency": 0.064,
+      "wallSeconds": 15.002300000011921,
+      "audioSeconds": 14.997333333333334,
+      "clockRate": 0.9996689396506814,
+      "outputTimestamp": {
+        "contextTime": 15.656169666666669,
+        "performanceTime": 16220
+      }
+    }
+  ]
+}

@@ -20,7 +20,8 @@
   ],
   "stats": {
     "playing": true,
-    "nextStep": 182,
+    "audioTime": 22.856,
+    "nextStep": 191,
     "lastEvaluation": {
       "id": 7,
       "ok": true,
@@ -29,26 +30,26 @@
       "edits": 1
     },
     "evalCount": 7,
-    "voices": 22,
+    "voices": 25,
     "context": "running",
-    "frames": 1060,
+    "frames": 1066,
     "recording": false,
     "patterns": [
       "melody"
     ],
     "pending": 0,
     "mode": "performance",
-    "time": 21.742666666666665,
-    "beat": 44.56487868852461,
+    "time": 22.265333333333338,
+    "beat": 45.6002564663024,
     "revision": 12,
     "phase": "ACTIVE",
     "resources": {
-      "voices": 22,
-      "peakVoices": 23,
-      "triggered": 107,
-      "nodes": 275,
+      "voices": 25,
+      "peakVoices": 26,
+      "triggered": 127,
+      "nodes": 300,
       "buses": 6,
-      "intents": 106
+      "intents": 126
     },
     "gpu": {
       "programs": 2,
@@ -65,30 +66,38 @@
     },
     "diagnostics": {
       "missed": 0,
-      "ticks": 787,
-      "longTasks": 15
+      "ticks": 780,
+      "longTasks": 14
     }
   },
   "metrics": {
-    "elapsedSeconds": 24.135799999952315,
+    "elapsedSeconds": 24.87369999998808,
     "missedEvents": 0,
-    "schedulerTicks": 788,
-    "longTasks": 15,
-    "frameP95": 52,
-    "frameP99": 87,
-    "framesOver100Percent": 0.45385779122541603,
-    "avSubmitP95Ms": 15.573770491806194,
+    "schedulerTicks": 781,
+    "longTasks": 14,
+    "frameP95": 57,
+    "frameP99": 96,
+    "framesOver100Percent": 0.7552870090634441,
+    "audioClock": {
+      "sampleRate": 48000,
+      "baseLatency": 0.010666666666666666,
+      "outputLatency": 0.032,
+      "nativeSeconds": 22.877333333333333,
+      "wallSeconds": 23.357900000035762,
+      "rate": 0.9794259472511787
+    },
+    "avSubmitP95Ms": 27.814207650267875,
     "avSamples": 8,
-    "activationMaxMs": 3.799999952316284,
-    "renderMaxMs": 49.10000002384186,
-    "compileP95": 231.69999998807907,
+    "activationMaxMs": 9.199999988079071,
+    "renderMaxMs": 48.30000001192093,
+    "compileP95": 400.69999998807907,
     "resources": {
-      "voices": 22,
-      "peakVoices": 23,
-      "triggered": 107,
-      "nodes": 275,
+      "voices": 26,
+      "peakVoices": 26,
+      "triggered": 128,
+      "nodes": 309,
       "buses": 6,
-      "intents": 106
+      "intents": 127
     },
     "gpu": {
       "programs": 2,
@@ -109,9 +118,9 @@
     "recording": null,
     "audioTiming": {
       "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
-      "samples": 14,
-      "p95Ms": 0.018442622955916477,
-      "maxMs": 0.018442622955916477,
+      "samples": 15,
+      "p95Ms": 2.647491455078921,
+      "maxMs": 2.647491455078921,
       "ready": true,
       "error": null
     },

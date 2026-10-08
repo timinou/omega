@@ -57,7 +57,7 @@ with sync_playwright() as p:
  page.evaluate(q+'.midi().bindings.set("0:1","crossfade");'+q+'.midi().receive({data:[176,1,32]})')
  page.wait_for_function('Math.abs('+q+'.config().crossfade-32/127)<0.001');done('MIDI CC adapter')
  with page.expect_download(timeout=20000) as download:
-  page.get_by_role('button',name='● REC',exact=True).click();page.wait_for_function(q+'.stats().recording')
+  page.get_by_role('button',name='● REC',exact=True).click();page.wait_for_function(q+'.stats().recording');assert page.evaluate(q+'.shader().canvas.width===1280&&'+q+'.shader().canvas.height===720')
   page.wait_for_timeout(3000);page.get_by_role('button',name='■ SAVE REC',exact=True).click()
  download.value.save_as(str(PROOF/'live-check.webm'));done('incremental recording finalizes actual live audio and shader')
  page.screenshot(path=str(PROOF/'studio.jpg'),type='jpeg',quality=85)

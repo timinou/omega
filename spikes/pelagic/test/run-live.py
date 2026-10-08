@@ -128,6 +128,7 @@ with sync_playwright() as p:
   m=report['metrics'];timing=m['audioTiming'];report['gates']={
    'duration':manifest['duration']>=args.seconds,
    'audioDeadlines':m['missedEvents']==0,
+   'nativeClockProgress':.99<=(m.get('audioClock') or {}).get('rate',0)<=1.01,
    'frameP95':m['frameP95']<=40,
    'frameLongIntervals':m['framesOver100Percent']<1,
    'AVSubmit':m['avSubmitP95Ms'] is not None and m['avSubmitP95Ms']<=50,

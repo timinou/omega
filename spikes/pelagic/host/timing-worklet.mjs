@@ -1,12 +1,12 @@
-// Silent probe path: measure actual sample onset in the AudioContext render graph.
-// This is not a microphone loopback or hardware output latency measurement.
+// Timestamp travels in the silent probe's second channel, not an asynchronous
+// message queue. Delayed messages or cancelled pilots cannot shift associations.
+// Float32 timestamp quantization is below .125 ms at twenty minutes.
 class TimingProbe extends AudioWorkletProcessor {
-  constructor(){super();this.expected=[];this.port.onmessage=e=>{if(Number.isFinite(e.data))this.expected.push(e.data);if(this.expected.length>128)this.expected.shift();};}
   process(inputs,outputs){
-    const channel=inputs[0]?.[0];
-    if(channel)for(let i=0;i<channel.length;i++)if(channel[i]>.5){
-      const expected=this.expected.shift();if(expected!==undefined)this.port.postMessage({expected,actual:(currentFrame+i)/sampleRate});
-      break;
+    const impulse=inputs[0]?.[0],stamp=inputs[0]?.[1];
+    if(impulse&&stamp)for(let i=0;i<impulse.length;i++)if(impulse[i]>.5){
+      // Simultaneous pilots add; divide by their summed impulse amplitude.
+      this.port.postMessage({expected:stamp[i]/impulse[i],actual:(currentFrame+i)/sampleRate});
     }
     for(const output of outputs)for(const channel of output)channel.fill(0);
     return true;

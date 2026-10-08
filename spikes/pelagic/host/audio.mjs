@@ -25,6 +25,22 @@ export function validateGraph(g, depth=0) {
   }
   if (g.ugen === 'env-gen' && !['perc','adsr'].includes(g.envelope?.envelope)) throw new Error('Unsupported envelope');
 }
+// Release silent voice graphs at their actual envelope end; effect tails live on
+// the shared buses. Adding :dur to a percussion release doubled silent DSP work.
+export function voiceLifetime(graph,params={}) {
+  let envelopeEnd=0,hasEnvelope=false;
+  const n=x=>x?.ugen==='param'?(params[x.key]??x.default):x;
+  const find=x=>{if(!x||typeof x!=='object')return;
+    if(x.ugen==='env-gen'){
+      hasEnvelope=true;const e=x.envelope,a=n(e.attack),r=n(e.release);
+      const end=e.envelope==='adsr'?Math.max(a+n(e.decay),params.dur??1)+r:a+r;
+      if(!Number.isFinite(end)||end<0)throw new Error('Invalid envelope lifetime');
+      envelopeEnd=Math.max(envelopeEnd,end);
+    }
+    Object.values(x).forEach(y=>{if(Array.isArray(y))y.forEach(find);else if(y&&typeof y==='object')find(y);});
+  };find(graph);
+  return Math.min(30,Math.max(.03,(hasEnvelope?envelopeEnd:(params.dur??1))+.08));
+}
 export class AudioEngine {
   constructor(context, config={}) {
     this.ctx=context; this.voices=new Map(); this.serial=0; this.disposed=false;
@@ -98,9 +114,9 @@ export class AudioEngine {
     this.timing={samples:[],error:null,ready:false};
     try{
       await this.ctx.audioWorklet.addModule(url);if(this.disposed)return;
-      this.probe=new AudioWorkletNode(this.ctx,'pelagic-timing-probe',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
-      this.probe.port.onmessage=e=>{this.timing.samples.push((e.data.actual-e.data.expected)*1000);if(this.timing.samples.length>8192)this.timing.samples.shift();};
-      this.probe.connect(this.ctx.destination);this.probeBuffer=this.ctx.createBuffer(1,1,this.ctx.sampleRate);this.probeBuffer.getChannelData(0)[0]=1;this.timing.ready=true;
+      this.probe=new AudioWorkletNode(this.ctx,'pelagic-timing-probe',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],channelCount:2,channelCountMode:'explicit',channelInterpretation:'discrete'});
+      this.probe.port.onmessage=e=>{this.timing.samples.push(Math.abs(e.data.actual-e.data.expected)*1000);if(this.timing.samples.length>8192)this.timing.samples.shift();};
+      this.probe.connect(this.ctx.destination);this.timing.ready=true;
     }catch(e){this.timing.error=e.message;}
   }
   timingReport(){const values=this.timing?.samples.slice().sort((a,b)=>a-b)||[];
@@ -147,13 +163,7 @@ export class AudioEngine {
     const c=this.ctx, params=v.params || {}, start=Math.max(time,c.currentTime), owned=[], sources=[], controls=new Map();
     const resolve=x=>x?.ugen==='param' ? (params[x.key] ?? x.default) : x;
     const num=(x)=>{ const y=resolve(x); if(typeof y!=='number'||!Number.isFinite(y)) throw new Error('Expected numeric control'); return y; };
-    let release=0;
-    const find=x=>{
-      if (!x || typeof x !== 'object') return;
-      if (x.ugen==='env-gen') release=Math.max(release,x.envelope.envelope==='adsr' ? x.envelope.release : num(x.envelope.release)+num(x.envelope.attack));
-      Object.values(x).forEach(y=>{ if(Array.isArray(y))y.forEach(find); else if(typeof y==='object')find(y); });
-    };find(v.graph);
-    const duration=Math.min(30,Math.max(.03,(params.dur ?? 1)+release+.08)), end=start+duration;
+    const duration=voiceLifetime(v.graph,params),end=start+duration;
     const own=n=>{owned.push(n);return n;};
     const connect=(value,param)=>{
       if(typeof value==='number') param.value=value;
@@ -221,7 +231,7 @@ export class AudioEngine {
     if(this.intents.length>256)this.intents.splice(0,this.intents.length-256);
     this.triggered++;this.peakVoices=Math.max(this.peakVoices,this.voices.size+1);
     if(v.synth==='kick') {
-      if(this.probe){const pilot=c.createBufferSource();pilot.buffer=this.probeBuffer;pilot.connect(this.probe);this.probe.port.postMessage(start);pilot.start(start);pilot.onended=()=>pilot.disconnect();}
+      if(this.probe){const pilot=c.createBufferSource(),stamp=c.createBuffer(2,1,c.sampleRate);stamp.getChannelData(0)[0]=1;stamp.getChannelData(1)[0]=start;pilot.buffer=stamp;pilot.connect(this.probe);owned.push(pilot);sources.unshift(pilot);pilot.start(start);pilot.onended=()=>pilot.disconnect();}
 
       const p=this.decks.a.duck.gain;p.cancelScheduledValues(start);p.setValueAtTime(.5,start);p.linearRampToValueAtTime(1,start+.27);
     }
