@@ -25,3 +25,13 @@ test('new-desk prompt submits a scoped host intent and unload cancels its closur
  assert.equal(get(get(x,'args'),'from'),'second');assert.equal(get(get(x,'args'),'id'),'third');
  const removed=G.d_unuse(ed,'procurement');assert.equal(get(removed,'mode'),K('normal'));assert.equal(get(get(removed,'minibuf'),'submit')==null,true);
 });
+
+test('evidence layout keeps a namespaced source view and unload restores a single editor',()=>{
+ const data=ev(K('desk'),'second',K('opportunity'),'notice',K('requirement'),0,K('source'),'/procurement/artifact/second/RC.pdf#page=2');
+ const ed=M.d_boot('#+TITLE: Review','procurement:second/review/notice/0').assoc(K('doc'),ev(K('data'),data));
+ let fr=F.d_handle(F.d_single(ed),ev(K('type'),K('use'),K('package'),P.d_bl_package));
+ assert.equal(get(get(fr,'layout'),'name'),'procurement-evidence');
+ const model=P.d_source_model(F.d_focused(fr));assert.equal(get(model,'package'),'procurement');assert.equal(get(model,'src'),'/procurement/artifact/second/RC.pdf#page=2');
+ fr=F.d_handle(fr,key(':'));for(const ch of '(ed/unuse "procurement")')fr=F.d_handle(fr,ev(K('type'),K('text'),K('text'),ch));fr=F.d_handle(fr,key('Enter'));
+ assert.equal(get(get(fr,'layout'),'name'),'single');assert.equal(F.d_editor_ids(fr).cnt,1);
+});

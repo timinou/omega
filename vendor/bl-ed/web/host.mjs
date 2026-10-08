@@ -753,7 +753,7 @@ const viewPainters = {
   },
 };
 function paintView(dom, p) {
-  if (get(p, "view-kind") === K("host")) {
+  if (get(p, "view-kind") === K("host") || get(get(p, "view"), "package")) {
     const model = toJS(get(p, "view"));
     if (model?.package) pkgHosts.paint(model.package, dom.body, model, get(p, "of").name);
     return;

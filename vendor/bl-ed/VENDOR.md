@@ -259,3 +259,9 @@ untouched working text, prompt retention and file-draft refusal. Workbench's
 final navigation tour switches tasks while retaining a plan, then proves a
 second task switch preserves a pending reply. Domain policy remains in the
 package; frame decisions use only editor state and effect values.
+
+2026-10-08: package host painters also accept namespaced view kinds whose view
+model supplies `:package`, rather than requiring every package to register the
+same `:host` view name. This keeps independent package views composable. The
+procurement evidence pane uses this generic host boundary; its PDF DOM/resource
+lifecycle lives entirely in the procurement package.
