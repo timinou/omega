@@ -1,0 +1,350 @@
+#+TITLE: PELAGIC: a playable audiovisual instrument and twenty-minute live set
+#+STATE: TODO
+#+CUSTOM_ID: PLAN-008-pelagic-playable-av-instrument
+#+DATE: 2026-10-08
+
+* Objective and authorization
+
+Turn the independent PELAGIC bl-ed package into an audiovisual instrument that can
+sustain a twenty-minute improvised set: imported audio, live synthesis, live Beam
+Lisp/GLSL edits, playable visual transitions and uninterrupted recording. Keep
+musical and visual coherence through an atmospheric opening, groove, development,
+breakdowns, drops and release. Demonstrate operation without reloads or external
+editing of the proof recording.
+
+User requested a full implementation plan for all three proposed workstreams and
+instructed us to commit as work progresses. This document is the planning
+deliverable; proposed APIs and acceptance targets below are not implemented or
+measured results. Implementation follows this plan in verified, scoped commits.
+
+* Observed starting point
+
+- spikes/pelagic/pelagic/main.bl exports one pure bl-package with two layouts,
+  editor commands and :package-host effects. Package state is layered under
+  [:pkg-state "pelagic"]. The real editor/compiler evaluates live buffers.
+- pelagic/score.bl and host/host.mjs implement a finite 64-bar score. The scheduler
+  stops after step 1024 and its tail. Repeating patches are applied at bar
+  boundaries, but synthesis policy, edit queue and transport still share a host.
+- host/audio.mjs interprets Overtone-shaped graph data with Web Audio. Separate
+  physical buses currently represent decks A/B, not each musical stem.
+- host/features.mjs measures mixed-output bass, mids, treble and amplitude
+  attacks. The current visual response is tested against silence at fixed time.
+  These are features, not reliable instrument identification or beat tracking.
+- host/shader.mjs owns one active program. The four scenes are sections of one
+  shader, chosen by score position; there is no scene/layer/transition model.
+- host/host.mjs stages source in a fresh namespace and validates graph/shader
+  requests, but patterns/configuration wait while shader changes apply
+  immediately. A session is not yet one time-aligned audio/visual transaction.
+- REC captures the actual canvas/audio as WebM, retaining chunks in memory. WAV
+  exports the original composition, excluding live patterns/imported tracks.
+- Upstream Overtone/Shadertone trees are vendored references. Browser execution
+  uses Beam Lisp's JavaScript target, Web Audio and WebGL; no JVM/SC backend.
+- Latest saved proof: 14 package tests, 73 editor tests, 23 equivalence variants,
+  24 browser checks, unclipped 135.90-second recording/render and fixed-clock
+  audio-response proof. These are a baseline, not the next milestone's proof.
+- The prototype is currently untracked, and generic editor-host work shares
+  dirty files with unrelated work. Establish a scoped source checkpoint first.
+
+* Architecture and invariants
+
+Keep one independent package named pelagic under spikes/pelagic. Scene graphs,
+patterns, revisions, mappings, validation policy and performance structure are
+plain Beam Lisp values/functions. JavaScript owns AudioNodes, browser clocks,
+WebGL, worker/worklet bridges, controller IO, persistence and recording streams.
+Do not add a second Lisp reader, private editor or music concepts to ed.*.
+
+Keep source-editor and stage layouts; add a performance layout through
+:provides/:layouts if cue/history/mapping panes are needed. Package state belongs
+under :pkg-state. Large buffers, GPU objects, file handles and compiled runtime
+resources stay in the disposable package host. Compact acknowledgements return
+as events. The BL model is authoritative for requested/applied revisions; the
+host is authoritative for physical timing/resources. Version/generation IDs
+reconcile them rather than exposing mutable host tables to BL.
+
+Keep frame-wide use/unuse exact. Dispose every pane's resources, analysis taps,
+workers, controller listeners, pending compilations, recording streams and URLs.
+Ignore asynchronous results from removed generations. Document any generic
+vendored-editor seam in vendor/bl-ed/VENDOR.md. Never test against live port
+8790: use a fresh offline memory instance on 8792 or another unused port.
+
+Preserve existing Overtone/Shadertone subset behavior and aliases. New av/* APIs
+are explicit extensions, not claims of upstream compatibility. Retain a legacy
+finite composition mode alongside continuous performance mode.
+
+* Workstream 1: make the visuals playable
+
+** Musical buses and signals
+
+Add named stem buses: kick, bass, percussion, melody and atmosphere, routed into
+the existing two decks. Imported tracks expose deck-level bands and onsets;
+label their inferred signals as analysis, not isolated kick or melody stems.
+
+Supply two complementary signals: scheduled musical intent (onset, velocity,
+pitch, phrase boundary) and measured post-gain audio activity. A muted stem must
+not keep causing visual impacts. Effects tails may keep contributing measured
+energy. Use audio timestamps for event signals, not the scheduler's lookahead
+execution time. Deliver same mappings in live playback and offline replay.
+
+Define normalized named signals, attack/release smoothing, bounds and curves as
+BL data. Proposed targets: bass -> camera/scale, percussion -> accents/sparks,
+melody pitch -> palette/shape, atmosphere -> depth/feedback. Support deck-a/b
+and master signals so imported music still drives a useful visual instrument.
+
+** Scene engine and visual vocabulary
+
+Extract four existing visual languages into independently selectable scene
+values. Each declares shader source, controls, signal mappings and defaults.
+Implement a bounded compositor: up to two scene layers plus one accent layer;
+a crossfade needs at most three transient render targets. Check GPU limits and
+frame budget before enabling a configuration. Reuse buffers/textures; no
+per-frame shader compilation or fresh texture allocation.
+
+Provide crossfade, dissolve and directional/iris reveal transitions, cueable on
+next beat, next bar or next phrase. Compile candidates in the owning WebGL
+context ahead of the transition; retain the last working program on failure.
+Use audio-clock progress rather than frame-count progress. Support cancellation,
+replace-pending semantics, seek, tempo changes and explicit scene lock. Feedback
+history resets on seek/new scene unless a scene explicitly retains it.
+
+Expose a few musically useful controls: intensity, palette, symmetry, spatial
+scale, feedback and transition duration. Add macro gestures BUILD, BREAK, DROP
+and RELEASE that coordinate audio/visual values through the same revision model.
+These are editable mappings, not an automatic twenty-minute arrangement.
+
+Proposed code shape; not an existing API:
+
+#+begin_src clojure
+(av/scene :current
+  {:shader current-glsl
+   :controls {:intensity 0.7 :palette :cyan-coral}
+   :mappings {:zoom {:signal [:stem :bass :level] :amount 0.18}
+              :accent {:signal [:stem :percussion :onset] :amount 0.8}}})
+(av/launch :current {:quantize :bar :transition :dissolve :beats 4})
+#+end_src
+
+Acceptance: keyboard/code can select, layer and transition scenes during live
+playback; mute/routing changes affect the correct signals; imported files react;
+invalid shaders preserve the active scene; transitions follow tempo changes;
+fixed-clock tests isolate each signal's visible effect. Capture screenshots in
+the real studio, including multi-pane use and exact state after unuse.
+
+* Workstream 2: make live coding safe and fluid
+
+** Continuous transport and patterns
+
+Replace the finite step ceiling in performance mode with a monotonic beat
+transport and repeating phrase state. The existing score becomes a selectable
+arrangement/pattern bank. Specify start, pause/resume, stop, seek and panic;
+prevent stuck voices and event bursts on tab suspension/resume. A stale clock
+must skip expired events and resynchronize visibly, never silently claim
+uninterrupted timing. Maintain phase through tempo changes and manual deck sync.
+
+Add pattern start/stop/replace, density, probability, transposition and variation
+using seeded deterministic randomness. Keep initial pattern lengths bounded and
+represent event positions in beats; convert at the host scheduling edge. Existing
+millisecond Overtone bundles retain their documented behavior. Arbitrary live
+functions are evaluated into validated plans before the scheduling hot path.
+
+** One revision, one musical commit
+
+Introduce a BL performance model and pure edit reducer (proposed
+pelagic/performance.bl): applied revision, draft/staged revision, quantization,
+patterns, mix, scenes, mappings and bounded history. Separate edit preparation
+from scheduled application. Candidate synthesis graphs and shader programs must
+all validate before accepting the revision. Recheck generation on every async
+completion. Explicitly distinguish QUEUED, ARMED and ACTIVE in the studio.
+
+Use a prepare/arm/apply protocol: choose a future boundary beyond the scheduling
+horizon; schedule that revision's audio events at the boundary; activate visual
+state against the same audio timestamp. Do not announce ACTIVE when the
+lookahead first visits the bar. Coalesce superseded edits and remove old queued
+sources beyond the commit boundary. Ramp mix parameters; define old voice tails
+per stem so replacement neither clicks nor doubles attacks. Shader compilation
+failure or resource exhaustion before arming rejects the entire edit. A physical
+runtime failure after arming invokes recovery/panic rather than claiming a
+perfect rollback of sound already emitted.
+
+Add structured error locations for BL/GLSL, a pending-edit indicator and a
+preview mode that validates without playing. Continue to stage through the real
+Beam Lisp compiler. Bound/dispose old namespaces, voice-handle maps and compiled
+candidates; investigate available runtime cleanup primitives instead of assuming
+namespace deletion exists. Keep explicit exceptions to compatibility documented.
+
+** Undo, snapshots and recovery
+
+Keep the last 32 committed performance revisions. Undo/redo queues a prior
+state for a musical boundary; it cannot undo audio already heard. Allow immediate
+panic, cancel pending edit and a named last-good recovery state. Source text is
+not silently replaced: restoring a snapshot is an explicit editor operation
+with existing dirty-document protection.
+
+Save/load a versioned .pelagic.json document containing patterns, graph plans,
+GLSL, mappings, mixer state, source references and deterministic seeds. Store
+local audio by content hash in a separately managed asset store or require
+relinking; never serialize AudioNodes, closures, file handles or huge base64
+tracks into every revision. Unknown schema versions, missing audio and unsupported
+UGens get actionable errors. Save/import/export operate through host effects.
+
+Proposed transaction shape; new API to be implemented:
+
+#+begin_src clojure
+(av/commit
+  {:quantize :bar
+   :edits [(av/pattern :bass 8 bass-plan)
+           (av/launch :cathedral {:transition :iris :beats 4})
+           (av/configure {:space 0.4 :echo 0.28})]})
+(av/snapshot :before-the-drop)
+(av/undo {:quantize :bar})
+#+end_src
+
+Acceptance: a valid multi-edit revision activates together at its intended beat;
+an invalid nested edit changes nothing; rapid edits cannot resurrect old work;
+undo/redo and snapshot restore preserve sound continuity; missing assets do not
+stop unrelated playback; old snapshots migrate or fail clearly. Source, cursor,
+history and every pane restore correctly after unuse. Test tempo changes,
+pause/seek, cancellation and unuse while compilation/import is pending.
+
+* Workstream 3: prove performance reliability
+
+** Measure before changing the clock
+
+Instrument scheduled versus intended audio onset, missed scheduling deadlines,
+queue depth, main-thread long tasks, RAF intervals, compile/commit duration,
+recording chunk size and counts of voices, nodes, shader programs/textures,
+workers, snapshots and retained namespaces. Actual output timing needs an
+AudioWorklet sample counter or loopback/capture measurement; AudioContext
+scheduled timestamps alone do not prove audible jitter. Report which metric
+was measured and do not equate RAF variation with audio variation.
+
+Profile existing scheduling under edits first. Move plan expansion/compilation
+or scheduling supervision into a worker only where measurements justify it.
+Keep native Web Audio DSP and audio-clock timestamps. A worker timer is not a
+hard realtime guarantee. If needed, use a minimal AudioWorklet for sample-clock
+telemetry/queue timing, with bounded messages and no BL compiler/DSP graph build
+inside process(). Retain a feature-tested fallback and report reduced guarantees.
+
+Set provisional desktop targets at 48 kHz, 1280x720, 30 fps, integrated GPU:
+zero expired scheduled events in normal foreground playback; measured onset
+error p95 <=5 ms and maximum <=15 ms for the selected measurement method; visual
+frame interval p95 <=40 ms and <1% intervals >100 ms; AV event alignment p95
+<=50 ms. Repeated unload closes all owned resources. After warmup, resource counts
+plateau and post-cleanup retained memory grows <10% between equivalent 5-minute
+checkpoints. Heap measurements are browser-dependent; use explicit resource
+counts everywhere and record GC/heap method where available. These are release
+targets to validate, not promised universal performance or mobile guarantees.
+
+** Bounded capture and evidence
+
+Replace unbounded in-memory recording chunks with incremental local writes
+where the browser supports them, or bounded IndexedDB chunks with an export
+path. Surface storage errors and estimate remaining space before long capture.
+Preserve continuity and timestamps when saving segments; do not silently drop
+segments or remux over a recording gap. Handle stop/unuse during recording with
+predictable finalization and release resources.
+
+Keep original-score WAV export explicitly named. Add actual live mixed-bus
+audio capture including imported decks and live patches, plus synchronized
+canvas capture. A recording manifest includes source revision, browser/device,
+clock/sample rate, event/revision log, audio asset hashes and duration. Logs must
+not retain full FFT frames or unbounded per-event objects.
+
+Deliver an uncut twenty-minute live capture, a concise highlight video, stereo
+compressed audio, screenshots, session snapshot and machine-readable timing/
+resource report. Preserve masters locally; produce H.264/AAC MP4 and MP3/AAC
+phone copies with fast-start metadata, exact file sizes and verified full decode.
+For a long set, offer smaller continuous segments as well as the full download.
+The highlight is labeled edited; the milestone proof remains uncut.
+
+** Test and rehearsal ladder
+
+1. BL reducer/transport tests: revisions, quantization, beat math, history,
+   serialization, seeded variation and cancellation across tempo/seek changes.
+2. Host tests: routing/muting, scheduler generation fences, compile failure,
+   disposal, partial storage failure and recording finalization.
+3. Real-editor browser drive: source edits and shader edits during playback,
+   cue/mix/import, scene layering, undo, snapshot save/load, independent sample
+   playback, recovery, and repeated use/unuse. Default presentation equivalence
+   checker stays unchanged; run all vendored editor tests.
+4. Ten-minute deterministic stress rehearsal with a fixed edit/cue/import script.
+   Include a foreground main-thread stall; report any missed events. Background
+   and GPU-context-loss probes are separate recovery tests, not hidden edits to
+   the normal-run metrics. Simulated clocks are unit evidence, not a live soak.
+5. One twenty-minute automated real-time soak for timing/resource baselines.
+6. A separate twenty-minute performed set, making live musical choices while
+   the transport runs. Record the actual canvas/audio and timestamp those actions.
+   Do not describe a prerecorded action script or offline render as improvisation.
+   Headless driving can operate the real editor, but desktop hardware controls
+   and mobile behavior remain separately labeled unless physically tested.
+
+* Interface and control scope
+
+Keep the editable score visible alongside the stage and two decks. Add scene
+cues, a transition preview/progress indicator, macro controls, armed/applied
+revision status, undo/redo, snapshots and a compact diagnostics drawer. Avoid
+covering the stage with implementation telemetry during performance.
+
+Keyboard and code provide the complete control surface. Add a small learnable
+MIDI mapping adapter for eight continuous controls and cue pads after core
+transactions work; no controller is required. Enable MIDI only through an
+explicit user action, feature-detect it and remove listeners on unuse. Test
+message-to-action mappings synthetically; report physical hardware validation
+separately. Touch-friendly controls and responsive screenshots are useful, but
+full phone performance is outside this desktop milestone.
+
+* Dependency and commit sequence
+
+Each row is a reviewable, verified commit or a small set of atomic commits with
+the same scope. Never use git add -A. Inspect staged paths/hunks and commit only
+owned work. Preserve concurrent changes in vendor/bl-ed and spikes/present.
+
+| Step | Proposed commit | Deliverable and gate |
+|------+-----------------+----------------------|
+| P0 | docs(pelagic): plan playable AV performance milestone | This plan; source-grounded review; no implementation claims. |
+| P1 | feat(pelagic): checkpoint current club prototype | Package source, licenses/hashes and reproducible tests; isolate required generic host hunks in a preceding/following focused commit. Audit large artifacts; keep masters out of ordinary Git blobs. Document artifact locations/checksums and retain phone proofs. Rebuild and run baseline gates. |
+| P2 | feat(pelagic): add continuous transport and performance revisions | BL state/reducer, beat-based queue, acknowledgements, panic and finite-mode compatibility; transport/transaction tests. |
+| P3 | feat(pelagic): add stem signals and visual mappings | Named audio buses, muted-signal semantics and event/analysis mapping; isolated signal and routing proof. |
+| P4 | feat(pelagic): add quantized scene layers and transitions | Four independent scenes, bounded compositor and precompiled transitions; real browser switching/rollback and frame-budget check. |
+| P5 | feat(pelagic): commit live audio and visuals together | Integrate audio scheduling/visual activation with revision boundary; stale edit and multi-error tests; inspect queued versus active UI. |
+| P6 | feat(pelagic): add variation history and session snapshots | Seeded variations, undo/redo, last-good recovery, schema/assets/relink; round-trip and restore tests. |
+| P7 | feat(pelagic): add performance cues and controller mappings | Performance layout, keyboard macros, optional MIDI adapter and live source demo; controller mapping/unit tests and editor-use/unuse screenshots. |
+| P8 | perf(pelagic): bound scheduling resources and record diagnostics | Instrumentation, profile-driven worker/worklet work, namespace/resource caps; ten-minute stress gates. Split observability and optimization into separate commits. |
+| P9 | feat(pelagic): stream live capture and export phone media | Bounded full-session recording, asset/event manifest, actual live audio and compressed exports; full decode/storage/disposal tests. |
+| P10 | test(pelagic): prove twenty-minute live performance | Automated soak plus distinct performed set; uncut capture, highlights, screenshots, metrics, compatibility update and final regression gates. |
+
+P2 precedes shared commit semantics; P3 precedes stem-reactive scenes; P4 and P5
+complete the first playable vertical slice. P6/P7 make it practical to improvise.
+Instrumentation starts during P2, and P8 stabilizes the accumulated workload
+before P9/P10. Rehearse after P5 and P7 rather than postponing musical evaluation
+until the final recording. Fix failed gates in focused commits; never hide
+failures by shortening the run or switching to offline proof.
+
+* Final acceptance checklist
+
+- [ ] Twenty-minute continuous performance transport with imported audio and synthesis.
+- [ ] At least four scene languages, layering, phrase-aware transitions and editable signal mappings.
+- [ ] Demonstrate at least eight live pattern edits, eight visual cues/transitions,
+      three expressive macro gestures, two breakdown/drop pairs, an undo, and
+      snapshot recall. These are minimum exercise counts, not a scripted arrangement.
+- [ ] Deliberate invalid BL and GLSL edits preserve the current performance.
+- [ ] Timing/frame/resource targets measured with hardware/browser and method stated;
+      any misses are reported and resolved or remain explicit blockers.
+- [ ] Bounded recording includes actual imported/live sound and corresponding stage.
+- [ ] Source, cursor and all panes survive clean unuse; no owned resources remain.
+- [ ] Package/editor tests green and default-presentation equivalence check unchanged.
+- [ ] Uncut recording, compact phone outputs, screenshots, snapshot, manifest and
+      reproduction instructions delivered; full outputs decode successfully.
+- [ ] Compatibility docs distinguish implemented APIs, planned features and limitations.
+- [ ] All implementation slices committed with exact staged scope and validation.
+
+* Boundaries and later work
+
+No JVM/SuperCollider backend, full Overtone UGen parity, commercial DJ parity,
+automatic key-lock/time-stretch, projector mapping, browser-to-browser clock
+sync or external clock protocol in this milestone. Add Overtone-compatible
+functions only where a musical slice needs them and document behavior. Native
+SC, better imported-track beat analysis and multichannel monitoring can follow
+this performance proof. Controller support must not postpone a working keyboard/
+code instrument. No arbitrary runtime eval inside the audio rendering thread.
+
+Success is a playable, coherent and recoverable instrument demonstrated in a
+real sustained session. Another finite offline film alone does not satisfy it.
