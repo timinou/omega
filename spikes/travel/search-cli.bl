@@ -1,0 +1,11 @@
+;; Host bridge: run omega.search.openrouter for the travel desk.
+;; usage: bin/bl run spikes/travel/search-cli.bl -- '<json {query, opts}>'   → one JSON line on stdout.
+;; The API key is read here (root/.env or process env) and never printed.
+(ns travel.search-cli (:require [omega.search.openrouter :as sr] [omega.llm :as llm]))
+(def args (vec (BeamLisp/argv)))
+(def req (json/decode (last args)))
+(defn kw [m] (reduce-kv (fn [a k v] (assoc a (keyword k) v)) {} m))
+(def o (kw (or (get req "opts") {})))
+(def home (System/get_env "OMEGA_HOME"))
+(def r (sr/search (get req "query") (assoc (into {} (map (fn [[k v]] [k (if (seq? v) (vec v) v)]) o)) :root (or (:root o) home))))
+(println (str "@@RESULT@@" (erlang/iolist_to_binary (json/encode (llm/jsonable r)))))

@@ -13,7 +13,7 @@ import {recover} from '../procurement/lifecycle.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url));
 export async function startBrowserHost({root=process.env.BROWSER_DEMO_ROOT || '/tmp/omega-browser-demo',
   manager,backend=process.env.BROWSER_BACKEND || 'native',
-  upstream='http://127.0.0.1:8796',port=8797,procurement=new Procurement(root,upstream)}={}) {
+  upstream='http://127.0.0.1:8796',port=8797,procurement=new Procurement(root,upstream),routes}={}) {
 if(process.env.BL_BROWSER_ENABLED==='0')backend='off';
 if(!['native','kernel','off'].includes(backend))throw Error('Choose native, kernel or off browser backend');
 if(!manager){
@@ -93,6 +93,9 @@ const server=http.createServer(async(req,res)=>{
     if(![`127.0.0.1:${actualPort}`,`localhost:${actualPort}`].includes(host))return json(res,403,{ok:false,message:'Invalid host'});
     if(req.method==='POST' && req.headers.origin && ![`http://${host}`,`http://127.0.0.1:${actualPort}`,`http://localhost:${actualPort}`].includes(req.headers.origin))return json(res,403,{ok:false,message:'Invalid origin'});
     const u=new URL(req.url,`http://${host}`);const p=u.searchParams.get('path');
+    // Optional domain-neutral extension point: runs only after the Host/Origin checks above.
+    // routes(req,res,url,{manager,json,body}) resolves true when it answered the request.
+    if(routes && await routes(req,res,u,{manager,json,body}))return;
     if(u.pathname.startsWith('/browser/live/') || u.pathname.startsWith('/browser/credentials/') || u.pathname.startsWith('/browser/native-stream/')) {
       if(req.headers['sec-fetch-site']==='cross-site' || req.headers['sec-fetch-site']==='same-site')return json(res,403,{ok:false,message:'Same-origin browser access required'});
       if(req.headers['x-omega-browser']!=='human')return json(res,403,{ok:false,message:'Open the browser panel to access this capability'});

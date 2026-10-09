@@ -1,0 +1,121 @@
+(ns travel.main
+ (:require [ed.core :as c] [ed.docs :as docs]))
+;; Travel desk: an editable trip notebook beside a host-drawn desk. Pure: events in, state + effects out.
+;; Listings, trip form, shortlist and notes persist in the TravelService (host side); this package
+;; keeps only per-editor navigation/selection state under (:pkg-state ed) "travel".
+(defn travel? [ed]
+ (some (fn [line] (starts-with? line "#+TRAVEL:")) (take 12 (:lines (:text ed)))))
+(defn desk-layout []
+ {:name "travel" :doc "An editable trip notebook beside the travel desk."
+  :panes [{:id :notebook :doc :linked :width [:fr 1]}
+          {:id :desk :view [:travel/desk :notebook] :width [:fr 3]}]
+  :focus :notebook})
+(defn inspect-layout []
+ {:name "travel-inspect" :doc "Notebook, desk, and the real same-origin browser panel inspecting a listing."
+  :panes [{:id :notebook :doc :linked :width [:fr 1]}
+          {:id :desk :view [:travel/desk :notebook] :width [:fr 2]}
+          {:id :browser :view [:travel/browser :notebook] :width [:fr 3]}]
+  :focus :notebook})
+(defn research-layout []
+ {:name "travel-research" :doc "Notebook and desk beside a retained Omega research task."
+  :panes [{:id :notebook :doc :linked :width [:fr 1]}
+          {:id :desk :view [:travel/desk :notebook] :width [:fr 2]}
+          {:id :research :doc :linked :width [:fr 2]}]
+  :focus :research})
+(defn adopt [ed]
+ (if (and (travel? ed) (not (get-in ed [:pkg-state "travel" :notebook-path])))
+  (assoc (assoc-in ed [:pkg-state "travel" :notebook-path] (:path ed)) :frame/layout (desk-layout))
+  ed))
+(def tabs ["discover" "shortlist" "compare" "trip" "notes"])
+(def fields {"tab" :tab "selected" :selected "query" :query "filter" :filter "section" :section "sort" :sort})
+(defn st [ed] (get-in ed [:pkg-state "travel"] {}))
+(defn model [ed]
+ {:package "travel" :role "desk" :source (join "\n" (:lines (:text ed))) :path (:path ed) :state (st ed)})
+(defn browser-model [ed]
+ (let [i (get (st ed) :inspect)]
+  {:package "travel" :role "browser" :inspect i :state {:tab (get (st ed) :tab)}}))
+(defn select [ed ev]
+ (let [k (get fields (:field ev))]
+  (if k (assoc-in ed [:pkg-state "travel" k] (:value ev)) ed)))
+(defn set-tab [tab] (fn [ed] (assoc-in ed [:pkg-state "travel" :tab] tab)))
+(defn toggle-compare [ed ev]
+ (let [ids (vec (get (st ed) :compare []))
+       id (:id ev)]
+  (assoc-in ed [:pkg-state "travel" :compare]
+   (if (some (fn [x] (= x id)) ids) (vec (filter (fn [x] (not= x id)) ids)) (conj ids id)))))
+(defn host-op [ed op extra]
+ (c/effect ed (merge {:kind :package-host :package "travel" :op op} extra)))
+(defn refresh-cmd [scope force]
+ (fn [ed] (host-op ed "refresh" {:scope scope :force force :listing (get (st ed) :selected)})))
+(defn inspect-selected [ed]
+ (if-let [id (get (st ed) :selected)]
+  (host-op ed "inspect" {:listing id})
+  (c/message ed "Select a listing in the desk first.")))
+(defn inspected [ed ev]
+ (let [already (get (st ed) :inspect)
+       ed (assoc-in ed [:pkg-state "travel" :inspect]
+            {:session (:session ev) :listing (:listing ev) :url (:url ev) :title (:title ev)})
+       ed (update-in ed [:pkg-state "travel"] dissoc :inspect-error)]
+  (if already ed
+   (c/effect ed {:kind :frame-layout :layout "travel-inspect" :keep {:notebook :notebook} :focus :notebook}))))
+(defn close-inspect [ed]
+ (let [i (get (st ed) :inspect)]
+  (if i
+   (-> (update-in ed [:pkg-state "travel"] dissoc :inspect)
+       (host-op "release-session" {:session (:session i)})
+       (c/effect {:kind :frame-layout :layout "travel" :keep {:notebook :notebook} :focus :notebook}))
+   ed)))
+(defn goal [ev]
+ (str "Travel research for the notebook " (:path ev) ".\nTrip: Essaouira, Morocco, check-in 2026-12-19 for 4 or 5 nights; 11 adults and 9 children, 20 guests; budget unlimited."
+  "\nQuestion: " (:question ev) "\nDesk context (user's shortlist and candidates):\n" (:context ev)
+  "\nFind real, citable evidence for private whole-property rentals (riads and villas) in or near Essaouira that can sleep all 20. Quote the source text for capacity, bedrooms, access, heating, pool safety, and say plainly what stays unknown. "
+  "Draft only: do NOT contact owners, book, pay or send messages. Publish a separate cited .bl.org report; do not overwrite the notebook."))
+(defn run-research [ed ev]
+ (if (empty? (trim (or (:question ev) "")))
+  (c/message ed "Enter a research question first.")
+  (c/effect ed {:kind :intent :intent "task/open" :then :travel/research-route
+   :args {:title "Travel desk · research" :path (or (get (st ed) :notebook-path) (:path ed))
+          :goal (goal (assoc ev :path (or (get (st ed) :notebook-path) (:path ed))))}})))
+(defn research-result [ed ev]
+ (if (:ok? ev)
+  (c/effect (assoc-in ed [:pkg-state "travel" :research-id] (get-in ev [:data :id]))
+   {:kind :frame-layout :layout "travel-research" :keep {:notebook [:notebook :origin] :research nil} :focus :research
+    :visits {:research {:path (get-in ev [:data :path])}}})
+  (c/message (assoc-in ed [:pkg-state "travel" :research-error] (or (:message ev) "Research task failed")) "Research task failed; notebook and desk retained.")))
+(defn return-to-desk [ed]
+ (c/effect ed {:kind :frame-layout :layout "travel" :keep {:notebook :notebook} :focus :notebook}))
+(defn home [ed] (docs/visit ed "spikes/travel/trip.bl.org"))
+(defn intercept [ed ev]
+ (let [t (:type ev)]
+  (cond
+   (and (= :intent-result t) (= :travel/research-route (:then ev))) (research-result ed ev)
+   (= :travel/select t) (select ed ev)
+   (= :travel/toggle-compare t) (toggle-compare ed ev)
+   (= :travel/inspected t) (inspected ed ev)
+   (= :travel/inspect-failed t) (assoc-in ed [:pkg-state "travel" :inspect-error] (:message ev))
+   (= :travel/close-inspect t) (close-inspect ed)
+   (= :travel/research t) (run-research ed ev)
+   (= :travel/host-note t) (c/message ed (str (:message ev)))
+   :else nil)))
+(def bl-package
+ {:name "travel" :doc "Group-stay desk: evidence-first candidates, shortlist, comparison and an inquiry checklist (draft only)."
+  :commands {:travel/home {:doc "Open the trip notebook and desk." :run home}
+             :travel/discover {:doc "Desk: discover tab." :run (set-tab "discover")}
+             :travel/shortlist {:doc "Desk: shortlist tab." :run (set-tab "shortlist")}
+             :travel/compare {:doc "Desk: comparison tab." :run (set-tab "compare")}
+             :travel/trip {:doc "Desk: trip & party form." :run (set-tab "trip")}
+             :travel/notes {:doc "Desk: notes and inquiry checklist." :run (set-tab "notes")}
+             :travel/search {:doc "Focus the discovery search field." :run (fn [ed] (host-op (assoc-in ed [:pkg-state "travel" :tab] "discover") "focus-search" {}))}
+             :travel/refresh {:doc "Refresh the selected listing (cached)." :run (refresh-cmd "selected" false)}
+             :travel/force-refresh {:doc "Force-refresh the selected listing." :run (refresh-cmd "selected" true)}
+             :travel/refresh-all {:doc "Refresh every candidate (cached)." :run (refresh-cmd "all" false)}
+             :travel/inspect {:doc "Inspect the selected listing in the real browser panel." :run inspect-selected}
+             :travel/close-inspect {:doc "Close this desk's browser panel." :run close-inspect}
+             :travel/return {:doc "Return to notebook and desk." :run return-to-desk}}
+  :keys {:normal {"space t o" :travel/home "space t d" :travel/discover "space t s" :travel/shortlist "space t c" :travel/compare
+                  "space t p" :travel/trip "space t n" :travel/notes "space t /" :travel/search "space t r" :travel/refresh
+                  "space t f" :travel/force-refresh "space t a" :travel/refresh-all "space t i" :travel/inspect "space t x" :travel/close-inspect}}
+  :intercept intercept
+  :adopt adopt :owns [:frame/layout]
+  :provides {:layouts {"travel" (desk-layout) "travel-inspect" (inspect-layout) "travel-research" (research-layout)}
+             :views {:travel/desk model :travel/browser browser-model}}})

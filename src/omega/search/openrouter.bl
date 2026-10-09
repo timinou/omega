@@ -1,0 +1,150 @@
+;; omega.search.openrouter — OpenRouter-backed web search as a value-returning namespace.
+;;
+;; WHAT IT IS: one chat-completion call to https://openrouter.ai/api/v1/chat/completions with the
+;; server tool {:type "openrouter:web_search"}. The MODEL decides the query; OpenRouter runs the
+;; search engine (exa by default; parallel/perplexity/native/auto also accepted) and the answer comes
+;; back as grounded text plus `url_citation` annotations (url, title, content excerpt).
+;; WHAT IT IS NOT: a raw SERP API. :results are the engine's cited pages as relayed in annotations;
+;; :answer is MODEL-SYNTHESIZED text and must never be stored as evidence of a page's contents.
+;; Cited results are discovery candidates only. They say nothing about dates or availability.
+;;
+;; COST MODEL (docs, checked 2026-10): the engine fee (Exa auto/fast/instant $0.007/request, up to
+;; 10 results; deep-lite/deep $0.012; deep-reasoning $0.015; Parallel $0.001-0.005; Perplexity $0.005)
+;; PLUS the model's own tokens. :usage carries what the response reports (including :cost in credits
+;; when OpenRouter returns it). Bounded by :max-results :max-uses :max-total-results :max-characters.
+;; The key stays on the host: read from root/.env or the process env, sent only in the Authorization
+;; header, never returned, logged or put in an error. Missing key => {:status :missing-credential}.
+;; Legacy plugins:[{:id "web"}] is deprecated; :legacy? true uses it as a compatibility fallback.
+;;
+;;   (search query)  (search query {:model :engine :max-results :max-uses :root :transport :timeout-ms
+;;                                  :allowed-domains :excluded-domains :legacy? :context})
+;;   → {:status :ok|:error|:missing-credential|:no-results :query :source :engine :model :fetched-at
+;;      :answer :results [{:url :title :snippet :domain :rank}] :usage :error}
+;; :transport is (fn [body-map headers]) → {:status n :body "json"} | {:transport reason}; tests inject it.
+
+(ns omega.search.openrouter
+  (:require [omega.llm :as llm]
+            [credential.env :as cenv]))
+
+(def URL "https://openrouter.ai/api/v1/chat/completions")
+(def default-model "openai/gpt-4o-mini")
+(def default-engine "exa")
+
+(defn now-iso []
+  (erlang/list_to_binary (calendar/system_time_to_rfc3339 (erlang/system_time :second)
+                           (list (tuple :offset (String/to_charlist "Z"))))))
+
+(defn api-key
+  "OPENROUTER_API_KEY from root/.env or the process env; nil when absent. Never logged."
+  [root]
+  (let [k (or (when root (cenv/lookup (cenv/read-file (str root "/.env")) "OPENROUTER_API_KEY"))
+              (System/get_env "OPENROUTER_API_KEY"))]
+    (when (and k (not= "" (trim k))) (trim k))))
+
+(defn domain-of [url]
+  (let [u (str url)]
+    (when (or (starts-with? u "http://") (starts-with? u "https://"))
+      (let [rest-url (subs u (+ 3 (index-of u "://")))
+            host (first (split (first (split (first (split (first (split rest-url "/")) "?")) "#")) ":"))]
+        (lower-case (if (starts-with? host "www.") (subs host 4) host))))))
+
+(defn tool-spec [opts]
+  (let [p (cond-> {"engine" (or (:engine opts) default-engine)
+                   "max_results" (or (:max-results opts) 5)
+                   "max_uses" (or (:max-uses opts) 1)
+                   "max_total_results" (or (:max-total-results opts) (:max-results opts) 5)
+                   "max_characters" (or (:max-characters opts) 2000)}
+            (seq (:allowed-domains opts)) (assoc "allowed_domains" (vec (:allowed-domains opts)))
+            (and (not (seq (:allowed-domains opts))) (seq (:excluded-domains opts))) (assoc "excluded_domains" (vec (:excluded-domains opts))))]
+    {"type" "openrouter:web_search" "parameters" p}))
+
+(defn prompt [query opts]
+  (str "Search the web for: " query
+       (when (:context opts) (str "\nContext: " (:context opts)))
+       "\nReturn the most relevant distinct sources (official sites and listing pages, with URLs). "
+       "Report only what the sources say; mark anything not stated as unknown. Do not invent availability or prices."))
+
+(defn request-body
+  "Pure: the JSON-able request map."
+  [query opts]
+  (let [base {"model" (or (:model opts) default-model)
+              "messages" [{"role" "user" "content" (prompt query opts)}]
+              "max_tokens" (or (:max-tokens opts) 900)}]
+    (if (:legacy? opts)
+      (assoc base "plugins" [{"id" "web" "engine" (or (:engine opts) default-engine) "max_results" (or (:max-results opts) 5)}])
+      (assoc base "tools" [(tool-spec opts)]))))
+
+(defn- clean [s n] (let [t (clojure.string/replace (str (or s "")) #"\s+" " ")] (if (> (count t) n) (subs t 0 n) t)))
+
+(defn parse-response
+  "Pure: decoded response body (string keys) → result map fields. Citations dedupe by URL, keep rank order."
+  [body]
+  (let [msg (get-in body ["choices" 0 "message"])
+        anns (filter (fn [a] (= "url_citation" (get a "type"))) (or (get msg "annotations") []))
+        cites (map (fn [a] (get a "url_citation")) anns)
+        seen (atom #{})
+        uniq (filter (fn [c] (let [u (get c "url")] (when (and u (not (contains? @seen u))) (swap! seen conj u) true))) cites)
+        results (vec (map-indexed (fn [i c] {:rank (inc i) :url (get c "url") :title (clean (get c "title") 200)
+                                             :snippet (clean (get c "content") 600) :domain (domain-of (get c "url"))}) uniq))
+        u (get body "usage")]
+    {:answer (get msg "content") :results results
+     :model (get body "model") :id (get body "id")
+     :usage {:prompt-tokens (get u "prompt_tokens") :completion-tokens (get u "completion_tokens")
+             :total-tokens (get u "total_tokens") :cost (get u "cost")
+             :web-search-requests (get-in u ["server_tool_use_details" "web_search_requests"])}}))
+
+(defn- default-transport [timeout-ms]
+  (fn [body headers]
+    (Application/ensure_all_started :ssl)
+    (Application/ensure_all_started :inets)
+    (let [hs (to-list (map (fn [[k v]] (tuple (String/to_charlist k) (String/to_charlist v))) headers))
+          payload (erlang/iolist_to_binary (json/encode (llm/jsonable body)))
+          r (httpc/request :post (tuple (String/to_charlist URL) hs (String/to_charlist "application/json") payload)
+                           (list (tuple :timeout timeout-ms)) (list (tuple :body_format :binary)))]
+      (if (= :ok (elem r 0))
+        (let [resp (elem r 1)] {:status (elem (elem resp 0) 1) :body (elem resp 2)})
+        {:transport (pr-str (elem r 1))}))))
+
+(defn- error-kind [status]
+  (cond (= 429 status) :rate-limited (contains? #{401 403} status) :auth (= 402 status) :credits
+        (= 400 status) :invalid-request (>= status 500) :server :else :client))
+
+(defn- plain [x]
+  (cond (map? x) (reduce-kv (fn [acc k v] (assoc acc k (plain v))) {} x)
+        (seq? x) (vec (map plain x))
+        (= :null x) nil
+        :else x))
+(defn- decode-quiet [s] (try (plain (json/decode s)) (catch e nil)))
+
+(defn search
+  "One bounded OpenRouter web search. Never throws; errors are values. See header for the result shape."
+  ([query] (search query {}))
+  ([query opts]
+   (let [base {:query query :source "openrouter:web_search" :engine (or (:engine opts) default-engine)
+               :requested-model (or (:model opts) default-model) :fetched-at (now-iso) :results [] :answer nil}
+         key (when-not (:transport opts) (api-key (:root opts)))]
+     (cond
+       (or (nil? query) (= "" (trim (str query)))) (assoc base :status :error :error {:kind :empty-query})
+       (and (nil? key) (not (:transport opts)))
+         (assoc base :status :missing-credential
+                :error {:kind :missing-credential :message "OPENROUTER_API_KEY is not set in the host environment or root/.env; no search was made."})
+       :else
+       (let [body (request-body query opts)
+             headers [["authorization" (str "Bearer " (or key "test"))] ["x-title" "omega-search"]]
+             tr (or (:transport opts) (default-transport (or (:timeout-ms opts) 60000)))
+             r (try (tr body headers) (catch e {:transport (ex-message e)}))]
+         (cond
+           (:transport r) (assoc base :status :error :error {:kind :transport :message (str (:transport r))})
+           (not= 200 (:status r))
+             (let [d (decode-quiet (:body r))]
+               (assoc base :status :error
+                      :error {:kind (error-kind (:status r)) :http-status (:status r)
+                              :message (clean (or (get-in d ["error" "message"]) (str "HTTP " (:status r))) 300)}))
+           :else
+           (let [d (decode-quiet (:body r))]
+             (if (nil? d)
+               (assoc base :status :error :error {:kind :bad-response :message "Response was not JSON"})
+               (if (get d "error")
+                 (assoc base :status :error :error {:kind :provider :message (clean (get-in d ["error" "message"]) 300)})
+                 (let [p (parse-response d)]
+                   (merge base p {:status (if (seq (:results p)) :ok :no-results)})))))))))))

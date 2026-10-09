@@ -1,0 +1,43 @@
+✔ package is plain maps and fns with the contract keys (2.71867ms)
+✔ adoption is scoped: only a #+TRAVEL notebook gets the desk layout (6.205279ms)
+✔ desk model is a projection of the editable notebook text (4.065532ms)
+✔ select, tab and compare live in package state; compare toggles (4.538315ms)
+✔ IO leaves as host effects: refresh needs a selection for the selected scope, inspect needs one too (5.042846ms)
+✔ inspect opens the browser pane once, close releases the owned session and restores the desk (4.107491ms)
+✔ failed inspect keeps layout and stores the message (1.512664ms)
+✔ research: empty question is refused; submitted question emits a draft-only task/open with desk context (1.341111ms)
+✔ research result opens a task beside retained notebook and desk; failure retains both (4.428136ms)
+✔ unuse leaves editor text, tables, history and layout exactly as before (2.121824ms)
+✔ real frame: typing (ed/unuse "travel") returns to one editor, inspect pane included (8.47317ms)
+✔ browser view model carries inspect metadata at the top level (the host reads it there, not under :state) (2.004653ms)
+✔ trip defaults and validation (3.49707ms)
+✔ URL safety: http(s) only, no creds or private hosts (0.759123ms)
+✔ classification: exa library excluded, collection vs property (0.939763ms)
+✔ bridge: picks @@RESULT@@ line among noise; normalizeSearch separates answer from citations (0.78932ms)
+✔ runSearchCli spawns bin/bl with argv (no shell) and parses the result (6.722837ms)
+✔ CachedCall: TTL cache, inflight dedup, concurrency limit, failures not cached (94.428014ms)
+✔ Limiter never exceeds max (22.217105ms)
+✔ capacity extraction requires quoted excerpt; below 20 unsuitable; unverified unknown (2.410108ms)
+✔ fetchSource: ok extracts title/text/hash/capacity; scripts removed; text clipped (3.51318ms)
+✔ capacity: header claims beat later related-listing noise; title counts; "max" is quoted (0.992954ms)
+✔ collection pages never yield a property capacity; sale listings excluded (1.577607ms)
+✔ setKind records a reason and demotes a listing out of refresh (13.060777ms)
+✔ fetchSource: blocked (403, bot challenge, redirect failures) vs unknown (transport) vs not-found (25.102451ms)
+✔ fetchSource: followed redirect records final URL; conditional headers sent; 304 reachable (1.270768ms)
+✔ service discovery: dedup concurrent searches, cache, exclude exa, keep answer out of listings (17.761177ms)
+✔ service search failure is reported and not cached (2.237893ms)
+✔ refreshAll: bounded concurrency, blocked vs unknown vs ok, excluded never fetched, availability never claimed (63.040073ms)
+✔ refresh: TTL cache, force, inflight dedup, failed refresh keeps last good extract (24.228983ms)
+✔ manual evidence, notes, shortlist, kind override; persistence across instances (16.772962ms)
+✔ ranking: confirmed capacity first, unknown before below, collections after properties; below flagged unsuitable (78.961177ms)
+✔ addCandidate rejects unsafe URLs; htmlToText/clip helpers (2.977008ms)
+✔ qualification: dining/event/extra-bed numbers never verify; outside-target and unreadable pages are explicit (1.401325ms)
+✔ facts: only explicit whole-property wording counts as private use; generic access mentions are not step-free evidence (0.453195ms)
+ℹ tests 35
+ℹ suites 0
+ℹ pass 35
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 485.959771

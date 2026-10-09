@@ -1,0 +1,43 @@
+(ns search-openrouter-test (:require [omega.search.openrouter :as sr]))
+(def fake-body "{\"id\":\"gen-1\",\"model\":\"m/x\",\"choices\":[{\"message\":{\"content\":\"Answer text\",\"annotations\":[{\"type\":\"url_citation\",\"url_citation\":{\"url\":\"https://www.example.com/a\",\"title\":\"A  title\",\"content\":\"Sleeps 20\\n\\nrooms\"}},{\"type\":\"url_citation\",\"url_citation\":{\"url\":\"https://www.example.com/a\",\"title\":\"dup\"}},{\"type\":\"url_citation\",\"url_citation\":{\"url\":\"https://b.org/x\",\"title\":\"B\",\"content\":\"\"}}]}}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15,\"cost\":0.0075,\"server_tool_use_details\":{\"web_search_requests\":1}}}")
+(deftest request-uses-the-current-server-tool-with-bounds
+ (let [b (sr/request-body "riad" {:max-results 3})
+       t (first (get b "tools"))]
+  (is (= "openrouter:web_search" (get t "type")))
+  (is (= "exa" (get-in t ["parameters" "engine"])))
+  (is (= 3 (get-in t ["parameters" "max_results"])))
+  (is (= 1 (get-in t ["parameters" "max_uses"])))
+  (is (nil? (get b "plugins")))))
+(deftest legacy-plugin-is-opt-in
+ (let [b (sr/request-body "riad" {:legacy? true})]
+  (is (= "web" (get-in b ["plugins" 0 "id"])))
+  (is (nil? (get b "tools")))))
+(deftest citations-become-deduped-structured-results
+ (let [r (sr/search "q" {:transport (fn [b h] {:status 200 :body fake-body})})]
+  (is (= :ok (:status r)))
+  (is (= 2 (count (:results r))))
+  (is (= "example.com" (:domain (first (:results r)))))
+  (is (= "Sleeps 20 rooms" (:snippet (first (:results r)))))
+  (is (= "Answer text" (:answer r)))
+  (is (= 0.0075 (get-in r [:usage :cost])))
+  (is (= 1 (get-in r [:usage :web-search-requests])))
+  (is (= "openrouter:web_search" (:source r)))
+  (is (string? (:fetched-at r)))))
+(deftest no-citations-is-no-results-not-ok
+ (is (= :no-results (:status (sr/search "q" {:transport (fn [b h] {:status 200 :body "{\"choices\":[{\"message\":{\"content\":\"x\"}}]}"})})))))
+(deftest http-and-transport-errors-are-values-without-the-key
+ (let [r (sr/search "q" {:transport (fn [b h] {:status 401 :body "{\"error\":{\"message\":\"bad key\"}}"})})]
+  (is (= :error (:status r))) (is (= :auth (get-in r [:error :kind]))))
+ (is (= :rate-limited (get-in (sr/search "q" {:transport (fn [b h] {:status 429 :body "{}"})}) [:error :kind])))
+ (is (= :transport (get-in (sr/search "q" {:transport (fn [b h] {:transport "timeout"})}) [:error :kind])))
+ (is (= :bad-response (get-in (sr/search "q" {:transport (fn [b h] {:status 200 :body "<html>"})}) [:error :kind]))))
+(deftest the-authorization-header-is-passed-only-to-the-transport
+ (let [seen (atom nil)]
+  (sr/search "q" {:transport (fn [b h] (reset! seen h) {:status 200 :body fake-body})})
+  (is (= "authorization" (first (first @seen))))))
+(deftest missing-credential-is-explicit-and-makes-no-request
+ (let [r (sr/search "q" {:root "/tmp/nonexistent-root-xyz"})]
+  (when (nil? (sr/api-key "/tmp/nonexistent-root-xyz"))
+   (is (= :missing-credential (:status r))))))
+(deftest empty-query-is-rejected
+ (is (= :empty-query (get-in (sr/search "  " {:transport (fn [b h] nil)}) [:error :kind]))))
