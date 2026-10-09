@@ -34,7 +34,8 @@
     (replace-str (File/read! (str root "/vendor/bl-ed/web/index.html"))
              "./host.mjs" "./local/boot.mjs"))
   (copy! (str root "/vendor/bl-ed/web/welcome.bl.org") (str stage "/welcome.bl.org"))
-  (copy-files! (str here "/local") (str stage "/local") [".mjs"])
+  (doseq [name ["boot.mjs" "documents.mjs"]]
+    (copy! (str here "/local/" name) (str stage "/local/" name)))
   (copy-files! (str here "/host") (str stage "/pkg/pelagic") [".mjs" ".css"])
   ; Actor profile is optional: compile it explicitly with `bl actors`.
   (when (= "1" (System/get_env "PELAGIC_ACTORS"))

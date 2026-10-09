@@ -16,3 +16,14 @@ test('server staging installs the same graph, preserves other packages, and reta
   await assert.rejects(fs.access(path.join(root,'spikes/pelagic/dist/server/sw.mjs')));
  }finally{await fs.rm(root,{recursive:true,force:true});}
 });
+
+test('the regular build selects the package env instead of inheriting Omega’s compiler override',async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'pelagic-launch-'));
+ try{
+  const launcher=path.join(root,'bl'),capture=path.join(root,'capture.json');
+  await fs.writeFile(launcher,'#!/usr/bin/env node\n'+`require('node:fs').writeFileSync(process.env.PELAGIC_TEST_CAPTURE,JSON.stringify({override:process.env.BL_USE??null,cwd:process.cwd(),args:process.argv.slice(2)}));\n`,{mode:0o755});
+  const result=spawnSync('bash',[new URL('../build.sh',import.meta.url).pathname,'--local'],{env:{...process.env,BL_USE:'commit:old-omega',PELAGIC_BL:launcher,PELAGIC_TEST_CAPTURE:capture},encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);const data=JSON.parse(await fs.readFile(capture,'utf8'));
+  assert.equal(data.override,null);assert.deepEqual(data.args,['bundle']);assert.ok(data.cwd.endsWith('/spikes/pelagic'));
+ }finally{await fs.rm(root,{recursive:true,force:true});}
+});
