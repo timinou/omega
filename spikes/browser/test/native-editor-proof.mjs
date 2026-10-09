@@ -40,6 +40,8 @@ try{
  // Exercise the local extension-manager control without downloading or unlocking
  // a password manager during an automated synthetic proof.
  await panel.locator('[data-auth="extensions"]').click();await adapter.handles.get(manager.get('manual').kernelId).browser.contexts()[0].pages().at(-1).waitForURL('chrome://extensions/');
+ await adapter.handles.get(manager.get('manual').kernelId).browser.contexts()[0].pages().at(-1).locator('extensions-manager').waitFor();
+ await page.waitForTimeout(500); // Let the independently streamed final screenshot catch up.
  await page.screenshot({path:new URL('05-editor-extensions.png',proof).pathname});
  await page.locator('#input-sink').focus();await page.keyboard.press(':');await page.keyboard.insertText('(ed/unuse "browser")');await page.keyboard.press('Enter');
  await page.waitForFunction(()=>blEd.frame().get(blEd.K('layout')).get(blEd.K('name'))==='single');assert.equal(await page.locator('iframe[data-embed-source]').count(),0);assert.equal(await page.locator('.pane.editor').count(),1);

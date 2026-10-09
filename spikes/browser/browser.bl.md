@@ -137,7 +137,7 @@ BROWSER_NATIVE_CONFIG="$PWD/spikes/browser/.native/paths.json" \
 bin/bl-ed --offline --memory --port 8838 --root /tmp/omega-native-editor-proof
 BROWSER_NATIVE_CONFIG="$PWD/spikes/browser/.native/paths.json" \
   node spikes/browser/test/native-editor-proof.mjs
-BLED_OUT=vendor/bl-ed/web/out node --test vendor/bl-ed/test/*.test.mjs
+BLED_OUT=vendor/bl-ed/web/out BLED_ROOT=../beam-lisp node --test vendor/bl-ed/test/*.test.mjs
 node spikes/present/test/check.mjs vendor/bl-ed/web/welcome.bl.org \
   spikes/browser/demo.bl.org spikes/present/web/welcome.bl.org
 ```

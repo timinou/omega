@@ -4,6 +4,7 @@ Source: beam-lisp, branch `feat/native-browser-port-pr`, commit
 `b4d2dbfb` (native/browser_port and priv/lib/browser/port.bl).
 The source checkout commits are 51fff8a7, 9fe38795, d13c4f80 and 88127970;
 the publication branch contains only these changes on upstream origin/main.
+Contribution: https://github.com/timinou/beam-lisp/pull/1 (open for review).
 License: Eclipse Public License 2.0, copied as LICENSE.
 
 Cargo manifests, Rust source, Nix flake/lock, README and opt-in tests are copied
