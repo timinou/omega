@@ -1,0 +1,11 @@
+#+title: PELAGIC native actor namespace
+
+Implement upstream a checked actor/native integration prototype using the existing
+reader, ANF, native JS emitter and BL actor runtime. Annotated namespaces can mix
+receive/spawn with native JS expressions and statically linked synchronous BL
+functions. Direct native calls preserve values and do not visit the actor machine.
+Cross-thread Worker messages remain explicit. Keep old closed-data input intact.
+
+Commit implementation and semantic tests first, exercise from PELAGIC, benchmark
+bridged/direct/prebuilt alternatives, optimize from measurements, document limits
+and real-editor lifecycle proof. Do not modify unrelated shared work or live worlds.
