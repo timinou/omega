@@ -1,0 +1,25 @@
+; CPU placement is a worker. Demand, cancellation and control are BL actors.
+; Native annotated BL computes each finite chunk through the existing host sink.
+(defn prepare-score [id start]
+  (if (< start 1024)
+    (do
+      (host/emit :chunk [id start (min 16 (- 1024 start))])
+      (receive
+        [:credit] (prepare-score id (+ start 16))))
+    (host/emit :done id)))
+
+(defn main []
+  (rt-register-input!)
+  (host/emit :ready 0)
+  (loop [worker nil generation nil]
+    (receive
+      [:browser :prepare id]
+        (do (when worker (rt-exit worker :kill))
+            (recur (rt-spawn prepare-score [id 0]) id))
+      [:browser :credit id]
+        (do (when (and worker (= id generation)) (rt-send worker [:credit])) (recur worker generation))
+      [:browser :ping id]
+        (do (host/emit :pong id) (recur worker generation))
+      [:browser :cancel id]
+        (do (when worker (rt-exit worker :kill))
+            (host/emit :cancelled id) (recur nil nil)))))

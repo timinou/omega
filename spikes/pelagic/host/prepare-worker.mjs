@@ -24,19 +24,19 @@ self.addEventListener('message',({data})=>{
    }).catch(fail);
    else import('./values.mjs').then(B=>{
     prepareChunk=B.prepareChunk;
-    if(mode==='actor')return import('./actor/host.mjs').then(H=>{
-     actor=H;H.setEmitter((op,value)=>{
+    if(mode==='actor'||mode==='actor-bridge')return import('./actor/host.mjs').then(H=>{
+     actor=H;if(mode==='actor-bridge')H.setEmitter((op,value)=>{
       if(op==='chunk'){const [id,offset,count]=H.vecItems(value);chunk(id,offset,count);}
       else self.postMessage({op,id:value});
      });
-     import('./actor/out/prepare.mjs').catch(fail);
+     import(mode==='actor'?'./actor/out/prepare.mjs':'./actor/out/prepare-bridge.mjs').catch(fail);
     });
     self.postMessage({op:'ready'});
    }).catch(fail);
-  }else if(data.op==='prepare'){job=data.id;start=0;mode==='actor'?input('prepare',job):advance();}
-  else if(data.op==='credit'&&data.id===job){mode==='actor'?input('credit',job):advance();}
-  else if(data.op==='ping'){mode==='actor'?input('ping',data.id):self.postMessage({op:'pong',id:data.id});}
-  else if(data.op==='cancel'){job=0;mode==='actor'?input('cancel',data.id):self.postMessage({op:'cancelled',id:data.id});}
+  }else if(data.op==='prepare'){job=data.id;start=0;actor?input('prepare',job):advance();}
+  else if(data.op==='credit'&&data.id===job){actor?input('credit',job):advance();}
+  else if(data.op==='ping'){actor?input('ping',data.id):self.postMessage({op:'pong',id:data.id});}
+  else if(data.op==='cancel'){job=0;actor?input('cancel',data.id):self.postMessage({op:'cancelled',id:data.id});}
  }catch(error){fail(error);}
 });
 function fail(error){closed=true;self.postMessage({op:'error',error:error.message||String(error)});}

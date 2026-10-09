@@ -13,15 +13,22 @@
   (File/mkdir_p! scratch)
   (try
     (File/cp! (str actor-dir "/runtime.bl") (str scratch "/runtime.bl"))
-    (File/cp! (str here "/actor/prepare.bl") (str scratch "/prepare.bl"))
-    (BeamLisp/eval (subs source 0 ending))
+    (doseq [name ["prepare.bl" "prepare-bridge.bl"]]
+      (File/cp! (str here "/actor/" name) (str scratch "/" name)))
+    (when-not (BeamLisp.Env/bound? "js-actors-compiler" "build-one")
+      (BeamLisp/eval (subs source 0 ending)))
     (let [positive (BeamLisp.Env/fetch! "js-actors-compiler" "positive-tests")
           negative (BeamLisp.Env/fetch! "js-actors-compiler" "negative-tests")
           _ (when-not (zero? (+ (positive) (negative))) (throw (ex-info "Actor ABI tests failed" {})))
           build (BeamLisp.Env/fetch! "js-actors-compiler" "build-one")]
-      (build scratch "prepare.bl" "prepare.mjs"))
+      (build scratch "prepare.bl" "prepare.mjs" []
+        {:native-links {"pelagic.browser/score-chunk"
+                        {:path "../../values.mjs" :export "prepareChunk" :arities #{2}}}})
+      (build scratch "prepare-bridge.bl" "prepare-bridge.mjs"))
     (let [out (str here "/dist/actor")]
       (File/mkdir_p! (str out "/out"))
       (File/cp! (str actor-dir "/host.mjs") (str out "/host.mjs"))
-      (File/cp! (str scratch "/out/prepare.mjs") (str out "/out/prepare.mjs")))
+      (File/cp! (str actor-dir "/native.mjs") (str out "/native.mjs"))
+      (doseq [name ["prepare.mjs" "prepare-bridge.mjs"]]
+        (File/cp! (str scratch "/out/" name) (str out "/out/" name))))
     (finally (File/rm_rf! scratch))))

@@ -17,7 +17,11 @@ alongside `dist/local`. `build.sh` installs its editor/runtime graph and PELAGIC
 loader in the real editor's web directory, preserving unrelated package files.
 Omega's server compiler pin is unchanged. The frontend pin is `a5f51eae`.
 
-## CPU placement and actors
+## CPU placement and actors — original bridged prototype
+
+The subsequent [native actor namespace prototype](native-actors.bl.md) removes
+the computation bridge described below. These measurements remain the historical
+baseline; the selected default is still the prebuilt score.
 
 The native JS emitter and the existing generator actor profile have different
 control/value ABIs. The native profile rejects `receive`; the actor profile owns

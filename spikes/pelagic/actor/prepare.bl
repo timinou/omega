@@ -1,16 +1,18 @@
-; CPU placement is a worker. Demand, cancellation and control are BL actors.
-; Native annotated BL computes each finite chunk through the existing host sink.
+; One annotated namespace: actors control demand; native BL runs directly.
+(ns ^:js pelagic.prepare (:require [pelagic.browser :as browser]))
 (defn prepare-score [id start]
   (if (< start 1024)
-    (do
-      (host/emit :chunk [id start (min 16 (- 1024 start))])
+    (let [size (min 16 (- 1024 start))
+          before (.now js/performance)
+          rows (browser/score-chunk start size)]
+      (.postMessage js/self #js {:op "chunk" :id id :start start :rows rows
+                                :workMs (- (.now js/performance) before)})
       (receive
         [:credit] (prepare-score id (+ start 16))))
-    (host/emit :done id)))
-
+    (.postMessage js/self #js {:op "done" :id id})))
 (defn main []
   (rt-register-input!)
-  (host/emit :ready 0)
+  (.postMessage js/self #js {:op "ready"})
   (loop [worker nil generation nil]
     (receive
       [:browser :prepare id]
@@ -19,7 +21,7 @@
       [:browser :credit id]
         (do (when (and worker (= id generation)) (rt-send worker [:credit])) (recur worker generation))
       [:browser :ping id]
-        (do (host/emit :pong id) (recur worker generation))
+        (do (.postMessage js/self #js {:op "pong" :id id}) (recur worker generation))
       [:browser :cancel id]
         (do (when worker (rt-exit worker :kill))
-            (host/emit :cancelled id) (recur nil nil)))))
+            (.postMessage js/self #js {:op "cancelled" :id id}) (recur nil nil)))))

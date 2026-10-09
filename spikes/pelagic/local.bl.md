@@ -72,7 +72,7 @@ patch syntax. The page evaluator starts on demand for editor commands such as
 
 ## Verification
 
-The bundle pins compiler `a5f51eae`; generic BL frame pacing is committed on
+The bundle pins compiler `6525fe59`; generic BL frame pacing is committed on
 upstream main as `7861aa54`, following runtime improvements in `cb485ab3`.
 It contains 44 modules, 2,766,014 bytes of static files and a 608,464-byte ZIP
 (integrity checked).

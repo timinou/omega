@@ -28,7 +28,7 @@
         (when-not (File/exists? alias)
           (File/write! alias (str "export * from './ns/" module ".mjs';\n")))))
     (File/write! (str stage "/build.json")
-      (str "{\"name\":\"pelagic-local\",\"compiler\":\"a5f51eae\",\"modules\":" (count (:modules result)) "}\n")))
+      (str "{\"name\":\"pelagic-local\",\"compiler\":\"6525fe59\",\"modules\":" (count (:modules result)) "}\n")))
   (copy-files! (str root "/vendor/bl-ed/web") stage [".mjs" ".css"])
   (File/write! (str stage "/index.html")
     (replace-str (File/read! (str root "/vendor/bl-ed/web/index.html"))
@@ -41,7 +41,8 @@
   (when (= "1" (System/get_env "PELAGIC_ACTORS"))
     (when-not (File/exists? (str here "/dist/actor/out/prepare.mjs"))
       (throw (ex-info "Run bl actors before enabling PELAGIC_ACTORS" {})))
-    (File/cp_r! (str here "/dist/actor") (str stage "/pkg/pelagic/actor")))
+    (doseq [name ["host.mjs" "native.mjs" "out/prepare.mjs"]]
+      (copy! (str here "/dist/actor/" name) (str stage "/pkg/pelagic/actor/" name))))
   (copy-files! (str here "/shaders") (str stage "/pkg/pelagic") [".glsl"])
   (copy! (str here "/pelagic/overtone.bl") (str stage "/pkg/pelagic/overtone.bl"))
   (doseq [name ["live-set.bl.org" "demo.bl.org"]]

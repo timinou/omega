@@ -3,14 +3,14 @@
 import functools,http.server,threading,json,os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
-ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'dist/local';PROOF=ROOT/'proof/preparation';PROOF.mkdir(parents=True,exist_ok=True)
+ROOT=Path(__file__).resolve().parents[1];OUT=Path(os.environ.get('PELAGIC_LOCAL_OUT',ROOT/'dist/local'));PROOF=Path(os.environ.get('PELAGIC_PREPARATION_PROOF',ROOT/'proof/preparation'));PROOF.mkdir(parents=True,exist_ok=True)
 class Handler(http.server.SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
  def translate_path(self,path):
   prefix='/pkg/pelagic/actor/'
   if path.startswith(prefix):
    relative=path[len(prefix):].split('?')[0]
-   if relative in ['host.mjs','out/prepare.mjs']:return str(ROOT/'dist/actor'/relative)
+   if relative in ['host.mjs','native.mjs','out/prepare.mjs','out/prepare-bridge.mjs']:return str(ROOT/'dist/actor'/relative)
   return super().translate_path(path)
  def do_GET(self):
   if self.path=='/benchmark':
@@ -21,8 +21,8 @@ results=[];errors=[]
 try:
  with sync_playwright() as p:
   browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM','/home/user/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome'),args=['--no-sandbox'])
-  for repeat in range(3):
-   for mode in ['main','cooperative','worker','actor','prebuilt']:
+  for repeat in range(int(os.environ.get('PELAGIC_BENCH_REPEATS','3'))):
+   for mode in os.environ.get('PELAGIC_BENCH_MODES','main,cooperative,worker,actor-bridge,actor,prebuilt').split(','):
     page=browser.new_page();page.on('pageerror',lambda e:errors.append(str(e)));page.goto(f'http://127.0.0.1:{s.server_port}/benchmark')
     value=page.evaluate('''async mode=>{
      const [P,Score,B]=await Promise.all([import('/pkg/pelagic/prepare.mjs'),import('/out/pelagic.score.mjs'),import('/pkg/pelagic/values.mjs')]);
