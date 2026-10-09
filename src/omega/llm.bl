@@ -231,9 +231,28 @@
           (do (Process/sleep (* 1000 (erlang/bsl 1 attempt))) (recur (inc attempt)))
           r)))))
 
+(def MAX-TOKENS-CEILING
+  "Largest OMEGA_MAX_TOKENS accepted: above any current model's output limit, so a typo (an extra zero) fails loudly."
+  128000)
+
+(defn parse-max-tokens
+  "OMEGA_MAX_TOKENS text → {:ok n} | {:error message}. nil/blank = {:ok nil} (keep the default).
+   A positive decimal integer up to MAX-TOKENS-CEILING. The message names the variable and the
+   rule, never the rejected text beyond its length-clipped form."
+  [s]
+  (cond
+    (or (nil? s) (= "" (trim s))) {:ok nil}
+    (not (Regex/match? (Regex/compile! "^[0-9]{1,7}$") (trim s)))
+    {:error (str "OMEGA_MAX_TOKENS must be a positive whole number between 1 and " MAX-TOKENS-CEILING)}
+    :else (let [n (erlang/binary_to_integer (trim s))]
+            (if (and (pos? n) (<= n MAX-TOKENS-CEILING))
+              {:ok n}
+              {:error (str "OMEGA_MAX_TOKENS must be a positive whole number between 1 and " MAX-TOKENS-CEILING)}))))
+
 (defn from-env
   "The default provider for project `root`: Anthropic via the local proxy.
-   root/.env (or the process env) may set OMEGA_MODEL, and OMEGA_BASE_URL.
+   root/.env (or the process env) may set OMEGA_MODEL, OMEGA_BASE_URL and OMEGA_MAX_TOKENS
+   (output cap per reply, default 8000; an invalid value throws rather than silently using the default).
    Only when OMEGA_BASE_URL is the real API (api.anthropic.com) is
    ANTHROPIC_API_KEY sent and the Claude Code identity dropped — a stray key in
    the shell must never redirect a proxy setup."
@@ -241,8 +260,11 @@
   (let [env (cenv/read-file (str root "/.env"))
         pick (fn [k] (or (cenv/lookup env k) (System/get_env k)))
         base (pick "OMEGA_BASE_URL")
-        direct? (and (some? base) (includes? base "api.anthropic.com"))]
+        direct? (and (some? base) (includes? base "api.anthropic.com"))
+        mt (parse-max-tokens (pick "OMEGA_MAX_TOKENS"))
+        _ (when (:error mt) (throw (ex-info (:error mt) {:var "OMEGA_MAX_TOKENS"})))]
     (provider (cond-> {:kind :anthropic}
+                (:ok mt) (assoc :max-tokens (:ok mt))
                 (some? base) (assoc :base-url base)
                 (pick "OMEGA_MODEL") (assoc :model (pick "OMEGA_MODEL"))
                 direct? (assoc :api-key (pick "ANTHROPIC_API_KEY") :identity nil)))))

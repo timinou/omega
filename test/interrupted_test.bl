@@ -1,0 +1,190 @@
+(ns interrupted-test
+  (:require [omega.env :as env]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.codemode :as cm]
+            [clojure.string]))
+
+;; Harness regressions: (1) eval input validation and output-limit cut-offs,
+;; (2) a tool call persisted before its result (SIGTERM mid-tool) must not leave
+;; an orphan that every provider rejects, and recovery must never re-run it.
+
+(defn- dir! [] (str "/tmp/omega-interrupted-" (System/system_time :microsecond) "-" (erlang/unique_integer (to-list [:positive]))))
+
+(defn- use [id] {:type :tool-use :id id :name "eval" :input {:code "1"}})
+(defn- res [id] {:type :tool-result :id id :content "ok" :error? false})
+(defn- ids [content type] (vec (map :id (filter (fn [b] (= type (:type b))) content))))
+(defn- text [s] {:type :text :text s})
+
+;; ── eval input validation ───────────────────────────────────────────────
+
+(deftest bad-eval-input-is-refused-with-an-actionable-message
+  (is (nil? (cm/bad-code "(+ 1 2)")))
+  (doseq [bad [nil 42 {:a 1} ["x"] "" "   " "\n\t "]]
+    (let [m (cm/bad-code bad)]
+      (is (string? m) (str "refuses " (pr-str bad)))
+      (when (string? m)
+        (is (includes? m "Nothing was run"))
+        (is (includes? m "smaller"))))))
+
+(deftest an-eval-with-empty-input-runs-nothing-and-leaves-the-task-working
+  (let [s (task/start-system (env/open) {:step (loop/scripted [(loop/call-tool "eval" {} "tu-empty")
+                                                               (fn [req] (loop/say (get-in (last (:messages req)) [:content 0 :content])))])
+                                         :tools cm/tools :root "/tmp"})
+        id (task/open! s {:goal "empty"})
+        v (task/await s id 10000)
+        results (filter (fn [b] (= :tool-result (:type b))) (mapcat :content (loop/turns s id)))]
+    (is (= :idle (:status v)) "the task continues: no crash, no failure")
+    (is (includes? (:result v) "`code` was missing"))
+    (is (= [true] (map :error? results)))
+    (task/stop-system! s))
+  ;; the tool itself, called directly (as a provider with a null/typed input would)
+  (let [run (:run cm/eval-tool)]
+    (doseq [input [nil {} {:code nil} {:code 7} {:code "  "} "(+ 1 2)"]]
+      (let [r (run {:sys {} :task "t-none"} input)]
+        (is (contains? r :error) (str "refuses " (pr-str input)))))))
+
+;; ── output-limit cut-offs ───────────────────────────────────────────────
+
+(deftest a-max-tokens-reply-runs-no-tool-and-asks-for-smaller-chunks
+  (let [ran (atom 0)
+        tool {:name "eval" :description "d" :input-schema {:type "object"}
+              :run (fn [_ _] (swap! ran inc) {:ok "ran"})}
+        cut {:content [(text "writing") {:type :tool-use :id "tu-cut" :name "eval" :input {}}] :stop :max-tokens}
+        s (task/start-system (env/open) {:step (loop/scripted [cut (fn [req] (loop/say (get-in (last (:messages req)) [:content 0 :content])))])
+                                         :tools [tool] :root "/tmp"})
+        id (task/open! s {:goal "big"})
+        v (task/await s id 10000)]
+    (is (= 0 @ran) "an incomplete call is never executed")
+    (is (includes? (:result v) "NOT RUN"))
+    (is (includes? (:result v) "OMEGA_MAX_TOKENS"))
+    (is (= ["tu-cut"] (ids (:content (nth (loop/turns s id) 2)) :tool-result)) "the call is still paired")
+    (task/stop-system! s)))
+
+;; ── the pure repair ─────────────────────────────────────────────────────
+
+(defn- msgs [& xs] (vec xs))
+(defn- a [& content] {:role :assistant :content (vec content)})
+(defn- u [& content] {:role :user :content (vec content)})
+
+(deftest a-healthy-history-is-returned-unchanged
+  (let [h (msgs (u (text "go")) (a (use "1") (use "2")) (u (res "1") (res "2")) (a (text "done")) (u (text "more")))]
+    (is (= h (loop/repair-messages h)))
+    (let [h2 (vec (concat h [(a (use "3")) (u (res "3"))]))] (is (= h2 (loop/repair-messages h2))))
+    (is (= [] (loop/repair-messages [])))))
+
+(deftest every-missing-id-is-answered-once-and-completed-results-are-kept
+  ;; trailing orphan: no user message after it at all
+  (let [r (loop/repair-messages (msgs (u (text "go")) (a (use "1") (use "2"))))
+        last-m (last r)]
+    (is (= :user (:role last-m)))
+    (is (= ["1" "2"] (ids (:content last-m) :tool-result)))
+    (is (every? :error? (:content last-m)))
+    (is (includes? (:content (first (:content last-m))) "UNKNOWN")))
+  ;; partial: 1 answered, 2 missing -> only 2 synthesised, 1 untouched
+  (let [r (loop/repair-messages (msgs (u (text "go")) (a (use "1") (use "2")) (u (res "1"))))
+        m (nth r 2)]
+    (is (= 3 (count r)))
+    (is (= ["2" "1"] (ids (:content m) :tool-result)))
+    (is (= (res "1") (second (:content m))) "the completed result is untouched"))
+  ;; the same id answered across two consecutive user messages: nothing added
+  (let [h (msgs (a (use "1") (use "2")) (u (res "1")) (u (res "2")))]
+    (is (= h (loop/repair-messages h))))
+  ;; a new user text arrived after the orphan (say! after restart): results go FIRST in it
+  (let [r (loop/repair-messages (msgs (u (text "go")) (a (text "x") (use "1")) (u (text "continue"))))
+        m (nth r 2)]
+    (is (= 3 (count r)))
+    (is (= [:tool-result :text] (map :type (:content m))))
+    (is (= "continue" (:text (second (:content m))))))
+  ;; an orphan in the middle, followed by later healthy exchanges
+  (let [r (loop/repair-messages (msgs (u (text "go")) (a (use "1")) (u (text "hm")) (a (use "2")) (u (res "2"))))]
+    (is (= ["1"] (ids (:content (nth r 2)) :tool-result)))
+    (is (= ["2"] (ids (:content (nth r 4)) :tool-result)) "later healthy pair untouched")
+    (is (= 5 (count r))))
+  ;; duplicate use ids in one message are answered once; idempotent
+  (let [r (loop/repair-messages (msgs (a (use "1") (use "1"))))]
+    (is (= ["1"] (ids (:content (last r)) :tool-result)))
+    (is (= r (loop/repair-messages r)))))
+
+(deftest orphaned-results-look-only-at-the-tail-turns
+  (let [t (fn [n role content] {:n n :role role :content content})]
+    (is (= [] (loop/orphaned-results [])))
+    (is (= [] (loop/orphaned-results [(t 1 :user [(text "go")]) (t 2 :assistant [(use "1")]) (t 3 :tool [(res "1")])])))
+    (is (= ["2"] (map :id (loop/orphaned-results [(t 1 :user [(text "go")]) (t 2 :assistant [(use "1") (use "2")]) (t 3 :tool [(res "1")])]))))
+    (is (= ["1"] (map :id (loop/orphaned-results [(t 1 :assistant [(use "1")]) (t 2 :user [(text "later")])]))))))
+
+;; ── the real durable restart ────────────────────────────────────────────
+
+(deftest sigterm-between-tool-use-and-result-recovers-without-re-running-the-tool
+  (let [d (dir!)
+        effects (atom [])
+        fast {:name "fast" :description "d" :input-schema {:type "object"}
+              :run (fn [_ _] (swap! effects conj :fast) {:ok "fast done"})}
+        slow {:name "slow" :description "d" :input-schema {:type "object"}
+              :run (fn [_ _] (swap! effects conj :slow-started) (Process/sleep 60000) {:ok "never"})}
+        tools [fast slow]
+        e1 (env/open-durable! d)
+        s1 (task/start-system e1 {:step (loop/scripted [(loop/call-tool "fast" {} "tu-fast")
+                                                        {:content [(text "now two") {:type :tool-use :id "tu-slow-a" :name "slow" :input {}}
+                                                                   {:type :tool-use :id "tu-slow-b" :name "slow" :input {}}]
+                                                         :stop :tool-use}])
+                                  :tools tools :root "/tmp"})
+        id (task/open! s1 {:goal "work"})
+        _ (loop [n 0] (when (and (< n 200) (not= [:fast :slow-started] @effects)) (Process/sleep 50) (recur (inc n))))
+        _ (is (= [:fast :slow-started] @effects))
+        before (loop/turns s1 id)
+        _ (is (= [:user :assistant :tool :assistant] (map :role before)) "the orphan is durable: assistant turn persisted, no result")
+        _ (task/stop-system! s1)
+        _ (env/close! e1)
+        ;; ── restart ──
+        e2 (env/open-durable! d)
+        seen (atom nil)
+        s2 (task/start-system e2 {:step (loop/scripted [(fn [req] (reset! seen req) (loop/say "resumed"))])
+                                  :tools tools :root "/tmp"})
+        _ (is (= [id] (task/recover! s2)))
+        after (loop/turns s2 id)
+        _ (is (= [:user :assistant :tool :assistant :tool] (map :role after)))
+        synth (:content (last after))]
+    ;; the completed pair is byte-for-byte what it was
+    (is (= (take 4 before) (take 4 after)))
+    ;; both missing ids answered once, explicitly as errors about uncertain effect
+    (is (= ["tu-slow-a" "tu-slow-b"] (ids synth :tool-result)))
+    (is (every? :error? synth))
+    (is (includes? (:content (first synth)) "NOT re-run"))
+    (is (includes? (:content (first synth)) "UNKNOWN"))
+    ;; a second recovery pass is a no-op
+    (is (= [] (loop/repair-tail! s2 id)))
+    (is (= 5 (count (loop/turns s2 id))))
+    ;; the resumed model gets a request the provider accepts: every use is answered, in the very next message
+    (task/say! s2 id "continue please")
+    (Process/sleep 300)
+    (let [v (task/await s2 id 10000)]
+      (is (= "resumed" (:result v))))
+    (let [req @seen
+          ms (:messages req)]
+      (is (some? req))
+      (is (= ms (loop/repair-messages ms)) "nothing left to repair in the request")
+      (doseq [[i m] (map-indexed (fn [i m] [i m]) ms)]
+        (when (= :assistant (:role m))
+          (let [answered (set (ids (:content (nth ms (inc i))) :tool-result))]
+            (is (every? (fn [x] (contains? answered x)) (ids (:content m) :tool-use)) (str "message " i " is paired"))))))
+    ;; recovery never re-ran anything
+    (is (= [:fast :slow-started] @effects))
+    (task/stop-system! s2)
+    (env/close! e2)))
+
+(deftest a-recovered-task-with-a-healthy-history-is-left-alone
+  (let [d (dir!)
+        e1 (env/open-durable! d)
+        s1 (task/start-system e1 {:step (loop/scripted [(loop/say "hello")]) :tools cm/tools :root "/tmp"})
+        id (task/open! s1 {:goal "quiet"})
+        _ (task/await s1 id 10000)
+        before (loop/turns s1 id)
+        _ (task/stop-system! s1)
+        _ (env/close! e1)
+        e2 (env/open-durable! d)
+        s2 (task/start-system e2 {:step (loop/scripted [(loop/say "x")]) :tools cm/tools :root "/tmp"})
+        _ (task/recover! s2)]
+    (is (= before (loop/turns s2 id)))
+    (task/stop-system! s2)
+    (env/close! e2)))

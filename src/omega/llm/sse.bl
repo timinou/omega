@@ -73,8 +73,10 @@
 (defn- finish-block [b]
   (case (:type b)
     :text {:type :text :text (:text b)}
+    ;; a reply cut off by the output limit leaves the tool input as unfinished JSON:
+    ;; that is an EMPTY input (never a crash), and the :max-tokens stop says why
     :tool-use {:type :tool-use :id (:id b) :name (:name b)
-               :input (keywordize (if (seq (:json b)) (json/decode (:json b)) {}))}
+               :input (keywordize (if (seq (:json b)) (try (json/decode (:json b)) (catch _ {})) {}))}
     nil))
 
 (defn response

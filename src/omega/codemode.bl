@@ -72,11 +72,31 @@
   [err]
   (and (string? err) (or (includes? err "the cell was killed") (includes? err "the evaluating process exited"))))
 
+(def BAD-INPUT
+  (str "eval needs input {\"code\": \"<beam-lisp program>\"}: `code` was %s. Nothing was run. "
+       "If your previous reply was cut off by the output limit, retry with a much smaller program "
+       "(write big files in several chunks of a few hundred lines per eval)."))
+
+(defn- format-bad [what] (String/replace BAD-INPUT "%s" what))
+
+(defn bad-code
+  "nil when `code` is a runnable program (a non-blank string), else the
+   actionable error text to hand back to the model. Pure."
+  [code]
+  (cond
+    (nil? code) (format-bad "missing")
+    (not (string? code)) (format-bad (str "not a string (" (cond (map? code) "a map" (vector? code) "a vector" (number? code) "a number" :else "another type") ")"))
+    (= "" (trim code)) (format-bad "blank")
+    :else nil))
+
 (defn run-eval
   "Evaluate `code` for `task` with system `sys`. {:ok text} | {:error text}.
-   `at` = {:step n :tool-use-id s} names the cell (C4); optional."
+   `at` = {:step n :tool-use-id s} names the cell (C4); optional. Missing,
+   non-string or blank `code` is refused BEFORE anything is registered or run."
   ([sys task code] (run-eval sys task code nil))
   ([sys task code at]
+  (if-let [bad (bad-code code)]
+    {:error bad}
   (let [id (omega.env/eid (:env sys) :task/id task)
         cwd (:task/cwd (when id (omega.env/pull (:env sys) [:task/cwd] id)))
         world (omega.prelude/-register! task sys)
@@ -100,7 +120,7 @@
     (cond
       (:error r) {:error (str (:error r) (when (seq out) (str "\nstdout:\n" out)))}
       (omega.prelude/-done? world task) {:ok (omega.prelude/-take-done! world task) :done true}
-      :else {:ok (str (when (seq out) (str out "\n")) "=> " (:value r))}))))
+      :else {:ok (str (when (seq out) (str out "\n")) "=> " (:value r))})))))
 
 (def DESCRIPTION
   (str "Evaluate beam-lisp in your task's own namespace; definitions persist between calls. "
@@ -121,8 +141,8 @@
   {:name "eval"
    :description DESCRIPTION
    :input-schema {:type "object" :properties {:code {:type "string"}} :required ["code"]}
-   :run (fn [ctx {:keys [code]}]
-          (run-eval (:sys ctx) (:task ctx) code {:step (:step ctx) :tool-use-id (get-in ctx [:block :id])}))})
+   :run (fn [ctx input]
+          (run-eval (:sys ctx) (:task ctx) (when (map? input) (:code input)) {:step (:step ctx) :tool-use-id (get-in ctx [:block :id])}))})
 
 (def tools
   "omega's default tool table: exactly one tool."

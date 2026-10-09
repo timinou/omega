@@ -68,6 +68,22 @@ cd /some/project && ~/code/undefine/omega/bin/bl-ed --offline  # open the printe
   Override with `OMEGA_BASE_URL` / `OMEGA_MODEL` in `.env`. Set
   `OMEGA_BASE_URL=https://api.anthropic.com` plus `ANTHROPIC_API_KEY` for the
   direct API.
+- **Output limit:** `OMEGA_MAX_TOKENS` (in `.env` or the environment) sets the maximum tokens of
+  one model reply. Unset keeps the default of 8000, a deliberate small default (cost, latency): raise it
+  per project when you ask for large single replies (`OMEGA_MAX_TOKENS=32000`). It must be a whole number
+  from 1 to 128000; anything else (`0`, `-1`, `8k`, `1e5`, too large) stops startup with an error that names
+  the variable and the rule but never echoes the value. When a reply is cut off by the limit while it was
+  writing a tool call, omega runs nothing, answers the call with a "NOT RUN … retry with smaller chunks"
+  error, and the model carries on. `eval` with a missing, non-string or blank `code` likewise returns an
+  actionable error instead of running anything.
+- **Interrupted tool calls:** an assistant tool call is persisted before the tool runs, so a kill
+  (SIGTERM, crash) in between leaves a call with no result. `task/recover!` answers each genuinely
+  unanswered call with an explicit error result ("INTERRUPTED … NOT re-run … effect UNKNOWN: inspect
+  before retrying"); completed results and healthy histories are untouched, and no tool is ever replayed.
+  The request builder (`omega.loop/messages`) applies the same pure repair, so no provider sees an orphan.
+- **Transient 5xx:** `omega.llm` retries rate-limit, 5xx (500/502/503/504/529) and transport errors 3 times
+  with 1 s, 2 s, 4 s backoff. A 503 that outlasts those retries fails the turn and the task ends as
+  `failed` (terminal: open a new task to try again). This is by design, not changed.
 - **Jev:** `TYPESAFE_API_KEY` in omega's `.env`. Credentials are always read from
   omega's home, never from the project being worked on.
 

@@ -41,6 +41,7 @@
             [omega.actor :as actor]
             [omega.trace :as tr]
             [omega.stream :as stream]
+            [clojure.string]
             [datom]))
 
 (def MAX-STEPS 40)
@@ -100,11 +101,95 @@
   ([sys id role content usage]
    (count (append! sys id (turns sys id) role content usage))))
 
+;; ── orphaned tool calls (an interrupted history) ─────────────────────────
+;
+; Every provider requires each assistant :tool-use to be answered by a
+; :tool-result in the user-side message(s) right after it. omega persists the
+; assistant turn BEFORE it runs the tools, so a kill (SIGTERM, crash, power)
+; in between leaves a durable conversation with an unanswered call; the next
+; request is then rejected (Anthropic 400 "tool_use ids without tool_result").
+;
+; The repair is pure and provider-neutral: it only ADDS an explicit error
+; result for a genuinely missing id. It never re-runs a tool (the effect may
+; have been applied), never drops or edits a completed result, and leaves a
+; healthy history byte-identical.
+
+(def INTERRUPTED-NOTE
+  (str "INTERRUPTED: omega stopped before this tool call returned a result. It was NOT re-run. "
+       "Its effect is UNKNOWN: it may have fully applied, partly applied, or not run at all. "
+       "Inspect the current state (files, processes, remote systems) before retrying; do not assume either outcome."))
+
+(defn- blocks-of [content type] (filter (fn [b] (= type (:type b))) content))
+
+(defn- use-ids
+  "The distinct, non-nil ids of the tool calls in `content`, in order."
+  [content]
+  (vec (distinct (filter some? (map :id (blocks-of content :tool-use))))))
+
+(defn- result-ids [content] (set (filter some? (map :id (blocks-of content :tool-result)))))
+
+(defn interrupted-result
+  "The explicit error result standing in for call `id` that never answered."
+  [id]
+  {:type :tool-result :id id :content INTERRUPTED-NOTE :error? true :interrupted true})
+
+(defn- missing-results
+  "Synthetic results for the ids called in `content` and answered by none of
+   the user-side messages `following` (the run right after it)."
+  [content following]
+  (let [have (reduce (fn [s m] (into s (result-ids (:content m)))) #{} following)]
+    (vec (map interrupted-result (remove (fn [id] (contains? have id)) (use-ids content))))))
+
+(defn repair-messages
+  "Pair every assistant tool call with a result. A call is answered when any
+   message of the user-side run right after its assistant message holds a
+   result with its id (the provider merges consecutive user messages). Missing
+   ones get an explicit error result, put FIRST in that run's first message (or
+   in a new user message when no user message follows). Healthy lists are
+   returned unchanged."
+  [msgs]
+  (let [n (count msgs)]
+    (loop [i 0 out []]
+      (if (>= i n)
+        out
+        (let [m (nth msgs i)]
+          (if (not= :assistant (:role m))
+            (recur (inc i) (conj out m))
+            (let [run (vec (take-while (fn [x] (= :user (:role x))) (drop (inc i) msgs)))
+                  synth (missing-results (:content m) run)]
+              (cond
+                (empty? synth) (recur (inc i) (conj out m))
+                (empty? run) (recur (inc i) (conj (conj out m) {:role :user :content synth}))
+                :else (let [f (first run)]
+                        (recur (+ i 2) (conj (conj out m) (assoc f :content (into synth (:content f))))))))))))))
+
+(defn orphaned-results
+  "The synthetic results the TAIL of turns `ts` needs: the calls of the last
+   assistant turn that no later turn answers (turns after it are all user-side).
+   [] when the history is healthy. What `recover!` persists."
+  [ts]
+  (let [i (last (keep-indexed (fn [k t] (when (= :assistant (:role t)) k)) ts))]
+    (if (nil? i)
+      []
+      (missing-results (:content (nth ts i)) (drop (inc i) ts)))))
+
+(defn repair-tail!
+  "Persist the explicit error results an interrupted task's tail is missing, as
+   one :tool turn. Idempotent. Returns the ids it answered ([] when none)."
+  [sys id]
+  (let [ts (turns sys id)
+        rs (orphaned-results ts)]
+    (when (seq rs) (append! sys id ts :tool rs))
+    (vec (map :id rs))))
+
 (defn messages
   "Turns → the model's message list. :tool turns travel as :user messages
-   (tool results are user-side content, as in the Anthropic and pi models)."
+   (tool results are user-side content, as in the Anthropic and pi models).
+   An unanswered tool call is answered by an explicit interruption error here
+   too (repair-messages), so no provider ever sees an orphan."
   [ts]
-  (vec (map (fn [t] {:role (if (= :assistant (:role t)) :assistant :user) :content (:content t)}) ts)))
+  (repair-messages
+   (vec (map (fn [t] {:role (if (= :assistant (:role t)) :assistant :user) :content (:content t)}) ts))))
 
 ;; ── the inbox becomes user turns ────────────────────────────────────────
 
@@ -158,6 +243,12 @@
                               :data {:input (:input block) :error? (some? (:error r))}})
     (emit sys :tool/result {:task id :tool (:name block) :error? (some? (:error r))})
     r))
+
+(def TRUNCATED-NOTE
+  (str "NOT RUN: your reply hit the output token limit (stop: max-tokens) while this call was being written, "
+       "so its input may be incomplete. Nothing was executed. Retry with a much smaller call: write large files "
+       "in several chunks of a few hundred lines per eval (create, then append) and avoid huge literals. "
+       "The operator can raise the limit with OMEGA_MAX_TOKENS."))
 
 (defn- tool-uses [content] (filter (fn [b] (= :tool-use (:type b))) content))
 
@@ -241,7 +332,11 @@
                 (let [r {:status :idle :result (text-of content)}]
                   (emit sys :turn/end (assoc r :task id))
                   r)
-                (let [results (vec (map (fn [u] (assoc (run-tool sys id u turn-n) :id (:id u))) uses))
+                (let [results (if (= :max-tokens (:stop resp))
+                                ;; the output was cut off: the call's input may be incomplete.
+                                ;; Answer every call WITHOUT running any, so the history stays paired
+                                (vec (map (fn [u] {:id (:id u) :error TRUNCATED-NOTE}) uses))
+                                (vec (map (fn [u] (assoc (run-tool sys id u turn-n) :id (:id u))) uses)))
                       done (first (filter :done results))
                       ts (append! sys id ts :tool
                                   (vec (map (fn [r] {:type :tool-result :id (:id r)

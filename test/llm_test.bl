@@ -49,3 +49,46 @@
       (is (= "n1" (get-in (play req) [:content 0 :text])))
       (is (= 1 @calls) "replay never calls the model")
       (is (= :cassette-miss (get-in (play (assoc req :system "changed")) [:error :kind]))))))
+
+(deftest max-tokens-setting-parses-strictly
+  (is (= {:ok nil} (llm/parse-max-tokens nil)))
+  (is (= {:ok nil} (llm/parse-max-tokens "  ")))
+  (is (= {:ok 32000} (llm/parse-max-tokens "32000")))
+  (is (= {:ok 128000} (llm/parse-max-tokens " 128000 ")))
+  (doseq [bad ["0" "-5" "12.5" "abc" "8k" "128001" "99999999" "1e5"]]
+    (is (some? (:error (llm/parse-max-tokens bad))) (str "rejects " bad)))
+  (is (includes? (:error (llm/parse-max-tokens "sk-secret-value")) "OMEGA_MAX_TOKENS"))
+  (is (not (includes? (:error (llm/parse-max-tokens "sk-secret-value")) "sk-secret")) "the rejected text is never echoed"))
+
+(defn- env-root! [content]
+  (let [r (str "/tmp/omega-llm-env-" (erlang/unique_integer (to-list [:positive])))]
+    (File/mkdir_p! r)
+    (when content (File/write! (str r "/.env") content))
+    r))
+
+(deftest from-env-reads-max-tokens-with-a-deliberate-default
+  (when (nil? (System/get_env "OMEGA_MAX_TOKENS"))
+    (is (= 8000 (:max-tokens (llm/from-env (env-root! "OMEGA_MODEL=m\n")))) "unset keeps the default")
+    (is (= 8000 (:max-tokens (llm/from-env (env-root! nil))))))
+  (let [p (llm/from-env (env-root! "OMEGA_MAX_TOKENS=32000\n"))]
+    (is (= 32000 (:max-tokens p)))
+    (is (= 32000 (:max_tokens (llm/anthropic-body p {:messages []}))) "and it reaches the wire")))
+
+(deftest from-env-rejects-an-invalid-max-tokens-loudly-without-leaking-it
+  (doseq [bad ["0" "-1" "lots" "999999999"]]
+    (let [r (try (llm/from-env (env-root! (str "OMEGA_MAX_TOKENS=" bad "\nANTHROPIC_API_KEY=sk-ant-secret\n")))
+                 :no-error
+                 (catch err (ex-message err)))]
+      (is (string? r) (str "throws for " bad))
+      (when (string? r)
+        (is (includes? r "OMEGA_MAX_TOKENS"))
+        (is (not (includes? r "sk-ant-secret")))))))
+
+(deftest a-cut-off-tool-input-streams-into-an-empty-input-not-a-crash
+  (let [sse (omega.llm.sse/response
+             (reduce omega.llm.sse/fold omega.llm.sse/empty-acc
+                     [{"type" "content_block_start" "index" 0 "content_block" {"type" "tool_use" "id" "tu1" "name" "eval"}}
+                      {"type" "content_block_delta" "index" 0 "delta" {"type" "input_json_delta" "partial_json" "{\"code\": \"(writ"}}
+                      {"type" "message_delta" "delta" {"stop_reason" "max_tokens"} "usage" {"output_tokens" 8000}}]))]
+    (is (= :max-tokens (:stop sse)))
+    (is (= {} (:input (first (:content sse)))))))

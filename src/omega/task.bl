@@ -335,6 +335,10 @@
         rows (env/q e '[:find ?id ?s :where [?t :task/id ?id] [?t :task/status ?s]])
         live (remove (fn [[_ s]] (terminal? s)) rows)
         interrupted (vec (sort (keep (fn [[id s]] (when (contains? #{:open :running :waiting} s) id)) live)))]
+    ;; An assistant tool call persists before its tool runs; a kill between leaves it
+    ;; unanswered and the provider rejects the next request. Answer it with an explicit
+    ;; "interrupted, effect unknown" error result. The tool is NEVER re-run.
+    (doseq [[id _] live] (loop/repair-tail! sys id))
     (doseq [id interrupted]
       (env/tx! e [[:db/add (env/eid e :task/id id) :task/result
                    "interrupted: omega stopped while this task was running. Send a message to continue."]])
