@@ -155,3 +155,26 @@ latency measurements. Evidence: proof/actor-consolidation/callbacks.
 Stage 3 has started by separating production js.actor compiler/runtime modules
 from research fixtures. Ordinary editor/core lowering still needs migration;
 no claim of complete consolidation or five delivered experiences is warranted.
+
+* Checkpoint: shipped library and actor-only Pelagic preparation
+Upstream bb0ed533 moves production lowering/linking into js.actor and the actor
+policy/engine into priv/lib/js/actor. Research fixtures reference those modules;
+there is no second implementation in research. The normal frontend build ships
+out/actor/ once; package runtime files re-export it through link-runtime!.
+Pelagic no longer reads/evaluates research compiler text or discovers its checkout.
+
+Pelagic's production preparation is now actor-only. Removed worker-only, prebuilt
+and actor-bridge branches/artifacts. The fixed-slice benchmark is a budget setting
+of the same actor. The actors env.bl task rebuilds the preparation entrypoint
+inside the frontend graph, rather than producing a second dist/actor graph.
+Stale cancellation now acknowledges the old id without killing its replacement.
+Fresh capped build passes: 7m15s wall, 7m03s CPU, 1.2 GB RAM peak, 74 MB swap.
+All 50 package tests pass; real browser demand/cancel/restart tests pass at both
+budgets, including stale cancellation. Three Node runs/configuration preserve the
+same 1024-row digest. Actor medians: CPU 1297 ms, kernel work 180 ms, startup
+130 ms, per-run chunk P95 4.51 ms. Evidence is under production/ alongside the
+browser benchmark. This does not establish physical audio/video latency.
+
+Remaining upstream stage 3 is substantial: common compiled core, ordinary
+lowering/live evaluator and actor-aware higher-order dispatch. Shared runtime
+ownership and actor-default preparation are verified steps, not completion.

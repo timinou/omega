@@ -19,8 +19,8 @@ const moduleURL=name=>new URL(name,import.meta.url);
 function blocks(source){const result=[];const re=/^#\+begin_src\s+(\S+)[^\n]*\n([\s\S]*?)^#\+end_src\s*$/gmi;let m;while((m=re.exec(source)))result.push({language:m[1].toLowerCase(),code:m[2]});
   if(!result.length && source.trim())result.push({language:'beam-lisp',code:source});return result;}
 export function createHost(api) {
-  const preparationMode=new URLSearchParams(globalThis.location?.search||'').get('prepare')||'prebuilt';
-  const scoreVoices=prepareScore(createScoreSource(Score.d_step,Score.d_defaults),()=>createGraphicsWorker(moduleURL('prepare-worker.mjs')),{mode:['prebuilt','worker','actor','none'].includes(preparationMode)?preparationMode:'prebuilt'});
+  const prepareEnabled=new URLSearchParams(globalThis.location?.search||'').get('prepare')!=='none';
+  const scoreVoices=prepareScore(createScoreSource(Score.d_step,Score.d_defaults),()=>createGraphicsWorker(moduleURL('prepare-worker.mjs')),{enabled:prepareEnabled});
   afterPaint(()=>scoreVoices.start());
   let config={...defaults},ctx=null,ctxWall=0,audio=null,timer=null,playing=false,nextStep=0,nextTime=0,origin=0,beatOrigin=0,disposed=false;
   const store=new LocalStore();let lastTake=null,restoreGeneration=0,recordPreparing=false,lastEvaluation=null,evalCount=0;

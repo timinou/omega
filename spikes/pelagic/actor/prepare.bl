@@ -23,5 +23,8 @@
       [:browser :ping id]
         (do (.postMessage js/self #js {:op "pong" :id id}) (recur worker generation))
       [:browser :cancel id]
-        (do (when worker (rt-exit worker :kill))
-            (.postMessage js/self #js {:op "cancelled" :id id}) (recur nil nil)))))
+        (if (= id generation)
+          (do (when worker (rt-exit worker :kill))
+              (.postMessage js/self #js {:op "cancelled" :id id}) (recur nil nil))
+          (do (.postMessage js/self #js {:op "cancelled" :id id :stale true})
+              (recur worker generation))))))

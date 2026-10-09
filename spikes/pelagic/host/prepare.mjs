@@ -1,9 +1,7 @@
-// Resource ownership only: one worker, one demanded chunk, finite score cache.
-// Actors manage the prototype's demand in BL; the native alternative uses the
-// same credit protocol and kernel to make the scheduling comparison meaningful.
-export function prepareScore(base,createWorker,{mode='prebuilt',delay=4,onError=()=>{}}={}){
+// Own the worker and finite cache; scheduling policy lives in BL actors.
+export function prepareScore(base,createWorker,{enabled=true,budgetMs=4,delay=4,onError=()=>{}}={}){
  const cache=new Map(),samples=[];let worker=null,closed=false,done=false,started=0,readyAt=0,timer=0,credit=0,rows=0;
- const state={mode,ready:false,done:false,rows:0,workMs:0,chunkMaxMs:0,error:null};
+ const state={mode:'actor',budgetMs,ready:false,done:false,rows:0,workMs:0,chunkMaxMs:0,error:null};
  const fail=error=>{state.error=error.message||String(error);dispose();onError(error);};
  function guard(){clearTimeout(timer);timer=setTimeout(()=>fail(new Error('Score preparation timed out')),15000);}
  function dispose(){if(closed)return;closed=true;clearTimeout(timer);clearTimeout(credit);worker?.terminate();worker=null;cache.clear();state.closed=true;}
@@ -11,9 +9,9 @@ export function prepareScore(base,createWorker,{mode='prebuilt',delay=4,onError=
  source.dispose=dispose;
  source.stats=()=>({...state,worker:!!worker,rows,elapsedMs:done?state.elapsedMs:started?performance.now()-started:0,startupMs:readyAt?readyAt-started:null,chunkP95Ms:samples.length?samples.slice().sort((a,b)=>a-b)[Math.floor((samples.length-1)*.95)]:null});
  source.start=()=>{
-  if(closed||worker||done||mode==='none')return;
+  if(closed||worker||done||!enabled)return;
   started=performance.now();
-  try{worker=createWorker();if(!worker){state.mode='none';return;}
+  try{worker=createWorker();if(!worker){state.workerUnavailable=true;return;}
    worker.addEventListener('error',event=>fail(new Error(event.message||'Preparation worker failed')));
    worker.addEventListener('messageerror',()=>fail(new Error('Preparation message could not be decoded')));
    worker.addEventListener('message',({data})=>{
@@ -26,7 +24,7 @@ export function prepareScore(base,createWorker,{mode='prebuilt',delay=4,onError=
      samples.push(data.workMs);state.workMs+=data.workMs;state.chunkMaxMs=Math.max(state.chunkMaxMs,data.workMs);
      guard();clearTimeout(credit);credit=setTimeout(()=>{if(!closed&&worker)worker.postMessage({op:'credit',id:1});},delay);
     }else if(data.op==='done'&&data.id===1){if(rows!==1024){fail(new Error('Incomplete preparation score'));return;}done=true;state.done=true;state.elapsedMs=performance.now()-started;clearTimeout(timer);clearTimeout(credit);worker.terminate();worker=null;}
-   });guard();worker.postMessage({op:'init',mode});
+   });guard();worker.postMessage({op:'init',budgetMs});
   }catch(error){fail(error);}
  };
  return source;

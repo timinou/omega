@@ -13,7 +13,7 @@ if(process.argv[2]==='--one'){
  const mode=process.argv[3],stage=mkdtempSync(join(tmpdir(),'pelagic-native-cpu-'));
  const local=resolve(process.env.PELAGIC_LOCAL_OUT||join(root,'dist/local')),pkg=join(stage,'pkg/pelagic');
  mkdirSync(join(pkg,'actor/out'),{recursive:true});symlinkSync(join(local,'out'),join(stage,'out'),'dir');
- for(const name of ['prepare-worker.mjs','values.mjs','score-cache.json'])copyFileSync(join(local,'pkg/pelagic',name),join(pkg,name));
+ for(const name of ['prepare-worker.mjs','values.mjs'])copyFileSync(join(local,'pkg/pelagic',name),join(pkg,name));
  for(const name of ['host.mjs','native.mjs','out/prepare.mjs'])copyFileSync(join(local,'pkg/pelagic/actor',name),join(pkg,'actor',name));
  const bootstrap=join(stage,'realm.mjs');
  writeFileSync(bootstrap,`import {parentPort,workerData} from 'node:worker_threads';
@@ -31,14 +31,14 @@ if(process.argv[2]==='--one'){
   terminate(){ended=super.terminate();return ended;}
  }
  const before=process.cpuUsage(),started=performance.now();
- const source=prepareScore(i=>{throw new Error('Unexpected fallback: '+i);},()=>new BrowserWorker(),{mode,delay:0});
+ const source=prepareScore(i=>{throw new Error('Unexpected fallback: '+i);},()=>new BrowserWorker(),{budgetMs:mode==='actor-fixed'?0:4,delay:0});
  try{
   source.start();
   while(!source.stats().done){if(source.stats().error)throw new Error(source.stats().error);if(performance.now()-started>90000)throw new Error('Preparation deadline');await new Promise(r=>setTimeout(r,2));}
   await ended;
   const cpu=process.cpuUsage(before),stats=source.stats();
   const data=JSON.stringify(Array.from({length:1024},(_,i)=>source(i)));
-  console.log(JSON.stringify({mode,...stats,cpuMs:(cpu.user+cpu.system)/1000,peakRssKiB:process.resourceUsage().maxRSS,bytes:Buffer.byteLength(data),digest:createHash('sha256').update(data).digest('hex')}));
+  console.log(JSON.stringify({...stats,benchmark:mode,cpuMs:(cpu.user+cpu.system)/1000,peakRssKiB:process.resourceUsage().maxRSS,bytes:Buffer.byteLength(data),digest:createHash('sha256').update(data).digest('hex')}));
  }finally{source.dispose();await ended;rmSync(stage,{recursive:true,force:true});}
 }else{
  const modes=(process.env.PELAGIC_BENCH_MODES||'actor,actor-fixed').split(','),results=[];

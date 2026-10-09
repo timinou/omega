@@ -9,7 +9,7 @@ class WorkerStub{
 }
 test('preparation demands one finite chunk, preserves fallback, and owns worker/cache disposal',async()=>{
  const w=new WorkerStub(),source=prepareScore(i=>['fallback',i],()=>w,{delay:0});
- source.start();source.start();assert.deepEqual(w.sent,[{op:'init',mode:'prebuilt'}]);
+ source.start();source.start();assert.deepEqual(w.sent,[{op:'init',budgetMs:4}]);
  assert.deepEqual(source(0),['fallback',0]);w.emit({op:'ready'});
  assert.deepEqual(w.sent.at(-1),{op:'prepare',id:1});
  w.emit({op:'chunk',id:1,start:0,rows:[['voice']],workMs:2});
@@ -24,7 +24,7 @@ test('out-of-order or oversized preparation fails closed and retains the working
  assert.equal(errors.length,1);assert.equal(w.terminated,1);assert.equal(source(16),16);
 });
 test('disabled preparation creates no worker; completed preparation retains cache and does not restart',()=>{
- let count=0;const w=new WorkerStub(),none=prepareScore(i=>i,()=>{count++;return w;},{mode:'none'});none.start();assert.equal(count,0);
+ let count=0;const w=new WorkerStub(),none=prepareScore(i=>i,()=>{count++;return w;},{enabled:false});none.start();assert.equal(count,0);
  const source=prepareScore(i=>i,()=>{count++;return w;});source.start();for(let start=0;start<1024;start+=16)w.emit({op:'chunk',id:1,start,rows:Array.from({length:16},(_,i)=>start+i),workMs:0});w.emit({op:'done',id:1});source.start();assert.equal(count,1);source.dispose();
 });
 

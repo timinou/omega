@@ -94,3 +94,26 @@ that only JavaScript consumes. One sample's median fell from 5.31 to 1.82 µs;
 varied on this loaded host. These batched numbers explain the optimization;
 they do not establish end-to-end P95 audio/video latency. Both JSON samples and
 semantic checks are in `proof/actor-consolidation/callbacks`.
+
+## The actor runtime is a library, and preparation has one implementation
+
+The package build now requires `js.actor` directly. Upstream `bb0ed533` owns the
+compiler, BL scheduler and JavaScript engine under `priv/lib/js/actor`. Research
+files reference those sources. The normal build publishes `out/actor/`; package
+entrypoints re-export it. This preserves one module identity as well as one
+implementation, and removes checkout discovery and source-text evaluation from
+Pelagic's build module.
+
+Preparation now always uses BL actors. The old prebuilt, worker-only and bridge
+branches are removed. Disabling preparation remains a diagnostic option; score
+fallback uses the same compiled BL kernel. The fixed-slice benchmark changes the
+actor's budget, not its scheduler or implementation. A stale cancellation cannot
+kill the replacement actor.
+
+The fresh bundle builds successfully and all 50 package tests pass. Browser
+control tests cover one-chunk demand, stale credits, cancellation, replacement,
+and stale cancellation. Across three Node runs, the actor configuration's median
+kernel work was 180 ms, startup 130 ms and per-run chunk P95 4.51 ms, with the
+unchanged 1024-row digest. The samples are in `proof/actor-consolidation/production`.
+Ordinary editor lowering and the legacy collection prelude remain tracked
+upstream work; actor-only preparation does not silently stand in for that work.
