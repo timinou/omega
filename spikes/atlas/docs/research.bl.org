@@ -1,0 +1,201 @@
+#+TITLE: Atlas / research dossier — replication, diffusion and Adobe
+#+DATE: 2026-10-09
+#+STATUS: Public evidence snapshot; conditional research decision
+
+* Editorial decision
+Keep Adobe on a disruption watch. The available evidence does not justify an
+Artcraft-only short. This is a conclusion about the supplied evidence and the
+thesis, not a personalized allocation recommendation. No trade is connected.
+
+The actionable work is to establish production capability, paid substitution,
+materiality and an expectation gap. The dashboard makes these four separate
+questions. A negative answer at one link can change the decision even when
+public attention keeps growing.
+
+* What is being compared
+Artcraft is an umbrella with a generative studio and open-source creative apps.
+Do not conflate the paid studio's pricing with the desktop apps' licensing.
+The object of this case is the open creative-app suite, especially PhotoCraft.
+
+DeepSeek R1 is the January 20, 2025 reasoning-model release. The January 27
+market shock is a separate event. R1 has later updates, and a current repository
+star count cannot be used as its January 2025 adoption observation.
+
+Sources:
+- [[https://getartcraft.com/apps][Artcraft app catalog]]
+- [[https://deepseek.com/en/news/deepseek-r1/][DeepSeek release announcement]]
+
+* Reporting method and evidence classes
+Public observations are collected with bounded unauthenticated HTTP functions.
+The notebook records original URLs, retrieval timestamps and SHA-256 hashes.
+The acquisition manifest preserves source responses; derived values are
+recomputed with deterministic functions. Editorial interpretation is written
+separately and a generative adversarial review is retained as model output.
+
+The evidence room distinguishes:
+- Primary: issuer disclosures, maintainer statements and public API records.
+- Secondary: dated original reporting used to establish narrative diffusion.
+- Gap: a required observation not present in this research package.
+- Inference: an explicit claim connecting observations to an economic mechanism.
+- Assumption: a subjective probability, payoff or implementation input.
+
+A primary source can still be promotional. A repository README is strong
+evidence of what maintainers say, weaker evidence of product quality, and no
+evidence of customers abandoning another product. A press headline can prove
+that a narrative crossed an audience boundary without proving the headline's
+strongest economic implication.
+
+* The first story: replication changes the supply side
+The economically interesting hypothesis is that AI lowers the cost of
+recreating parts of existing software. If that is durable, familiar feature
+surfaces become less scarce. Open implementations can be forked and adapted,
+which may change the bargaining power of users even before incumbent revenue
+falls.
+
+This hypothesis has several distinct mechanisms. Entry-level creators could
+avoid buying their first subscription. Existing solo users could downgrade.
+Agencies could negotiate discounts. An ecosystem could form around open
+formats and automation. Developers could use cheaper creation tools to expand
+the market rather than displace existing purchases. These mechanisms have
+different lags and different implications for Adobe's cash flows.
+
+The maintainer's own status statement is important counterevidence: PhotoCraft
+is described as an early alpha, with acknowledged professional workflow gaps.
+This is not a finding from independent testing. It is a reason to prioritize
+that testing before translating software availability into a revenue forecast.
+
+[[https://github.com/storytold/photocraft][PhotoCraft README, status section]]
+
+* The second story: diffusion changes investor attention
+A hidden signal becomes useful when its meaning changes across audiences.
+A repository can attract builders. A hacker discussion can explain why it is
+surprising. Photography and design publications can carry it to potential
+users. Financial discussion can turn it into a stock narrative.
+
+The current HN sample is a keyword sample, not a census. Two queries are
+combined and deduplicated by story ID. Story publication dates are known,
+but scores are observed only at retrieval. A chart of points grouped by story
+publication date is therefore a publication-cohort chart. It is not a chart
+of points accumulated each day. One star snapshot cannot establish star
+velocity or acceleration. Repeated comparable snapshots are needed.
+
+Specialist reporting on October 7 establishes a useful audience-crossing
+marker. It does not establish a cancellation cohort or a professional quality
+benchmark. Several outlets repeating a developer's claim remain one underlying
+claim. The desk should let an analyst trace this dependence rather than count
+each repetition as independent validation.
+
+Sources:
+- [[https://hn.algolia.com/api/v1/search?tags=story&hitsPerPage=100&query=artcraft][HN Algolia public search]]
+- [[https://www.designweek.co.uk/first-ai-came-and-scooped-up-your-art-now-its-scooped-up-adobe/][Design Week, October 7]]
+- [[https://petapixel.com/2026/10/07/someone-rebuilt-free-open-source-versions-of-photoshop-premiere-and-lightroom-using-ai/][PetaPixel, October 7]]
+
+* DeepSeek: what the analogy contributes
+The R1 release challenged beliefs about how expensive valuable reasoning
+capability had to be. Runnable weights and an API made experimentation
+possible. The narrative had implications for an already prominent AI
+infrastructure investment theme. That is why the economic mechanism matters
+more than the superficial similarity of two viral open-source announcements.
+
+Contemporaneous AP reporting describes a 16.9% Nvidia decline on January 27,
+with Nasdaq down 3.1% and the S&P 500 down 1.5%. Many stocks rose and the Dow
+gained, so the shock was not a uniform collapse of all equities. The captured
+price series independently supports a roughly 17% NVDA daily decline.
+
+The frequently repeated low training-cost number should not be treated as a
+complete audited R1 development cost. Training compute, prior research,
+distillation, post-training and inference have different economics. This
+notebook does not use a disputed cost headline as an input to a valuation.
+
+The relevant analogy is an expectations shock about scarcity. The invalid
+analogy is to apply Nvidia's one-day percentage loss to Adobe. The businesses,
+valuation expectations, exposed cash flows, demand elasticities and switching
+costs differ. One selected historical episode also supplies no calibrated
+base rate for future disruption events.
+
+[[https://apnews.com/article/52c54e361616509280bd2775674b6b4b][AP, January 27 market report]]
+
+* Adobe: establish the denominator before applying a haircut
+Adobe's September 10 issuer release reports $6.76bn quarterly revenue,
+$27.50bn ending ARR and $2.52bn operating cash flow for a quarter ending
+August 28. These figures precede the Artcraft episode. They establish scale
+and pre-event business performance, not proof about future substitution.
+
+A clone of a creative application does not expose all corporate revenue.
+The economic bridge needs a cohort denominator: which product, which paid
+user segment, which geography and which renewal horizon? Apply migration
+and pricing assumptions only to the exposed share. Then model contribution
+margin, response costs, buybacks and valuation separately.
+
+The desk intentionally lacks an invented exposed-revenue percentage. The
+absence is a research result. Treating all ARR as Photoshop-like revenue
+would create a precise answer to the wrong question.
+
+[[https://www.adobe.com/cc-shared/assets/investor-relations/pdfs/01906202/au56y4ter.pdf][Adobe Q3 FY2026 release, pages 1–2]]
+
+* Market study and practical limits
+The data pipeline captures public adjusted daily closes from Yahoo's chart
+endpoint. Its manifest records the full parameterized endpoint and response
+hash. NVDA and QQQ are compared over January 27, 2025. ADBE and QQQ are compared
+over October 5–8, 2026. The latter is a declared narrative-observation window,
+not a uniquely identified release event.
+
+The calculation uses compounded buy-and-hold asset return minus compounded
+benchmark return. Beta is fixed at one. A positive difference is not evidence
+of positive causal impact; a negative difference is not proof of disruption.
+A model estimated over a pre-event sample, sector controls, intraday timing,
+placebo windows and explicit confounds would improve attribution.
+
+The captured Adobe window does not show a crash comparable to Nvidia's.
+This weakens a claim that such a crash has already occurred. It does not rule
+out future substitution or prove that investors have correctly priced it.
+
+* A decision model that reveals its assumptions
+The scenario sandbox has three analyst-defined future stock-return states.
+Probabilities sum to one and are not empirical frequencies. Short P&L per
+notional dollar is negative stock return minus annual borrow times holding
+years minus friction. Expected P&L is the probability-weighted outcome.
+
+The worst listed scenario is not the maximum loss. Stock upside is unbounded;
+borrow can change or be recalled; forced liquidation makes path matter. The
+sandbox omits several implementation costs and labels them. A broker quote
+is required before interpreting the result as executable economics.
+
+The Bayesian sensitivity panel is arithmetic over a subjective prior and
+combined likelihood ratio. It is useful for exposing how strongly a person
+must interpret the evidence to change a belief. It is not a calibrated
+forecast. Correlated attention signals must not be multiplied as if they
+were independent experiments.
+
+* Highest value next investigations
+** 1. Professional workflow validation
+Pre-register representative tasks using public project assets. Compare
+completion time, fidelity, failures and interoperability. Blind judges to
+application when scoring outputs. Include plug-ins, color management and
+round-trip files. Report failed tasks, not only attractive screenshots.
+
+** 2. Paying-user displacement
+Define a denominator of current paying Adobe users. Track repeated usage and
+actual cancellation or downgrade, with consent and aggregate reporting.
+Separate first-time hobbyists from paid-seat substitution. Intent to cancel
+is weaker evidence than a documented billing change.
+
+** 3. Revenue bridge and expectations
+Build ranges for exposed share, migration and realization lag. Test what
+change in cash-flow expectations is needed to justify the proposed payoff.
+A threatened company can already be cheaply priced; a growing company can
+still disappoint high expectations. A short thesis needs the difference.
+
+** 4. Trade implementation and reversal rules
+Obtain fresh borrow economics and a dated catalyst. Define the maximum
+portfolio loss, monitoring frequency and thesis invalidation observations.
+Keep decision records append-only or versioned, so later outcomes do not
+rewrite what was believed at entry.
+
+* What would change the current decision
+Move toward human trade review if independent production tests succeed,
+credible paid migration appears, exposed economics are material relative to
+expectations, and a bounded implementation fits a separately defined risk
+budget. Abandon this specific catalyst thesis if substitutes fail routine
+workflows, adoption remains non-paying curiosity, or incumbent responses
+absorb the value while pricing already reflects the threat.

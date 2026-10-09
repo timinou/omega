@@ -1,0 +1,133 @@
+#+TITLE: Atlas / design — an observatory for decisions
+#+DATE: 2026-10-09
+
+* Product intent
+A market terminal makes facts available. A strategic desk should make the
+reasoning between a fact and a decision visible. Atlas starts with a question,
+shows competing explanations, and lets a person descend into evidence before
+returning to an explicit choice. The notebook is the durable artifact; the
+screen is a projection of it.
+
+The specific question is whether Artcraft attention supports an Adobe short.
+The general class is an emerging capability shock with uncertain business
+transmission. The desk schema separates evidence, claims, a transmission
+chain, scenarios, decision gates and research experiments. This can also
+represent a pricing change, an open-source competitor, a regulation shock or
+a supply-chain disruption.
+
+* Precedents examined
+** Observable: executable thought beside explanation
+Observable's public notebook material demonstrates reactive exploration and
+literate composition of prose, code and visuals. Atlas takes the adjacency
+of source and result: an editable Org notebook remains beside its rendered
+desk. A malformed specification produces a visible error instead of silently
+falling back to attractive demo content.
+
+[[https://old.observablehq.com/][Observable notebook overview]]
+
+** Koyfin: persistent comparison and reusable watchlists
+Koyfin's public dashboard and watchlist documentation emphasizes reusable
+views, benchmarks and comparison. Atlas takes persistent context: a current
+case stays visible while the analyst changes evidence or assumptions. It
+uses a restrained information hierarchy rather than a full-screen wall of
+undifferentiated numbers.
+
+[[https://www.koyfin.com/help/mydashboards-myd/amp/][Koyfin dashboards]]
+
+** Quartr: return to the source in context
+Quartr's public transcript-search and highlighting descriptions emphasize
+source context and returning to exact passages. Atlas takes the requirement
+that a claim should expose its evidence dependencies, original URL and
+locator. A click on an evidence ID leads to the corresponding evidence card;
+the card distinguishes observation from source limitations.
+
+[[https://quartr.com/features/transcript-search][Quartr transcript search]]
+
+** Existing Omega spikes: one package, shared language
+Workspace demonstrates panes and task context. Procurement demonstrates
+accountable research, retained evidence and reusable functions. Browser
+supplies a host boundary for visible research IO. Presentation demonstrates
+rich documents without replacing the editor. Atlas composes the editor's
+existing package-host and frame seams rather than creating a parallel app.
+
+* Information architecture
+** Observatory
+Start with the decision state and the transmission bottleneck. Show the
+strongest bear mechanism and strongest rebuttal side by side. Use a five-node
+chain: attention, capability, adoption, economics and pricing. Unknown links
+are visually present. They never receive fake confidence scores.
+
+** Signal anatomy
+A ledger explains what each observation can establish and what experiment
+would discriminate between explanations. A chronology separates creation,
+publication and capture times. HN discussions are expandable and linked.
+The publication-cohort chart's caption prevents a common error: treating
+retrieval-time scores as historical accumulation.
+
+** Event comparison
+A qualitative matrix appears with quantitative charts. The juxtaposition
+makes differences inspectable: artifact, friction, economic mechanism and
+market clock. Price charts expose dates and values on hover. Captions state
+normalization, adjustment convention and the descriptive benchmark method.
+
+** Evidence room
+Claim cards lead to source cards. Filtering primary, secondary and gap
+records supports an adversarial reading: what remains if headlines are
+removed? An acquisition audit exposes endpoint, timestamp and hash. Source
+links open in a new tab without navigating away from the notebook.
+
+** Decision lab
+Scenario payoffs and Bayesian sensitivity live beside decision gates and
+experiments. Editable controls are assumptions, never sourced facts. Expected
+P&L is contextualized by the worst listed scenario and the unbounded loss
+outside the list. Gate failure is deterministic; favorable assumed P&L cannot
+override missing capability or borrow evidence.
+
+** Research journal
+A contextual Omega task can ask a follow-up question. A memo draft records
+what changed the analyst's mind and what would reverse the decision. Export
+produces a .bl.org file containing rationale and current assumptions. This
+makes deliberation portable without pretending transient state is saved.
+
+* Visual language
+A deep teal masthead anchors the case. Warm white cards sit on a muted paper
+background. Teal marks observed structure; rust marks unresolved links.
+Serif titles give narrative space while sans-serif tables carry observations.
+The screen uses whitespace to separate arguments rather than relying on many
+status colors. The palette is intentionally legible in screenshots and in a
+long reading session.
+
+At smaller widths, cards stack and the transmission chain becomes vertical.
+The editable pane remains a real editor with its standard modes, save keys,
+selection and command line. Buttons, inputs, select controls and expandable
+source records use native browser semantics. No chart library is needed for
+the current line charts; small SVGs keep offline operation and dependency
+weight low.
+
+* Interaction contract
+- space s a opens the case notebook.
+- space s q opens an owned research question prompt.
+- Tabs change package state through BL events.
+- Evidence-ID buttons select and scroll to a source record.
+- Scenario controls update transient package state.
+- Memo export retains the user's draft and assumptions as Org.
+- Editing the atlas block changes the observatory from the same source text.
+- Unloading atlas removes its state, owned layout and host resources.
+
+* Deliberate constraints and next versions
+Version one includes a fixed case study and a reusable schema. Some overview
+labels and comparison series are still case-specific. Generalized arbitrary
+watchlists require configurable role bindings, query specifications and a
+case selector rather than merely changing the title. The schema is versioned
+so that extension can fail explicitly.
+
+The notebook does not auto-refresh. Refresh means collecting a new snapshot,
+reviewing the diff and materializing a new proposal. This prevents a live
+feed from overwriting a human's editorial work. A future feed can show fresh
+observations in a separate layer before promotion.
+
+The first iteration established source + projection + analytical functions.
+The second adds real evidence, comparison, sensitivity, task follow-ups and
+memo export. The proof tour checks both visual states and interactions in the
+real editor. Further work should prioritize generalized case bindings,
+additional public data adapters, evidence-diff views and experiment results.

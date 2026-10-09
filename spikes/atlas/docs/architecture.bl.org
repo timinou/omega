@@ -1,0 +1,127 @@
+#+TITLE: Atlas / architecture — values, effects and evidence
+#+DATE: 2026-10-09
+
+* Boundaries
+Atlas is a bl-ed package exported as one plain BL value. Its functions are
+pure functions of editor and event. BL owns commands, package state, frame
+layout and the view model. The host owns DOM and download IO. Collection and
+model synthesis run as explicit offline-world processes. No omega-domain
+code is added to vendor/bl-ed.
+
+The notebook is ordinary editable .bl.org text. Its #+begin_atlas block
+contains schema-versioned JSON. The adjacent view parses that block, validates
+critical structure and derives displayed values. There is no private editor,
+page, render loop, global command-table mutation or parallel package registry.
+
+* Namespaces and modules
+** atlas.main / BL
+Exports bl-package, adoption, layout, model and research command. Adoption
+recognizes #+ATLAS within the first twelve lines and sets only :frame/layout,
+which is declared in :owns. Transient state lives under :pkg-state "atlas".
+The view model carries current source, path and package state.
+
+The research prompt is owned by atlas. Its submission emits task/open with
+the source path and a constrained research goal. Omega's existing harness
+owns the resulting task, transcript and follow-up interaction. No source
+writes happen inside render or on import.
+
+** models.mjs / deterministic functions
+notebook parses and checks the source schema. attention deduplicates story
+IDs and groups retrieval-time points by publication day. returns and
+eventStudy produce matched compounded returns and a descriptive benchmark
+difference. posterior uses log odds to avoid repeated odds multiplication.
+shortModel computes explicitly assumed carry and scenario P&L. readiness
+checks gates without consulting a language model. normalized supplies a
+first-observation-equals-100 chart projection.
+
+These functions are shared by collection, tests and the view. They do not
+fetch data, mutate editor state or know credentials. Tests target financial
+identities, missing-data behavior and source invariants rather than UI
+implementation details.
+
+** host/desk.mjs / package-owned view
+createHost has no top-level application initialization. mount creates a
+scoped stylesheet and a view root. update receives the BL model, parses the
+notebook and paints the selected experience. DOM interactions dispatch
+package events to the source pane; no shared editor tables are mutated.
+The host manager tags events with pane context and suppresses stale lifetime
+events after unuse. dispose removes style and DOM resources.
+
+Strings from the notebook are escaped before HTML interpolation. External
+links accept only HTTP(S). The current SVG charts use fixed trusted colors
+and escaped labels. Evidence content is treated as data, never executable
+HTML. A notebook source block is not evaluated by the host.
+
+** collect.mjs / acquisition
+Each bounded request records URL, timestamp, status, response hash and a
+content-addressed raw artifact. Successful responses are parsed into typed
+shapes before derived output. Failures remain explicit records. Raw files
+are immutable by content name; the latest manifest and derived view are
+replaceable acquisition products.
+
+The current adapter set covers HN Algolia, GitHub repository metadata and
+Yahoo adjusted daily close. Queries are public and unauthenticated. Search
+coverage is not claimed complete. The script emits data only; it never
+changes desk.bl.org.
+
+** materialize.mjs / publication
+Combines derived data with the authored case specification. Uses exclusive
+create so it cannot overwrite an existing notebook accidentally. A new
+snapshot becomes a candidate file for review. The notebook embeds the data
+it displays, so a retained copy renders without network access.
+
+** synthesize.bl / probabilistic and generative review
+Uses the actual gen.llm module for an adversarial editorial review. Uses
+omega.jev for a closed evidence-readiness question. Reads credentials from
+the existing .env without printing them or copying another repository's
+secrets. Outputs are separate artifacts, not source fact replacements.
+
+Jev's readiness probabilities are not stock return probabilities. The
+subjective Bayesian panel is independent of Jev. Deterministic evidence gates
+remain authoritative even if a model favors a more confident conclusion.
+Provider failures generate an explicit unavailable artifact, not invented
+model output.
+
+* Frame composition
+The atlas layout contains an editor pane named notebook and a package-host
+view named observatory, which views notebook. The frame routes view events
+to its source pane. The notebook pane remains fully editable. A package
+unload collapses its layout according to the core frame contract and removes
+per-editor state. Tests compare base editor fields before use and after
+unuse, including user keys and commands, and test the frame lifecycle.
+
+No special provider scheme or server route is required. bin/bl-ed serves the
+compiled package from web/pkg/atlas.mjs. build.sh compiles into the editor's
+single runtime output directory, copies host assets and writes the loader.
+Generated output is ignored by git and reproducible from tracked source.
+
+* Data lineage
+Public endpoint → content-addressed response → manifest → deterministic
+normalization → embedded notebook data → claim dependencies → screen →
+exported decision memo.
+
+Evidence records keep publication/event date separate from retrieval time.
+Claims reference evidence IDs. Scenarios are assumptions. Model reviews are
+labeled and separately stored. This makes it possible to ask whether a
+changed conclusion came from a new observation, changed assumption or model
+interpretation.
+
+* Refresh and proposal protocol
+Run collect.mjs to acquire a new snapshot. Materialize to a new candidate
+path. Diff against the human notebook; inspect changed evidence, dates and
+series. Only promote a candidate intentionally. Never overwrite analyst
+notes in an automatic refresh. The explicit research task instructions use
+the same protocol for generative revisions.
+
+* Verification and limits
+The offline browser tour loads ?use=atlas in the real editor, traverses
+screens, edits assumptions, selects evidence, opens/cancels research and
+unloads. Screenshots cover active and removed states. Package tests verify
+adoption, state ownership, effect context and frame restoration. The vendor
+drive suite and existing presentation equivalence test are required gates.
+
+This is a research prototype, not a brokerage interface. The data is a
+snapshot. There is no trade execution, real-time quote guarantee, historical
+attention time series, independently verified parity benchmark or paying
+migration cohort. Those are visible research gaps. The stock-price model is
+a scenario calculator and the event study is descriptive.

@@ -1,0 +1,33 @@
+(ns atlas.main
+ (:require [ed.core :as c] [ed.docs :as docs]))
+(defn atlas? [ed]
+ (some (fn [line] (starts-with? line "#+ATLAS:")) (take 12 (:lines (:text ed)))))
+(defn layout []
+ {:name "atlas" :doc "An editable strategic notebook beside its decision observatory."
+  :panes [{:id :notebook :doc :linked :width [:fr 1]}
+          {:id :observatory :view [:atlas/desk :notebook] :width [:fr 3]}]
+  :focus :notebook})
+(defn adopt [ed] (if (atlas? ed) (assoc ed :frame/layout (layout)) ed))
+(defn model [ed]
+ {:package "atlas" :source (join "\n" (:lines (:text ed))) :path (:path ed)
+  :state (get-in ed [:pkg-state "atlas"] {})})
+(defn select [ed ev]
+ (assoc-in ed [:pkg-state "atlas" (:field ev)] (:value ev)))
+(defn research [ed]
+ (docs/owned-prompt ed "atlas" "Research question: "
+  (fn [ed question]
+   (c/effect ed {:kind :intent :intent "task/open" :then :visit-path
+    :args {:title "Atlas · evidence follow-up" :path (:path ed)
+     :goal (str "Read " (:path ed) " and spikes/atlas/instructions.bl.org. Research question: " question
+      ". Use public evidence only. Reuse spikes/atlas/collect.mjs and models.mjs; use Gen module gen.llm for a cited adversarial synthesis. Preserve source facts, label assumptions, write a separate .bl.org proposal with citations and missing data. Do not trade or modify the source dashboard without a reviewed diff.")}}))))
+(def bl-package
+ {:name "atlas" :doc "Public evidence, comparative events and strategic decisions as a live notebook."
+  :commands {:atlas/research {:doc "Open an Omega follow-up task with this notebook as evidence." :run research}
+             :atlas/home {:doc "Open the Artcraft / Adobe notebook." :run (fn [ed] (docs/visit ed "spikes/atlas/desk.bl.org"))}}
+  :keys {:normal {"space s a" :atlas/home "space s q" :atlas/research}}
+  :intercept (fn [ed ev]
+   (cond (= :atlas/select (:type ev)) (select ed ev)
+         (= :atlas/research (:type ev)) (research ed)
+         :else nil))
+  :adopt adopt :owns [:frame/layout]
+  :provides {:layouts {"atlas" (layout)} :views {:atlas/desk model}}})
