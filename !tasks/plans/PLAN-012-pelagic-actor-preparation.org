@@ -1,0 +1,22 @@
+#+TITLE: PELAGIC shared frontend and actor preparation prototype
+#+STATUS: implementing
+
+* Objective
+Use the same native-JS BL frontend in server-backed and local launches. Prototype
+CPU score preparation managed by the existing BL actor runtime, compare against
+bounded native-worker scheduling using the same BL kernel, and retain evidence.
+No changes to live world 8790; preserve unrelated work. Commit validated slices.
+
+* Architecture
+The regular JS emitter is synchronous and refuses receive. The existing actor
+profile emits generators and owns its scheduler, mailboxes and process lifetimes.
+Bridge profiles through existing bounded actor input/output transport in an owned
+module Worker. Native annotated BL computes score chunks; BL actors own demand
+and cancellation. Compare throughput, native kernel work, chunk latency, heartbeat
+and startup costs. Actors in one realm are cooperative, not extra CPU cores.
+
+* Gates
+Real package lifecycle, source preservation and screenshots; bounded demand and
+cleanup; identical score output; server-backed and local browser behavior;
+existing package/editor/presentation checks. Keep native audio graph ownership on
+the main thread; score preparation isolation alone cannot remove that cost.
