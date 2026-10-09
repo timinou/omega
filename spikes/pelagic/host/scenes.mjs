@@ -51,29 +51,31 @@ export class SceneStage extends ShaderStage {
         g.bindFramebuffer(g.FRAMEBUFFER,target.framebuffer);g.framebufferTexture2D(g.FRAMEBUFFER,g.COLOR_ATTACHMENT0,g.TEXTURE_2D,target.texture,0);
         if(g.checkFramebufferStatus(g.FRAMEBUFFER)!==g.FRAMEBUFFER_COMPLETE)throw new Error('Scene framebuffer unavailable');
         g.bindTexture(g.TEXTURE_2D,target.previous);g.texImage2D(g.TEXTURE_2D,0,g.RGB,w,h,0,g.RGB,g.UNSIGNED_BYTE,null);}}
+    this.sampleAudio(options.analyser,options.audioFrame);
+    const outputFrame=this.frames;
     const visual=this.visual.visual,progress=this.transition?Math.max(0,Math.min(1,(options.beat-this.transition.start)/(this.transition.end-this.transition.start))):1;
     const layers=[this.transition?.from||null,this.visual,visual.overlay?this.visual:null];
     const savedUniforms=this.uniforms;
     layers.forEach((state,index)=>{
       const target=this.targets[index];
-      if(!state){g.bindFramebuffer(g.FRAMEBUFFER,target.framebuffer);g.clearColor(0,0,0,1);g.clear(g.COLOR_BUFFER_BIT);return;}
+      if(!state)return;
       const name=index===2?visual.overlay:state.visual.scene,definition=state.scenes[name]||{};
       this.activate(this.cached(definition.shader||state.visual.shader||this.baseSource),true);
       this.previous=target.previous;this.uniforms={...savedUniforms,...state.visual.uniforms};
-      const signals=options.signals||{};
+      const signals=options.signals||options.audioFrame?.signals||{};
       const controls={...state.visual,...definition.controls};
       for(const [key,mapping] of Object.entries(definition.mappings||{})) {
         const [scope,stem,feature]=mapping.signal;let value=signals[scope==='deck'?'deck-'+stem:scope==='master'?'master':stem]?.[feature]||0;if(feature==='pitch')value=Math.max(0,Math.min(1,Math.log2(Math.max(20,value)/20)/10));
         controls[key]=(controls[key]||0)+value*mapping.amount;
       }
       for(const [key,lo,hi] of [['zoom',0,.5],['accent',0,1],['intensity',.1,2],['symmetry',3,16],['feedback',0,.7],['palette',0,1]])if(controls[key]!==undefined)controls[key]=Math.max(lo,Math.min(hi,controls[key]));
-      super.draw({...options,width:w,height:h,scene:definition.scene??Math.max(0,NAMES.indexOf(name)),target:target.framebuffer,controls});
+      super.draw({...options,width:w,height:h,scene:definition.scene??Math.max(0,NAMES.indexOf(name)),target:target.framebuffer,audioPrepared:true,controls});
     });
     this.uniforms=savedUniforms;this.previous=this.defaultPrevious;
     this.activate(this.compositor,true);g.bindFramebuffer(g.FRAMEBUFFER,null);g.viewport(0,0,outputW,outputH);this.uniform('iResolution',[outputW,outputH,1]);
-    this.targets.forEach((target,index)=>{g.activeTexture(g.TEXTURE0+index);g.bindTexture(g.TEXTURE_2D,target.texture);g.uniform1i(g.getUniformLocation(this.program,['a','b','c'][index]),index);});
+    this.targets.forEach((target,index)=>{g.activeTexture(g.TEXTURE0+index);g.bindTexture(g.TEXTURE_2D,target.texture);g.uniform1i(this.location(['a','b','c'][index]),index);});
     this.uniform('progress',progress);this.uniform('overlay',visual.mix);this.uniform('mode',visual.transition==='iris'?2:visual.transition==='dissolve'?1:0);
-    g.drawArrays(g.TRIANGLE_STRIP,0,4);if(progress>=1)this.transition=null;
+    g.drawArrays(g.TRIANGLE_STRIP,0,4);this.frames=outputFrame+1;if(progress>=1)this.transition=null;
   }
   resources(){return {programs:this.disposed?0:this.pool.size+1,targets:this.targets.length,renderSize:this.renderSize,outputSize:[this.canvas.width,this.canvas.height],transition:!!this.transition};}
   dispose(options){if(this.disposed)return;const g=this.gl;

@@ -1,4 +1,4 @@
-import {audioFeatures} from './features.mjs';
+import {audioFeatures,waveformRms} from './features.mjs';
 // Web Audio interpreter for pure BL UGen graphs. No score/pattern logic here.
 import {plain} from './values.mjs';
 export {plain} from './values.mjs';
@@ -128,12 +128,12 @@ export class AudioEngine {
   signals(time=this.ctx.currentTime) {
     const out={};
     for(const b of this.buses.values()) {
-      b.analyser.getByteFrequencyData(b.fft);b.analyser.getByteTimeDomainData(b.wave);
-      const f=audioFeatures(b.fft,b.wave,{sampleRate:this.ctx.sampleRate,fftSize:512});
+      b.analyser.getByteTimeDomainData(b.wave);
+      const volume=waveformRms(b.wave);
       const fade=(b.deck==='a'?Math.cos(this.config.crossfade*Math.PI/2):Math.sin(this.config.crossfade*Math.PI/2))*this.config['deck-'+b.deck]*this.config.master;
       const prior=out[b.stem]||{level:0,onset:0,pitch:0};
       const intent=this.intents.findLast(x=>x.stem===b.stem&&x.time<=time);
-      out[b.stem]={level:Math.min(1,prior.level+f.volume*10*fade),onset:Math.max(prior.onset,
+      out[b.stem]={level:Math.min(1,prior.level+volume*10*fade),onset:Math.max(prior.onset,
         this.config[b.stem]===false?0:(intent?Math.exp(-Math.max(0,time-intent.time)*12)*intent.velocity*fade:0)),pitch:intent?.pitch||0};
     }
     for(const [key,analyser] of [...Object.entries(this.decks).map(([key,d])=>['deck-'+key,d.analyser]),['master',this.analyser]]){
@@ -142,6 +142,10 @@ export class AudioEngine {
       const f=audioFeatures(fft,wave,{sampleRate:this.ctx.sampleRate});out[key]={...f,level:Math.min(1,f.volume*10),pitch:0};
     }
     return out;
+  }
+  visualFrame(time=this.ctx.currentTime){
+    const signals=this.signals(time),master=this.tapBuffers.get('master');
+    return {signals,fft:master.fft,wave:master.wave,features:signals.master};
   }
   cancelFrom(time) {
     for(const [id,v] of this.voices)if(v.start>=time){for(const n of v.sources){n.onended=null;try{n.stop();}catch{}}v.owned.forEach(n=>n.disconnect());this.voices.delete(id);}

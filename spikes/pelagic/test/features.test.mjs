@@ -31,3 +31,17 @@ test('transients respond to an actual amplitude attack, not a beat clock',()=>{
   wave.fill(160);
   assert.equal(audioFeatures(fft,wave).onset,0);
 });
+
+test('cached feature plans preserve decibel calibration across analyser shapes',()=>{
+ const fft=Uint8Array.from({length:1024},(_,i)=>(i*73+19)%256),wave=new Uint8Array(2048).fill(128);
+ for(let i=0;i<24;i++){
+  const sampleRate=22050+i*1000,fftSize=2048,minDecibels=-110+i,maxDecibels=-25;
+  const result=audioFeatures(fft,wave,{sampleRate,fftSize,minDecibels,maxDecibels});
+  for(const [key,lo,hi,gain] of [['bass',35,180,22],['mid',250,2500,55],['high',4500,14000,240]]){
+   const first=Math.max(1,Math.ceil(lo*fftSize/sampleRate)),last=Math.min(fft.length-1,Math.floor(hi*fftSize/sampleRate));let power=0;
+   for(let bin=first;bin<=last;bin++)if(fft[bin]){const amplitude=10**((minDecibels+fft[bin]/255*(maxDecibels-minDecibels))/20);power+=amplitude*amplitude;}
+   const expected=Math.min(1,Math.sqrt(power/Math.max(1,last-first+1))*gain);
+   assert.ok(Math.abs(result[key]-expected)<1e-12,`${key}: ${result[key]} vs ${expected}`);
+  }
+ }
+});

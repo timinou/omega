@@ -26,6 +26,7 @@ export class ShaderStage {
     const g=this.gl;
     this.buffer=g.createBuffer();g.bindBuffer(g.ARRAY_BUFFER,this.buffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),g.STATIC_DRAW);
     this.audioTex=this.texture();this.empty=this.texture();this.previous=this.texture();g.bindTexture(g.TEXTURE_2D,this.previous);g.texImage2D(g.TEXTURE_2D,0,g.RGB,1,1,0,g.RGB,g.UNSIGNED_BYTE,new Uint8Array([0,0,0]));this.audio=new Uint8Array(512*2*4);
+    g.bindTexture(g.TEXTURE_2D,this.audioTex);g.texImage2D(g.TEXTURE_2D,0,g.RGBA,512,2,0,g.RGBA,g.UNSIGNED_BYTE,null);
     this.fft=new Uint8Array(1024);this.wave=new Uint8Array(2048);this.uniforms={};this.frames=0;this.disposed=false;
     this.mouse=[0,0,0,0];
     this.move=e=>{const r=canvas.getBoundingClientRect();this.mouse[0]=(e.clientX-r.left)*canvas.width/r.width;this.mouse[1]=(r.bottom-e.clientY)*canvas.height/r.height;};
@@ -46,38 +47,46 @@ export class ShaderStage {
       if(!g.getProgramParameter(p,g.LINK_STATUS))throw new Error(g.getProgramInfoLog(p));
     } catch(e) {created.forEach(s=>g.deleteShader(s));if(p)g.deleteProgram(p);throw e;}
     created.forEach(s=>g.deleteShader(s));
-    return {program:p,locations:new Map(),source};
+    return {program:p,locations:new Map(),position:g.getAttribLocation(p,'position'),source};
   }
   activate(candidate,retain=false){
     if(!retain&&this.program&&this.program!==candidate.program)this.gl.deleteProgram(this.program);
     this.program=candidate.program;this.locations=candidate.locations;this.source=candidate.source;
-    const g=this.gl;g.useProgram(this.program);const at=g.getAttribLocation(this.program,'position');
+    const g=this.gl;g.useProgram(this.program);const at=candidate.position;
     g.bindBuffer(g.ARRAY_BUFFER,this.buffer);if(at>=0){g.enableVertexAttribArray(at);g.vertexAttribPointer(at,2,g.FLOAT,false,0,0);}
   }
   compile(source){this.activate(this.prepare(source));return true;
   }
+  location(name){let value=this.locations.get(name);if(value===undefined){value=this.gl.getUniformLocation(this.program,name);this.locations.set(name,value);}return value;}
+  sampleAudio(analyser,audioFrame){
+    if(audioFrame){this.fft.set(audioFrame.fft);this.wave.set(audioFrame.wave);this.features=audioFrame.features;}
+    else{
+      if(analyser){analyser.getByteFrequencyData(this.fft);analyser.getByteTimeDomainData(this.wave);}
+      else{this.fft.fill(0);this.wave.fill(128);}
+      this.features=audioFeatures(this.fft,this.wave,{sampleRate:analyser?.context?.sampleRate??analyser?.sampleRate??44100,
+        fftSize:analyser?.fftSize??2048,minDecibels:analyser?.minDecibels??-100,maxDecibels:analyser?.maxDecibels??-30});
+    }
+    this.volume=this.features.volume;
+    for(let i=0;i<512;i++)for(let row=0;row<2;row++){const x=row===0?this.fft[i*2]:this.wave[i*4],at=(row*512+i)*4;this.audio[at]=x;this.audio[at+1]=x;this.audio[at+2]=x;this.audio[at+3]=255;}
+    const g=this.gl;g.activeTexture(g.TEXTURE0);g.bindTexture(g.TEXTURE_2D,this.audioTex);
+    g.texSubImage2D(g.TEXTURE_2D,0,0,0,512,2,g.RGBA,g.UNSIGNED_BYTE,this.audio);
+  }
   uniform(name,value) {
     const g=this.gl,p=this.program;if(!p)return;
-    let loc=this.locations.get(name);if(loc===undefined){loc=g.getUniformLocation(p,name);this.locations.set(name,loc);}
+    const loc=this.location(name);
     if(loc===null)return;
     if(Array.isArray(value)){const f=g[`uniform${value.length}fv`];if(f)f.call(g,loc,value);}
     else g.uniform1f(loc,value);
   }
-  draw({time=0,beat=0,scene=0,energy=.2,accent=0,analyser=null,width,height,signals={},target=null,controls={}}={}) {
+  draw({time=0,beat=0,scene=0,energy=.2,accent=0,analyser=null,audioFrame=null,audioPrepared=false,width,height,signals=audioFrame?.signals||{},target=null,controls={}}={}) {
     if(this.disposed||!this.program)return;
     const g=this.gl,c=this.canvas;
     const w=width||Math.max(2,Math.round(c.clientWidth*Math.min(devicePixelRatio||1,1)*.8)),h=height||Math.max(2,Math.round(c.clientHeight*Math.min(devicePixelRatio||1,1)*.8));
     if(!target&&(c.width!==w||c.height!==h)){c.width=w;c.height=h;g.bindTexture(g.TEXTURE_2D,this.previous);g.texImage2D(g.TEXTURE_2D,0,g.RGB,w,h,0,g.RGB,g.UNSIGNED_BYTE,null);}
-    let volume=0;
-    if(analyser){analyser.getByteFrequencyData(this.fft);analyser.getByteTimeDomainData(this.wave);
-      for(let i=0;i<this.wave.length;i++){const x=(this.wave[i]-128)/128;volume+=x*x;}volume=Math.sqrt(volume/this.wave.length);
-    }else{this.fft.fill(0);this.wave.fill(128);}
-    this.features=audioFeatures(this.fft,this.wave,{sampleRate:analyser?.context?.sampleRate??analyser?.sampleRate??44100,
-      fftSize:analyser?.fftSize??2048,minDecibels:analyser?.minDecibels??-100,maxDecibels:analyser?.maxDecibels??-30});
-    for(let i=0;i<512;i++)for(let row=0;row<2;row++){const x=row===0?this.fft[i*2]:this.wave[i*4],at=(row*512+i)*4;this.audio[at]=x;this.audio[at+1]=x;this.audio[at+2]=x;this.audio[at+3]=255;}
+    if(!audioPrepared)this.sampleAudio(analyser,audioFrame);
+    const volume=this.volume;
     g.bindFramebuffer(g.FRAMEBUFFER,target);g.viewport(0,0,w,h);g.useProgram(this.program);
-    for(const [index,tex] of [[0,this.audioTex],[1,this.previous],[2,this.empty],[3,this.empty]]){g.activeTexture(g.TEXTURE0+index);g.bindTexture(g.TEXTURE_2D,tex);g.uniform1i(g.getUniformLocation(this.program,'iChannel'+index),index);}
-    g.activeTexture(g.TEXTURE0);g.bindTexture(g.TEXTURE_2D,this.audioTex);g.texImage2D(g.TEXTURE_2D,0,g.RGBA,512,2,0,g.RGBA,g.UNSIGNED_BYTE,this.audio);
+    for(const [index,tex] of [[0,this.audioTex],[1,this.previous],[2,this.empty],[3,this.empty]]){g.activeTexture(g.TEXTURE0+index);g.bindTexture(g.TEXTURE_2D,tex);g.uniform1i(this.location('iChannel'+index),index);}
     this.uniform('iResolution',[w,h,1]);this.uniform('iGlobalTime',time);this.uniform('iTime',time);
     this.uniform('iOvertoneVolume',volume);this.uniform('iBeat',beat);this.uniform('iScene',scene);this.uniform('iEnergy',energy);this.uniform('iAccent',accent);
     this.uniform('iAudioBass',Math.max(this.features.bass,(signals.bass?.level||0)*1.5));this.uniform('iAudioMid',this.features.mid);
@@ -86,11 +95,11 @@ export class ShaderStage {
     this.uniform('iZoom',controls.zoom||0);this.uniform('iIntensity',controls.intensity??1);this.uniform('iSymmetry',controls.symmetry??6);
     this.uniform('iPalette',controls.palette??0);this.uniform('iFeedback',controls.feedback??0);
     this.uniform('iMouse',this.mouse);const now=new Date();this.uniform('iDate',[now.getFullYear(),now.getMonth()+1,now.getDate(),now.getHours()*3600+now.getMinutes()*60+now.getSeconds()]);
-    const tl=g.getUniformLocation(this.program,'iChannelTime[0]');if(tl)g.uniform1fv(tl,[time,time,time,time]);
-    const rl=g.getUniformLocation(this.program,'iChannelResolution[0]');if(rl)g.uniform3fv(rl,[512,2,1,w,h,1,1,1,1,1,1,1]);
+    const tl=this.location('iChannelTime[0]');if(tl)g.uniform1fv(tl,[time,time,time,time]);
+    const rl=this.location('iChannelResolution[0]');if(rl)g.uniform3fv(rl,[512,2,1,w,h,1,1,1,1,1,1,1]);
     for(const [name,value] of Object.entries(this.uniforms))this.uniform(name,value);
     g.drawArrays(g.TRIANGLE_STRIP,0,4);
-    g.activeTexture(g.TEXTURE1);g.bindTexture(g.TEXTURE_2D,this.previous);g.copyTexSubImage2D(g.TEXTURE_2D,0,0,0,0,0,w,h);
+    if(this.location('iChannel1')!==null){g.activeTexture(g.TEXTURE1);g.bindTexture(g.TEXTURE_2D,this.previous);g.copyTexSubImage2D(g.TEXTURE_2D,0,0,0,0,0,w,h);}
     this.frames++;this.volume=volume;
   }
   dispose({lose=true}={}){if(this.disposed)return;this.disposed=true;const g=this.gl;if(this.program)g.deleteProgram(this.program);g.deleteBuffer(this.buffer);g.deleteTexture(this.audioTex);g.deleteTexture(this.previous);g.deleteTexture(this.empty);this.canvas.removeEventListener('pointermove',this.move);this.canvas.removeEventListener('pointerdown',this.down);this.canvas.removeEventListener('pointerup',this.up);if(lose)g.getExtension('WEBGL_lose_context')?.loseContext();}

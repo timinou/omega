@@ -33,3 +33,12 @@ workers have explicit lifetimes and bounded messages. No writes to the user's
 world on port 8790. Use isolated static or offline-memory test servers only.
 Preserve unrelated dirty files. Upstream generic compiler/runtime improvements
 are committed independently; source pins remain reproducible.
+
+* First validated slice
+Removed the 30 Hz cap; master analysis and its GPU upload are shared by layers.
+Feature calibration uses bounded cached lookup tables; bus level meters read
+waveforms without unused FFTs. GPU locations and texture allocations are reused.
+31 package tests pass. A 45-second profiled transition/edit stress run improves
+frame p95 164 -> 125 ms, missed scheduler steps 9 -> 0, and sample-onset maximum
+66.67 -> 0.022 ms on this busy host. These runs are profiling evidence, not the
+final frame-budget gate. The 16 ms target remains open; isolation follows.

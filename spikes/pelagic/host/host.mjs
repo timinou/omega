@@ -398,7 +398,7 @@ export function createHost(api) {
       const drawStarted=performance.now(),beat=options.beat??time*config.bpm/60,bar=beat/4,act=Math.min(3,Math.floor((bar%64)/16)),scene=config.scene<0?Math.max(0,Math.min(3,bar/16-.15)):config.scene;
       const breakdown=(bar>=28&&bar<32)||(bar>=52&&bar<56);
       const energy=bar<8?.1:breakdown?.25:bar<16?.65:bar<32?.85:bar<48?1:bar<60?.8:.1;
-      v.shader?.draw({time,beat,scene,energy,accent:Math.exp(-(beat%1)*8)*energy,width:recording?1280:undefined,height:recording?720:undefined,analyser:audio?.analyser,signals:audio?.signals()||{},...options});
+      v.shader?.draw({time,beat,scene,energy,accent:Math.exp(-(beat%1)*8)*energy,width:recording?1280:undefined,height:recording?720:undefined,audioFrame:audio?.visualFrame(),...options});
       diagnostics.render.push(performance.now()-drawStarted);if(diagnostics.render.length>256)diagnostics.render.shift();
       if(avExpected!==null){diagnostics.av.push(Math.max(0,(ctx.currentTime-avExpected)*1000));if(diagnostics.av.length>4096)diagnostics.av.shift();avExpected=null;}
       if(announcement!==null){const id=announcement;announcement=null;setTimeout(()=>{if(!disposed){ack('ACTIVE');for(const view of views)view.status('Revision '+id+' active');}},0);}
@@ -409,7 +409,7 @@ export function createHost(api) {
     }
     function frame(){if(dead||disposed)return;if(!root.isConnected){raf=requestAnimationFrame(frame);return;}
       const stamp=performance.now();if(ctx)applyRevision();if(stamp<nextFrame-2&&avExpected===null){raf=requestAnimationFrame(frame);return;}
-      nextFrame=Math.max(nextFrame+1000/30,stamp);if(lastFrame){diagnostics.frameHistogram[Math.min(1000,Math.max(0,Math.round(stamp-lastFrame)))]++;}lastFrame=stamp;
+      nextFrame=Math.max(nextFrame+1000/60,stamp);if(lastFrame){diagnostics.frameHistogram[Math.min(1000,Math.max(0,Math.round(stamp-lastFrame)))]++;}lastFrame=stamp;
       const now=current();if(ctx)applyRevision();if(config.freeze||v.frozen){freezeTime??=now.time;}else freezeTime=null;
       if(!contextLost&&((!config.freeze&&!v.frozen&&(playing||(audio?.voices.size||0)>0||Object.values(decks).some(d=>d.running))) || v.shader?.frames===0))renderAt(freezeTime??now.time,{beat:now.beat});
       raf=requestAnimationFrame(frame);
