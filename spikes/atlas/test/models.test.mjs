@@ -1,7 +1,7 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import crypto from 'node:crypto';
-import {notebook,eventStudy,posterior,shortModel,attention,readiness,marketMetrics,revenueBridge} from '../models.mjs';
+import {notebook,eventStudy,posterior,shortModel,attention,readiness,marketMetrics,revenueBridge,growthRate} from '../models.mjs';
 const source=fs.readFileSync(new URL('../desk.bl.org',import.meta.url),'utf8'),d=notebook(source);
-test('snapshot lineage: every retained response matches its hash',()=>{for(const a of d.data.acquisition.filter(a=>a.status==='ok')){const raw=fs.readFileSync(new URL('../'+a.file,import.meta.url));assert.equal(crypto.createHash('sha256').update(raw).digest('hex'),a.sha256);}});
+test('snapshot lineage: every retained response matches its hash',()=>{for(const a of [...d.data.acquisition,...d.scan.rows].filter(a=>a.status==='ok')){const raw=fs.readFileSync(new URL('../'+a.file,import.meta.url));assert.equal(crypto.createHash('sha256').update(raw).digest('hex'),a.sha256);}});
 test('notebook validates probabilities and claim references; broken source never silently defaults',()=>{assert.throws(()=>notebook('no block'));assert.throws(()=>notebook(source.replace('"probability": 0.25','"probability": 0.35')),/sum/);assert.throws(()=>notebook(source.replace('"E03",','"INVALID",')),/Unknown/);assert.equal(readiness(d).missing.length,5);});
 test('short payoff respects stock moves, time and costs, not optimistic labels',()=>{const s=[{probability:.5,return:-.2},{probability:.5,return:.2}],r=shortModel(s,{borrow:.04,months:6,friction:.005,notional:10000});assert.ok(Math.abs(r.expected+250)<1e-9);assert.ok(Math.abs(r.worst+2250)<1e-9);assert.equal(r.unboundedLoss,true);assert.throws(()=>shortModel(s,{months:-1}));});
 test('Bayes odds cancel with reciprocal likelihoods and do not accept invalid priors',()=>{assert.ok(Math.abs(posterior(.2,[2,.5])-.2)<1e-12);assert.ok(Math.abs(posterior(.5,[3])-.75)<1e-12);assert.throws(()=>posterior(1,[2]));});
@@ -12,3 +12,11 @@ test('captured market result distinguishes the historical shock from current win
 test('market screen matches sessions and preserves a flat zero-volatility series',()=>{const a=Array.from({length:22},(_,i)=>({date:String(i).padStart(2,'0'),close:100}));const m=marketMetrics(a,a,20);assert.equal(m.status,'ok');assert.equal(m.return,0);assert.equal(m.relative,0);assert.equal(m.volatility,0);assert.equal(m.drawdown,0);assert.equal(marketMetrics(a.slice(0,10),a,20).status,'missing');});
 
 test('revenue bridge applies displacement only to exposed recurring value',()=>{const r=revenueBridge(1000,.2,.05,.5);assert.equal(r.loss,5);assert.equal(r.totalFraction,.005);assert.equal(revenueBridge(1000,0,1,0).loss,0);assert.throws(()=>revenueBridge(1000,2,.1,0));});
+
+test('growth requires comparable timestamped snapshots, never a single count',()=>{const a={scope:'repo:a',at:'2026-10-01T00:00:00Z',count:100},b={scope:'repo:a',at:'2026-10-03T00:00:00Z',count:120};assert.equal(growthRate(a,b).perDay,10);assert.equal(growthRate(a,null).status,'missing');assert.equal(growthRate(a,{...b,scope:'repo:b'}).status,'missing');assert.equal(growthRate(a,{...b,at:a.at}).status,'missing');});
+test('published event and scan metrics reproduce exactly from retained public prices',()=>{
+ const parse=file=>{const j=JSON.parse(fs.readFileSync(new URL('../'+file,import.meta.url))),r=j.chart.result[0],values=r.indicators.adjclose?.[0]?.adjclose||r.indicators.quote[0].close;return r.timestamp.map((t,i)=>({date:new Date(t*1000).toISOString().slice(0,10),close:values[i]})).filter(r=>Number.isFinite(r.close)&&r.close>0);};
+ const series=id=>parse(d.data.acquisition.find(a=>a.id===id).file);
+ const expected=[eventStudy(series('NVDA-2025-01-10'),series('QQQ-2025-01-10'),'2025-01-27','2025-01-27'),eventStudy(series('ADBE-2026-09-01'),series('QQQ-2026-09-01'),'2026-10-05','2026-10-08')];
+ assert.deepEqual(d.data.market,expected);const benchmark=parse(d.scan.rows.find(r=>r.symbol==='QQQ').file);for(const r of d.scan.rows.filter(r=>r.status==='ok'))assert.deepEqual(r.metrics,marketMetrics(parse(r.file),benchmark,20));
+});

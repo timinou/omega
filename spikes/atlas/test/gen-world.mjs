@@ -1,0 +1,6 @@
+// Opt-in real Gen-backed task proof against the isolated Atlas world.
+import fs from 'node:fs/promises';import assert from 'node:assert/strict';
+const base='http://127.0.0.1:'+Number(process.env.ATLAS_GEN_PORT||8832);if(base.endsWith(':8790'))throw Error('Refusing live world');
+const r=await fetch(base+'/api/intent',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({intent:'task/open',args:{title:'Atlas live follow-up proof',path:'spikes/atlas/desk.bl.org',goal:'Using the saved Atlas notebook only, explain in under 250 words why the Adobe October window does not establish Artcraft-caused revenue loss. Cite evidence IDs and propose one discriminating public observation.'}})}).then(r=>r.json());assert.equal(r.ok,true);assert.ok(r.path.startsWith('task:'));let d;
+for(let i=0;i<120;i++){d=await fetch(base+'/api/doc?path='+encodeURIComponent(r.path)).then(r=>r.json());if(d.text?.includes('* model ·')||d.text?.includes('IDLE')||d.text?.includes('idle')||d.text?.includes('DONE')||d.text?.includes('FAILED'))break;await new Promise(r=>setTimeout(r,1000));}
+assert.ok(d.text?.includes('E09')||d.text?.includes('E10'));await fs.writeFile('spikes/atlas/proof/gen-world.json',JSON.stringify({task:r.path,document:d},null,2)+'\n');console.log('Live isolated Gen task returned a cited review.');

@@ -1,5 +1,5 @@
 (ns atlas.main
- (:require [ed.core :as c] [ed.docs :as docs]))
+ (:require [ed.core :as c] [ed.docs :as docs] [pp.present :as p] [pp.conv :as conv]))
 (defn atlas? [ed]
  (some (fn [line] (starts-with? line "#+ATLAS:")) (take 12 (:lines (:text ed)))))
 (defn layout []
@@ -7,27 +7,65 @@
   :panes [{:id :notebook :doc :linked :width [:fr 1]}
           {:id :observatory :view [:atlas/desk :notebook] :width [:fr 3]}]
   :focus :notebook})
-(defn adopt [ed] (if (atlas? ed) (assoc ed :frame/layout (layout)) ed))
+(defn research-layout []
+ {:name "atlas-research" :doc "Retained notebook and observatory beside its research conversation."
+  :panes [{:id :notebook :doc :linked :width [:fr 1]}
+          {:id :observatory :view [:atlas/desk :notebook] :width [:fr 2]}
+          {:id :research :doc :linked :width [:fr 2]}]
+  :focus :research})
+(defn adopt [ed]
+ (cond (atlas? ed) (if (get-in ed [:pkg-state "atlas" :notebook-path]) ed
+                         (assoc (assoc-in ed [:pkg-state "atlas" :notebook-path] (:path ed)) :frame/layout (layout)))
+       (and (starts-with? (str (:path ed)) "task:")
+        (some? (index-of (or (first (:lines (:text ed))) "") "Atlas")))
+        (assoc-in ed [:pkg-state "atlas" :research?] true)
+       :else ed))
+(defn return-to-desk [ed]
+ (c/effect ed {:kind :frame-layout :layout "atlas" :keep {:notebook :notebook} :focus :notebook}))
+(defn home [ed]
+ (if (get-in ed [:pkg-state "atlas" :research?])
+  (return-to-desk ed)
+  (docs/visit ed "spikes/atlas/desk.bl.org")))
+(defn research-result [ed ev]
+ (if (:ok? ev)
+  (c/effect (assoc-in ed [:pkg-state "atlas" :research-id] (get-in ev [:data :id])) {:kind :frame-layout :layout "atlas-research"
+   :keep {:notebook [:notebook :origin] :research nil} :focus :research
+   :visits {:research {:path (get-in ev [:data :path])}}})
+  (c/message ed (or (:message ev) "Research task failed; notebook retained."))))
 (defn model [ed]
  {:package "atlas" :source (join "\n" (:lines (:text ed))) :path (:path ed)
   :state (get-in ed [:pkg-state "atlas"] {})})
 (defn select [ed ev]
  (assoc-in ed [:pkg-state "atlas" (:field ev)] (:value ev)))
+(defn prompt [ed label submit]
+ (c/effect (docs/owned-prompt ed "atlas" label submit)
+  {:kind :frame-focus :target (if (starts-with? (str (:path ed)) "task:") :research :notebook)}))
 (defn research [ed]
- (docs/owned-prompt ed "atlas" "Research question: "
+ (prompt ed "Research question: "
   (fn [ed question]
-   (c/effect ed {:kind :intent :intent "task/open" :then :visit-path
-    :args {:title "Atlas · evidence follow-up" :path (:path ed)
-     :goal (str "Read " (:path ed) " and spikes/atlas/instructions.bl.org. Research question: " question
+   (c/effect ed {:kind :intent :intent "task/open" :then :atlas/research-route
+    :args {:title "Atlas · evidence follow-up" :path (or (get-in ed [:pkg-state "atlas" :notebook-path]) (:path ed))
+     :goal (str "Read " (or (get-in ed [:pkg-state "atlas" :notebook-path]) (:path ed)) " and spikes/atlas/instructions.bl.org. Research question: " question
       ". Use public evidence only. Reuse spikes/atlas/collect.mjs and models.mjs; use Gen module gen.llm for a cited adversarial synthesis. Preserve source facts, label assumptions, write a separate .bl.org proposal with citations and missing data. Do not trade or modify the source dashboard without a reviewed diff.")}}))))
+(defn reply [ed]
+ (let [id (if (starts-with? (str (:path ed)) "task:") (subs (:path ed) 5) (get-in ed [:pkg-state "atlas" :research-id]))]
+  (if id (prompt ed "Follow-up to research: "
+    (fn [ed text] (c/effect ed {:kind :intent :intent "task/say" :args {:id id :text text}})))
+   (c/message ed "Ask a research question first."))))
 (def bl-package
  {:name "atlas" :doc "Public evidence, comparative events and strategic decisions as a live notebook."
-  :commands {:atlas/research {:doc "Open an Omega follow-up task with this notebook as evidence." :run research}
-             :atlas/home {:doc "Open the Artcraft / Adobe notebook." :run (fn [ed] (docs/visit ed "spikes/atlas/desk.bl.org"))}}
-  :keys {:normal {"space s a" :atlas/home "space s q" :atlas/research}}
+  :commands {:atlas/reply {:doc "Send a follow-up to the retained research task." :run reply}
+             :atlas/return {:doc "Return to the retained notebook and observatory." :run return-to-desk}
+             :atlas/research {:doc "Open an Omega follow-up task with this notebook as evidence." :run research}
+             :atlas/home {:doc "Open the Artcraft / Adobe notebook." :run home}}
+  :keys {:normal {"space s a" :atlas/home "space s q" :atlas/research "space s r" :atlas/reply}}
   :intercept (fn [ed ev]
-   (cond (= :atlas/select (:type ev)) (select ed ev)
+   (cond (and (= :intent-result (:type ev)) (= :atlas/research-route (:then ev))) (research-result ed ev)
+         (= :atlas/select (:type ev)) (select ed ev)
          (= :atlas/research (:type ev)) (research ed)
+         (= :atlas/reply (:type ev)) (reply ed)
+         (and (get-in ed [:pkg-state "atlas" :research?]) (= :key (:type ev)) (= "i" (:key ev)) (= :normal (:mode ed))) (reply ed)
          :else nil))
+  :render (fn [ed] (when (get-in ed [:pkg-state "atlas" :research?]) (p/render conv/presentation ed)))
   :adopt adopt :owns [:frame/layout]
-  :provides {:layouts {"atlas" (layout)} :views {:atlas/desk model}}})
+  :provides {:layouts {"atlas" (layout) "atlas-research" (research-layout)} :views {:atlas/desk model}}})

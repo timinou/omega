@@ -57,3 +57,9 @@ export function revenueBridge(arr,exposedShare,migration,retainedFraction){
  const exposed=arr*exposedShare,loss=exposed*migration*(1-retainedFraction);
  return {exposed,loss,totalFraction:arr?loss/arr:0,kind:'sensitivity, not a revenue forecast'};
 }
+export function growthRate(previous,current){
+ if(!previous||!current||previous.scope!==current.scope)return {status:'missing',reason:'Need two observations of the same scope'};
+ const days=(Date.parse(current.at)-Date.parse(previous.at))/86400000;
+ if(!(days>0)||![previous.count,current.count].every(x=>Number.isFinite(x)&&x>=0))return {status:'missing',reason:'Need valid counts and a positive capture interval'};
+ return {status:'ok',days,change:current.count-previous.count,perDay:(current.count-previous.count)/days,relative:previous.count?(current.count/previous.count-1):null,kind:'observed count change, not user adoption'};
+}
