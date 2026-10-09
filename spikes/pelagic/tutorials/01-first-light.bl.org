@@ -1,0 +1,39 @@
+#+TITLE: PELAGIC showcase 1 · first light
+
+* Hear it
+Press ▶ PERFORM, then C-Enter. This whole document is one runnable patch.
+Listen for three soft notes repeating every four beats. If the built-in music
+masks them, isolate the melody stem in the mixer.
+
+#+begin_src beam-lisp :id first-light
+(o/definst lantern [freq 440 amp 0.055 dur 0.7]
+  (* amp
+     (o/env-gen (o/perc 0.01 dur))
+     (o/sin-osc freq)))
+
+(def clock (o/metronome 120))
+
+(av/session
+  (av/configure {:bpm 120 :space 0.35 :echo 0.2})
+  (av/pattern :melody 4
+    (o/play
+      (o/at (clock 0) (lantern :freq (o/midi->hz (o/note :D5))))
+      (o/at (clock 1.5) (lantern :freq (o/midi->hz (o/note :A4))))
+      (o/at (clock 3) (lantern :freq (o/midi->hz (o/note :F5)))))))
+#+end_src
+
+* Make three tiny changes
+Change =:F5= to =:E5= and evaluate. Change =dur 0.7= to =dur 1.8= for overlap.
+Change the middle beat from =1.5= to =1.75= for a different pocket.
+UNDO restores the previous performance; your source text stays available to edit.
+
+* What you just wrote
+=definst= makes a reusable graph with named controls. Inside its body, =*=
+constructs a graph operator. The oscillator and envelope become sound when the
+host triggers a voice. Outside that body, arithmetic is ordinary BL arithmetic.
+
+=clock= turns beats into relative milliseconds. =o/at= groups voices at a time;
+=o/play= collects those groups; =av/pattern= gives the score a repeating stem.
+The loop is four beats, so event positions must stay below four.
+
+Next: [[file:02-pattern-laboratory.bl.org][generate the notes instead of listing them]].

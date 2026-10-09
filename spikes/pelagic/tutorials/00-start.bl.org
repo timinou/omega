@@ -1,0 +1,54 @@
+#+TITLE: PELAGIC showcase · start here
+
+* Five minutes to something alive
+Read these files in order. Each numbered patch is complete; paste its contents
+into the PELAGIC source buffer, replacing the previous patch. In a server editor,
+you can instead open the file as a document with the PELAGIC package active.
+C-Enter evaluates every Beam Lisp source block in the buffer, not just the block
+under the cursor. Examples marked as example blocks are reading material only.
+
+Already running PELAGIC? Press ▶ PERFORM once to enable browser audio, then start
+with [[file:01-first-light.bl.org][First light]]. Keep your listening volume comfortable.
+
+For a local build, from the repository root:
+#+begin_example
+spikes/pelagic/build.sh --local
+python3 -m http.server 8808 --directory spikes/pelagic/dist/local
+#+end_example
+Open http://localhost:8808/. The first build can take a while; reuse the generated
+bundle afterward. See [[file:../local.bl.md][local setup]] for compiler selection and offline use.
+The tutorials also work with the regular server frontend built from this graph.
+
+* The fast route
+1. [[file:01-first-light.bl.org][First light]] — an instrument, three notes, one loop.
+2. [[file:02-pattern-laboratory.bl.org][Pattern laboratory]] — generate a score with ordinary functions.
+3. [[file:03-safe-worlds.bl.org][Safe worlds]] — combine sound, scenes, variation and a private audition.
+4. [[file:04-under-the-surface.bl.org][Under the surface]] — follow the BL → JavaScript → BL boundary in real code.
+
+* Three useful distinctions
+=o/= builds instrument graphs and timed score data. =av/= describes performance
+edits. The host owns AudioNodes, graphics resources and their cleanup. You write
+a patch; the runtime prepares and schedules its work.
+
+The score clock gives relative milliseconds. It does not run a background timer.
+A pattern repeats that finite score; there is no recursive scheduling loop to write.
+
+The two decks and built-in score may already be playing. These examples replace
+named stems, not the entire built-in arrangement. Use the stem mixer to listen
+closely to your melody or bass.
+
+* Getting out
+=g s= stops playback; =g != is panic. UNDO returns to the previous performance
+revision. To remove the package, enter this in the editor command line:
+#+begin_example
+:(ed/unuse "pelagic")
+#+end_example
+
+* Checked examples
+The three performance patches were evaluated in an isolated Chromium session
+against the current local bundle. Each audition succeeded without changing the
+active revision; no browser errors occurred. [[file:verification.json][Results]]. To repeat from the
+repository root (Python Playwright and Chromium required):
+#+begin_example
+python3 spikes/pelagic/test/tutorials-browser.py
+#+end_example

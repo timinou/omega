@@ -1,0 +1,56 @@
+#+TITLE: PELAGIC showcase 3 · safe worlds
+
+* One patch, sound and image
+Replace the source buffer with this document. Press ▶ PERFORM, then C-Enter.
+The melody repeats while the built-in cathedral scene transitions in.
+
+#+begin_src beam-lisp :id safe-worlds
+(o/definst halo [freq 440 amp 0.045 dur 1.5]
+  (* amp (o/env-gen (o/perc 0.015 dur))
+     (o/mix [(o/sin-osc freq)
+             (* 0.18 (o/sin-osc (* freq 3)))])))
+(def clock (o/metronome 120))
+
+(av/session
+  (av/configure {:bpm 120 :space 0.55 :echo 0.3})
+  (av/pattern :melody 8
+    (o/play
+      (o/at (clock 0) (halo :freq (o/midi->hz (o/note :D5))))
+      (o/at (clock 2.5) (halo :freq (o/midi->hz (o/note :F5))))
+      (o/at (clock 5) (halo :freq (o/midi->hz (o/note :A5))))))
+  (av/variation {:seed 37 :density 0.8 :transpose 0})
+  (av/visual {:intensity 1.2 :symmetry 6 :feedback 0.08})
+  (av/launch :cathedral {:transition :iris :beats 8})
+  (av/layer :afterglow 0.12))
+#+end_src
+
+* Audition without replacing the active revision
+Open SESSION / MAPPINGS / DIAGNOSTICS. Change =:transpose 0= to =:transpose 7=
+and =:density 0.8= to =:density 0.5=. Click AUDITION CODE instead of C-Enter.
+You hear a short, quieter preview mixed alongside the active performance.
+The active revision and its history stay unchanged.
+
+Click CANCEL AUDITION to discard it. Click AUDITION CODE again, then COMMIT
+AUDITION to activate it on a future bar boundary. If you change the live
+performance in between, that preview becomes stale: audition again before
+committing. Preview cleanup also happens on package unload.
+
+This is a monitored preview, not a copy of the recording mix. The preview bus is
+excluded from the main recording. Keep the active arrangement sparse when you
+want to compare pitches closely.
+
+* Play the world
+Try BUILD, BREAK, DROP and RELEASE, then UNDO. Save a named snapshot in the
+expanded controls; change scenes and recall it. The scene transition controls
+choose a musical boundary, transition shape and duration.
+
+=seed= makes density decisions repeatable; =transpose= is in semitones.
+=feedback= retains some of the previous image. Avoid raising many controls at
+once: change one, listen, then keep or undo it.
+
+* Go beyond built-in scenes
+[[file:../live-set.bl.org][The live set]] contains a complete custom GLSL scene and audio mappings.
+[[file:../demo.bl.org][The compact demo]] shows a separate GLSL source block with FFT input and previous-frame
+feedback. They use the same package and evaluation path as these patches.
+
+Next: [[file:04-under-the-surface.bl.org][read the browser boundary and runtime design]].

@@ -1,0 +1,67 @@
+#+TITLE: PELAGIC showcase 4 · under the surface
+
+* From a patch to a package
+This is a source tour, not a live performance patch. The examples below belong
+to compiled namespaces. Do not paste their namespace declarations into the live
+patch evaluator, which supplies the =o=, =av= and =t= vocabulary itself.
+
+Start with [[file:../pelagic/live.bl][pelagic.live]]: each function returns an ordinary map describing an edit.
+Then read [[file:../pelagic/main.bl][pelagic.main]]: the package connects editor commands and events to host
+effects. Its one exported =bl-package= value is the editor integration contract.
+Editor state stays in the package layer; the host owns IO and resource lifetimes.
+
+* Beam Lisp to JavaScript
+The short annotation =^:js= bounds direct JavaScript access to a namespace.
+Here is the actual shape used in [[file:../pelagic/browser.bl][pelagic.browser]]:
+#+begin_example
+(ns ^:js pelagic.browser)
+(defn audio-context []
+  (js/AudioContext. #js {:latencyHint "interactive"}))
+(defn set-text [node value]
+  (let [text (js/String value)]
+    (when-not (= (.-textContent node) text)
+      (set! (.-textContent node) text))))
+#+end_example
+=js/AudioContext.= constructs an object; =.-textContent= reads a property;
+=set!= writes it. Method calls use forms such as =(.click anchor)=.
+=#js= creates a native object or array. =bl->js= and =js->bl= explicitly convert
+values when the boundary needs a different representation.
+
+* JavaScript to Beam Lisp
+PELAGIC exposes a small host-facing module; read [[file:../host/values.mjs][host/values.mjs]] and
+[[file:../pelagic/browser.bl][pelagic.browser]] side by side. The adapter calls compiled BL exports and gives
+them stable host names. For example, BL =project-clock= supplies the host's clock
+projection. Its result is a native =#js= object, so the host can read =time= and
+=beat= directly. For a BL map, the host uses the explicit conversion bridge.
+
+The host imports the generated interop module and looks up a namespace by its BL
+name. This is the public calling shape used by the adapter:
+#+begin_example
+import {requireNamespace} from '../../out/interop.mjs';
+const browser = requireNamespace('pelagic.browser');
+const projected = browser['project-clock'](0, 0, 120, true, 1000, 1500);
+// projected.time === 0.5; projected.beat === 1
+#+end_example
+The import path is relative to PELAGIC's generated host directory. This example
+belongs in host JavaScript, not in a Beam Lisp source block.
+
+There is no serialized message required for an ordinary call in the same realm.
+Cross-worker work still needs a worker boundary: a direct function call does not
+move CPU work onto another thread.
+
+* Follow the expensive work
+Read these small modules in order:
+- [[file:../pelagic/graph-js.bl][graph-js]] validates bounded graphs and compiles reusable envelope lifetime plans.
+- [[file:../pelagic/playback-js.bl][playback-js]] shares musical projection across playback, audition and export.
+- [[file:../pelagic/work.bl][work]] assigns work budgets with the audio reserve in mind.
+- [[file:../pelagic/audition.bl][audition]] checks preview revision ownership and commit eligibility.
+- [[file:../actor/prepare.bl][actor/prepare]] slices preparation and owns cancellation state.
+
+These are implementation techniques you can learn from. A normal patch does not
+need to know their scheduling details. The actor migration is still in progress;
+the whole editor/compiler is not yet one unified actor execution path.
+
+* Where to continue
+[[file:../actor-consolidation.bl.md][Implementation notes]] explain the contracts, measured improvements and remaining
+gaps. [[file:../../../!tasks/plans/PLAN-014-actor-native-consolidation.org][The roadmap]] tracks the unfinished work. The measured preparation slice times
+are not a guarantee of 16 ms physical audio/video latency.

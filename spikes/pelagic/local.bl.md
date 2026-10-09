@@ -35,6 +35,8 @@ complete load and service-worker installation, reload works offline on the same
 origin. Service workers require localhost or HTTPS. Changing the hosting port
 changes the browser storage origin.
 
+For a fast, progressive introduction, start with the [showcase tutorials](tutorials/00-start.bl.org).
+
 Press PERFORM, then C-Enter to run the bundled patch. Edit BL and evaluate again.
 The same `bl-package` is loaded through the editor's package layers and layouts;
 `:(ed/unuse "pelagic")` returns to the source editor and releases its resources.

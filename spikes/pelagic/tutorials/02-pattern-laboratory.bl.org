@@ -1,0 +1,49 @@
+#+TITLE: PELAGIC showcase 2 · pattern laboratory
+
+* A little program becomes a score
+Replace the source buffer with this document. Press ▶ PERFORM if needed, then
+C-Enter. The melody climbs a Dorian scale while the bass marks an eight-beat loop.
+
+#+begin_src beam-lisp :id pattern-laboratory
+(o/definst prism [freq 440 amp 0.04 dur 0.5]
+  (* amp (o/env-gen (o/perc 0.008 dur))
+     (o/mix [(o/sin-osc freq)
+             (* 0.2 (o/sin-osc (* freq 2.01)))])))
+
+(o/definst floor [freq 110 amp 0.055 dur 0.8]
+  (* amp (o/env-gen (o/perc 0.015 dur)) (o/sin-osc freq)))
+
+(def clock (o/metronome 120))
+(def pitches (o/scale :D4 :dorian))
+(defn phrase [notes]
+  (apply o/play
+    (map-indexed
+      (fn [index pitch]
+        (o/at (clock index) (prism :freq (o/midi->hz pitch))))
+      notes)))
+
+(av/session
+  (av/configure {:bpm 120 :space 0.45 :echo 0.25 :swing 0.1})
+  (av/pattern :melody 8 (phrase pitches))
+  (av/pattern :bass 8
+    (o/play
+      (o/at (clock 0) (floor :freq (o/midi->hz (o/note :D2))))
+      (o/at (clock 4) (floor :freq (o/midi->hz (o/note :A2)))))))
+#+end_src
+
+* Explore quickly
+Replace =:dorian= with =:minor= or =:major=. Replace =pitches= in the phrase call
+with =(reverse pitches)=. Use =(o/chord :D4 :minor9)= there for a sparse ascent.
+Each change is another complete patch evaluation.
+
+The scale and chord helpers return MIDI numbers. =map-indexed= assigns a beat
+to each number, and =apply= assembles the bundles into one play plan. These are
+ordinary collection operations; you do not need a separate sequencer language.
+
+* Reuse pays off
+The instrument graph is prepared at definition time. Its shape is shared across
+voices while =freq= and the other controls vary. Preparation caches and compiled
+graph schemas live below this API, so playing more notes does not require you to
+write a cache or manage an AudioNode pool.
+
+Next: [[file:03-safe-worlds.bl.org][perform and audition an audiovisual world]].
