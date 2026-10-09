@@ -1,0 +1,10 @@
+(ns atlas.readiness (:require [omega.jev :as jev] [atlas.context :as context]))
+(def root (System/get_env "OMEGA_HOME"))
+(def dir (str root "/spikes/atlas"))
+(def result (jev/ask (jev/http (jev/key-from-env root)) (context/readiness (File/read! (str dir "/desk.bl.org")))
+ {:readiness (jev/choice "Classify evidence readiness for human review of an executable short, not a return forecast. Missing current expectation gap, catalyst or borrow economics means research. Reported churn is NOT required for a narrative-driven multiple reset."
+  {:research "Material expectations, catalyst or implementation evidence remains missing."
+   :review "Enough evidence for human trade review, never authority to trade."
+   :reject "The research thesis is sufficiently contradicted to abandon."})}))
+(File/write! (str dir "/data/jev-review.edn") (pr-str result))
+(println (if (:ok result) "Bounded Jev readiness saved." "Readiness unavailable; error retained."))

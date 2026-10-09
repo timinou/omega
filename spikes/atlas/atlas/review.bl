@@ -1,13 +1,13 @@
 (ns atlas.review
- (:require [gen.llm :as gen] [credential.env :as credentials] [omega.loop :as loop]))
+ (:require [gen.llm :as gen] [credential.env :as credentials] [omega.loop :as loop] [atlas.context :as context]))
 (defn provider [home]
  (assoc gen/deepseek :max-tokens 4500 :timeout-ms 180000
   :key (or (credentials/lookup (credentials/read-file (str home "/.env")) "DEEPSEEK_API_KEY") (System/get_env "DEEPSEEK_API_KEY"))))
 (defn step [root home]
  (fn [req]
   (let [question (join "\n" (mapcat (fn [m] (map (fn [b] (or (:text b) "")) (:content m))) (:messages req)))
-        context (File/read! (str root "/spikes/atlas/desk.bl.org"))
+        context (context/text (File/read! (str root "/spikes/atlas/desk.bl.org")))
         r (gen/chat (provider home)
-          (list {:role "system" :content "You are Atlas's public-evidence research editor. Use only supplied notebook evidence. Cite evidence IDs. Distinguish facts, inference and assumptions. Do not invent prices, adoption, sources or model calibration. You can critique and propose Org notebook changes but cannot acquire new data in this read-only review mode. State required acquisitions explicitly. No trades. Keep response under 1000 words."}
+          (list {:role "system" :content "You are Atlas's public-evidence research editor. The case concerns information diffusion about software rents, not ArtCraft company success. Separate fast valuation repricing from slow paid migration; churn is not required for a multiple reset. Compare technical surprises with prior market expectations and distinguish direct model competition from listed supplier exposures. Use only supplied notebook evidence. Cite evidence IDs. Distinguish facts, inference and assumptions. Do not invent prices, adoption, sources or model calibration. You can critique and propose Org notebook changes but cannot acquire new data in this read-only review mode. State required acquisitions explicitly. No trades. Keep response under 1000 words."}
                 {:role "user" :content (str question "\n\nSAVED NOTEBOOK:\n" context)}))]
    (loop/say (or (:ok r) "Gen unavailable. No analysis was fabricated; the notebook's evidence gates remain open.")))))

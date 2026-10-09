@@ -63,3 +63,28 @@ export function growthRate(previous,current){
  if(!(days>0)||![previous.count,current.count].every(x=>Number.isFinite(x)&&x>=0))return {status:'missing',reason:'Need valid counts and a positive capture interval'};
  return {status:'ok',days,change:current.count-previous.count,perDay:(current.count-previous.count)/days,relative:previous.count?(current.count/previous.count-1):null,kind:'observed count change, not user adoption'};
 }
+
+// Pre-event OLS: estimate alpha/beta only from matched sessions strictly before anchor.
+// Event paths are descriptive residual sums; no causal interpretation or significance claim.
+export function eventTape(asset,benchmark,anchor,{lookback=80,minFit=40,before=5,after=5}={}){
+ const b=new Map(returns(benchmark).map(r=>[r.date,r.return]));
+ const rows=returns(asset).filter(r=>b.has(r.date)).map(r=>({...r,market:b.get(r.date),volume:asset.find(a=>a.date===r.date)?.volume}));
+ const zero=rows.findIndex(r=>r.date>=anchor);if(zero<0)return {status:'missing',reason:'Anchor beyond captured tape'};
+ const fit=rows.slice(Math.max(0,zero-lookback),zero);if(fit.length<minFit)return {status:'missing',reason:'Insufficient pre-event matched returns'};
+ const mx=fit.reduce((s,r)=>s+r.market,0)/fit.length,my=fit.reduce((s,r)=>s+r.return,0)/fit.length;
+ const xx=fit.reduce((s,r)=>s+(r.market-mx)**2,0);if(xx<=0)return {status:'missing',reason:'Zero benchmark variance'};
+ const beta=fit.reduce((s,r)=>s+(r.market-mx)*(r.return-my),0)/xx,alpha=my-beta*mx;
+ const selected=rows.slice(Math.max(0,zero-before),Math.min(rows.length,zero+after+1));
+ let a=1,m=1,car=0;const path=selected.map(r=>{const offset=rows.indexOf(r)-zero;if(offset>=0){a*=1+r.return;m*=1+r.market;car+=r.return-alpha-beta*r.market;}
+ const pos=rows.indexOf(r),vs=rows.slice(Math.max(0,pos-20),pos).map(x=>x.volume).filter(v=>Number.isFinite(v)&&v>0),mean=vs.reduce((x,y)=>x+y,0)/vs.length;
+ return {...r,offset,residual:r.return-alpha-beta*r.market,car:offset>=0?car:null,assetCumulative:offset>=0?a-1:null,relative:offset>=0?a-m:null,volumeRatio:vs.length===20&&Number.isFinite(r.volume)&&mean>0?r.volume/mean:null};});
+ return {status:'ok',anchor,firstSession:rows[zero].date,fitFrom:fit[0].date,fitTo:fit.at(-1).date,n:fit.length,alpha,beta,path,observedThrough:rows.at(-1).date,method:'OLS daily alpha/beta fit on up to 80 pre-event matched sessions; CAR is arithmetic residual sum from session 0; volume / prior 20-session mean. Descriptive, not causal.'};
+}
+export function repricing(earningsFactor,oldMultiple,newMultiple){
+ if(![earningsFactor,oldMultiple,newMultiple].every(Number.isFinite)||earningsFactor<0||oldMultiple<=0||newMultiple<0)throw Error('Invalid valuation assumptions');
+ return {priceReturn:earningsFactor*newMultiple/oldMultiple-1,earningsContribution:earningsFactor-1,multipleContribution:newMultiple/oldMultiple-1,kind:'valuation identity / analyst assumptions, not a price target'};
+}
+export function sentimentSummary(articles){
+ const groups=new Map(),seen=new Set();for(const a of articles){const key=a.canonical||a.url;if(seen.has(key))continue;seen.add(key);const group=a.event+' / '+a.channel+' / '+(a['input-scope']?.startsWith('analyst abstract')?'abstract':'article'),g=groups.get(group)||{group,n:0,classified:0,threatening:0,supportive:0,mixed:0,descriptive:0};g.n++;const tone=a.sentiment?.ok?.tone?.value;if(a.sentiment?.ok?.tone?.confidence>=.6&&['threatening','supportive','mixed','descriptive'].includes(tone)){g.classified++;g[tone]++;}groups.set(group,g);}
+ return [...groups.values()].map(g=>({...g,threatShare:g.classified?g.threatening/g.classified:null,kind:'share of classified curated documents; not population sentiment or a stock-return probability'}));
+}

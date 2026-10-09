@@ -1,0 +1,19 @@
+; Bound model context from the CURRENT saved notebook, not a stale summary.
+(ns atlas.context (:require [omega.llm :as llm]))
+(defn- tape [t]
+ (assoc (dissoc t "path") "observations"
+  (vec (filter (fn [r] (>= (get r "offset") 0)) (get t "path" [])))))
+(defn text [source]
+ (if-let [m (re-find #"(?ms)^#\+begin_atlas\s*\n(.*?)^#\+end_atlas" source)]
+  (let [d (json/decode (nth m 1)) movement (get d "movement")
+        slim (select-keys d ["revision" "title" "subtitle" "summary" "bear" "bull" "decision" "comparison" "chain" "claims" "evidence" "gates" "signals" "comparisonRows" "experiments" "report" "scenarios" "fundamentals"])
+        windows (mapv (fn [w] (assoc (select-keys w ["id" "event" "anchor" "title"])
+                               "tapes" (mapv tape (get w "tapes"))
+                               "sectorTapes" (mapv tape (get w "sectorTapes")))) (get movement "windows" []))]
+   (erlang/iolist_to_binary (json/encode (llm/jsonable
+    (assoc slim "movement" (assoc (select-keys movement ["at" "selection" "sentiment" "valuations"]) "windows" windows))))))
+  source))
+(defn readiness [source]
+ (let [d (json/decode (text source))]
+  (erlang/iolist_to_binary (json/encode (llm/jsonable
+   (select-keys d ["revision" "decision" "gates" "claims"]))))))

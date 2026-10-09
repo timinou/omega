@@ -1,13 +1,15 @@
 # Atlas — a strategic decision desk in the real bl-ed
 
 An editable `.bl.org` notebook drives a public-evidence observatory, market
-scan, signal ledger, comparative event study, evidence room, decision lab and
+scan, narrative/tape study, signal ledger, comparative event study, evidence room, decision lab and
 research journal. The authored case asks whether Artcraft's Adobe-replacement
 story supports an Adobe short, using DeepSeek R1 as a mechanism comparison.
 
-**Current research decision: wait and test.** Attention is observed; independent
-professional capability, paid migration, exposed economics and executable
-borrow remain unresolved. All future probabilities, returns and cost inputs
+**Current research frame: information diffusion about replicable software rents.**
+ArtCraft need not win for a market repricing to occur. Fast multiple resets
+are separate from slow paid migration. The broad software-disruption story
+is already public; incremental surprise, current expectations, catalyst and
+executable borrow remain unresolved. All future probabilities, returns and cost inputs
 are explicitly assumptions. This is a captured public-data research desk.
 
 ## Open it
@@ -65,6 +67,7 @@ editor source was changed by this spike.
 ```sh
 spikes/atlas/build.sh
 BLED_OUT=vendor/bl-ed/web/out node --test spikes/atlas/test/*.test.mjs
+OMEGA_HOME="$PWD" bin/bl run spikes/atlas/test/context.bl -p spikes/atlas
 # With run.sh serving the isolated world:
 ATLAS_PORT=8831 node spikes/atlas/test/browser.mjs
 # Editor corpus belongs to the pinned beam-lisp checkout:
@@ -95,6 +98,27 @@ specific to the Adobe case. New case notebooks should supply their own subject
 roles, evidence, transmission chain, comparison windows and decision gates.
 The current prototype has no automatic refresh or brokerage connection.
 
+## Information-event revision
+
+Narrative & tape adds four declared anchors, pre-event QQQ beta fits, IGV
+controls, software peers and volume. Jev classifies incumbent-rent framing,
+economic mechanism and pricing clocks across eight public document inputs;
+article text and web-verified analyst abstracts remain distinct. Low-confidence
+labels abstain. Full news article text stays in local analysis inputs; metadata,
+hashes and classifications are retained. The decision lab separately models earnings × multiple repricing.
+
+```sh
+node spikes/atlas/movement-collect.mjs
+OMEGA_HOME="$PWD" bin/bl run spikes/atlas/sentiment.bl -p spikes/atlas
+node spikes/atlas/revise-movement.mjs /tmp/atlas-new-movement.bl.org
+# Review and explicitly promote the proposed notebook.
+```
+
+The collector uses eight news requests and three batches of eight price
+instruments. HTTP failures remain recorded. This is a curated sample, not a
+population sentiment index. [Revised research](docs/research.bl.org) explains
+the two clocks, the prior February software selloff, and the unresolved edge.
+
 ## Real-editor proof
 
 The tour drives native controls and editor keys, edits the structured title,
@@ -119,3 +143,11 @@ Assertions and results are retained in [browser.json](proof/browser.json).
 
 The final verification counts and commands are recorded in PROGRESS.bl.org.
 The presentation equivalence checker itself is unchanged.
+
+![Information diffusion and event tape](proof/15-information-diffusion.png)
+
+![Prior software repricing control](proof/17-prior-software-repricing.png)
+
+![Multiple reset before churn](proof/18-multiple-before-churn.png)
+
+![Jev source and probability audit](proof/19-news-framing-audit.png)

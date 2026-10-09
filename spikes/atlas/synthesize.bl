@@ -1,14 +1,14 @@
 ; Real Gen-module synthesis. Public context only; credentials are never output.
 (ns atlas.synthesize
- (:require [gen.llm :as gen] [credential.env :as credentials] [omega.jev :as jev]))
+ (:require [gen.llm :as gen] [credential.env :as credentials] [omega.jev :as jev] [atlas.context :as context]))
 (def root (System/get_env "OMEGA_HOME"))
 (def dir (str root "/spikes/atlas"))
-(def context (File/read! (str dir "/desk.bl.org")))
+(def context (str (File/read! (str dir "/docs/research.bl.org")) "\nBOUNDED STRUCTURED CONTEXT:\n" (context/text (File/read! (str dir "/desk.bl.org")))))
 (def env (credentials/read-file (str root "/.env")))
 (def key (or (credentials/lookup env "DEEPSEEK_API_KEY") (System/get_env "DEEPSEEK_API_KEY")))
 (def response
  (gen/chat (assoc gen/deepseek :key key :max-tokens 6000 :timeout-ms 180000)
-  (list {:role "system" :content "You are an adversarial financial research editor. Use ONLY supplied public evidence. No invented prices, revenue attribution, adoption, borrow quotes or forecast precision. Cite evidence IDs. Distinguish observed facts, inferences and assumptions. Output Org prose, no fences. Give strongest bear case, strongest rebuttal, comparison with DeepSeek, highest value next experiments, and a conditional decision. Model output is uncalibrated analysis."}
+  (list {:role "system" :content "You are an adversarial financial research editor. The unit of analysis is information diffusion about replicable software rents, not ArtCraft company success. Compare DeepSeek competition with proprietary model vendors versus its listed supplier-stock transmission. Treat fast valuation repricing and slow realized churn as separate clocks; churn is NOT a necessary trigger for multiple compression. Test incremental surprise against prior February 2026 software selling. Do not assume the user's thesis is proven. Do not quote or reconstruct source articles. Use ONLY supplied public evidence. No invented prices, revenue attribution, adoption, borrow quotes or forecast precision. Cite evidence IDs. Distinguish observed facts, inferences and assumptions. Output Org prose, no fences. Give strongest bear case, strongest rebuttal, comparison with DeepSeek, highest value next experiments, and a conditional decision. Model output is uncalibrated analysis."}
         {:role "user" :content (str "Analyze this strategic notebook. Keep answer under 1200 words.\n" context)})))
 (if (:ok response)
  (do (File/write! (str dir "/docs/gen-review.bl.org")
@@ -19,8 +19,8 @@
  (do (File/write! (str dir "/docs/gen-error.bl.org") "#+TITLE: Gen review unavailable\nProvider did not return a usable synthesis. No model analysis fabricated.\n")
      (println "Gen provider failed; see gen-error.bl.org.")))
 (def typed
- (jev/ask (jev/http (jev/key-from-env root)) context
-  {:readiness (jev/choice "Classify the evidence readiness, not a stock return forecast. Is the public notebook sufficient to evaluate an executable Adobe short? Missing borrow and adoption evidence means research."
+ (jev/ask (jev/http (jev/key-from-env root)) (context/readiness (File/read! (str dir "/desk.bl.org")))
+  {:readiness (jev/choice "Classify the evidence readiness, not a stock return forecast. Is the public notebook sufficient to evaluate an executable Adobe short? Missing current expectation-gap, catalyst and executable borrow evidence means research; paid churn is not a necessary gate for a narrative repricing thesis."
     {:research "Missing material evidence; research before considering execution."
      :review "Enough sourced evidence for human trade review, still not authority to trade."
      :reject "The thesis is contradicted sufficiently to abandon this research line."})}))

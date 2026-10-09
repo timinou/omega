@@ -1,240 +1,252 @@
-#+TITLE: Atlas / research dossier — replication, diffusion and Adobe
+#+TITLE: Atlas / information diffusion, replicable software rents and Adobe
 #+DATE: 2026-10-09
-#+STATUS: Public evidence snapshot; conditional research decision
+#+REVISION: information-diffusion-v2
+#+STATUS: Public-evidence research; trade attractiveness unresolved
 
-* Editorial decision
-Keep Adobe on a disruption watch. The available evidence does not justify an
-Artcraft-only short. This is a conclusion about the supplied evidence and the
-thesis, not a personalized allocation recommendation. No trade is connected.
+* The revised question
+ArtCraft is a demonstrator of a possible market movement, not the company
+whose commercial success has to displace Adobe. The hypothesis is that
+technically informed people can see the reproduction of complicated software
+and familiar workflows becoming dramatically easier while investors still
+value some application subscriptions as durable, difficult-to-contest rents.
+Open implementations, competing forks, custom software and future entrants
+could transmit that change even if ArtCraft itself disappears.
 
-The actionable work is to establish production capability, paid substitution,
-materiality and an expectation gap. The dashboard makes these four separate
-questions. A negative answer at one link can change the decision even when
-public attention keeps growing.
+The earlier analysis imposed too much of a company-displacement sequence:
+attention, parity, paid migration, financial damage, then a trade. That is
+incomplete for an information event. Investors can immediately change their
+beliefs about future pricing power, terminal growth or the duration of cash
+flows. A multiple can compress while this quarter's subscriptions still grow.
+Reported churn is a later fundamental test, not a prerequisite for repricing.
 
-* What is being compared
-Artcraft is an umbrella with a generative studio and open-source creative apps.
-Do not conflate the paid studio's pricing with the desktop apps' licensing.
-The object of this case is the open creative-app suite, especially PhotoCraft.
+The corrected question is: what has technical evidence newly revealed about
+contestable software rents; who understands the implication; what does the
+market already discount; and what event could close the remaining belief gap?
 
-DeepSeek R1 is the January 20, 2025 reasoning-model release. The January 27
-market shock is a separate event. R1 has later updates, and a current repository
-star count cannot be used as its January 2025 adoption observation.
+* Two clocks, two theses
+** Fast clock / information and valuation
+A demonstration makes a previously abstract possibility tangible. Independent
+reproduction makes it credible. Creators and operators translate it into
+workflow implications. Financial interpreters translate those implications
+into estimates of pricing power and business duration. Investors can respond
+to that interpretation before anyone has cancelled a subscription.
 
-Sources:
-- [[https://getartcraft.com/apps][Artcraft app catalog]]
-- [[https://deepseek.com/en/news/deepseek-r1/][DeepSeek release announcement]]
+An information-asymmetry trade needs a difference between the analyst's
+understanding and market expectations, plus some route to convergence. It
+cannot be inferred from excitement, a missing headline in one search, or a
+flat stock chart. Investors may already know the argument, assign it a low
+probability, expect incumbent adaptation, or price a substantial risk premium.
+Those alternatives require investigation rather than an assumption of ignorance.
 
-* Reporting method and evidence classes
-Public observations are collected with bounded unauthenticated HTTP functions.
-The notebook records original URLs, retrieval timestamps and SHA-256 hashes.
-The acquisition manifest preserves source responses; derived values are
-recomputed with deterministic functions. Editorial interpretation is written
-separately and a generative adversarial review is retained as model output.
+** Slow clock / economic realization
+Over time, repeated use, renewals, negotiated prices, conversion rates, gross
+margins and product investment test whether the expected rent erosion occurs.
+These observations matter for fundamental conviction and eventual valuation.
+They are not the only signals that can move a stock first.
 
-The evidence room distinguishes:
-- Primary: issuer disclosures, maintainer statements and public API records.
-- Secondary: dated original reporting used to establish narrative diffusion.
-- Gap: a required observation not present in this research package.
-- Inference: an explicit claim connecting observations to an economic mechanism.
-- Assumption: a subjective probability, payoff or implementation input.
+The two clocks can disagree. A sharp selloff can overestimate substitution.
+Strong current earnings can coexist with a rational fall in terminal value.
+An excellent technology forecast can produce a poor short when the stock has
+already discounted it or convergence takes longer than the financing horizon.
 
-A primary source can still be promotional. A repository README is strong
-evidence of what maintainers say, weaker evidence of product quality, and no
-evidence of customers abandoning another product. A press headline can prove
-that a narrative crossed an audience boundary without proving the headline's
-strongest economic implication.
+* What ArtCraft would newly demonstrate
+The central mechanism has two parts. First, AI assistance may lower the cost
+and time of implementing a substantial application surface. Second, reproducing
+familiar interactions may reduce the learned-behavior component of switching.
+The latter is more specific than the existence of free alternatives. A user
+can face no license fee and still face substantial retraining costs.
 
-* The first story: replication changes the supply side
-The economically interesting hypothesis is that AI lowers the cost of
-recreating parts of existing software. If that is durable, familiar feature
-surfaces become less scarce. Open implementations can be forked and adapted,
-which may change the bargaining power of users even before incumbent revenue
-falls.
+These are hypotheses with distinct tests. Visible breadth across applications
+is not independently measured implementation cost. Interface familiarity is
+not file fidelity, plug-in compatibility, color accuracy, team coordination,
+cloud identity, procurement or support. The maintainer's alpha status remains
+important evidence about depth, without making commercial alpha status a veto
+on the broader information thesis.
 
-This hypothesis has several distinct mechanisms. Entry-level creators could
-avoid buying their first subscription. Existing solo users could downgrade.
-Agencies could negotiate discounts. An ecosystem could form around open
-formats and automation. Developers could use cheaper creation tools to expand
-the market rather than displace existing purchases. These mechanisms have
-different lags and different implications for Adobe's cash flows.
+Clean-room is an attributed development claim, not an independently established
+methodology or legal judgment. The replicability argument should survive an
+honest accounting of engineering work, maintenance, licensing, security and
+interoperability. One repository is not a statistically representative sample
+of how cheaply all software can now be built.
 
-The maintainer's own status statement is important counterevidence: PhotoCraft
-is described as an early alpha, with acknowledged professional workflow gaps.
-This is not a finding from independent testing. It is a reason to prioritize
-that testing before translating software availability into a revenue forecast.
+Sources and exact limitations are E01, E02, E04 and E13 in the notebook:
+- [[https://github.com/storytold/photocraft][PhotoCraft / maintainer status and source]]
+- [[https://getartcraft.com/apps][ArtCraft app catalog]]
+- [[https://www.phoronix.com/news/Photocraft-Filmcraft-AI][Phoronix / technical demonstration coverage]]
+- [[https://www.designweek.co.uk/first-ai-came-and-scooped-up-your-art-now-its-scooped-up-adobe/][Design Week / creator-audience crossover]]
 
-[[https://github.com/storytold/photocraft][PhotoCraft README, status section]]
+* DeepSeek / same epistemic structure, different exposures
+The January 20, 2025 R1 release directly contested beliefs about proprietary
+frontier reasoning capability, including the competitive positions of OpenAI
+and Anthropic. Open weights, API access and inspectable claims allowed people
+to try and discuss an alternative rather than merely imagine one.
 
-* The second story: diffusion changes investor attention
-A hidden signal becomes useful when its meaning changes across audiences.
-A repository can attract builders. A hacker discussion can explain why it is
-surprising. Photography and design publications can carry it to potential
-users. Financial discussion can turn it into a stock narrative.
+The January 27 financial shock was an additional event. Nvidia's observed
+share-price loss is a listed-market transmission into expectations for AI
+compute and capital expenditure. It is not a measurement of OpenAI's or
+Anthropic's equity loss, nor proof that an AI-model entrant took Nvidia users.
+A single shock can have different implications for model margins, suppliers,
+cloud distributors and application consumers of cheaper intelligence.
 
-The current HN sample is a keyword sample, not a census. Two queries are
-combined and deduplicated by story ID. Story publication dates are known,
-but scores are observed only at retrieval. A chart of points grouped by story
-publication date is therefore a publication-cohort chart. It is not a chart
-of points accumulated each day. One star snapshot cannot establish star
-velocity or acceleration. Repeated comparable snapshots are needed.
+For software, the analogous scarce asset is implementation effort and durable
+user dependence on established applications. Replication evidence could change
+expected rents without a single entrant winning the market. The analogy is a
+sequence of belief changes, not an instruction to copy Nvidia's percentage loss
+onto Adobe. Different priors, exposures, timing and complementary assets matter.
 
-Specialist reporting on October 7 establishes a useful audience-crossing
-marker. It does not establish a cancellation cohort or a professional quality
-benchmark. Several outlets repeating a developer's claim remain one underlying
-claim. The desk should let an analyst trace this dependence rather than count
-each repetition as independent validation.
-
-Sources:
-- [[https://hn.algolia.com/api/v1/search?tags=story&hitsPerPage=100&query=artcraft][HN Algolia public search]]
-- [[https://www.designweek.co.uk/first-ai-came-and-scooped-up-your-art-now-its-scooped-up-adobe/][Design Week, October 7]]
-- [[https://petapixel.com/2026/10/07/someone-rebuilt-free-open-source-versions-of-photoshop-premiere-and-lightroom-using-ai/][PetaPixel, October 7]]
-
-* DeepSeek: what the analogy contributes
-The R1 release challenged beliefs about how expensive valuable reasoning
-capability had to be. Runnable weights and an API made experimentation
-possible. The narrative had implications for an already prominent AI
-infrastructure investment theme. That is why the economic mechanism matters
-more than the superficial similarity of two viral open-source announcements.
-
-Contemporaneous AP reporting describes a 16.9% Nvidia decline on January 27,
-with Nasdaq down 3.1% and the S&P 500 down 1.5%. Many stocks rose and the Dow
-gained, so the shock was not a uniform collapse of all equities. The captured
-price series independently supports a roughly 17% NVDA daily decline.
-
-The frequently repeated low training-cost number should not be treated as a
-complete audited R1 development cost. Training compute, prior research,
-distillation, post-training and inference have different economics. This
-notebook does not use a disputed cost headline as an input to a valuation.
-
-The relevant analogy is an expectations shock about scarcity. The invalid
-analogy is to apply Nvidia's one-day percentage loss to Adobe. The businesses,
-valuation expectations, exposed cash flows, demand elasticities and switching
-costs differ. One selected historical episode also supplies no calibrated
-base rate for future disruption events.
-
-[[https://apnews.com/article/52c54e361616509280bd2775674b6b4b][AP, January 27 market report]]
-
-* Adobe: establish the denominator before applying a haircut
-Adobe's September 10 issuer release reports $6.76bn quarterly revenue,
-$27.50bn ending ARR and $2.52bn operating cash flow for a quarter ending
-August 28. These figures precede the Artcraft episode. They establish scale
-and pre-event business performance, not proof about future substitution.
-
-A clone of a creative application does not expose all corporate revenue.
-The economic bridge needs a cohort denominator: which product, which paid
-user segment, which geography and which renewal horizon? Apply migration
-and pricing assumptions only to the exposed share. Then model contribution
-margin, response costs, buybacks and valuation separately.
-
-The desk intentionally lacks an invented exposed-revenue percentage. The
-absence is a research result. Treating all ARR as Photoshop-like revenue
-would create a precise answer to the wrong question.
-
-[[https://www.adobe.com/cc-shared/assets/investor-relations/pdfs/01906202/au56y4ter.pdf][Adobe Q3 FY2026 release, pages 1–2]]
-
-* Market study and practical limits
-The data pipeline captures public adjusted daily closes from Yahoo's chart
-endpoint. Its manifest records the full parameterized endpoint and response
-hash. NVDA and QQQ are compared over January 27, 2025. ADBE and QQQ are compared
-over October 5–8, 2026. The latter is a declared narrative-observation window,
-not a uniquely identified release event.
-
-The calculation uses compounded buy-and-hold asset return minus compounded
-benchmark return. Beta is fixed at one. A positive difference is not evidence
-of positive causal impact; a negative difference is not proof of disruption.
-A model estimated over a pre-event sample, sector controls, intraday timing,
-placebo windows and explicit confounds would improve attribution.
-
-The captured Adobe window does not show a crash comparable to Nvidia's.
-This weakens a claim that such a crash has already occurred. It does not rule
-out future substitution or prove that investors have correctly priced it.
-
-* A decision model that reveals its assumptions
-The scenario sandbox has three analyst-defined future stock-return states.
-Probabilities sum to one and are not empirical frequencies. Short P&L per
-notional dollar is negative stock return minus annual borrow times holding
-years minus friction. Expected P&L is the probability-weighted outcome.
-
-The worst listed scenario is not the maximum loss. Stock upside is unbounded;
-borrow can change or be recalled; forced liquidation makes path matter. The
-sandbox omits several implementation costs and labels them. A broker quote
-is required before interpreting the result as executable economics.
-
-The Bayesian sensitivity panel is arithmetic over a subjective prior and
-combined likelihood ratio. It is useful for exposing how strongly a person
-must interpret the evidence to change a belief. It is not a calibrated
-forecast. Correlated attention signals must not be multiplied as if they
-were independent experiments.
-
-* Highest value next investigations
-** 1. Professional workflow validation
-Pre-register representative tasks using public project assets. Compare
-completion time, fidelity, failures and interoperability. Blind judges to
-application when scoring outputs. Include plug-ins, color management and
-round-trip files. Report failed tasks, not only attractive screenshots.
-
-** 2. Paying-user displacement
-Define a denominator of current paying Adobe users. Track repeated usage and
-actual cancellation or downgrade, with consent and aggregate reporting.
-Separate first-time hobbyists from paid-seat substitution. Intent to cancel
-is weaker evidence than a documented billing change.
-
-** 3. Revenue bridge and expectations
-Build ranges for exposed share, migration and realization lag. Test what
-change in cash-flow expectations is needed to justify the proposed payoff.
-A threatened company can already be cheaply priced; a growing company can
-still disappoint high expectations. A short thesis needs the difference.
-
-** 4. Trade implementation and reversal rules
-Obtain fresh borrow economics and a dated catalyst. Define the maximum
-portfolio loss, monitoring frequency and thesis invalidation observations.
-Keep decision records append-only or versioned, so later outcomes do not
-rewrite what was believed at entry.
-
-* What would change the current decision
-Move toward human trade review if independent production tests succeed,
-credible paid migration appears, exposed economics are material relative to
-expectations, and a bounded implementation fits a separately defined risk
-budget. Abandon this specific catalyst thesis if substitutes fail routine
-workflows, adoption remains non-paying curiosity, or incumbent responses
-absorb the value while pricing already reflects the threat.
-
-* Final audit / public sample and market context
-The retained HN sample contains fourteen candidates: twelve suite-related
-posts and two studio posts under the title rule used in collect.mjs. The
-suite cohort sums to 416 retrieval-time points. The studio records remain
-visible and labeled in the source map but do not enter the suite chart.
-This is a small biased search sample, not total audience reach.
-
-The matched twenty-session scan ending October 8 shows that Adobe and
-Salesforce underperformed QQQ over a broader interval, while Autodesk
-outperformed. This is useful context for alternative explanations: broad
-software expectations can differ from the selected four-session Artcraft
-window. No causal claim follows from these comparative returns. The saved
-raw responses and deterministic metrics permit independent reproduction.
-
-The Gen-backed Omega experiment memo proposes an independent production
-trial. Its numeric pass/fail thresholds are model suggestions, not empirical
-standards; they should be agreed and pre-registered before testing. The Jev
-output classifies evidence readiness. Neither artifact supplies a validated
-probability that Adobe's price will fall.
-
-* Competitive baseline / ask what is actually new
-Free alternatives were available before this episode. GIMP's official 3.0
-release was published on March 16, 2025. Blackmagic's current Resolve page
-offers a free edition alongside Studio. Their existence does not establish
-professional parity or Adobe seat loss, but it changes the right experiment.
-The incremental hypothesis is AI-accelerated replication and reduced migration
-friction, not simply the existence of a zero-price creative tool.
-
-Include existing alternatives in the proposed workflow trial. If Artcraft
-performs no better at migration, fidelity or task completion, the novelty
-story may have more attention than incremental economic content. If it improves
-those outcomes substantially, the capability mechanism deserves more weight.
-This is a falsifiable comparison; no competitive market-share figure is
-assumed here.
+The release date was a US market holiday. The daily-tape release anchor therefore
+starts at January 21, the first captured trading session on or after January 20.
+A six-session release window overlaps the January 27 shock; these are alternative
+anchors for one episode, not independent observations that can be pooled.
 
 Sources:
-- [[https://www.gimp.org/news/2025/03/16/gimp-3-0-released/][GIMP 3.0 official release]]
-- [[https://www.blackmagicdesign.com/products/davinciresolve][Blackmagic Resolve product overview]]
+- [[https://deepseek.com/en/news/deepseek-r1/][Official R1 announcement / vendor claims, E06]]
+- [[https://apnews.com/article/52c54e361616509280bd2775674b6b4b][AP / January 27 market reporting, E07]]
+- [[https://www.bessemertrust.com/insights/market-update-recent-artificial-intelligence-stock-selloff][Bessemer Trust / competing economic implications, N03]]
+
+* The essential prior-belief control
+The broad AI application-layer threat was financial-market news months before
+ArtCraft. Reuters's February 4 account describes investors reconsidering software
+businesses following Anthropic's new tool. This is evidence against a thesis
+that the entire software-replacement idea remains hidden from financial markets.
+It also supplies a closer listed-software repricing comparison than Nvidia alone.
+
+A later financial-sector commentary reports substantial prior compression in
+creative-software valuation medians. The desk displays that publisher's bucket
+table with its date, composition limitations and a small table/prose discrepancy.
+Those bucket medians are not Adobe's multiple or a direct measure of Adobe's
+implied disruption probability.
+
+The remaining possible edge is narrower and more interesting: perhaps the
+market understands agent automation but underestimates broad replication of
+familiar standalone applications; perhaps it prices seat compression but misses
+falling switching costs; perhaps repeated independent implementations change
+beliefs about the speed and generality of the process. None is established by
+assertion. Each needs comparison with actual public investor expectations.
+
+Sources:
+- [[https://www.marketscreener.com/news/global-software-stocks-hit-by-anthropic-wake-up-call-on-ai-disruption-ce7e5adad880f724][Reuters / prior application-layer repricing, E14 / N07]]
+- [[https://www.hl.co.uk/news/what-happened-to-software-stocks-after-the-ai-driven-saaspocalypse][Hargreaves Lansdown / dated sector valuation context, E15 / N08]]
+
+* Market tape / what is observed
+The revised desk uses eight instruments in three public daily-price periods:
+ADBE, ADSK, CRM, INTU, NOW, IGV, QQQ and NVDA. Four declared event anchors cover
+R1's release, R1's financial shock, the earlier software repricing and ArtCraft's
+specialist-press crossover. Every successful response has an original endpoint,
+capture time and content hash. Error responses remain errors.
+
+Selected observations, adjusted daily close returns rounded to two decimals:
+| Anchor / first trading session | ADBE day | IGV day | NVDA day |
+|-------------------------------+----------+---------+----------|
+| R1 financial shock / Jan 27 2025 | +0.74% | -1.66% | -16.97% |
+| Prior software shock / Feb 3 2026 | -7.31% | -4.61% | -2.84% |
+| ArtCraft press cluster / Oct 7 2026 | -2.25% | -1.19% | -0.74% |
+
+These are selected historical comparisons, not causal estimates. The first
+row demonstrates why direct competitors and traded exposures must be separated.
+The second is evidence that listed software had already experienced a repricing
+associated in contemporaneous reporting with the application-layer threat.
+The third shows an Adobe decline on the declared date; it does not attribute
+that decline to ArtCraft or establish a persistent correction.
+
+The current episode has only two captured sessions from October 7 through
+October 8. Adobe's modeled cumulative QQQ residual over those sessions is about
++0.21%; the price rebound prevents a simple persistent-selloff reading. Current
+volume is also much less extreme than Nvidia's January 27 volume spike. This
+is contextual evidence about the tape, not proof that investors ignored a
+technology signal. The earlier October 5–8 window remains available as a
+window-sensitivity comparison; it cannot be silently substituted for the new
+anchor to manufacture a preferred conclusion.
+
+The desk shows both raw QQQ/IGV day differentials and an OLS model fitted on
+80 matched pre-event sessions. CAR is the arithmetic sum of daily residuals
+from session zero. The pre-event model contains no event or post-event returns.
+Volume is divided by the previous 20-session average. These diagnostics make
+assumptions visible; they do not identify a treatment effect.
+
+The current Adobe/QQQ fitted beta is negative (about -0.46), illustrating why
+one recent beta estimate must not become false precision. Report raw and sector
+comparisons beside residuals. No standard errors, significance, intraday timing,
+placebo analysis or co-occurring earnings/rates controls are claimed. Some press
+arrived after US trading hours; the date anchor describes a press cluster, not a
+uniform intraday information arrival. Later events can contaminate longer paths.
+
+Two public-source annotations further constrain attribution. October 7 AP
+reporting describes broad equity and Treasury-yield pressure (E18), so a common
+discount-rate shock is a competing explanation. Adobe's September 3 succession
+announcement (E19) is background within the beta-fit period, not an October 7
+catalyst. Neither annotation is part of the eight-document Jev corpus.
+- [[https://apnews.com/article/44b75c188756038371cf3112ede9cee8][AP / contemporaneous macro confound]]
+- [[https://news.adobe.com/news/2026/09/adobe-announces-anil-chakravarthy-to-become-president-and-ceo][Adobe / dated succession announcement]]
+
+* News sentiment / typed interpretation, not a market oracle
+Eight documents were selected deliberately across technical, creative and
+financial channels. This is a small panel to inspect competing framings, not a
+news census or a statistical estimate of market sentiment. HN publication cohorts
+remain visible separately; historical point totals are not historical daily growth.
+
+Jev answered three closed questions for each public input: framing toward
+incumbent rents, dominant economic mechanism, and whether the text reports
+realized repricing, prospective risk or neither. This separates positive
+enthusiasm about an open tool from negative implications for incumbent economics.
+The exact questions, requested/returned model versions, probabilities and input
+hashes are retained. The model does not validate a clean-room claim, infer a
+market consensus, or estimate an Adobe-return probability.
+
+Five inputs are extracted article text. Direct HTTP requests to AP, Phoronix
+and PetaPixel returned 403. Those failures are retained; their classifications
+use separately identified analyst abstracts of web-verified reports. Abstract
+framing can introduce analyst bias and must not be pooled invisibly with text.
+All three abstract-based tone outputs are below the declared 0.60 review threshold.
+They abstain from aggregate counts. The AP abstract even receives a low-confidence
+supportive label despite describing a selloff: a concrete example of why the
+review queue matters. Do not repair this by silently changing the model output.
+
+In the five article-text inputs, R1's announcement and creator-sector coverage
+are classified as threatening to incumbent rents; the financial commentaries
+are mixed. That describes this panel's framing, not the proportion of investors
+who are bearish. Financial reporting can acknowledge severe disruption while
+also discussing complements, adaptation or excessive pessimism. Such mixed
+framing is analytically useful and should not be forced into a single fear score.
+
+* Implications for Adobe / revise the decision, not just the rhetoric
+The company-watch framing is superseded by an active software-rent repricing
+thesis. Independent paid migration is no longer a necessary early timing gate.
+The current short decision nevertheless remains unresolved because incremental
+surprise, current Adobe-specific valuation, convergence catalyst and executable
+borrow economics are not established by these observations.
+
+The desk now separates a multiple-reset identity from the slower ARR bridge.
+Holding earnings constant, moving an assumed P/E from 24 to 18 implies a 25%
+price decline. These are illustrative assumptions, not measured Adobe multiples
+or a price target. Earnings changes interact multiplicatively with the multiple
+ratio; adding the two component percentages is generally wrong. The separate
+short payoff model still includes assumed financing and upside scenarios.
+
+Highest-value next work:
+1. Predeclare a broader technical/creator/financial publisher panel and fixed
+   date range; identify first-observed independent evidence rather than repeat
+   headlines. Compare with dated investor commentary and earnings-call language.
+2. Independently reproduce several applications and measure build time, cost,
+   maintenance, file fidelity and same-user task completion. Separate lower
+   learning friction from the other components of switching.
+3. Reconstruct public Adobe-specific valuation and estimate revisions; compare
+   reasonable rent-duration scenarios with what the current price implies.
+4. Add matched placebo dates, intraday publication times and competing-event
+   annotations to the event study before making any causal claim.
+5. If a trade reaches review, obtain actual borrow/recall terms, a loss budget,
+   a time horizon and an exit rule. Technology insight and executable P&L are
+   different questions.
+
+* Reproducibility and review boundaries
+Run movement-collect.mjs for eight public news acquisitions followed by three
+bounded eight-instrument price batches. Run sentiment.bl with existing Jev
+credentials. Run revise-movement.mjs with a NEW proposal filename. It validates
+schema and provenance and never implicitly overwrites the notebook. Review and
+promote the proposal explicitly; collect remains separate from editorial writing.
+
+Raw responses and extracted classifier inputs are provenance artifacts, not
+articles republished in the reading experience. The UI displays classifications,
+source links, hashes and limitations. The saved Gen synthesis is adversarial
+model analysis over public evidence, separate from deterministic observations.
+Older company-focused reviews are explicitly marked superseded.

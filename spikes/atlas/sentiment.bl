@@ -1,0 +1,36 @@
+; Real typed Jev classifications over bounded, public news. No trade forecasts.
+(ns atlas.sentiment
+ (:require [omega.jev :as jev] [omega.llm :as llm]))
+(def root (System/get_env "OMEGA_HOME"))
+(def dir (str root "/spikes/atlas"))
+(def corpus (json/decode (File/read! (str dir "/data/movement.json"))))
+(def abstracts (json/decode (File/read! (str dir "/data/news-abstracts.json"))))
+(def transport (jev/http (jev/key-from-env root)))
+(def questions
+ {:tone (jev/choice "Classify the article's framing toward INCUMBENT economic rents / pricing power (AI-model incumbents and suppliers in R1; established subscription software in other cases), NOT enthusiasm toward the new entrant. Use only the supplied document. Mixed when material threat and defenses coexist. Classify framing, not whether claims are true."
+   {:threatening "Predominantly frames incumbent rents, scarcity or pricing power as threatened."
+    :supportive "Predominantly defends incumbent rents or dismisses the threat."
+    :mixed "Material disruptive and defensive implications are both present."
+    :descriptive "Mostly announcement or descriptive report without directional economic framing."})
+  :mechanism (jev/choice "Which economic mechanism is most central? Pick only from supplied document; do not add background beliefs."
+   {:scarcity "Lower cost or open replication undermines scarce capability or incumbent economics."
+    :switching "Familiar workflows, interoperability or switching costs are central."
+    :application "Agents disintermediate or replace applications or compress paid seats."
+    :defense "Data, trust, ecosystem, legal barriers or incumbent adaptation dominate."
+    :none "None of these mechanisms is sufficiently explicit."})
+  :pricing (jev/choice "Does this document report a market repricing that has ALREADY occurred, discuss a possible future repricing, or neither? This is classification of reporting, not causal confirmation."
+   {:observed "Reports realized stock declines or valuation changes."
+    :prospective "Discusses future economic or valuation risk without reporting a realized price change."
+    :neither "No explicit financial repricing discussion."})})
+(def results
+ (mapv (fn [a]
+  (let [id (get a "id") fallback (get abstracts id)
+        file (get a "inputFile")
+        input (if file (File/read! (str dir "/" file)) (get fallback "text"))
+        scope (if file "extracted public article text" (get fallback "scope"))
+        result (if input (jev/ask transport (str "DOCUMENT " id "\nTitle: " (get a "title") "\nPublisher: " (get a "publisher") "\nDate: " (get a "date") "\nInput scope: " scope "\n\n" input) questions) {:error {:kind :missing-public-text}})]
+   (println (str id " " (if (:ok result) "classified" "unavailable")))
+   {:id id :input-scope scope :input-file file :input-sha256 (when input (lower-case (Base/encode16 (crypto/hash :sha256 input)))) :sentiment result})) (get corpus "articles")))
+(File/write! (str dir "/data/news-sentiment.json")
+ (erlang/iolist_to_binary (json/encode (llm/jsonable {:at (DateTime/to_iso8601 (DateTime/utc_now)) :model-requested jev/MODEL :questions questions :method "Typed Jev document framing; full extracted articles and analyst abstracts remain separate. Probabilities are classifier outputs, not calibrated market or trade probabilities. Deliberately selected corpus, not population sentiment." :results results}))))
+(println "Public sentiment results saved.")

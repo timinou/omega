@@ -1,0 +1,423 @@
+{
+  "at": "2026-10-09T07:08:54.889503Z",
+  "method": "Typed Jev document framing; full extracted articles and analyst abstracts remain separate. Probabilities are classifier outputs, not calibrated market or trade probabilities. Deliberately selected corpus, not population sentiment.",
+  "model-requested": "jev-latest",
+  "questions": {
+    "mechanism": {
+      "criteria": {
+        "application": "Agents disintermediate or replace applications or compress paid seats.",
+        "defense": "Data, trust, ecosystem, legal barriers or incumbent adaptation dominate.",
+        "none": "None of these mechanisms is sufficiently explicit.",
+        "scarcity": "Lower cost or open replication undermines scarce capability or incumbent economics.",
+        "switching": "Familiar workflows, interoperability or switching costs are central."
+      },
+      "instructions": "Which economic mechanism is most central? Pick only from supplied document; do not add background beliefs.",
+      "type": "choice"
+    },
+    "pricing": {
+      "criteria": {
+        "neither": "No explicit financial repricing discussion.",
+        "observed": "Reports realized stock declines or valuation changes.",
+        "prospective": "Discusses future economic or valuation risk without reporting a realized price change."
+      },
+      "instructions": "Does this document report a market repricing that has ALREADY occurred, discuss a possible future repricing, or neither? This is classification of reporting, not causal confirmation.",
+      "type": "choice"
+    },
+    "tone": {
+      "criteria": {
+        "descriptive": "Mostly announcement or descriptive report without directional economic framing.",
+        "mixed": "Material disruptive and defensive implications are both present.",
+        "supportive": "Predominantly defends incumbent rents or dismisses the threat.",
+        "threatening": "Predominantly frames incumbent rents, scarcity or pricing power as threatened."
+      },
+      "instructions": "Classify the article's framing toward INCUMBENT economic rents / pricing power (AI-model incumbents and suppliers in R1; established subscription software in other cases), NOT enthusiasm toward the new entrant. Use only the supplied document. Mixed when material threat and defenses coexist. Classify framing, not whether claims are true.",
+      "type": "choice"
+    }
+  },
+  "results": [
+    {
+      "id": "N01",
+      "input-file": "data/raw/movement-N01-extracted.txt",
+      "input-scope": "extracted public article text",
+      "input-sha256": "99674f25d9c6a452a8803efeb610d5e0b445205db19ddf9ba77f1df76c71866c",
+      "sentiment": {
+        "model": "jev-1.13.0",
+        "ok": {
+          "mechanism": {
+            "confidence": 0.97,
+            "probabilities": {
+              "application": 0.01,
+              "defense": 0,
+              "none": 0.01,
+              "scarcity": 0.98,
+              "switching": 0
+            },
+            "type": "choice",
+            "value": "scarcity"
+          },
+          "pricing": {
+            "confidence": 0.98,
+            "probabilities": {
+              "neither": 0.99,
+              "observed": 0.01,
+              "prospective": 0
+            },
+            "type": "choice",
+            "value": "neither"
+          },
+          "tone": {
+            "confidence": 0.64,
+            "probabilities": {
+              "descriptive": 0.16,
+              "mixed": 0.1,
+              "supportive": 0.01,
+              "threatening": 0.73
+            },
+            "type": "choice",
+            "value": "threatening"
+          }
+        },
+        "usage": {
+          "input_tokens": 1055,
+          "output_tokens": 153
+        }
+      }
+    },
+    {
+      "id": "N02",
+      "input-file": null,
+      "input-scope": "analyst abstract of web-verified public report; direct HTTP blocked",
+      "input-sha256": "21c3a91be607323f2ea09fce3d56df5e7012c45f31158946c100f6ca96f02ea7",
+      "sentiment": {
+        "model": "jev-1.13.0",
+        "ok": {
+          "mechanism": {
+            "confidence": 0.84,
+            "probabilities": {
+              "application": 0,
+              "defense": 0,
+              "none": 0.13,
+              "scarcity": 0.87,
+              "switching": 0
+            },
+            "type": "choice",
+            "value": "scarcity"
+          },
+          "pricing": {
+            "confidence": 1,
+            "probabilities": {
+              "neither": 0,
+              "observed": 1,
+              "prospective": 0
+            },
+            "type": "choice",
+            "value": "observed"
+          },
+          "tone": {
+            "confidence": 0.33,
+            "probabilities": {
+              "descriptive": 0.07,
+              "mixed": 0.26,
+              "supportive": 0.5,
+              "threatening": 0.17
+            },
+            "type": "choice",
+            "value": "supportive"
+          }
+        },
+        "usage": {
+          "input_tokens": 836,
+          "output_tokens": 154
+        }
+      }
+    },
+    {
+      "id": "N03",
+      "input-file": "data/raw/movement-N03-extracted.txt",
+      "input-scope": "extracted public article text",
+      "input-sha256": "23e80eb8ba99cacbfbcca1ff6843c05b06e37fadcfb513605c1313ad881d2b45",
+      "sentiment": {
+        "model": "jev-1.13.0",
+        "ok": {
+          "mechanism": {
+            "confidence": 1,
+            "probabilities": {
+              "application": 0,
+              "defense": 0,
+              "none": 0,
+              "scarcity": 1,
+              "switching": 0
+            },
+            "type": "choice",
+            "value": "scarcity"
+          },
+          "pricing": {
+            "confidence": 1,
+            "probabilities": {
+              "neither": 0,
+              "observed": 1,
+              "prospective": 0
+            },
+            "type": "choice",
+            "value": "observed"
+          },
+          "tone": {
+            "confidence": 0.96,
+            "probabilities": {
+              "descriptive": 0,
+              "mixed": 0.97,
+              "supportive": 0.03,
+              "threatening": 0
+            },
+            "type": "choice",
+            "value": "mixed"
+          }
+        },
+        "usage": {
+          "input_tokens": 2065,
+          "output_tokens": 152
+        }
+      }
+    },
+    {
+      "id": "N04",
+      "input-file": null,
+      "input-scope": "analyst abstract of web-verified public report; direct HTTP blocked",
+      "input-sha256": "83fe4e8d9815d2d025d10fde73b3166d2d7a12735b19070c9fff1f69722614fb",
+      "sentiment": {
+        "model": "jev-1.13.0",
+        "ok": {
+          "mechanism": {
+            "confidence": 0.32,
+            "probabilities": {
+              "application": 0.45999999999999996,
+              "defense": 0.26,
+              "none": 0.04,
+              "scarcity": 0.24,
+              "switching": 0
+            },
+            "type": "choice",
+            "value": "application"
+          },
+          "pricing": {
+            "confidence": 1,
+            "probabilities": {
+              "neither": 1,
+              "observed": 0,
+              "prospective": 0
+            },
+            "type": "choice",
+            "value": "neither"
+          },
+          "tone": {
+            "confidence": 0.43,
+            "probabilities": {
+              "descriptive": 0.57,
+              "mixed": 0.35,
+              "supportive": 0.01,
+              "threatening": 0.07
+            },
+            "type": "choice",
+            "value": "descriptive"
+          }
+        },
+        "usage": {
+          "input_tokens": 844,
+          "output_tokens": 152
+        }
+      }
+    },
+    {
+      "id": "N05",
+      "input-file": "data/raw/movement-N05-extracted.txt",
+      "input-scope": "extracted public article text",
+      "input-sha256": "c4d099aba288f43810ccbc3282d7a144f7e6fdd18567db1aadb237be3f8426e1",
+      "sentiment": {
+        "model": "jev-1.13.0",
+        "ok": {
+          "mechanism": {
+            "confidence": 0.96,
+            "probabilities": {
+              "application": 0.03,
+              "defense": 0,
+              "none": 0,
+              "scarcity": 0.97,
+              "switching": 0
+            },
+            "type": "choice",
+            "value": "scarcity"
+          },
+          "pricing": {
+            "confidence": 0.35,
+            "probabilities": {
+              "neither": 0.57,
+              "observed": 0,
+              "prospective": 0.43
+            },
+            "type": "choice",
+            "value": "neither"
+          },
+          "tone": {
+            "confidence": 0.61,
+            "probabilities": {
+              "descriptive": 0,
+              "mixed": 0.29,
+              "supportive": 0,
+              "threatening": 0.71
+            },
+            "type": "choice",
+            "value": "threatening"
+          }
+        },
+        "usage": {
+          "input_tokens": 2918,
+          "output_tokens": 153
+        }
+      }
+    },
+    {
+      "id": "N06",
+      "input-file": null,
+      "input-scope": "analyst abstract of web-verified public report; direct HTTP blocked",
+      "input-sha256": "51bd5912ea163f0a45086dd4bb1cd1d3108510d9cfa2e0dbe90ccad7dbb5b2d4",
+      "sentiment": {
+        "model": "jev-1.13.0",
+        "ok": {
+          "mechanism": {
+            "confidence": 0.24,
+            "probabilities": {
+              "application": 0.39,
+              "defense": 0.01,
+              "none": 0.14,
+              "scarcity": 0.38,
+              "switching": 0.08
+            },
+            "type": "choice",
+            "value": "application"
+          },
+          "pricing": {
+            "confidence": 1,
+            "probabilities": {
+              "neither": 1,
+              "observed": 0,
+              "prospective": 0
+            },
+            "type": "choice",
+            "value": "neither"
+          },
+          "tone": {
+            "confidence": 0.49,
+            "probabilities": {
+              "descriptive": 0.62,
+              "mixed": 0.05,
+              "supportive": 0.2,
+              "threatening": 0.13
+            },
+            "type": "choice",
+            "value": "descriptive"
+          }
+        },
+        "usage": {
+          "input_tokens": 835,
+          "output_tokens": 152
+        }
+      }
+    },
+    {
+      "id": "N07",
+      "input-file": "data/raw/movement-N07-extracted.txt",
+      "input-scope": "extracted public article text",
+      "input-sha256": "970747abdd7edf9b30b5884245ff278bb6bab11607b1f9509fa40012e2757695",
+      "sentiment": {
+        "model": "jev-1.13.0",
+        "ok": {
+          "mechanism": {
+            "confidence": 1,
+            "probabilities": {
+              "application": 1,
+              "defense": 0,
+              "none": 0,
+              "scarcity": 0,
+              "switching": 0
+            },
+            "type": "choice",
+            "value": "application"
+          },
+          "pricing": {
+            "confidence": 1,
+            "probabilities": {
+              "neither": 0,
+              "observed": 1,
+              "prospective": 0
+            },
+            "type": "choice",
+            "value": "observed"
+          },
+          "tone": {
+            "confidence": 0.83,
+            "probabilities": {
+              "descriptive": 0,
+              "mixed": 0.87,
+              "supportive": 0,
+              "threatening": 0.13
+            },
+            "type": "choice",
+            "value": "mixed"
+          }
+        },
+        "usage": {
+          "input_tokens": 1976,
+          "output_tokens": 150
+        }
+      }
+    },
+    {
+      "id": "N08",
+      "input-file": "data/raw/movement-N08-extracted.txt",
+      "input-scope": "extracted public article text",
+      "input-sha256": "58b8454d25cdc8b9163efd05d68291f3af2cde87208983f58c0a20885446840c",
+      "sentiment": {
+        "model": "jev-1.13.0",
+        "ok": {
+          "mechanism": {
+            "confidence": 0.7,
+            "probabilities": {
+              "application": 0.76,
+              "defense": 0.22,
+              "none": 0,
+              "scarcity": 0.02,
+              "switching": 0
+            },
+            "type": "choice",
+            "value": "application"
+          },
+          "pricing": {
+            "confidence": 1,
+            "probabilities": {
+              "neither": 0,
+              "observed": 1,
+              "prospective": 0
+            },
+            "type": "choice",
+            "value": "observed"
+          },
+          "tone": {
+            "confidence": 0.88,
+            "probabilities": {
+              "descriptive": 0,
+              "mixed": 0.91,
+              "supportive": 0.08,
+              "threatening": 0.01
+            },
+            "type": "choice",
+            "value": "mixed"
+          }
+        },
+        "usage": {
+          "input_tokens": 2477,
+          "output_tokens": 150
+        }
+      }
+    }
+  ]
+}
