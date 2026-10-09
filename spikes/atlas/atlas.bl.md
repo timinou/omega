@@ -151,3 +151,60 @@ The presentation equivalence checker itself is unchanged.
 ![Multiple reset before churn](proof/18-multiple-before-churn.png)
 
 ![Jev source and probability audit](proof/19-news-framing-audit.png)
+
+## v3: independent research, with authored and generated work separated
+
+The earlier read-only Gen follow-up is superseded by an actual Omega tool loop.
+Start `spikes/atlas/run-gen.sh`: it builds this same package and seeds a durable,
+separate `.omega/atlas-desk` world once. Tests use only `/tmp/omega-atlas.*` and
+ports 8833/8834. No writes to the user's live world. The offline `run.sh` remains
+a demonstration, clearly labeled as such in Research.
+
+Decision now introduces the investigation and distinguishes the authored case
+from the latest Omega-generated draft. Research exposes the real dataset catalog,
+a question form, investigation presets, source IDs, tool failures, actual task
+status, task-generated charts, and report/proposal links. Reports open in a real
+layout beside the retained notebook. Polling preserves a typed question and focus;
+unuse disposes the timer, styles, view and layout.
+
+[`docs/independent-desk.bl.org`](docs/independent-desk.bl.org) describes what is
+hardcoded/authored, reusable functions, Gen and Jev responsibilities, task data,
+architecture, workflow, bounds and remaining limitations. The generic Gen adapter
+and editor startup configuration live in Omega; public data adapters, numerical
+analysis and domain tools stay in Atlas. Model findings are not automatically
+adopted into the case. Source-ID validation establishes lineage, not semantic
+truth or investment suitability.
+
+Reproduce v3 verification:
+
+```sh
+bin/bl test test/gen_test.bl test/ed_test.bl
+node --test spikes/atlas/test/*.test.mjs
+# Opt-in network-backed proof, against an owned run-gen.sh world:
+ATLAS_PORT=8833 node spikes/atlas/test/desk-world.mjs
+ATLAS_PORT=8833 node spikes/atlas/test/research-browser.mjs
+```
+
+Real-editor proof:
+
+- [Guided decision](proof/20-guided-decision.png)
+- [Research workspace and actual dataset inventory](proof/21-research-workspace.png)
+- [Compact research](proof/24-compact-research.png)
+- [After unuse](proof/25-research-unused.png)
+- [Browser assertions](proof/research-browser.json)
+
+The original 19-screen tour also passed against a separate offline world on
+8834, including editor edits/undo, event charts, source tracing, contextual
+real task submission, reply prompt, retained-pane return and package removal.
+The vendor suite passed all 60 checks. The unchanged presentation equivalence
+checker passed the 1574 case variants and the new explanatory notebook.
+
+Live proof: [actual Omega tool traces and publication](proof/independent-task.json)
+and [Omega-authored report](docs/omega-task-report.bl.org). The task acquired
+seven public responses, used Jev and computed three event tapes. It recovered
+across an isolated-world restart. The report is a draft: its initial baseline-gap
+statement was flagged against its own computation ledger and sent through a
+real follow-up investigation. Citation IDs alone do not certify semantic truth.
+
+- [Task-generated findings](proof/22-omega-findings.png)
+- [Published .bl.org report beside retained source](proof/23-report-beside-source.png)

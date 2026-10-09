@@ -1,0 +1,202 @@
+#+TITLE: Atlas v3 / from authored case study to an Omega research desk
+#+DATE: 2026-10-09
+
+* The product correction
+
+An attractive display of a developer's analysis is not an independent desk.
+The preceding version was useful as an inspectable case study but its live
+Gen action could only review saved evidence. Its tool table was empty. That
+limitation was a product architecture issue, not a missing prompt.
+
+The v3 desk gives a real Omega task an explicit public-data tool table. Gen
+chooses the next action, Omega executes it, and the next model request includes
+the actual result or error. The dashboard shows each run's acquisition and
+computation trail beside a separately labeled generated draft. The original
+case remains an authored starting hypothesis. A task can disagree with it.
+
+The target experience is an investigation, not a row of attractive screens:
+question → available evidence → acquisition → calculation → competing account
+→ discriminating observation → reviewed decision. The initial Adobe question
+is one instance. The same search, prices, event functions and report tools can
+investigate another public-market question without inheriting Adobe opinions.
+
+* What was authored or hardcoded
+
+The source notebook's thesis, comparative prose, evidence selection, gate names,
+falsifiers, scenario probabilities and forecast returns were authored during
+case development. The initial notebook's current data captures, Jev outputs,
+Gen reviews and prior task transcript are saved artifacts, not a continuous
+feed. The eight-document corpus is deliberately selected. News sentiment is
+not an unbiased measure of market consensus. Its probabilities classify
+framing, not future returns.
+
+Several original CLI workflows use case-specific query lists and event dates.
+revise-movement.mjs builds the supplied case; it is not a general autonomous
+research engine. The dashboard's rendering functions, chart palette, five
+navigation stages, task presets and sandbox starting assumptions are coded
+product choices. The preset questions do not prescribe findings. Numeric
+scenario defaults remain subjective and can be changed in the source or UI.
+
+No refreshed task output silently changes those authored judgments. The task
+publishes an immutable report and separate structured proposal with the base
+notebook SHA-256. The dashboard displays the generated result alongside the
+seed. Adopting a changed thesis remains an explicit notebook edit after source
+review. There is no automated merge or assertion that citations were verified
+semantically merely because their IDs exist.
+
+* What is implemented as reusable functions
+
+** Package numerical layer: models.mjs
+
+notebook validates the structured source block. returns, eventStudy,
+eventTape, marketMetrics, normalized and attention derive descriptive market
+and attention views. The OLS fit uses matched sessions strictly before the
+anchor; residual sums do not identify causation. revenueBridge, repricing,
+posterior and shortModel calculate sensitivity to declared assumptions.
+readiness reports missing authored gates. These functions are deterministic;
+none consults an LLM, and missing prices do not become interpolated findings.
+
+** Package acquisition and artifacts: runtime.mjs
+
+inventory discovers available files and hashes. action provides bounded
+reading, public HN and Google News RSS search, reviewed-publisher HTTPS fetch,
+Yahoo daily prices, deterministic event analysis, article classification
+inputs and saved results, and report/proposal publication. All operations are
+reusable across research questions. The initial catalog is this desk's five
+known datasets, not a claim to a universal knowledge graph.
+
+Article acquisition deliberately has a narrow publisher allowlist, refuses
+redirects and caps response bytes. Static extraction can include boilerplate
+or miss rendered content. Search titles are metadata, not substitute article
+text. A blocked source stays a recorded failure. Another publisher needs a
+reviewed adapter; the task cannot browse arbitrary hosts or run arbitrary shell.
+
+** Package BL layer: atlas.desk and atlas.main
+
+atlas.desk declares real Omega tools and owns host IO. It invokes Node by an
+argument vector, never interpolated shell text. Jev receives only the bounded
+public article text acquired in this run, with its input hash and scope.
+atlas.main remains a pure editor package: its functions transform editor state
+and emit task/open, task/say, frame-layout and workspace effects. Several panes
+are real editor layouts. Unuse removes the package and its style/timer.
+
+** General Omega layer: omega.gen and omega.ed.main
+
+omega.gen adapts the text-only gen.llm seam to Omega's provider-neutral tool
+protocol. A model emits a validated JSON plan with up to three independent calls per step; unknown tools,
+ambiguous plans and invalid JSON are visible errors. This is a JSON planner,
+not a claim that Gen has native tool calling. Real tool execution, transcripts,
+activity, errors, follow-ups, step bounds, durable task storage and recovery
+remain omega.loop / omega.task responsibilities.
+
+omega.ed.main now accepts tools, system-prompt, max-steps and an intent factory.
+Its default codemode tools and default prompt remain the defaults for other
+worlds. Atlas does not modify vendor editor internals or introduce a private
+render loop. The generic Gen adapter does not know about finance or Atlas.
+The Gen text seam does not expose token usage, so the desk does not fabricate
+cost accounting. Steps and public requests are the enforced bounds.
+
+* Data available to a new task
+
+| Dataset | Available information | Limit |
+| case | Authored claims, evidence IDs, decision gates, experiments | Saved source, not unsaved editor buffer or ground truth |
+| movement | Three captured daily-price families: r1, baseline, artcraft; selected news acquisition metadata | Event choice and news selection are declared; no causal inference |
+| sentiment | Saved Jev tone/mechanism/pricing classifications | Selected corpus and input scopes; not a news census |
+| scan | Saved ticker rows, captures and matched market metrics | Historical daily snapshots, no live tape |
+| snapshot | Derived HN cohorts, repository observations and legacy market series | Counts at retrieval; not adoption, paid migration or comparable exposure |
+
+The Research screen discovers capture dates, file sizes, availability and
+SHA-256 values from the running world's files. It never marks a missing dataset
+available because a development checkout once contained it. Tasks read pages
+of at most 18K characters. Inventory returns sources and artifacts accumulated
+in that run, which can be cited in the eventual report. It also lists prior published
+reports, readable as run:<task-id>; those remain model-authored drafts, not
+independently verified facts.
+
+New acquisitions create S* IDs; read datasets receive D-* IDs; analysis and
+classification artifacts receive A* IDs. Reports require known IDs for every
+observation. That check proves lineage exists, not that the model's paraphrase
+is correct. Human source inspection remains part of a consequential decision.
+
+A new question can acquire HN or financial-news search metadata, public article
+text on the allowlist, and up to four daily ticker series per tool invocation.
+The total public request budget is eight per task. Existing data can be reused
+without network requests. Jev can classify an acquired article; its calls are
+separate model calls, not counted as public-data requests. Sixteen Omega model
+steps limit the planning loop. There is no earnings-estimate consensus feed,
+options chain, borrow locate, intraday tape, paid migration telemetry or trade
+execution tool. Absence is visible; the model must report it as a gap.
+
+* Starting and using the desk
+
+Run spikes/atlas/run-gen.sh. It builds the real bl-ed package and seeds a
+separate durable world at .omega/atlas-desk only when no notebook exists there.
+Restarts retain the notebook, acquired evidence, reports and Omega tasks.
+ATLAS_WORLD and ATLAS_PORT select another owned world and port. Port 8790 is
+refused. ATLAS_MEMORY=1 is for isolated test worlds. ATLAS_SKIP_BUILD=1 skips
+compilation when the current package is already built.
+
+Open the printed URL. Decision explains the authored hypothesis and shows the
+latest published task draft separately. Research shows the actual data catalog,
+question box, falsification/comparison presets, runs and provenance. Save source
+edits before launching a task. A task sees files on disk; the dashboard previews
+the editable buffer, so an unsaved edit is intentionally not a task input.
+
+Use New market question to enter a different investigation. The catalog's case
+is optional contextual evidence; new ticker/anchor selection is model-chosen
+from the user's question. Watch the retained conversation pane for tool calls,
+errors and results. Reply to steer it, or open the published .bl.org report or
+proposal beside the retained source. Refresh data & runs reads the workspace;
+while the package is mounted it also polls every ten seconds. Input focus and
+selection are retained across workspace updates. Unuse cancels the timer.
+
+run.sh remains a labeled offline demonstration using Omega's scripted model.
+It does not acquire data or produce real Gen research. Existing journal reviews
+are archived development artifacts. They must not be confused with current runs.
+
+* Architecture and acceptance
+
+The structured source notebook drives the existing package view. Package events
+emit host intents. task/open enters the same Omega task system used elsewhere;
+registered tools return real results to the loop. Files under data/runs/<task>/
+hold raw public responses, immutable derived artifacts, a manifest, a report
+and a proposed revision. Workspace intents join that manifest with real Omega
+task status. The view renders this join, not a simulated task log.
+
+The persistent world is separate from the repository and the user's running
+world. No task has a source overwrite tool. No live-world port is used in tests.
+Tests cover malformed Gen plans, provider errors, real transcript forwarding,
+dataset availability, path restrictions, request budget, numerical analysis,
+known citation requirements and preserving the original notebook on publication.
+An opt-in live proof must demonstrate actual acquired sources, computed
+artifacts and a published task result, not merely a model's final prose.
+
+This is an independent bounded research desk, not yet a full market-data
+terminal: query coverage is narrow, static extraction is imperfect, workflows
+and classification schemas remain explicit, and semantic review/adoption is
+manual. The next improvement should come from observed task failures and user
+decisions, rather than adding more unlabeled dashboard tiles.
+
+* Observed live run and review limits
+
+The opt-in proof task t-17 used seven public requests, performed actual Jev
+classification and computed three event tapes. After a world restart it resumed
+from durable turns and published a report/proposal. Its source notebook remained
+byte-identical. See docs/omega-task-report.bl.org and proof/independent-task.json.
+The latter retains actual tool traces and provenance, while the full transcript
+and publisher text remain in the owned world.
+
+The first generated report misstated that a baseline computation was missing
+even though its ledger contained that computation. This is precisely the kind
+of semantic inconsistency that citation-ID validation cannot catch. An explicit
+follow-up investigation checks the actual artifact ledger. A failed model call
+remains a failed task rather than an apparently successful report. Gen transport
+has a hard deadline; the synthesis token allowance is bounded at 9000. Error
+metadata distinguishes available provider truncation/status details from an
+unspecified transport failure. No success-token accounting is invented.
+
+Follow-ups to a running task enter its existing conversation. A completed or
+failed task creates a new research task with the prior report as an optional
+input, because Omega's terminal tasks cannot be reopened. Published reports
+can be read by new tasks with run:<id>, including their computation artifacts.
+A failed task without a publication has no report to pretend to reuse.

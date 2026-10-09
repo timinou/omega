@@ -1,7 +1,7 @@
 (ns atlas.review
  (:require [gen.llm :as gen] [credential.env :as credentials] [omega.loop :as loop] [atlas.context :as context]))
 (defn provider [home]
- (assoc gen/deepseek :max-tokens 4500 :timeout-ms 180000
+ (assoc gen/deepseek :max-tokens 9000 :timeout-ms 180000 :stop ["<｜｜DSML｜｜ calls>"]
   :key (or (credentials/lookup (credentials/read-file (str home "/.env")) "DEEPSEEK_API_KEY") (System/get_env "DEEPSEEK_API_KEY"))))
 (defn step [root home]
  (fn [req]

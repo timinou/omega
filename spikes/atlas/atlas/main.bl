@@ -40,27 +40,38 @@
 (defn prompt [ed label submit]
  (c/effect (docs/owned-prompt ed "atlas" label submit)
   {:kind :frame-focus :target (if (starts-with? (str (:path ed)) "task:") :research :notebook)}))
+(defn run-research [ed question]
+ (if (empty? (trim (or question ""))) (c/message ed "Enter a research question first.")
+  (c/effect ed {:kind :intent :intent "task/open" :then :atlas/research-route
+   :args {:title "Atlas · desk research" :path (or (get-in ed [:pkg-state "atlas" :notebook-path]) (:path ed))
+    :goal (str "Research question: " question "\nSaved case: " (or (get-in ed [:pkg-state "atlas" :notebook-path]) (:path ed))
+     "\nUse desk_inventory first. Read only relevant datasets; the authored case is a hypothesis, not a constraint on your conclusion. For a new market question acquire its own public evidence. Use registered tools to investigate, calculate and publish a separate cited .bl.org report and proposal. Do not overwrite the case. Label gaps and falsifiers. Source pane drafts must be saved before they are available to tasks.")}})))
 (defn research [ed]
- (prompt ed "Research question: "
-  (fn [ed question]
-   (c/effect ed {:kind :intent :intent "task/open" :then :atlas/research-route
-    :args {:title "Atlas · evidence follow-up" :path (or (get-in ed [:pkg-state "atlas" :notebook-path]) (:path ed))
-     :goal (str "Read " (or (get-in ed [:pkg-state "atlas" :notebook-path]) (:path ed)) " and spikes/atlas/instructions.bl.org. Research question: " question
-      ". Use public evidence only. Reuse spikes/atlas/collect.mjs and models.mjs; use Gen module gen.llm for a cited adversarial synthesis. Preserve source facts, label assumptions, write a separate .bl.org proposal with citations and missing data. Do not trade or modify the source dashboard without a reviewed diff.")}}))))
+ (prompt ed "Research question: " run-research))
+(defn refresh [ed]
+ (c/effect ed {:kind :intent :intent "atlas/workspace" :then :atlas/workspace-route :args {}}))
 (defn reply [ed]
  (let [id (if (starts-with? (str (:path ed)) "task:") (subs (:path ed) 5) (get-in ed [:pkg-state "atlas" :research-id]))]
   (if id (prompt ed "Follow-up to research: "
-    (fn [ed text] (c/effect ed {:kind :intent :intent "task/say" :args {:id id :text text}})))
+    (fn [ed text] (c/effect ed {:kind :intent :intent "atlas/followup" :then :atlas/research-route :args {:id id :text text}})))
    (c/message ed "Ask a research question first."))))
 (def bl-package
  {:name "atlas" :doc "Public evidence, comparative events and strategic decisions as a live notebook."
-  :commands {:atlas/reply {:doc "Send a follow-up to the retained research task." :run reply}
+  :commands {:atlas/refresh {:doc "Read available datasets and actual task artifacts." :run refresh}
+             :atlas/reply {:doc "Send a follow-up to the retained research task." :run reply}
              :atlas/return {:doc "Return to the retained notebook and observatory." :run return-to-desk}
              :atlas/research {:doc "Open an Omega follow-up task with this notebook as evidence." :run research}
              :atlas/home {:doc "Open the Artcraft / Adobe notebook." :run home}}
   :keys {:normal {"space s a" :atlas/home "space s q" :atlas/research "space s r" :atlas/reply}}
   :intercept (fn [ed ev]
    (cond (and (= :intent-result (:type ev)) (= :atlas/research-route (:then ev))) (research-result ed ev)
+         (and (= :intent-result (:type ev)) (= :atlas/workspace-route (:then ev)))
+          (assoc-in ed [:pkg-state "atlas" :workspace] (if (:ok? ev) (get-in ev [:data :snapshot]) "unavailable"))
+         (= :atlas/refresh (:type ev)) (refresh ed)
+         (= :atlas/run (:type ev)) (run-research ed (:question ev))
+         (= :atlas/open (:type ev))
+          (c/effect ed {:kind :frame-layout :layout "atlas-research" :keep {:notebook :notebook :research nil} :focus :research
+                        :visits {:research {:path (:path ev)}}})
          (= :atlas/select (:type ev)) (select ed ev)
          (= :atlas/research (:type ev)) (research ed)
          (= :atlas/reply (:type ev)) (reply ed)

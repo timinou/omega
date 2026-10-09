@@ -1,0 +1,284 @@
+#+TITLE: ArtCraft × DeepSeek information-diffusion analogy: bounded independent audit
+#+TASK: t-17
+#+RECORDED: 2026-10-09T08:12:01.577Z
+#+BASE_SHA256: 6bf367de2c2c80b135c3d0aa35bdbfbf4198833d568acf909c84ac4eff2469f9
+
+* Omega-generated draft / review before adoption
+Independent audit of the ArtCraft/DeepSeek analogy using the saved case, movement, sentiment and snapshot datasets plus fresh searches, prices and one Jev classification. R1's repricing is real and large; no Adobe-specific ArtCraft effect is identified. R1 is supplier-exposure evidence (NVDA), not a direct model-vendor return, and does not transfer mechanically to Adobe. Strongest counterargument: ADBE's −8.72% 20-session relative decline could be early repricing rather than noise. Conclusion: the analogy does not carry an Adobe short thesis; the authored decision remains unconfirmed and needs human source review.
+
+* Findings
+** observation
+NVDA fell 16.97% on 2025-01-27 versus QQQ −2.91%; against a pre-event OLS fit (n=80, beta 1.51) the event residual was −12.64% on 4.08× normal volume. DeepSeek's release page states MIT-licensed weights and API pricing of $0.14/$0.55/$2.19 per million cache-hit/cache-miss/output tokens.
+Sources: A1, S7, D-movement
+
+** observation
+At the 2026-10-07 ArtCraft anchor ADBE fell 2.25% versus QQQ −0.25% (residual −2.55%, volume 1.23×); the next session reversed +3.56%, leaving a two-day CAR of +0.21%. The 20-session relative return to 2026-10-08 was −8.72%. Fitted ADBE beta was −0.46, i.e. unstable.
+Sources: A2, S8, S9, D-movement
+
+** observation
+Fresh searches returned metadata only: one HN story (144 points, 209 comments) and four news items dated 2026-10-07/08; a later news query returned zero items. Direct fetches of AP, Phoronix and PetaPixel were HTTP 403, so their text is unavailable.
+Sources: S5, S6, S11, D-movement
+
+** inference
+The analogy is asymmetric. R1 produced immediate sector-level repricing in a supplier exposed to a capex narrative; ArtCraft produced a small one-day residual that reversed inside a longer pre-existing ADBE downtrend. The R1 template does not transfer to Adobe.
+Sources: A1, A2, D-case
+
+** observation
+The broad software-disruption narrative was public before ArtCraft: reporting of a February 2026 software selloff, and a 2026-10-07 publisher table showing the design/creative-tools median forward P/E at 15.4 versus 24.2 at the start of 2026 (sector bucket, not Adobe's multiple).
+Sources: D-movement, D-case
+
+** gap
+Unresolved: no borrow or options quotes, no cancellation cohort, no independent production-parity benchmark, no text for the 403-blocked publishers, no recomputation of the February 2026 baseline in this draft, and unstable ADBE beta limiting residual interpretation. Jev tone classifications cover a deliberately selected corpus, not population sentiment.
+Sources: A3, D-sentiment, D-case, D-movement
+
+* Next evidence
+- Run matched non-event placebo windows and IGV/peer controls on the 2026-10-07 ADBE residual to separate sector repricing from any Adobe-specific component.
+- Obtain authorized borrow/recall terms, options surface and a defined loss budget and horizon before any trade review.
+- Obtain independent parity/workflow benchmarks and creator trials for the ArtCraft suite versus Adobe and existing free alternatives (GIMP 3.0, Resolve).
+- Timestamp investor-expectation evidence (earnings-call language, analyst revisions, dated financial coverage) to test whether ArtCraft was incremental to pre-existing AI pessimism.
+
+* Acquisition ledger
+D-movement | captured dataset | data/movement.json | 3ee68075d92ea77eb27ee5225d79063eef28f203fdc69e64deef232654d73ed5 | captured 2026-10-09T07:07:27.779Z
+D-case | captured dataset | desk.bl.org | 6bf367de2c2c80b135c3d0aa35bdbfbf4198833d568acf909c84ac4eff2469f9 | captured 2026-10-09T01:27:30.304Z
+D-snapshot | captured dataset | data/derived.json | 5ae9bade79bdcd77e740fd6a4924979f6c3f7f71c6556e5c4becf97f52b9883a | captured 2026-10-09T01:27:30.304Z
+D-sentiment | captured dataset | data/news-sentiment.json | e2e0c5916191286a68de18f52473d51e5b32560596440dd124e05add6e095d02 | captured 2026-10-09T07:08:54.889503Z
+S5 | search metadata | https://hn.algolia.com/api/v1/search_by_date?query=ArtCraft%20Adobe%20open%20source%20Rust&tags=story&hitsPerPage=8 | 4baa51cae955c2ecbbeed11547c35d7f398ca19b4040e0991c1ca2d2d2686fa1 | captured 2026-10-09T08:02:57.093Z
+S6 | search metadata | https://news.google.com/rss/search?q=Adobe%20ArtCraft%20open%20source%20clones%20software%20stocks&hl=en-US&gl=US&ceid=US:en | f412eb4879ec8acd684436f0b244eb723eaab8b4d3eda6a3b0099c36c6ec225a | captured 2026-10-09T08:02:57.681Z
+S7 | public article extract | https://deepseek.com/en/news/deepseek-r1/ | 5dc227e3009a54da4d181748912e23cf3e5ee06adc05de1b55a0710e046276f2 | captured 2026-10-09T08:03:02.112Z
+S8 | daily prices | https://query1.finance.yahoo.com/v8/finance/chart/ADBE?period1=1769904000&period2=1791417600&interval=1d | 545c8ab6ef4980070df3a3e1841f504dd9f47393b799a263c10ed6fb42c66ea7 | captured 2026-10-09T08:03:16.411Z
+S9 | daily prices | https://query1.finance.yahoo.com/v8/finance/chart/QQQ?period1=1769904000&period2=1791417600&interval=1d | 88276cd6ee0a209be5fe70f90b6a3faaafde552c98d090c0a7f4203b96b0b095 | captured 2026-10-09T08:03:16.541Z
+S10 | daily prices | https://query1.finance.yahoo.com/v8/finance/chart/IGV?period1=1769904000&period2=1791417600&interval=1d | 858286faa1ede7f27994c89ebf38193a72ff41820060f2ea33b6107d0d303abb | captured 2026-10-09T08:03:16.830Z
+S11 | search metadata | https://news.google.com/rss/search?q=Adobe%20shares%20stock%20reaction%20AI%20clones%20Rust%20software%20selloff&hl=en-US&gl=US&ceid=US:en | 2a3c6c3d20e87f3af1249fca64d70d7ddf0134f2fe822e73f3830d5bd547274f | captured 2026-10-09T08:03:17.487Z
+D-scan | captured dataset | data/scan.json | ff3c907c74a39c355e771091047ae97b9cfe0ea9d8cf9741912091efe12960a5 | captured 2026-10-09T01:37:40.708Z
+
+* Structured proposal
+#+begin_atlas_proposal
+{
+  "findings": [
+    {
+      "kind": "observation",
+      "sources": [
+        "A1",
+        "S7",
+        "D-movement"
+      ],
+      "text": "NVDA fell 16.97% on 2025-01-27 versus QQQ −2.91%; against a pre-event OLS fit (n=80, beta 1.51) the event residual was −12.64% on 4.08× normal volume. DeepSeek's release page states MIT-licensed weights and API pricing of $0.14/$0.55/$2.19 per million cache-hit/cache-miss/output tokens."
+    },
+    {
+      "kind": "observation",
+      "sources": [
+        "A2",
+        "S8",
+        "S9",
+        "D-movement"
+      ],
+      "text": "At the 2026-10-07 ArtCraft anchor ADBE fell 2.25% versus QQQ −0.25% (residual −2.55%, volume 1.23×); the next session reversed +3.56%, leaving a two-day CAR of +0.21%. The 20-session relative return to 2026-10-08 was −8.72%. Fitted ADBE beta was −0.46, i.e. unstable."
+    },
+    {
+      "kind": "observation",
+      "sources": [
+        "S5",
+        "S6",
+        "S11",
+        "D-movement"
+      ],
+      "text": "Fresh searches returned metadata only: one HN story (144 points, 209 comments) and four news items dated 2026-10-07/08; a later news query returned zero items. Direct fetches of AP, Phoronix and PetaPixel were HTTP 403, so their text is unavailable."
+    },
+    {
+      "kind": "inference",
+      "sources": [
+        "A1",
+        "A2",
+        "D-case"
+      ],
+      "text": "The analogy is asymmetric. R1 produced immediate sector-level repricing in a supplier exposed to a capex narrative; ArtCraft produced a small one-day residual that reversed inside a longer pre-existing ADBE downtrend. The R1 template does not transfer to Adobe."
+    },
+    {
+      "kind": "observation",
+      "sources": [
+        "D-movement",
+        "D-case"
+      ],
+      "text": "The broad software-disruption narrative was public before ArtCraft: reporting of a February 2026 software selloff, and a 2026-10-07 publisher table showing the design/creative-tools median forward P/E at 15.4 versus 24.2 at the start of 2026 (sector bucket, not Adobe's multiple)."
+    },
+    {
+      "kind": "gap",
+      "sources": [
+        "A3",
+        "D-sentiment",
+        "D-case",
+        "D-movement"
+      ],
+      "text": "Unresolved: no borrow or options quotes, no cancellation cohort, no independent production-parity benchmark, no text for the 403-blocked publishers, no recomputation of the February 2026 baseline in this draft, and unstable ADBE beta limiting residual interpretation. Jev tone classifications cover a deliberately selected corpus, not population sentiment."
+    }
+  ],
+  "next": [
+    "Run matched non-event placebo windows and IGV/peer controls on the 2026-10-07 ADBE residual to separate sector repricing from any Adobe-specific component.",
+    "Obtain authorized borrow/recall terms, options surface and a defined loss budget and horizon before any trade review.",
+    "Obtain independent parity/workflow benchmarks and creator trials for the ArtCraft suite versus Adobe and existing free alternatives (GIMP 3.0, Resolve).",
+    "Timestamp investor-expectation evidence (earnings-call language, analyst revisions, dated financial coverage) to test whether ArtCraft was incremental to pre-existing AI pessimism."
+  ],
+  "summary": "Independent audit of the ArtCraft/DeepSeek analogy using the saved case, movement, sentiment and snapshot datasets plus fresh searches, prices and one Jev classification. R1's repricing is real and large; no Adobe-specific ArtCraft effect is identified. R1 is supplier-exposure evidence (NVDA), not a direct model-vendor return, and does not transfer mechanically to Adobe. Strongest counterargument: ADBE's −8.72% 20-session relative decline could be early repricing rather than noise. Conclusion: the analogy does not carry an Adobe short thesis; the authored decision remains unconfirmed and needs human source review.",
+  "title": "ArtCraft × DeepSeek information-diffusion analogy: bounded independent audit",
+  "baseHash": "6bf367de2c2c80b135c3d0aa35bdbfbf4198833d568acf909c84ac4eff2469f9",
+  "task": "t-17",
+  "at": "2026-10-09T08:12:01.577Z",
+  "sources": [
+    {
+      "id": "D-movement",
+      "kind": "captured dataset",
+      "file": "data/movement.json",
+      "sha256": "3ee68075d92ea77eb27ee5225d79063eef28f203fdc69e64deef232654d73ed5",
+      "at": "2026-10-09T08:02:52.617Z",
+      "capturedAt": "2026-10-09T07:07:27.779Z",
+      "url": null
+    },
+    {
+      "id": "D-case",
+      "kind": "captured dataset",
+      "file": "desk.bl.org",
+      "sha256": "6bf367de2c2c80b135c3d0aa35bdbfbf4198833d568acf909c84ac4eff2469f9",
+      "at": "2026-10-09T08:02:52.775Z",
+      "capturedAt": "2026-10-09T01:27:30.304Z",
+      "url": null
+    },
+    {
+      "id": "D-snapshot",
+      "kind": "captured dataset",
+      "file": "data/derived.json",
+      "sha256": "5ae9bade79bdcd77e740fd6a4924979f6c3f7f71c6556e5c4becf97f52b9883a",
+      "at": "2026-10-09T08:02:52.943Z",
+      "capturedAt": "2026-10-09T01:27:30.304Z",
+      "url": null
+    },
+    {
+      "id": "D-sentiment",
+      "kind": "captured dataset",
+      "file": "data/news-sentiment.json",
+      "sha256": "e2e0c5916191286a68de18f52473d51e5b32560596440dd124e05add6e095d02",
+      "at": "2026-10-09T08:02:56.286Z",
+      "capturedAt": "2026-10-09T07:08:54.889503Z",
+      "url": null
+    },
+    {
+      "id": "S5",
+      "kind": "search metadata",
+      "url": "https://hn.algolia.com/api/v1/search_by_date?query=ArtCraft%20Adobe%20open%20source%20Rust&tags=story&hitsPerPage=8",
+      "at": "2026-10-09T08:02:57.093Z",
+      "file": "data/runs/t-17/source-4baa51cae955.txt",
+      "sha256": "4baa51cae955c2ecbbeed11547c35d7f398ca19b4040e0991c1ca2d2d2686fa1",
+      "channel": "hn",
+      "query": "ArtCraft Adobe open source Rust",
+      "items": [
+        {
+          "title": "ArtCraft Apps – open-source Adobe compatible suite written in Rust",
+          "url": "https://getartcraft.com/apps",
+          "discussion": "https://news.ycombinator.com/item?id=49958850",
+          "published": "2026-10-04T23:02:43Z",
+          "points": 144,
+          "comments": 209
+        }
+      ],
+      "scope": "Eight search results; selected query, not a representative news census. Snippets and titles do not establish article contents."
+    },
+    {
+      "id": "S6",
+      "kind": "search metadata",
+      "url": "https://news.google.com/rss/search?q=Adobe%20ArtCraft%20open%20source%20clones%20software%20stocks&hl=en-US&gl=US&ceid=US:en",
+      "at": "2026-10-09T08:02:57.681Z",
+      "file": "data/runs/t-17/source-f412eb4879ec.txt",
+      "sha256": "f412eb4879ec8acd684436f0b244eb723eaab8b4d3eda6a3b0099c36c6ec225a",
+      "channel": "news",
+      "query": "Adobe ArtCraft open source clones software stocks",
+      "items": [
+        {
+          "title": "Developer Claims 'Software Is Over' After Building Open-Source Adobe Suite Clones With AI - BigGo Finance",
+          "url": "https://news.google.com/rss/articles/CBMidkFVX3lxTE1yWXZsdTBrVUZRTm1MQURRRkY3eUxjQ0hhUDhjWENkdUpnelZOWnJKVUVUaTR6X2dkTk9BTUR4cTBvVS1zMFd2WU1pRUxuVEJ4emwwbndMb1ZreWIzd1VLTERQUV92cmRiSTh1VmVpenRyTTAyUGc?oc=5",
+          "published": "Thu, 08 Oct 2026 18:20:00 GMT",
+          "publisher": "BigGo Finance"
+        },
+        {
+          "title": "“Software is over”: Bold AI developer takes aim at Adobe with open source clones - Ars Technica",
+          "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxNbnlQeEF0azJTVURrX1dtX3JUVjFRd0R0Z0t1S0hjQ1ZwSXh0TlhaVnFndEJHbzQtVU1PUFZVbmlzNGlCZmEyMGl6Wnc3NDFsMTdLVFQ0M0R0cHJDeWRGakJFUm93Vjh6ODVxTzR3MTJadGQyYnhXSnVwaUhsTzk1ZzFlVHJqa29rRlRmR3lOZUFWQ2p2Ymt5U3p6Ti1OQW5pclI5d3lycXBUZGYxSk53cWdiNA?oc=5",
+          "published": "Wed, 07 Oct 2026 21:56:42 GMT",
+          "publisher": "Ars Technica"
+        },
+        {
+          "title": "\"Software is over\": Developer uses AI to build free Adobe clones after frustration with cancellation fees - TechSpot",
+          "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxOcEJFeWltZkxOb3pmNERYY3hDTWk1T0tDNFRCQ0stZkFpLWNCMlpsTnZZTjFqTWRteEMtblEtbXlwdC1pMFlSRzJyM3dEMjE3YXFuZlpLTmxGRmk5c1IxWk5rdDcyMTZjMTJTVVA0b0lSY3gzLXlvZWZDbW52a2xrS2p0clFnczlBaFAzbHVsOU9NbHJs?oc=5",
+          "published": "Thu, 08 Oct 2026 11:15:00 GMT",
+          "publisher": "TechSpot"
+        },
+        {
+          "title": "A developer has created clones of Adobe Photoshop and other programs from Adobe using Claude Opus 5.5 - Mezha",
+          "url": "https://news.google.com/rss/articles/CBMidkFVX3lxTE9HNHpJakJtQWJHZUlUOVhDTkk5ZVJwMHJKSVNRcmNNNy1SUzhtQXA0MlJ3ZUd6Q3VCMXhhVlJVQXdtazd2Znh4YUZiTHZ6dEo1dkdVS1ZTVllibUJVcFVaOXZCWmtKY3MxWVZscGNqdU95VUhpRkHSAXZBVV95cUxPRzR6SWpCbUFiR2VJVDlYQ05JOWVScDBySklTUXJjTTctUlM4bUFwNDJSd2VHekN1QjF4YVZSVUF3bWs3dmZ4eGFGYkx2enRKNXZHVUtWU1ZZYm1CVXBVWjl2QlprSmNzMVlWbHBjanVPeVVIaUZB?oc=5",
+          "published": "Thu, 08 Oct 2026 12:46:00 GMT",
+          "publisher": "Mezha"
+        }
+      ],
+      "scope": "Eight search results; selected query, not a representative news census. Snippets and titles do not establish article contents."
+    },
+    {
+      "id": "S7",
+      "kind": "public article extract",
+      "url": "https://deepseek.com/en/news/deepseek-r1/",
+      "at": "2026-10-09T08:03:02.112Z",
+      "file": "data/runs/t-17/source-5dc227e3009a.txt",
+      "sha256": "5dc227e3009a54da4d181748912e23cf3e5ee06adc05de1b55a0710e046276f2",
+      "scope": "Static HTML stripped of markup, navigation tags and scripts; 14000-character cap; no browser rendering, may contain boilerplate or blocked-page text. Verify title and actual content."
+    },
+    {
+      "id": "S8",
+      "kind": "daily prices",
+      "url": "https://query1.finance.yahoo.com/v8/finance/chart/ADBE?period1=1769904000&period2=1791417600&interval=1d",
+      "at": "2026-10-09T08:03:16.411Z",
+      "file": "data/runs/t-17/source-545c8ab6ef49.txt",
+      "sha256": "545c8ab6ef4980070df3a3e1841f504dd9f47393b799a263c10ed6fb42c66ea7",
+      "symbol": "ADBE",
+      "scope": "Yahoo adjusted close when supplied; daily, not live ticks"
+    },
+    {
+      "id": "S9",
+      "kind": "daily prices",
+      "url": "https://query1.finance.yahoo.com/v8/finance/chart/QQQ?period1=1769904000&period2=1791417600&interval=1d",
+      "at": "2026-10-09T08:03:16.541Z",
+      "file": "data/runs/t-17/source-88276cd6ee0a.txt",
+      "sha256": "88276cd6ee0a209be5fe70f90b6a3faaafde552c98d090c0a7f4203b96b0b095",
+      "symbol": "QQQ",
+      "scope": "Yahoo adjusted close when supplied; daily, not live ticks"
+    },
+    {
+      "id": "S10",
+      "kind": "daily prices",
+      "url": "https://query1.finance.yahoo.com/v8/finance/chart/IGV?period1=1769904000&period2=1791417600&interval=1d",
+      "at": "2026-10-09T08:03:16.830Z",
+      "file": "data/runs/t-17/source-858286faa1ed.txt",
+      "sha256": "858286faa1ede7f27994c89ebf38193a72ff41820060f2ea33b6107d0d303abb",
+      "symbol": "IGV",
+      "scope": "Yahoo adjusted close when supplied; daily, not live ticks"
+    },
+    {
+      "id": "S11",
+      "kind": "search metadata",
+      "url": "https://news.google.com/rss/search?q=Adobe%20shares%20stock%20reaction%20AI%20clones%20Rust%20software%20selloff&hl=en-US&gl=US&ceid=US:en",
+      "at": "2026-10-09T08:03:17.487Z",
+      "file": "data/runs/t-17/source-2a3c6c3d20e8.txt",
+      "sha256": "2a3c6c3d20e87f3af1249fca64d70d7ddf0134f2fe822e73f3830d5bd547274f",
+      "channel": "news",
+      "query": "Adobe shares stock reaction AI clones Rust software selloff",
+      "items": [],
+      "scope": "Eight search results; selected query, not a representative news census. Snippets and titles do not establish article contents."
+    },
+    {
+      "id": "D-scan",
+      "kind": "captured dataset",
+      "file": "data/scan.json",
+      "sha256": "ff3c907c74a39c355e771091047ae97b9cfe0ea9d8cf9741912091efe12960a5",
+      "at": "2026-10-09T08:03:38.660Z",
+      "capturedAt": "2026-10-09T01:37:40.708Z",
+      "url": null
+    }
+  ],
+  "method": "Gen authored from actual Omega tool results. Citation existence checked; semantic accuracy requires review. No auto-adoption or trading."
+}
+#+end_atlas_proposal

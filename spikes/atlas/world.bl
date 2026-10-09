@@ -1,9 +1,12 @@
-; Optional network-backed Gen review world; always an isolated /tmp root.
-(ns atlas.world (:require [omega.ed.main :as editor] [atlas.review :as review]))
+; Isolated, persistent real Omega research desk. Never use the user's live world.
+(ns atlas.world (:require [omega.ed.main :as editor] [omega.gen :as adapter] [atlas.review :as review] [atlas.desk :as desk]))
 (def home (System/get_env "OMEGA_HOME"))
 (def root (System/get_env "ATLAS_WORLD"))
-(when-not (and root (String/starts_with? root "/tmp/omega-atlas."))
- (throw (ex-info "Atlas Gen world requires an isolated /tmp/omega-atlas.* root" {})))
-(def world (editor/start! {:root root :port (erlang/binary_to_integer (or (System/get_env "ATLAS_PORT") "8831")) :memory? true :step (review/step root home)}))
-(println (str "Atlas Gen review: " (:url world) "?file=spikes/atlas/desk.bl.org&use=atlas"))
+(when-not (and root (not= root home)) (throw (ex-info "Atlas requires its own world root" {})))
+(def port (erlang/binary_to_integer (or (System/get_env "ATLAS_PORT") "8831")))
+(when (= port 8790) (throw (ex-info "Refusing live-world port" {})))
+(def world (editor/start! {:root root :port port :memory? (= "1" (System/get_env "ATLAS_MEMORY"))
+ :step (adapter/step (review/provider home)) :tools (desk/tools home root) :max-steps 16 :system-prompt desk/prompt
+ :intent-factory (fn [sys] (desk/intents home root sys))}))
+(println (str "Atlas / real Omega research tools: " (:url world) "?file=spikes/atlas/desk.bl.org&use=atlas"))
 (receive :never nil)

@@ -17,3 +17,18 @@ test('research result opens a conversation beside the exact retained notebook an
  fr=F.d_handle(fr,taskdoc);assert.equal(get(F.d_focused(fr),'pkg-state').get('atlas').get(K('research?')),true);assert.ok(M.d_render(F.d_focused(fr)));const updated=source+'\n';fr=F.d_handle(fr,ev(K('type'),K('doc'),K('pane'),K('notebook'),K('path'),'desk.bl.org',K('text'),updated,K('rev'),'r-refresh'));assert.equal(get(get(fr,'layout'),'name'),'atlas-research');assert.equal(get(fr,'focus'),K('research'));assert.equal(get(A.d_model(F.d_editor(fr,K('notebook'))),'source'),updated);fr=F.d_handle(fr,key('i'));assert.equal(get(get(F.d_focused(fr),'minibuf'),'package'),'atlas');
  fr=F.d_handle(fr,key('Escape'));fr=F.d_handle(fr,ev(K('type'),K('command'),K('command'),K('atlas/home')));assert.equal(get(get(fr,'layout'),'name'),'atlas');assert.equal(get(A.d_model(F.d_focused(fr)),'source'),updated);
 });
+test('workspace is read via intent and task form emits real task/open',()=>{
+ let ed=use(M.d_boot(source,'spikes/atlas/desk.bl.org'));
+ ed=M.d_handle(ed,ev(K('type'),K('atlas/refresh')));let [,fx]=M.d_take_effects(ed).toArray();assert.ok(fx.toArray().some(x=>get(x,'intent')==='atlas/workspace'));
+ ed=M.d_handle(ed,ev(K('type'),K('intent-result'),K('then'),K('atlas/workspace-route'),K('ok?'),true,K('data'),ev(K('snapshot'),'{"runs":[]}')));assert.equal(get(ed,'pkg-state').get('atlas').get(K('workspace')),'{"runs":[]}');
+ ed=M.d_handle(ed,ev(K('type'),K('atlas/run'),K('question'),'What is already priced?'));[,fx]=M.d_take_effects(ed).toArray();const call=fx.toArray().find(x=>get(x,'intent')==='task/open');assert.ok(call);assert.match(get(get(call,'args'),'goal'),/What is already priced/);assert.match(get(get(call,'args'),'goal'),/desk_inventory/);
+});
+test('opening a published report retains the editable notebook in a real layout',()=>{
+ let fr=F.d_handle(F.d_single(M.d_boot(source,'spikes/atlas/desk.bl.org')),ev(K('type'),K('use'),K('package'),A.d_bl_package));const original=F.d_focused(fr);
+ fr=F.d_handle(fr,ev(K('type'),K('atlas/open'),K('path'),'spikes/atlas/data/runs/t-1/report.bl.org'));
+ assert.equal(get(get(fr,'layout'),'name'),'atlas-research');assert.equal(get(F.d_editor(fr,K('notebook')),'text'),get(original,'text'));assert.ok(get(fr,'effects').toArray().some(x=>get(x,'kind')===K('visit')&&get(x,'path').includes('report.bl.org')));
+});
+test('follow-up routes through the desk so completed reports can seed a new task',()=>{
+ let ed=use(M.d_boot('#+TITLE: Atlas research\n','task:t-test'));ed=M.d_handle(ed,ev(K('type'),K('atlas/reply')));ed=M.d_handle(M.d_handle(ed,ev(K('type'),K('text'),K('text'),'Test the strongest counterargument')),key('Enter'));
+ const [,fx]=M.d_take_effects(ed).toArray(),call=fx.toArray().find(x=>get(x,'intent')==='atlas/followup');assert.ok(call);assert.equal(get(get(call,'args'),'id'),'t-test');assert.equal(get(call,'then'),K('atlas/research-route'));
+});
