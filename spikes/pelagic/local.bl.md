@@ -2,7 +2,8 @@
 
 This optional build packages the real bl-ed editor, PELAGIC, its live Beam Lisp
 compiler, shaders and example patches as static files. It needs no Omega world
-or BEAM server at runtime. Omega's normal compiler pin/output are unchanged.
+or BEAM server at runtime. Omega's server compiler pin is unchanged; both launch
+modes now share the native-JS frontend graph.
 
 From `spikes/pelagic`, run the Beam Lisp launcher:
 
@@ -49,8 +50,9 @@ world intents and editor image storage are outside this PELAGIC bundle.
 conversion, audio-context creation, asset fetching, DOM text updates and downloads. Its public JS bridge unboxes numeric
 results. `pelagic.bridge` declares live namespace names and BL values directly,
 removing handwritten generated-name mangling. The DSP/GL interpreters remain
-native JS. The legacy Omega build uses a small compatibility boundary because
-its older compiler does not have annotated native interop.
+native JS. The regular server build now uses this same frontend boundary through
+PELAGIC’s package compiler pin; the older compatibility module remains for legacy
+checks. See [shared frontend and preparation](preparation.bl.md).
 
 ## Transparent browser performance
 
@@ -70,12 +72,12 @@ patch syntax. The page evaluator starts on demand for editor commands such as
 
 ## Verification
 
-The bundle pins compiler `341ca18d`; generic BL frame pacing is committed on
+The bundle pins compiler `a5f51eae`; generic BL frame pacing is committed on
 upstream main as `7861aa54`, following runtime improvements in `cb485ab3`.
-It contains 44 modules, 2,630,542 bytes of static files and a 602,493-byte ZIP
+It contains 44 modules, 2,766,014 bytes of static files and a 608,464-byte ZIP
 (integrity checked).
 
-The bundle passes **40 PELAGIC tests**, **73 vendored editor tests**,
+The bundle passes **46 PELAGIC tests**, **73 vendored editor tests**,
 **51 runtime tests**, native live interop and **14 static browser checks**.
 The unchanged presentation gate passes all 23 variants. The browser proof
 covers real C-Enter and Overtone macros during audio playback, worker isolation,
@@ -204,3 +206,11 @@ The final run exits successfully; its strict cadence/AV budget flags remain fals
 
 Real editor during pressure: ![pressure run](proof/realtime/used.jpg)
 After unuse: ![restored source](proof/realtime/unused.jpg)
+
+
+The current build also prepares the immutable default score through native BL at
+build time and interns repeated graph templates. Runtime loading uses a short-lived,
+bounded worker; live patterns retain normal BL evaluation. The actor-managed
+alternative, measurements, shared server build and current proof are documented
+in [preparation.bl.md](preparation.bl.md). Actor runtime assets are included only
+when explicitly requested with `PELAGIC_ACTORS=1`.

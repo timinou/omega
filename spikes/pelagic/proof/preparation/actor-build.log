@@ -1,0 +1,27 @@
+Running as unit: run-p3783472-i116818551.service; invocation ID: e81ce76f61df4a7c84c8c700f42ce8be
+bl-stage-hosts: 67 pinned host beams staged into /tmp/pelagic-speed-bl/build (app resource beam_lisp.app)
+POSITIVE OK   canonical rt/not_ lowers through the actor prelude
+POSITIVE OK   try with a catch lowers
+POSITIVE OK   try with a finalizer lowers
+POSITIVE OK   try/catch/finally lowers
+POSITIVE OK   a receive in the body and the finalizer lowers
+POSITIVE OK   a typed catch lowers
+POSITIVE OK   an unsafe integer literal is emitted exact
+NEGATIVE OK   an unknown remote inside a try body is refused
+NEGATIVE OK   an unknown erlang bif inside a catch handler is refused
+NEGATIVE OK   an unresolved global inside a finalizer is refused
+NEGATIVE OK   an unknown remote module is refused
+NEGATIVE OK   an unresolved global is refused
+NEGATIVE OK   a hand-built unresolved global ref is refused
+NEGATIVE OK   an unresolved global nested in a value is refused
+NEGATIVE OK   an unknown erlang bif is refused
+NEGATIVE OK   the earlier missed shape (vector subject, vector binder pattern) is refused
+js-actors: compiled 353 definitions from 2 sources -> /tmp/pelagic-actors-3970/out/prepare.mjs
+js-actors: 2938 host references audited (2402 remote, 536 global) against the allowlist
+js-actors: numeric gate — 0 raw-Number site(s) with witness, 4 checked H.arith site(s) -> /tmp/pelagic-actors-3970/out/numeric-gate.prepare.mjs.json
+:ok
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 1min 22.388s
+             CPU time consumed: 1min 9.880s
+                   Memory peak: 246M (swap: 128.2M)

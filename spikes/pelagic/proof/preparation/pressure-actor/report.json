@@ -1,0 +1,1651 @@
+{
+  "seconds": 60,
+  "profiled": false,
+  "errors": [],
+  "phases": [
+    {
+      "elapsed": 0.09318541898392141,
+      "edit": 0,
+      "metrics": {
+        "elapsedSeconds": 3.056,
+        "missedEvents": 0,
+        "schedulerTicks": 18,
+        "longTasks": 7,
+        "frameP95": 124,
+        "frameP99": 375,
+        "framesOver100Percent": 7.5,
+        "audioClock": {
+          "sampleRate": 48000,
+          "baseLatency": 0.010666666666666666,
+          "outputLatency": 0.032,
+          "outputTimestamp": {
+            "contextTime": 0.9696646666666666,
+            "performanceTime": 4276.899999976158
+          },
+          "nativeSeconds": 1.0026666666666666,
+          "wallSeconds": 1.144399999976158,
+          "rate": 0.8761505301359278
+        },
+        "avSubmitP95Ms": null,
+        "avSamples": 0,
+        "avHandoffP95Ms": null,
+        "activationMaxMs": 0,
+        "renderMaxMs": 20.600000023841858,
+        "compileP95": 503.10000002384186,
+        "preparation": {
+          "mode": "actor",
+          "ready": true,
+          "done": false,
+          "rows": 400,
+          "workMs": 607.9999999403954,
+          "chunkMaxMs": 96.10000002384186,
+          "error": null,
+          "elapsedMs": 2353.100000023842,
+          "startupMs": 505.7000000476837,
+          "chunkP95Ms": 48,
+          "nativeTurnP95Ms": 23,
+          "nativeTurnMaxMs": 23.30000001192093
+        },
+        "resources": {
+          "buildP95Ms": 8.600000381469727,
+          "buildMaxMs": 8.599999964237213,
+          "graphsCompletedAfterStart": 0,
+          "retiredNodes": 28,
+          "voices": 9,
+          "peakVoices": 14,
+          "triggered": 18,
+          "nodes": 154,
+          "buses": 2,
+          "intents": 9
+        },
+        "gpu": {
+          "worker": true,
+          "frames": 70,
+          "revision": null,
+          "clockSource": "audio-worklet",
+          "clockAgeMs": 6.5,
+          "gpuTime": {
+            "available": true,
+            "samples": 45,
+            "p95Ms": 1.1,
+            "maxMs": 1.191403,
+            "pending": 1,
+            "disjoint": 0
+          },
+          "frameP95": 18,
+          "frameP99": 100,
+          "workP95Ms": 13.2,
+          "workMaxMs": 98.5,
+          "frameMaxMs": 99.79999995231628,
+          "avSubmitP95Ms": null,
+          "avSubmitMaxMs": 0,
+          "avSamples": 0,
+          "scale": 1,
+          "programs": 3,
+          "targets": 3,
+          "renderSize": [
+            774,
+            351
+          ],
+          "outputSize": [
+            774,
+            351
+          ],
+          "transition": false,
+          "inFlight": true,
+          "pending": 0,
+          "validationPrograms": 3
+        },
+        "storageTransactions": 0,
+        "history": 0,
+        "namespaces": 0,
+        "evaluator": "worker",
+        "recording": null,
+        "audioTiming": {
+          "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+          "samples": 0,
+          "p95Ms": null,
+          "maxMs": null,
+          "ready": true,
+          "error": null
+        },
+        "avTiming": "audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured"
+      }
+    },
+    {
+      "elapsed": 10.489973228948656,
+      "edit": 1,
+      "metrics": {
+        "elapsedSeconds": 13.452600000023843,
+        "missedEvents": 0,
+        "schedulerTicks": 408,
+        "longTasks": 13,
+        "frameP95": 33,
+        "frameP99": 68,
+        "framesOver100Percent": 0.6589785831960462,
+        "audioClock": {
+          "sampleRate": 48000,
+          "baseLatency": 0.010666666666666666,
+          "outputLatency": 0.024,
+          "outputTimestamp": {
+            "contextTime": 11.340259333333332,
+            "performanceTime": 14675.599999964237
+          },
+          "nativeSeconds": 11.36,
+          "wallSeconds": 11.541099999964237,
+          "rate": 0.9843082548487754
+        },
+        "avSubmitP95Ms": 108.1202185792347,
+        "avSamples": 1,
+        "avHandoffP95Ms": 9.453551912568248,
+        "activationMaxMs": 5.300000011920929,
+        "renderMaxMs": 8.600000023841858,
+        "compileP95": 503.10000002384186,
+        "preparation": {
+          "mode": "actor",
+          "ready": true,
+          "done": true,
+          "rows": 1024,
+          "workMs": 1167.099999845028,
+          "chunkMaxMs": 96.10000002384186,
+          "error": null,
+          "elapsedMs": 3632.7000000476837,
+          "startupMs": 505.7000000476837,
+          "chunkP95Ms": 43.89999997615814,
+          "nativeTurnP95Ms": 2,
+          "nativeTurnMaxMs": 35.5
+        },
+        "resources": {
+          "buildP95Ms": 6.900000095367432,
+          "buildMaxMs": 8.599999964237213,
+          "graphsCompletedAfterStart": 0,
+          "retiredNodes": 0,
+          "voices": 13,
+          "peakVoices": 20,
+          "triggered": 43,
+          "nodes": 184,
+          "buses": 2,
+          "intents": 34
+        },
+        "gpu": {
+          "worker": true,
+          "frames": 924,
+          "revision": 2,
+          "clockSource": "audio-worklet",
+          "clockAgeMs": 5.899999976158142,
+          "gpuTime": {
+            "available": true,
+            "samples": 858,
+            "p95Ms": 1.4,
+            "maxMs": 2.088528,
+            "pending": 3,
+            "disjoint": 0
+          },
+          "frameP95": 18,
+          "frameP99": 21,
+          "workP95Ms": 3.3,
+          "workMaxMs": 98.5,
+          "frameMaxMs": 99.79999995231628,
+          "avSubmitP95Ms": 4,
+          "avSubmitMaxMs": 4.120218579235058,
+          "avSamples": 1,
+          "scale": 1,
+          "programs": 3,
+          "targets": 3,
+          "renderSize": [
+            774,
+            351
+          ],
+          "outputSize": [
+            774,
+            351
+          ],
+          "transition": false,
+          "inFlight": true,
+          "pending": 0,
+          "validationPrograms": 3
+        },
+        "storageTransactions": 0,
+        "history": 1,
+        "namespaces": 0,
+        "evaluator": "worker",
+        "recording": null,
+        "audioTiming": {
+          "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+          "samples": 0,
+          "p95Ms": null,
+          "maxMs": null,
+          "ready": true,
+          "error": null
+        },
+        "avTiming": "audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured"
+      }
+    },
+    {
+      "elapsed": 21.001807871973142,
+      "edit": 2,
+      "metrics": {
+        "elapsedSeconds": 24.137300000011923,
+        "missedEvents": 0,
+        "schedulerTicks": 696,
+        "longTasks": 31,
+        "frameP95": 65,
+        "frameP99": 143,
+        "framesOver100Percent": 2.0787746170678334,
+        "audioClock": {
+          "sampleRate": 48000,
+          "baseLatency": 0.010666666666666666,
+          "outputLatency": 0.04,
+          "outputTimestamp": {
+            "contextTime": 19.968059333333336,
+            "performanceTime": 25338.30000001192
+          },
+          "nativeSeconds": 19.994666666666667,
+          "wallSeconds": 22.22559999996424,
+          "rate": 0.8996232572663433
+        },
+        "avSubmitP95Ms": 134.91803278688684,
+        "avSamples": 2,
+        "avHandoffP95Ms": 17.584699453552233,
+        "activationMaxMs": 5.300000011920929,
+        "renderMaxMs": 42.10000002384186,
+        "compileP95": 503.10000002384186,
+        "preparation": {
+          "mode": "actor",
+          "ready": true,
+          "done": true,
+          "rows": 1024,
+          "workMs": 1167.099999845028,
+          "chunkMaxMs": 96.10000002384186,
+          "error": null,
+          "elapsedMs": 3632.7000000476837,
+          "startupMs": 505.7000000476837,
+          "chunkP95Ms": 43.89999997615814,
+          "nativeTurnP95Ms": 5,
+          "nativeTurnMaxMs": 76.80000001192093
+        },
+        "resources": {
+          "buildP95Ms": 14.100000381469727,
+          "buildMaxMs": 53.69999998807907,
+          "graphsCompletedAfterStart": 0,
+          "retiredNodes": 0,
+          "voices": 51,
+          "peakVoices": 52,
+          "triggered": 127,
+          "nodes": 591,
+          "buses": 6,
+          "intents": 118
+        },
+        "gpu": {
+          "worker": true,
+          "frames": 1656,
+          "revision": 3,
+          "clockSource": "audio-worklet",
+          "clockAgeMs": 7.799999952316284,
+          "gpuTime": {
+            "available": true,
+            "samples": 1323,
+            "p95Ms": 3.1,
+            "maxMs": 3.597674,
+            "pending": 4,
+            "disjoint": 0
+          },
+          "frameP95": 19,
+          "frameP99": 27,
+          "workP95Ms": 4.4,
+          "workMaxMs": 98.5,
+          "frameMaxMs": 166.5999999642372,
+          "avSubmitP95Ms": 4,
+          "avSubmitMaxMs": 4.120218579235058,
+          "avSamples": 2,
+          "scale": 1,
+          "programs": 3,
+          "targets": 3,
+          "renderSize": [
+            960,
+            540
+          ],
+          "outputSize": [
+            1280,
+            720
+          ],
+          "transition": false,
+          "inFlight": true,
+          "pending": 1,
+          "validationPrograms": 3
+        },
+        "storageTransactions": 1,
+        "history": 2,
+        "namespaces": 0,
+        "evaluator": "worker",
+        "recording": {
+          "bytes": 449384,
+          "pendingBytes": 74713,
+          "chunks": 4,
+          "error": null
+        },
+        "audioTiming": {
+          "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+          "samples": 9,
+          "p95Ms": 0.01949055989669546,
+          "maxMs": 0.01949055989669546,
+          "ready": true,
+          "error": null
+        },
+        "avTiming": "audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured"
+      }
+    },
+    {
+      "elapsed": 30.545580213947687,
+      "edit": 3,
+      "metrics": {
+        "elapsedSeconds": 33.552700000047686,
+        "missedEvents": 0,
+        "schedulerTicks": 1019,
+        "longTasks": 40,
+        "frameP95": 62,
+        "frameP99": 143,
+        "framesOver100Percent": 1.8996960486322187,
+        "audioClock": {
+          "sampleRate": 48000,
+          "baseLatency": 0.010666666666666666,
+          "outputLatency": 0.04,
+          "outputTimestamp": {
+            "contextTime": 27.003522333333333,
+            "performanceTime": 34765.69999998808
+          },
+          "nativeSeconds": 27.037333333333333,
+          "wallSeconds": 31.641099999964236,
+          "rate": 0.8545004229740398
+        },
+        "avSubmitP95Ms": 134.91803278688684,
+        "avSamples": 3,
+        "avHandoffP95Ms": 17.584699453552233,
+        "activationMaxMs": 5.300000011920929,
+        "renderMaxMs": 11.800000011920929,
+        "compileP95": 503.10000002384186,
+        "preparation": {
+          "mode": "actor",
+          "ready": true,
+          "done": true,
+          "rows": 1024,
+          "workMs": 1167.099999845028,
+          "chunkMaxMs": 96.10000002384186,
+          "error": null,
+          "elapsedMs": 3632.7000000476837,
+          "startupMs": 505.7000000476837,
+          "chunkP95Ms": 43.89999997615814,
+          "nativeTurnP95Ms": 5,
+          "nativeTurnMaxMs": 76.80000001192093
+        },
+        "resources": {
+          "buildP95Ms": 14.100000381469727,
+          "buildMaxMs": 53.69999998807907,
+          "graphsCompletedAfterStart": 0,
+          "retiredNodes": 0,
+          "voices": 42,
+          "peakVoices": 54,
+          "triggered": 188,
+          "nodes": 462,
+          "buses": 6,
+          "intents": 179
+        },
+        "gpu": {
+          "worker": true,
+          "frames": 2351,
+          "revision": 4,
+          "clockSource": "audio-worklet",
+          "clockAgeMs": 2.400000035762787,
+          "gpuTime": {
+            "available": true,
+            "samples": 1846,
+            "p95Ms": 3.2,
+            "maxMs": 4.186514,
+            "pending": 3,
+            "disjoint": 0
+          },
+          "frameP95": 19,
+          "frameP99": 29,
+          "workP95Ms": 4.4,
+          "workMaxMs": 298.80000001192093,
+          "frameMaxMs": 300,
+          "avSubmitP95Ms": 13,
+          "avSubmitMaxMs": 12.85901636959963,
+          "avSamples": 3,
+          "scale": 1,
+          "programs": 3,
+          "targets": 3,
+          "renderSize": [
+            774,
+            351
+          ],
+          "outputSize": [
+            774,
+            351
+          ],
+          "transition": false,
+          "inFlight": true,
+          "pending": 1,
+          "validationPrograms": 3
+        },
+        "storageTransactions": 0,
+        "history": 3,
+        "namespaces": 0,
+        "evaluator": "worker",
+        "recording": null,
+        "audioTiming": {
+          "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+          "samples": 23,
+          "p95Ms": 0.019180297851306705,
+          "maxMs": 0.01949055989669546,
+          "ready": true,
+          "error": null
+        },
+        "avTiming": "audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured"
+      }
+    },
+    {
+      "elapsed": 40.31685076496797,
+      "edit": 4,
+      "metrics": {
+        "elapsedSeconds": 43.333,
+        "missedEvents": 0,
+        "schedulerTicks": 1396,
+        "longTasks": 42,
+        "frameP95": 56,
+        "frameP99": 124,
+        "framesOver100Percent": 1.4293567894447499,
+        "audioClock": {
+          "sampleRate": 48000,
+          "baseLatency": 0.010666666666666666,
+          "outputLatency": 0.04,
+          "outputTimestamp": {
+            "contextTime": 34.773868666666665,
+            "performanceTime": 44539.69999998808
+          },
+          "nativeSeconds": 34.80266666666667,
+          "wallSeconds": 41.42129999995232,
+          "rate": 0.840211839481299
+        },
+        "avSubmitP95Ms": 134.91803278688684,
+        "avSamples": 4,
+        "avHandoffP95Ms": 17.584699453552233,
+        "activationMaxMs": 5.300000011920929,
+        "renderMaxMs": 5.800000011920929,
+        "compileP95": 503.10000002384186,
+        "preparation": {
+          "mode": "actor",
+          "ready": true,
+          "done": true,
+          "rows": 1024,
+          "workMs": 1167.099999845028,
+          "chunkMaxMs": 96.10000002384186,
+          "error": null,
+          "elapsedMs": 3632.7000000476837,
+          "startupMs": 505.7000000476837,
+          "chunkP95Ms": 43.89999997615814,
+          "nativeTurnP95Ms": 4,
+          "nativeTurnMaxMs": 76.80000001192093
+        },
+        "resources": {
+          "buildP95Ms": 12.300000190734863,
+          "buildMaxMs": 53.69999998807907,
+          "graphsCompletedAfterStart": 0,
+          "retiredNodes": 0,
+          "voices": 44,
+          "peakVoices": 55,
+          "triggered": 266,
+          "nodes": 498,
+          "buses": 6,
+          "intents": 256
+        },
+        "gpu": {
+          "worker": true,
+          "frames": 3127,
+          "revision": 5,
+          "clockSource": "audio-worklet",
+          "clockAgeMs": 26.5,
+          "gpuTime": {
+            "available": true,
+            "samples": 2513,
+            "p95Ms": 3.1,
+            "maxMs": 4.186514,
+            "pending": 2,
+            "disjoint": 0
+          },
+          "frameP95": 19,
+          "frameP99": 28,
+          "workP95Ms": 4.4,
+          "workMaxMs": 298.80000001192093,
+          "frameMaxMs": 300,
+          "avSubmitP95Ms": 13,
+          "avSubmitMaxMs": 12.85901636959963,
+          "avSamples": 4,
+          "scale": 1,
+          "programs": 3,
+          "targets": 3,
+          "renderSize": [
+            774,
+            351
+          ],
+          "outputSize": [
+            774,
+            351
+          ],
+          "transition": false,
+          "inFlight": false,
+          "pending": 0,
+          "validationPrograms": 3
+        },
+        "storageTransactions": 0,
+        "history": 4,
+        "namespaces": 0,
+        "evaluator": "worker",
+        "recording": null,
+        "audioTiming": {
+          "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+          "samples": 39,
+          "p95Ms": 0.01949055989669546,
+          "maxMs": 0.022328694662121507,
+          "ready": true,
+          "error": null
+        },
+        "avTiming": "audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured"
+      }
+    },
+    {
+      "elapsed": 50.16825319296913,
+      "edit": 5,
+      "metrics": {
+        "elapsedSeconds": 53.133100000023845,
+        "missedEvents": 0,
+        "schedulerTicks": 1687,
+        "longTasks": 54,
+        "frameP95": 55,
+        "frameP99": 116,
+        "framesOver100Percent": 1.3833110218652387,
+        "audioClock": {
+          "sampleRate": 48000,
+          "baseLatency": 0.010666666666666666,
+          "outputLatency": 0.04,
+          "outputTimestamp": {
+            "contextTime": 41.77562533333333,
+            "performanceTime": 54322.30000001192
+          },
+          "nativeSeconds": 41.81333333333333,
+          "wallSeconds": 51.2215,
+          "rate": 0.8163238744147152
+        },
+        "avSubmitP95Ms": 134.91803278688684,
+        "avSamples": 4,
+        "avHandoffP95Ms": 19.02732240436933,
+        "activationMaxMs": 5.300000011920929,
+        "renderMaxMs": 7.399999976158142,
+        "compileP95": 503.10000002384186,
+        "preparation": {
+          "mode": "actor",
+          "ready": true,
+          "done": true,
+          "rows": 1024,
+          "workMs": 1167.099999845028,
+          "chunkMaxMs": 96.10000002384186,
+          "error": null,
+          "elapsedMs": 3632.7000000476837,
+          "startupMs": 505.7000000476837,
+          "chunkP95Ms": 43.89999997615814,
+          "nativeTurnP95Ms": 4,
+          "nativeTurnMaxMs": 76.80000001192093
+        },
+        "resources": {
+          "buildP95Ms": 11.5,
+          "buildMaxMs": 53.69999998807907,
+          "graphsCompletedAfterStart": 0,
+          "retiredNodes": 0,
+          "voices": 50,
+          "peakVoices": 56,
+          "triggered": 335,
+          "nodes": 600,
+          "buses": 6,
+          "intents": 256
+        },
+        "gpu": {
+          "worker": true,
+          "frames": 3890,
+          "revision": 6,
+          "clockSource": "audio-worklet",
+          "clockAgeMs": 1.300000011920929,
+          "gpuTime": {
+            "available": true,
+            "samples": 3162,
+            "p95Ms": 3.1,
+            "maxMs": 4.186514,
+            "pending": 2,
+            "disjoint": 0
+          },
+          "frameP95": 19,
+          "frameP99": 28,
+          "workP95Ms": 4.3,
+          "workMaxMs": 298.80000001192093,
+          "frameMaxMs": 300,
+          "avSubmitP95Ms": 13,
+          "avSubmitMaxMs": 12.85901636959963,
+          "avSamples": 5,
+          "scale": 1,
+          "programs": 3,
+          "targets": 3,
+          "renderSize": [
+            774,
+            358
+          ],
+          "outputSize": [
+            774,
+            358
+          ],
+          "transition": false,
+          "inFlight": true,
+          "pending": 1,
+          "validationPrograms": 3
+        },
+        "storageTransactions": 0,
+        "history": 5,
+        "namespaces": 0,
+        "evaluator": "worker",
+        "recording": null,
+        "audioTiming": {
+          "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+          "samples": 53,
+          "p95Ms": 0.01949055989669546,
+          "maxMs": 0.022328694662121507,
+          "ready": true,
+          "error": null
+        },
+        "avTiming": "audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured"
+      }
+    }
+  ],
+  "stalls": [
+    {
+      "mainThreadMs": 250,
+      "main": {
+        "start": 1791534080665.1,
+        "end": 1791534080915.9001
+      },
+      "worker": {
+        "before": 1689,
+        "start": 1791534080626.8,
+        "after": 1709,
+        "end": 1791534080878.6
+      }
+    },
+    {
+      "mainThreadMs": 500,
+      "main": {
+        "start": 1791534099884.6,
+        "end": 1791534100384.7002
+      },
+      "worker": {
+        "before": 3139,
+        "start": 1791534099854.5,
+        "after": 3179,
+        "end": 1791534100360.2
+      }
+    }
+  ],
+  "take": {
+    "schema": "omega.pelagic.take",
+    "version": 1,
+    "id": "9215dafb-5c4d-4851-a3b6-5edbc52b8eac",
+    "chunks": 6,
+    "bytes": 702321,
+    "mime": "video/webm;codecs=vp8,opus",
+    "duration": 12.129099999964238,
+    "complete": true,
+    "error": null,
+    "capture": {
+      "width": 1280,
+      "height": 720,
+      "requestedFPS": 30,
+      "geometryScale": 0.75
+    },
+    "session": {
+      "schema": "omega.pelagic",
+      "version": 1,
+      "state": {
+        "assets": {},
+        "config": {
+          "bass": true,
+          "bpm": 122,
+          "crossfade": 0.5,
+          "deck-a": 0.9,
+          "deck-b": 0.9,
+          "echo": 0.22,
+          "eq-a-high": 0,
+          "eq-a-low": 0,
+          "eq-a-mid": 0,
+          "eq-b-high": 0,
+          "eq-b-low": 0,
+          "eq-b-mid": 0,
+          "filter": 1.25,
+          "freeze": false,
+          "hat": true,
+          "kick": true,
+          "master": 0.78,
+          "melody": true,
+          "scene": -1,
+          "snare": true,
+          "space": 0.28,
+          "swing": 0.12
+        },
+        "patterns": {
+          "melody": {
+            "beats": 8,
+            "kind": "pattern",
+            "plan": {
+              "bundles": [
+                {
+                  "kind": "bundle",
+                  "time": 0,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.043,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 0.9,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.18,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.043,
+                        "dur": 0.9,
+                        "freq": 587.3295358348153
+                      },
+                      "synth": "voice"
+                    }
+                  ]
+                },
+                {
+                  "kind": "bundle",
+                  "time": 737.7049180327868,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.043,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 0.9,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.18,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.043,
+                        "dur": 0.9,
+                        "freq": 880.0000000000003
+                      },
+                      "synth": "voice"
+                    }
+                  ]
+                },
+                {
+                  "kind": "bundle",
+                  "time": 1352.4590163934427,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.043,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 0.9,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.18,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.043,
+                        "dur": 0.9,
+                        "freq": 698.456462866008
+                      },
+                      "synth": "voice"
+                    }
+                  ]
+                },
+                {
+                  "kind": "bundle",
+                  "time": 1967.2131147540983,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.043,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 0.9,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.18,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.043,
+                        "dur": 0.9,
+                        "freq": 1046.502261202395
+                      },
+                      "synth": "voice"
+                    }
+                  ]
+                },
+                {
+                  "kind": "bundle",
+                  "time": 2704.9180327868853,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.043,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 0.9,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.18,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.043,
+                        "dur": 0.9,
+                        "freq": 880.0000000000003
+                      },
+                      "synth": "voice"
+                    }
+                  ]
+                },
+                {
+                  "kind": "bundle",
+                  "time": 3442.622950819672,
+                  "voices": [
+                    {
+                      "graph": {
+                        "inputs": [
+                          {
+                            "default": 0.043,
+                            "key": "amp",
+                            "ugen": "param"
+                          },
+                          {
+                            "envelope": {
+                              "attack": 0.008,
+                              "envelope": "perc",
+                              "release": {
+                                "default": 0.9,
+                                "key": "dur",
+                                "ugen": "param"
+                              }
+                            },
+                            "options": {},
+                            "ugen": "env-gen"
+                          },
+                          {
+                            "inputs": [
+                              {
+                                "freq": {
+                                  "default": 440,
+                                  "key": "freq",
+                                  "ugen": "param"
+                                },
+                                "ugen": "sin-osc"
+                              },
+                              {
+                                "inputs": [
+                                  0.18,
+                                  {
+                                    "freq": {
+                                      "inputs": [
+                                        {
+                                          "default": 440,
+                                          "key": "freq",
+                                          "ugen": "param"
+                                        },
+                                        2.01
+                                      ],
+                                      "ugen": "mul"
+                                    },
+                                    "ugen": "sin-osc"
+                                  }
+                                ],
+                                "ugen": "mul"
+                              }
+                            ],
+                            "ugen": "add"
+                          }
+                        ],
+                        "ugen": "mul"
+                      },
+                      "kind": "voice",
+                      "params": {
+                        "amp": 0.043,
+                        "dur": 0.9,
+                        "freq": 659.2551138257401
+                      },
+                      "synth": "voice"
+                    }
+                  ]
+                }
+              ],
+              "kind": "play"
+            },
+            "stem": "melody"
+          }
+        },
+        "scenes": {
+          "cathedral": {
+            "mappings": {
+              "zoom": {
+                "amount": 0.18,
+                "signal": [
+                  "stem",
+                  "bass",
+                  "level"
+                ]
+              }
+            },
+            "shader": "// Original live-set variation: folded chromatic architecture.\nuniform float iBeat;\nuniform float iZoom;\nuniform float iIntensity;\nuniform float iSymmetry;\nuniform float iFeedback;\nuniform float iPalette;\n#define PI 3.14159265359\nfloat edge(float d,float w){return w/(abs(d)+w);}\nmat2 turn(float a){return mat2(cos(a),-sin(a),sin(a),cos(a));}\nvec3 ink(float p){return .55+.45*cos(6.28318*(vec3(.03,.28,.55)+p));}\nvoid mainImage(out vec4 c,in vec2 coord){\n vec2 uv=(coord-.5*iResolution.xy)/iResolution.y;\n float low=iAudioBass,hit=iAudioOnset,mid=iAudioMid,t=iGlobalTime;\n vec2 p=turn(t*.06+floor(iBeat/16.)*.16)*uv*(1.-iZoom-low*.12);\n float r=length(p),a=atan(p.y,p.x),n=max(3.,iSymmetry);\n float fold=abs(mod(a+PI/n,2.*PI/n)-PI/n);\n vec2 k=r*vec2(cos(fold),sin(fold));\n vec3 light=vec3(0.);\n for(int j=0;j<8;j++){\n  float f=float(j),z=fract(f/8.+t*.052),radius=.06+z*z*.88;\n  float d=k.x-radius-.05*sin(k.y*13.+t*.4+f);\n  vec3 col=ink(f*.105+t*.008+iPalette*.3);\n  light+=col*pow(edge(d,.0016+.003*hit),1.7)*(.3+z)*(.3+low*1.8);\n  light+=col*edge(k.y-k.x*(.22+.06*sin(t*.3+f)),.0012)*edge(r-radius,.025)*mid*1.3;\n }\n float spoke=edge(sin(a*n+sin(r*10.-t)*.18),.015)*smoothstep(.08,.3,r);\n light+=vec3(.05,.85,.9)*spoke*(.08+iAudioHigh*.45);\n light*=1.-smoothstep(.65,.95,r);\n light=1.-exp(-light*(iIntensity+.3)*2.2);\n light=mix(light,texture2D(iChannel1,coord/iResolution.xy).rgb,clamp(iFeedback,0.,.6));\n c=vec4(light,1.);\n}\n"
+          }
+        },
+        "variation": {
+          "density": 1,
+          "seed": 37,
+          "transpose": 0
+        },
+        "visual": {
+          "beats": 1,
+          "feedback": 0.08,
+          "intensity": 1.65,
+          "mix": 0.2,
+          "overlay": "afterglow",
+          "palette": 0,
+          "scene": "afterglow",
+          "symmetry": 8,
+          "transition": "iris"
+        }
+      },
+      "snapshots": {},
+      "assets": []
+    },
+    "events": [
+      {
+        "kind": "play",
+        "audioTime": 0.07466666666666667,
+        "beat": 0,
+        "mode": "performance"
+      },
+      {
+        "kind": "queued",
+        "audioTime": 0.7573333333333333,
+        "beat": 1.2484666666666666,
+        "revision": 1,
+        "targetBeat": 4,
+        "audioChanged": true
+      },
+      {
+        "kind": "evaluate",
+        "audioTime": 0.816,
+        "beat": 1.3677555555555554,
+        "edits": 7,
+        "source": "#+TITLE: PELAGIC Performance 002\n\n* Play\nUse the PELAGIC package and its source/stage layout.\nPress PERFORM, then C-Enter. Edit the notes below and evaluate again.\nThis patch needs no imported files. It installs the bright prism from the\nperformed set over the original native rhythm and harmonic field.\n\n* Live patch\n#+begin_src beam-lisp\n(o/definst voice [freq 440 amp 0.043 dur 0.9]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/mix [(o/sin-osc freq) (* 0.18 (o/sin-osc (* freq 2.01)))])))\n(def metro (o/metronome 122))\n(av/session\n  (av/configure {:master 0.78 :swing 0.12})\n  (av/pattern :melody 8\n    (o/play\n      (o/at (metro 0) (voice :freq (o/midi->hz 74)))\n      (o/at (metro 1.5) (voice :freq (o/midi->hz 81)))\n      (o/at (metro 2.75) (voice :freq (o/midi->hz 77)))\n      (o/at (metro 4) (voice :freq (o/midi->hz 84)))\n      (o/at (metro 5.5) (voice :freq (o/midi->hz 81)))\n      (o/at (metro 7) (voice :freq (o/midi->hz 76)))))\n  (av/scene :cathedral {:shader \"// Original live-set variation: folded chromatic architecture.\\nuniform float iBeat;\\nuniform float iZoom;\\nuniform float iIntensity;\\nuniform float iSymmetry;\\nuniform float iFeedback;\\nuniform float iPalette;\\n#define PI 3.14159265359\\nfloat edge(float d,float w){return w/(abs(d)+w);}\\nmat2 turn(float a){return mat2(cos(a),-sin(a),sin(a),cos(a));}\\nvec3 ink(float p){return .55+.45*cos(6.28318*(vec3(.03,.28,.55)+p));}\\nvoid mainImage(out vec4 c,in vec2 coord){\\n vec2 uv=(coord-.5*iResolution.xy)/iResolution.y;\\n float low=iAudioBass,hit=iAudioOnset,mid=iAudioMid,t=iGlobalTime;\\n vec2 p=turn(t*.06+floor(iBeat/16.)*.16)*uv*(1.-iZoom-low*.12);\\n float r=length(p),a=atan(p.y,p.x),n=max(3.,iSymmetry);\\n float fold=abs(mod(a+PI/n,2.*PI/n)-PI/n);\\n vec2 k=r*vec2(cos(fold),sin(fold));\\n vec3 light=vec3(0.);\\n for(int j=0;j<8;j++){\\n  float f=float(j),z=fract(f/8.+t*.052),radius=.06+z*z*.88;\\n  float d=k.x-radius-.05*sin(k.y*13.+t*.4+f);\\n  vec3 col=ink(f*.105+t*.008+iPalette*.3);\\n  light+=col*pow(edge(d,.0016+.003*hit),1.7)*(.3+z)*(.3+low*1.8);\\n  light+=col*edge(k.y-k.x*(.22+.06*sin(t*.3+f)),.0012)*edge(r-radius,.025)*mid*1.3;\\n }\\n float spoke=edge(sin(a*n+sin(r*10.-t)*.18),.015)*smoothstep(.08,.3,r);\\n light+=vec3(.05,.85,.9)*spoke*(.08+iAudioHigh*.45);\\n light*=1.-smoothstep(.65,.95,r);\\n light=1.-exp(-light*(iIntensity+.3)*2.2);\\n light=mix(light,texture2D(iChannel1,coord/iResolution.xy).rgb,clamp(iFeedback,0.,.6));\\n c=vec4(light,1.);\\n}\\n\" :mappings {:zoom {:signal [:stem :bass :level] :amount 0.18}}}) (av/gesture :drop) (av/launch :cathedral {:transition :iris :beats 8}) (av/layer :afterglow 0.14) (av/visual {:intensity 1.65 :symmetry 8 :feedback 0.08}))\n#+end_src\n\n* Perform\nUse BUILD / BREAK / DROP / RELEASE and the four scene buttons.\nUNDO restores the complete preceding revision, including its patterns and scene.\nSave a home snapshot before exploring; recall it to return at a bar boundary.\nImport audio into either deck for a local-file DJ handoff.\nREC captures the actual live mix and stage into bounded local storage.\ng ! is panic. g s stops. :(ed/unuse \"pelagic\") returns the original editor.\n"
+      },
+      {
+        "kind": "armed",
+        "audioTime": 0.88,
+        "beat": 1.4978888888888888,
+        "revision": 1,
+        "time": 2.110546448087432
+      },
+      {
+        "kind": "queued",
+        "audioTime": 0.952,
+        "beat": 1.6442888888888887,
+        "revision": 2,
+        "targetBeat": 4,
+        "audioChanged": true
+      },
+      {
+        "kind": "evaluate",
+        "audioTime": 0.9706666666666667,
+        "beat": 1.6822444444444444,
+        "edits": 2,
+        "source": "(av/commit {:quantize :beat :edits [(av/launch :cathedral {:beats 1}) (av/layer :afterglow 0.2)]})"
+      },
+      {
+        "kind": "armed",
+        "audioTime": 1.0453333333333332,
+        "beat": 1.8340666666666663,
+        "revision": 2,
+        "time": 2.110546448087432
+      },
+      {
+        "kind": "active",
+        "audioTime": 2.1173333333333333,
+        "beat": 4.0138,
+        "revision": 2
+      },
+      {
+        "kind": "queued",
+        "audioTime": 11.264,
+        "beat": 22.61202222222222,
+        "revision": 3,
+        "targetBeat": 25,
+        "audioChanged": false
+      },
+      {
+        "kind": "evaluate",
+        "audioTime": 11.317333333333334,
+        "beat": 22.720466666666667,
+        "edits": 2,
+        "source": "(av/commit {:quantize :beat :edits [(av/launch :current {:beats 1}) (av/layer :afterglow 0.2)]})"
+      },
+      {
+        "kind": "active",
+        "audioTime": 12.456,
+        "beat": 25.035755555555557,
+        "revision": 3
+      },
+      {
+        "kind": "record-start",
+        "audioTime": 13.016,
+        "beat": 26.174422222222223,
+        "id": "9215dafb-5c4d-4851-a3b6-5edbc52b8eac"
+      },
+      {
+        "kind": "queued",
+        "audioTime": 19.717333333333332,
+        "beat": 39.800466666666665,
+        "revision": 4,
+        "targetBeat": 43,
+        "audioChanged": false
+      },
+      {
+        "kind": "evaluate",
+        "audioTime": 19.797333333333334,
+        "beat": 39.96313333333334,
+        "edits": 2,
+        "source": "(av/commit {:quantize :beat :edits [(av/launch :afterglow {:beats 1}) (av/layer :afterglow 0.2)]})"
+      },
+      {
+        "kind": "active",
+        "audioTime": 21.304,
+        "beat": 43.026688888888884,
+        "revision": 4
+      },
+      {
+        "kind": "record-stop",
+        "audioTime": 22.282666666666668,
+        "beat": 45.016644444444445,
+        "take": {
+          "id": "9215dafb-5c4d-4851-a3b6-5edbc52b8eac",
+          "chunks": 6,
+          "bytes": 702321,
+          "mime": "video/webm;codecs=vp8,opus",
+          "duration": 12.129099999964238,
+          "complete": true,
+          "error": null
+        }
+      }
+    ],
+    "diagnostics": {
+      "elapsedSeconds": 27.256400000035764,
+      "missedEvents": 0,
+      "schedulerTicks": 787,
+      "longTasks": 36,
+      "frameP95": 67,
+      "frameP99": 143,
+      "framesOver100Percent": 2.095808383233533,
+      "audioClock": {
+        "sampleRate": 48000,
+        "baseLatency": 0.010666666666666666,
+        "outputLatency": 0.04,
+        "outputTimestamp": {
+          "contextTime": 22.243916666666667,
+          "performanceTime": 28455.599999964237
+        },
+        "nativeSeconds": 22.285333333333334,
+        "wallSeconds": 25.345099999964237,
+        "rate": 0.8792758100526248
+      },
+      "avSubmitP95Ms": 134.91803278688684,
+      "avSamples": 3,
+      "avHandoffP95Ms": 17.584699453552233,
+      "activationMaxMs": 5.300000011920929,
+      "renderMaxMs": 42.10000002384186,
+      "compileP95": 503.10000002384186,
+      "preparation": {
+        "mode": "actor",
+        "ready": true,
+        "done": true,
+        "rows": 1024,
+        "workMs": 1167.099999845028,
+        "chunkMaxMs": 96.10000002384186,
+        "error": null,
+        "elapsedMs": 3632.7000000476837,
+        "startupMs": 505.7000000476837,
+        "chunkP95Ms": 43.89999997615814,
+        "nativeTurnP95Ms": 5,
+        "nativeTurnMaxMs": 76.80000001192093
+      },
+      "resources": {
+        "buildP95Ms": 15.100000381469727,
+        "buildMaxMs": 53.69999998807907,
+        "graphsCompletedAfterStart": 0,
+        "retiredNodes": 0,
+        "voices": 51,
+        "peakVoices": 54,
+        "triggered": 148,
+        "nodes": 590,
+        "buses": 6,
+        "intents": 139
+      },
+      "gpu": {
+        "worker": true,
+        "frames": 1903,
+        "revision": 4,
+        "clockSource": "audio-worklet",
+        "clockAgeMs": 13.100000023841858,
+        "gpuTime": {
+          "available": true,
+          "samples": 1457,
+          "p95Ms": 3.2,
+          "maxMs": 4.186514,
+          "pending": 4,
+          "disjoint": 0
+        },
+        "frameP95": 19,
+        "frameP99": 29,
+        "workP95Ms": 4.5,
+        "workMaxMs": 98.5,
+        "frameMaxMs": 166.5999999642372,
+        "avSubmitP95Ms": 13,
+        "avSubmitMaxMs": 12.85901636959963,
+        "avSamples": 3,
+        "scale": 1,
+        "programs": 3,
+        "targets": 3,
+        "renderSize": [
+          960,
+          540
+        ],
+        "outputSize": [
+          1280,
+          720
+        ],
+        "transition": false,
+        "inFlight": true,
+        "pending": 1,
+        "validationPrograms": 3
+      },
+      "storageTransactions": 0,
+      "history": 3,
+      "namespaces": 0,
+      "evaluator": "worker",
+      "recording": null,
+      "audioTiming": {
+        "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+        "samples": 14,
+        "p95Ms": 0.01949055989669546,
+        "maxMs": 0.01949055989669546,
+        "ready": true,
+        "error": null
+      },
+      "avTiming": "audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured"
+    },
+    "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "sampleRate": 48000
+  },
+  "atomicShaderFailure": true,
+  "metrics": {
+    "elapsedSeconds": 63.43120000004768,
+    "missedEvents": 0,
+    "schedulerTicks": 2095,
+    "longTasks": 54,
+    "frameP95": 53,
+    "frameP99": 103,
+    "framesOver100Percent": 1.1079342387419584,
+    "audioClock": {
+      "sampleRate": 48000,
+      "baseLatency": 0.010666666666666666,
+      "outputLatency": 0.04,
+      "outputTimestamp": {
+        "contextTime": 48.790427,
+        "performanceTime": 64630.19999998808
+      },
+      "nativeSeconds": 48.832,
+      "wallSeconds": 61.519599999964235,
+      "rate": 0.7937632884483707
+    },
+    "avSubmitP95Ms": 134.91803278688684,
+    "avSamples": 5,
+    "avHandoffP95Ms": 19.02732240436933,
+    "activationMaxMs": 5.300000011920929,
+    "renderMaxMs": 7.300000011920929,
+    "compileP95": 503.10000002384186,
+    "preparation": {
+      "mode": "actor",
+      "ready": true,
+      "done": true,
+      "rows": 1024,
+      "workMs": 1167.099999845028,
+      "chunkMaxMs": 96.10000002384186,
+      "error": null,
+      "elapsedMs": 3632.7000000476837,
+      "startupMs": 505.7000000476837,
+      "chunkP95Ms": 43.89999997615814,
+      "nativeTurnP95Ms": 4,
+      "nativeTurnMaxMs": 76.80000001192093
+    },
+    "resources": {
+      "buildP95Ms": 5.099999904632568,
+      "buildMaxMs": 53.69999998807907,
+      "graphsCompletedAfterStart": 0,
+      "retiredNodes": 0,
+      "voices": 51,
+      "peakVoices": 57,
+      "triggered": 407,
+      "nodes": 611,
+      "buses": 6,
+      "intents": 256
+    },
+    "gpu": {
+      "worker": true,
+      "frames": 4695,
+      "revision": 7,
+      "clockSource": "audio-worklet",
+      "clockAgeMs": 13,
+      "gpuTime": {
+        "available": true,
+        "samples": 3876,
+        "p95Ms": 3.1,
+        "maxMs": 4.186514,
+        "pending": 3,
+        "disjoint": 0
+      },
+      "frameP95": 19,
+      "frameP99": 29,
+      "workP95Ms": 4.2,
+      "workMaxMs": 298.80000001192093,
+      "frameMaxMs": 300,
+      "avSubmitP95Ms": 16,
+      "avSubmitMaxMs": 16.181420800791102,
+      "avSamples": 6,
+      "scale": 1,
+      "programs": 3,
+      "targets": 3,
+      "renderSize": [
+        774,
+        351
+      ],
+      "outputSize": [
+        774,
+        351
+      ],
+      "transition": false,
+      "inFlight": true,
+      "pending": 0,
+      "validationPrograms": 3
+    },
+    "storageTransactions": 0,
+    "history": 6,
+    "namespaces": 0,
+    "evaluator": "worker",
+    "recording": null,
+    "audioTiming": {
+      "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+      "samples": 67,
+      "p95Ms": 0.01949055989669546,
+      "maxMs": 0.022328694662121507,
+      "ready": true,
+      "error": null
+    },
+    "avTiming": "audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured"
+  },
+  "stats": {
+    "playing": true,
+    "audioTime": 48.85333333333333,
+    "nextStep": 429,
+    "lastEvaluation": {
+      "id": 8,
+      "ok": true,
+      "revision": 7,
+      "targetBeat": 87,
+      "edits": 2
+    },
+    "evalCount": 8,
+    "voices": 50,
+    "context": "running",
+    "frames": 4697,
+    "recording": false,
+    "patterns": [
+      "melody"
+    ],
+    "pending": 0,
+    "mode": "performance",
+    "time": 48.71,
+    "beat": 99.04366666666667,
+    "revision": 7,
+    "phase": "ACTIVE",
+    "resources": {
+      "buildP95Ms": 5.099999904632568,
+      "buildMaxMs": 53.69999998807907,
+      "graphsCompletedAfterStart": 0,
+      "retiredNodes": 0,
+      "voices": 50,
+      "peakVoices": 57,
+      "triggered": 407,
+      "nodes": 602,
+      "buses": 6,
+      "intents": 256
+    },
+    "gpu": {
+      "worker": true,
+      "frames": 4697,
+      "revision": 7,
+      "clockSource": "audio-worklet",
+      "clockAgeMs": 13,
+      "gpuTime": {
+        "available": true,
+        "samples": 3876,
+        "p95Ms": 3.1,
+        "maxMs": 4.186514,
+        "pending": 3,
+        "disjoint": 0
+      },
+      "frameP95": 19,
+      "frameP99": 29,
+      "workP95Ms": 4.2,
+      "workMaxMs": 298.80000001192093,
+      "frameMaxMs": 300,
+      "avSubmitP95Ms": 16,
+      "avSubmitMaxMs": 16.181420800791102,
+      "avSamples": 6,
+      "scale": 1,
+      "programs": 3,
+      "targets": 3,
+      "renderSize": [
+        774,
+        351
+      ],
+      "outputSize": [
+        774,
+        351
+      ],
+      "transition": false,
+      "inFlight": true,
+      "pending": 0,
+      "validationPrograms": 3
+    },
+    "diagnostics": {
+      "missed": 0,
+      "ticks": 2096,
+      "longTasks": 54
+    }
+  },
+  "budgets": {
+    "workP95Within16ms": true,
+    "workerCadenceP95Within60Hz": false,
+    "workerAVSubmissionP95Within16ms": true,
+    "avAcknowledgementP95Within16ms": false,
+    "zeroMissedAudioEvents": true
+  },
+  "video": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "vp8",
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "codec_name": "opus"
+      }
+    ]
+  },
+  "workerFailureStopsTransport": true,
+  "sourcePreserved": true,
+  "unloaded": true
+}

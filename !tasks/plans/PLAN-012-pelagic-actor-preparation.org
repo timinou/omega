@@ -1,5 +1,5 @@
 #+TITLE: PELAGIC shared frontend and actor preparation prototype
-#+STATUS: implementing
+#+STATUS: prototype implemented and measured; strict AV deadline target open
 
 * Objective
 Use the same native-JS BL frontend in server-backed and local launches. Prototype
@@ -20,3 +20,47 @@ Real package lifecycle, source preservation and screenshots; bounded demand and
 cleanup; identical score output; server-backed and local browser behavior;
 existing package/editor/presentation checks. Keep native audio graph ownership on
 the main thread; score preparation isolation alone cannot remove that cost.
+
+
+* Implemented prototype
+Regular and local frontend builds share one native-JS graph and pinned boundary;
+server transport is preserved. Actor source compiles through the existing checked
+profile; only numeric control data crosses its ABI to the annotated native BL
+kernel. Canonical rt/not_ ABI fix is upstream 47c14301, pin a5f51eae.
+
+Native worker and actor control tests cover bounded demand, busy/idle ping, stale
+credits, cancellation and replacement. Fifteen measured runs (three per mode)
+have identical 1024-step SHA-256 outputs. Median times: main 737.2 ms, cooperative
+main 965.5, native worker 803.5, actor 1302.1, prebuilt 79.5. The actor alternative
+stays responsive but is slower; keep it optional rather than the default.
+
+Native BL computes and factors immutable score data at build time. Seven templates
+reduce 603 KB to 126 KB (2.8 KB gzip) and eliminate runtime reconstruction. Default
+ships no actor runtime. Live patches/mutes/variation keep existing APIs. Native
+AudioNode construction retains its browser owner; BL preparation policy yields
+between steps after four milliseconds once a one-second safety reserve exists.
+
+46 package tests, 73 editor tests, 23 unchanged presentation variants and 16 actor
+ABI checks pass. Server-backed offline memory world passes six real-editor gates,
+including save readback, active worker lanes and exact source-preserving unuse.
+Three 60-second pressure runs pass recording/failure/cleanup with zero scheduler
+misses and zero late graphs; CPU render p95 4.6/4.2/3.3 ms for lazy/actor/prebuilt.
+Cadence 20/19/18 ms still misses strict display budget; actor-native calls remain
+indivisible. Retain maxima and do not infer physical AV from submission times.
+
+
+* Final default validation
+The actor-free factored default passes 300 seconds / 30 revisions, VP8/Opus
+1280x720 capture, UI stalls, atomic rejection, worker failure and exact unuse.
+No scheduler misses or late-built graphs. CPU render p95 3.7 ms, GPU 1.9,
+cadence 19, native-clock submission 22, main acknowledgement 149. Native
+scheduling turn p95/max 3/163 ms; sample-onset p95/max .022/395 ms. Native clock
+rate .754 wall. Keep strict cadence/AV flags false and physical AV unmeasured.
+
+Fresh final offline browser checks and package 46 pass. Default static graph is
+44 modules / 2,766,014 bytes; ZIP 608,464, checked, no actor runtime. Installer
+preserves unrelated packages and chooses the package pin instead of inheriting
+Omega's BL_USE override. Source/compiler code and proof are committed separately.
+The prototype reuses common graph outputs and emits changed native namespaces;
+the full cold graph compilation was not repeated. Source build-time score data
+creation and frontend routing were tested independently.
