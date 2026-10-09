@@ -5,7 +5,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[3]
 OUT=Path(os.environ.get('PELAGIC_LOCAL_OUT',ROOT/'spikes/pelagic/dist/local'))
-PROOF=ROOT/'spikes/pelagic/proof/local';PROOF.mkdir(parents=True,exist_ok=True)
+PROOF=Path(os.environ.get('PELAGIC_LOCAL_PROOF',ROOT/'spikes/pelagic/proof/local'));PROOF.mkdir(parents=True,exist_ok=True)
 class Handler(http.server.SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
  def do_GET(self):

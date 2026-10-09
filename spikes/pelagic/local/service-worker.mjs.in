@@ -1,0 +1,15 @@
+// Browser cache IO. pelagic.artifact fills compiler-owned build data.
+// A new graph waits for old clients to retire; never replace a live module realm.
+// Scope ownership keeps another local performance on this origin untouched.
+const PREFIX="pelagic-local:"+encodeURIComponent(new URL("./",self.location).pathname)+":";
+const CACHE=PREFIX+__PELAGIC_CACHE__,ASSETS=__PELAGIC_ASSETS__;
+self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS))));
+self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(names=>Promise.all(names.filter(n=>n.startsWith(PREFIX)&&n!==CACHE).map(n=>caches.delete(n))))));
+self.addEventListener('fetch',event=>{
+ const url=new URL(event.request.url);
+ if(event.request.method!=='GET'||url.origin!==self.location.origin||!url.pathname.startsWith(new URL('./',self.location).pathname))return;
+ event.respondWith(caches.open(CACHE).then(async cache=>{
+   const key=event.request.mode==='navigate'?new URL('./index.html',self.location).href:event.request;
+   return (await cache.match(key))||fetch(event.request);
+ }));
+});

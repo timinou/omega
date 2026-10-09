@@ -1,0 +1,199 @@
+{
+  "checks": [
+    "audition keeps active revision and history unchanged",
+    "cancel disposes the preview bus and leaves active sound unchanged",
+    "commit activates atomically on a future musical boundary",
+    "an intervening edit makes the old audition uncommittable",
+    "invalid shader retains the active revision and sound",
+    "bounded offline export completes while playback continues",
+    "real editor unload closes all owned resources and preserves source"
+  ],
+  "errors": [],
+  "stats": {
+    "playing": true,
+    "audioTime": 6.965333333333334,
+    "nextStep": 341,
+    "lastEvaluation": {
+      "id": 4,
+      "ok": false,
+      "error": "ERROR: 0:1: 'broken' : undeclared identifier\n"
+    },
+    "evalCount": 4,
+    "voices": 56,
+    "context": "running",
+    "audition": null,
+    "frames": 564,
+    "recording": false,
+    "patterns": [],
+    "pending": 1,
+    "mode": "performance",
+    "time": 37.91874316939891,
+    "beat": 77.10144444444444,
+    "revision": 1,
+    "phase": "ARMED",
+    "resources": {
+      "buildP95Ms": 7.5,
+      "buildMaxMs": 21.5,
+      "graphsCompletedAfterStart": 0,
+      "retiredNodes": 0,
+      "voices": 56,
+      "peakVoices": 59,
+      "triggered": 164,
+      "nodes": 722,
+      "buses": 6,
+      "intents": 119
+    },
+    "gpu": {
+      "worker": true,
+      "frames": 564,
+      "revision": 1,
+      "clockSource": "audio-worklet",
+      "clockAgeMs": 8.699999988079071,
+      "gpuTime": {
+        "available": true,
+        "samples": 549,
+        "p95Ms": 0.7,
+        "maxMs": 1.057849,
+        "pending": 1,
+        "disjoint": 0
+      },
+      "frameP95": 18,
+      "frameP99": 25,
+      "workP95Ms": 1.6,
+      "workMaxMs": 95.59999996423721,
+      "frameMaxMs": 96.69999998807907,
+      "avSubmitP95Ms": 0,
+      "avSubmitMaxMs": 0.36065573770382997,
+      "avSamples": 1,
+      "scale": 1,
+      "programs": 2,
+      "targets": 3,
+      "renderSize": [
+        774,
+        282
+      ],
+      "outputSize": [
+        774,
+        282
+      ],
+      "transition": false,
+      "inFlight": true,
+      "pending": 0,
+      "validationPrograms": 2
+    },
+    "diagnostics": {
+      "missed": 0,
+      "ticks": 238,
+      "longTasks": 9
+    }
+  },
+  "metrics": {
+    "audition": null,
+    "elapsedSeconds": 8.979900000035762,
+    "missedEvents": 0,
+    "schedulerTicks": 239,
+    "longTasks": 9,
+    "frameP95": 36,
+    "frameP99": 159,
+    "framesOver100Percent": 1.1235955056179776,
+    "audioClock": {
+      "sampleRate": 48000,
+      "baseLatency": 0.010666666666666666,
+      "outputLatency": 0.048,
+      "outputTimestamp": {
+        "contextTime": 6.931507333333334,
+        "performanceTime": 9949.600000023842
+      },
+      "nativeSeconds": 6.973333333333334,
+      "wallSeconds": 7.304100000023842,
+      "rate": 0.9547149317931807
+    },
+    "avSubmitP95Ms": 29.693989071037485,
+    "avSamples": 1,
+    "avHandoffP95Ms": 8.360655737704725,
+    "activationMaxMs": 0.6000000238418579,
+    "renderMaxMs": 15.699999988079071,
+    "compileP95": 255.5,
+    "preparation": {
+      "mode": "actor",
+      "budgetMs": 4,
+      "ready": true,
+      "done": true,
+      "rows": 1024,
+      "workMs": 425.099999666214,
+      "chunkMaxMs": 26.099999964237213,
+      "error": null,
+      "elapsedMs": 3793.300000011921,
+      "worker": false,
+      "graphs": 7,
+      "startupMs": 663.1999999880791,
+      "chunkP95Ms": 8.900000035762787,
+      "nativeTurnP95Ms": 9,
+      "nativeTurnMaxMs": 108.69999998807907
+    },
+    "resources": {
+      "buildP95Ms": 7.5,
+      "buildMaxMs": 21.5,
+      "graphsCompletedAfterStart": 0,
+      "retiredNodes": 0,
+      "voices": 56,
+      "peakVoices": 59,
+      "triggered": 164,
+      "nodes": 722,
+      "buses": 6,
+      "intents": 119
+    },
+    "gpu": {
+      "worker": true,
+      "frames": 564,
+      "revision": 1,
+      "clockSource": "audio-worklet",
+      "clockAgeMs": 8.699999988079071,
+      "gpuTime": {
+        "available": true,
+        "samples": 549,
+        "p95Ms": 0.7,
+        "maxMs": 1.057849,
+        "pending": 1,
+        "disjoint": 0
+      },
+      "frameP95": 18,
+      "frameP99": 25,
+      "workP95Ms": 1.6,
+      "workMaxMs": 95.59999996423721,
+      "frameMaxMs": 96.69999998807907,
+      "avSubmitP95Ms": 0,
+      "avSubmitMaxMs": 0.36065573770382997,
+      "avSamples": 1,
+      "scale": 1,
+      "programs": 2,
+      "targets": 3,
+      "renderSize": [
+        774,
+        282
+      ],
+      "outputSize": [
+        774,
+        282
+      ],
+      "transition": false,
+      "inFlight": true,
+      "pending": 0,
+      "validationPrograms": 2
+    },
+    "storageTransactions": 0,
+    "history": 1,
+    "namespaces": 0,
+    "evaluator": "worker",
+    "recording": null,
+    "audioTiming": {
+      "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+      "samples": 14,
+      "p95Ms": 0.020687103271299634,
+      "maxMs": 0.020687103271299634,
+      "ready": true,
+      "error": null
+    },
+    "avTiming": "audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured"
+  }
+}

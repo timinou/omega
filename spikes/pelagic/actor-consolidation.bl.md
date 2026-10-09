@@ -208,3 +208,42 @@ covers cancellation before work, after graph preparation, at a suspension, and
 through `ed/unuse`, preserving the document. The test is
 `python3 spikes/pelagic/test/export-cancel-browser.py`. It uses an isolated static
 world and the same compiled BL admission and graph modules as playback.
+
+## Compiling the compiler is an integration test
+
+The shared pattern traversal initially worked in focused fixtures but failed
+when Pelagic compiled its browser compiler from a cold process. Target staging
+can mark a namespace loaded and install forward placeholders. If the running
+compiler still needs to load that same namespace, those placeholders prevent
+it. The build now loads its shared pattern implementation before staging, just
+as it already did for the IR walker. This preserves the running implementation
+in the parent environment while compiling target definitions in an isolated fork.
+
+The canonical-core audit compiles the actual rt/core sources through the actor
+front end. It inventories provider contracts without running application
+initializers. That establishes where linking must go next; it does not establish
+that actor lazy forcing, receiving callbacks or evaluator execution already work.
+Those remain explicit gates before deleting the old control emitter.
+
+## A local artifact has an identity
+
+`pelagic.artifact` inventories the completed build, rejects non-regular assets,
+counts UTF-8 bytes and hashes each file. It derives the artifact identity from
+those hashes and its own source/template. Repeated generation produces identical
+manifest and worker bytes; generated files do not hash themselves. Editing an
+asset changes the identity. The ZIP is a delivery container; byte-for-byte ZIP
+reproducibility is not asserted.
+
+The service worker owns browser cache IO. It waits for old clients to retire
+before activating an update, so a live page cannot load half of a new module
+graph. Cache cleanup belongs to one hosting path, preserving other performances
+on the same origin. The server frontend excludes this local manifest/worker,
+because its index and transport differ. `bl artifact-check` exercises the BL
+contract through the same env.bl task surface as `bl bundle`.
+
+The final artifact build pins upstream `797dc039`: 50 modules, 159 inventoried
+assets. It passes 63 package checks, the BL artifact contract, independent asset
+hash/identity and ZIP checks, real-editor offline reload and safe audition, and
+the unchanged 12-variant presentation gate. Browser checks report no uncaught
+errors or server API requests. Evidence is in
+[artifact checks](proof/actor-consolidation/artifact/artifact-summary.json).

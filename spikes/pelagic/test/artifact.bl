@@ -1,0 +1,26 @@
+(ns pelagic-artifact-test (:require [pelagic.artifact :as artifact] [bl.json :as json]))
+(defn assert! [value message] (when-not value (throw (ex-info message {}))))
+(let [root (str (System/tmp_dir!) "/pelagic-artifact-" (System/unique_integer (list :positive)))]
+  (try
+    (File/mkdir_p! (str root "/out"))
+    (File/write! (str root "/index.html") "<!doctype html><title>Local</title>")
+    (File/write! (str root "/out/runtime.mjs") "export const example = '水';\n")
+    (let [first (artifact/write! root)
+          manifest (File/read! (str root "/assets.json"))
+          worker (File/read! (str root "/sw.mjs"))
+          second (artifact/write! root)]
+      (assert! (= first second) "Repeated artifact generation changed its identity")
+      (assert! (= manifest (File/read! (str root "/assets.json"))) "Manifest bytes are not reproducible")
+      (assert! (= worker (File/read! (str root "/sw.mjs"))) "Worker bytes are not reproducible")
+      (assert! (= ["index.html" "out/runtime.mjs"] (mapv :path (:files first))) "Generated files entered their own inventory")
+      (doseq [file (:files first)]
+        (let [data (File/read! (str root "/" (:path file)))]
+          (assert! (= (:bytes file) (erlang/byte_size data)) "Asset byte size differs")
+          (assert! (= (:sha256 file) (artifact/sha256 data)) "Asset hash differs")))
+      (File/write! (str root "/out/runtime.mjs") "export const example = 'changed';\n")
+      (let [changed (artifact/write! root)]
+        (assert! (not= (:sha256 first) (:sha256 changed)) "Changed runtime retained its old artifact identity"))
+      (let [result (System/cmd "node" (list "--check" (str root "/sw.mjs")))]
+        (assert! (= 0 (erlang/element 2 result)) (erlang/element 1 result)))
+      (println "PASS BL artifact inventory, hashes, idempotence, invalidation and generated worker syntax"))
+    (finally (File/rm_rf! root))))

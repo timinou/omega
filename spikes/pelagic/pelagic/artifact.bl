@@ -1,0 +1,38 @@
+; Build-time artifact provenance. env.bl's bundle task calls this in its VM.
+; Browser caching is host IO; path inventory, identity and serialization live here.
+(ns pelagic.artifact (:require [bl.json :as json] [clojure.string :as string]))
+(def schema "omega.pelagic.assets")
+(def version 1)
+(def generated #{"assets.json" "sw.mjs"})
+(defn sha256 [data] (string/lower-case (Base/encode16 (crypto/hash :sha256 data))))
+(defn- inventory [root directory]
+  (mapcat (fn [name]
+            (let [path (Path/join directory name) relative (Path/relative_to path root)
+                  kind (:type (File/lstat! path))]
+              (cond
+                (= :directory kind) (inventory root path)
+                (and (= :regular kind) (not (contains? generated relative)))
+                  (let [data (File/read! path)] [{:path relative :bytes (erlang/byte_size data) :sha256 (sha256 data)}])
+                (= :regular kind) []
+                :else (throw (ex-info "Artifact contains a non-regular asset" {:path relative})))))
+          (sort (File/ls! directory))))
+(defn- builder-source [] (BeamLisp.Loader/source_path "pelagic.artifact"))
+(defn- template []
+  (File/read! (Path/expand "../local/service-worker.mjs.in" (Path/dirname (builder-source)))))
+(defn manifest [root]
+  (let [files (vec (sort-by :path (inventory root root)))
+        builder (sha256 (str (File/read! (builder-source)) "\u0000" (template)))
+        identity (sha256 (json/encode [schema version builder
+                                      (mapv (fn [file] [(:path file) (:bytes file) (:sha256 file)]) files)]))]
+    {:schema schema :version version :sha256 identity :builder-sha256 builder :files files}))
+(defn service-worker [version urls]
+  (-> (template)
+      (string/replace "__PELAGIC_CACHE__" (json/encode version))
+      (string/replace "__PELAGIC_ASSETS__" (json/encode urls))))
+(defn write! [root]
+  (let [root (Path/expand root) artifact (manifest root)
+        cache (str "pelagic-local-" (subs (:sha256 artifact) 0 20))
+        urls (conj (mapv (fn [file] (str "./" (:path file))) (:files artifact)) "./assets.json")]
+    (File/write! (Path/join root "assets.json") (str (json/encode artifact) "\n"))
+    (File/write! (Path/join root "sw.mjs") (service-worker cache urls))
+    artifact))

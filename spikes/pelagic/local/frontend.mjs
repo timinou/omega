@@ -8,7 +8,7 @@ await fs.access(path.join(local,'.pelagic-local'));
 try{await fs.access(server);await fs.access(path.join(server,'.pelagic-server'));}catch(error){if(error.code!=='ENOENT')throw error;try{await fs.access(server);throw new Error('Refusing unmarked server output');}catch(e){if(e.code!=='ENOENT')throw e;}}
 const stage=server+'.stage-'+process.pid;
 try{
- await fs.cp(local,stage,{recursive:true,filter:source=>source===local||!['sw.mjs','.pelagic-local','local'].includes(path.basename(source))});
+ await fs.cp(local,stage,{recursive:true,filter:source=>source===local||!['sw.mjs','assets.json','.pelagic-local','local'].includes(path.basename(source))});
  await fs.copyFile(path.join(here,'../../vendor/bl-ed/web/index.html'),path.join(stage,'index.html'));
  await fs.writeFile(path.join(stage,'.pelagic-server'),'PELAGIC shared native-JS server frontend\n');
  await fs.rm(server,{recursive:true,force:true});await fs.rename(stage,server);

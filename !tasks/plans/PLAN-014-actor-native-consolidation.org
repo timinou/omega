@@ -279,3 +279,55 @@ The next candidate removes duplicate definition compilation, admits actor value
 definitions/source-ordered initializers, and bounds initialization turns through
 the same frame machine. Focused generated fixtures pass; a fresh capped cold
 compiler validation is running before any upstream commit or package repin.
+
+* Checkpoint: one definition compiler and initializer path
+Upstream 7269ec1c routes actor declarations, function/value definitions and
+expressions through js.build/definition-values and compile-prepared. Function
+exports/aliases initialize before source-ordered values/effects in the same
+frame machine; initialization yields at the engine budget. Bound undefined is
+distinct from absent globals/aliases. Initializer pruning is conservative.
+Fresh cold fixtures, server/supervisor gates, 55 focused checks, all 461 actor
+checks at default/17/41 budgets, hardening, and eight ordinary differential groups
+pass. General receiving module initialization still needs an actor owner/resumer.
+
+A read-only canonical-core audit now compiles rt/core through this shared front
+end: rt has 458 function definitions; core has 152 functions, three values and
+one expression. No remote call is outside both the canonical primitive table
+and known compiled rt/core providers. This is linking evidence, not executable
+core parity: namespace-qualified linking, actor-aware lazy forcing/callback
+contracts, and removal of the duplicate prelude remain open.
+
+The local artifact builder moves inventory/hash/cache identity into native BL
+and removes the Node builder. Its BL idempotence/hash/invalidation and generated
+worker syntax contract passes. A full package rebuild will validate the repin to
+797dc039 before committing it.
+
+Native compiler profiling also sampled repeated namespace-existence ETS scans.
+Upstream 797dc039 now contains a bounded publication-certificate cache. A pinned
+native probe passes mutation, bulk publication, fork/destroy, concurrent writer
+and cache-bound checks. Seven 100-call samples measure median 45,335 versus 204
+microseconds, about 251 times fewer reductions. This is lookup evidence only;
+checkout bootstrap seeds still require native rebuilding to consume host edits.
+
+* Checkpoint: compiler self-compilation and artifact lifecycle
+The first full repin exposed a cold staging failure: js.pattern was compiled as
+target source before the running emitter loaded its implementation. Upstream
+a04da9c4 preloads that shared dependency alongside system.ir, and extends the
+cold CLI regression to include both. With this dependency resident, a full
+Pelagic graph passes 63 package checks, real-editor audition/export cancellation,
+and complete offline reload/unuse with no server API calls or browser errors.
+
+The artifact builder is BL-owned inventory, UTF-8 byte counts, SHA256 identity
+and manifest generation. Browser cache IO remains a small template. Cache
+activation waits for old clients instead of mixing module generations in a live
+realm; cleanup is scoped to this hosting path. Idempotence/hash/invalidation and
+worker syntax pass in BL; scope/activation/navigation contracts pass in Node.
+A fresh cold build against final pin 797dc039 passes without a manual preload.
+All 63 package checks, real-editor offline/audition checks, independent asset
+hashes/identity and ZIP integrity, and the unchanged 12-variant presentation
+gate pass. The final-pin native cache contract passes in the same owned VM. The earlier successful graph identifies 9d4aefd3 and
+is kept distinct from that final-pin evidence.
+
+The final-pin vendored editor drive run passes all 73 checks. No editor vendor
+source is included in this artifact commit; unrelated concurrent edits remain
+owned by their respective work. Proof includes real-editor used/unuse images.

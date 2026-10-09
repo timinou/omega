@@ -1,0 +1,20 @@
+Started [systemd-run] /usr/bin/env "ERL_FLAGS=+S 2:2 +SDcpu 1 +SDio 1 +sbwt none +sbwtdcpu none +sbwtdio none" BL_ROOT=/home/user/code/undefine/beam-lisp ./bin/bl --cold run -p /home/user/code/undefine/omega/spikes/pelagic /tmp/pelagic-unified-build.bl.
+bl-stage-hosts: 67 pinned host beams staged into /home/user/code/undefine/beam-lisp/build (app resource beam_lisp.app)
+bl: this image's library beams are a previous toolchain's generation (first seen: vm.native).
+bl: stale libraries are compiled once and cached on first use; run `bl build` to rebuild the whole image.
+PELAGIC: compiling editor, language and package together
+js-actors: compiling /home/user/code/undefine/beam-lisp/priv/lib/js/actor/runtime.bl
+js-actors: compiling /tmp/pelagic-actors-4882/prepare.bl
+js-actors: retained 84/353 definitions
+js-actors: compiled 84 definitions from 2 sources -> /tmp/pelagic-actors-4882/out/prepare.mjs
+js-actors: 870 host references audited (736 remote, 134 global) against the allowlist
+js-actors: numeric gate — 0 raw-Number site(s) with witness, 5 checked H.arith site(s) -> /tmp/pelagic-actors-4882/out/numeric-gate.prepare.mjs.json
+PELAGIC: /home/user/code/undefine/omega/spikes/pelagic/dist/local (static files; no BEAM runtime server)
+CONSOLIDATION warm compiler ready
+PASS BL artifact inventory, hashes, idempotence, invalidation and generated worker syntax
+Testing test.env-namespace-cache
+PASS namespace cache mutation, declaration, fork, destroy, bulk publication, concurrent writer, bounds
+Ran 1 tests containing 1 assertions.
+0 failures, 0 errors.
+nil
+pelagic-unified-build-final.service: Consumed 6min 20.475s CPU time over 7min 32.472s wall clock time, 1.1G memory peak, 148.1M memory swap peak.

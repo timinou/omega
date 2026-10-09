@@ -1,5 +1,5 @@
 ; Run with the PELAGIC env.bl: `bl bundle`. One VM, one compiler, one runtime.
-(ns pelagic.build-local (:require [bl.js :as build] [pelagic.actor-build :as actors]))
+(ns pelagic.build-local (:require [bl.js :as build] [pelagic.actor-build :as actors] [pelagic.artifact :as artifact]))
 (def here (Path/expand (BeamLisp/cwd)))
 (def root (Path/expand (str here "/../..")))
 (def dist (str here "/dist"))
@@ -28,7 +28,7 @@
         (when-not (File/exists? alias)
           (File/write! alias (str "export * from './ns/" module ".mjs';\n")))))
     (File/write! (str stage "/build.json")
-      (str "{\"name\":\"pelagic-local\",\"compiler\":\"e02b1881\",\"modules\":" (count (:modules result)) "}\n")))
+      (str "{\"name\":\"pelagic-local\",\"compiler\":\"797dc039\",\"modules\":" (count (:modules result)) "}\n")))
   (copy-files! (str root "/vendor/bl-ed/web") stage [".mjs" ".css"])
   (File/write! (str stage "/index.html")
     (replace-str (File/read! (str root "/vendor/bl-ed/web/index.html"))
@@ -50,10 +50,7 @@
     "export {d_bl_package as package} from '../out/pelagic.main.mjs';\nexport {createHost} from './pelagic/host.mjs';\n")
   (File/write! (str stage "/.pelagic-local") "PELAGIC optional local bundle\n")
   ; Asset manifest and worker are generated from exactly this compilation.
-  (let [script (str here "/local/cache-build.mjs")
-        result (System/cmd "node" (list script stage))]
-    (when-not (= 0 (erlang/element 2 result))
-      (throw (ex-info (erlang/element 1 result) {}))))
+  (artifact/write! stage)
   (when (File/exists? output) (File/rm_rf! output))
   (File/rename! stage output)
   (let [archive (System/cmd "python3" (list "-m" "zipfile" "-c" (str dist "/pelagic-local.zip") output))]

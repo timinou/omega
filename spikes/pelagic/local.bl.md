@@ -70,9 +70,22 @@ resizes. Graphics initialization starts after the first paint through
 patch syntax. The page evaluator starts on demand for editor commands such as
 `ed/unuse`; those commands retain access to the live editor on the main thread.
 
-## Verification
+## Artifact identity and updates
 
-The bundle pins compiler `c9e95080`; generic BL frame pacing is committed on
+`bl artifact-check` verifies the BL inventory, byte counts, SHA256 hashes,
+repeatable manifest generation and generated worker syntax. The bundle contains
+`assets.json`; its identity covers every shipped asset and the builder/template.
+Generated manifest/worker files are excluded from their own inventory.
+
+An updated cache activates after old tabs retire, keeping each open page on one
+module graph. Cache cleanup is scoped to the hosting path. The server frontend
+uses the same compiled modules but excludes this local cache manifest/worker.
+Current integration evidence is maintained in [actor consolidation](actor-consolidation.bl.md)
+and `proof/actor-consolidation/artifact/`.
+
+## Earlier local-build measurements
+
+The earlier bundle pinned compiler `c9e95080`; generic BL frame pacing is committed on
 upstream main as `7861aa54`, following runtime improvements in `cb485ab3`.
 It contains 44 modules, 2,766,014 bytes of static files and a 608,464-byte ZIP
 (integrity checked).
