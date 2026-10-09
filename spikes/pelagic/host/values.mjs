@@ -28,3 +28,5 @@ export function createScoreSource(step,defaults){const cache=new Map();return in
 export function audibleTime(context,now){const stamp=context.getOutputTimestamp?.(),age=stamp?now-stamp.performanceTime:-1;return stamp?.contextTime>0&&age>=0&&age<1000?Math.min(context.currentTime,stamp.contextTime+age/1000):context.currentTime;}
 
 export const requestFrame=f=>requestAnimationFrame(f),cancelFrame=handle=>cancelAnimationFrame(handle);
+
+export const continuePreparation=(next,audio,elapsed)=>next<audio+1||elapsed<4;

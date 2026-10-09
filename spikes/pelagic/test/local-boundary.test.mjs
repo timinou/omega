@@ -130,3 +130,14 @@ test('BL audio equivalence isolates visual revisions while preserving every soun
  assert.equal(P.d_audio_equivalent$Q(state,state.assoc(R.kw('visual'),R.hashMap(R.kw('scene'),'afterglow'))),true);
  for(const field of ['config','patterns','assets','variation'])assert.equal(P.d_audio_equivalent$Q(state,state.assoc(R.kw(field),R.hashMap(R.kw('changed'),true))),false,field);
 });
+
+test('native BL preparation uses the same score and yields only after securing its safety reserve',{skip:!process.env.PELAGIC_OUT},async()=>{
+ const [B,Score]=await Promise.all(['pelagic.browser','pelagic.score'].map(imp));
+ for(const start of [0,128,448,640,1008]){
+  const chunk=B.d_score_chunk(start,16);assert.equal(chunk.length,16);
+  for(let i=0;i<16;i++)assert.deepEqual(chunk[i],B.d_to_js(Score.d_step(start+i,Score.d_defaults)));
+ }
+ assert.equal(B.d_continue_preparation$Q(0.9,0,100),true);
+ assert.equal(B.d_continue_preparation$Q(2,0,3),true);
+ assert.equal(B.d_continue_preparation$Q(2,0,4),false);
+});

@@ -1,0 +1,7 @@
+; The same compilation serves both storage/transport modes.
+(ns pelagic.build-frontend)
+(BeamLisp/eval (File/read! "bundle.bl"))
+(let [result (System/cmd "node" (list "local/frontend.mjs"))]
+  (print (erlang/element 1 result))
+  (when-not (= 0 (erlang/element 2 result))
+    (throw (ex-info "Server frontend staging failed" {}))))

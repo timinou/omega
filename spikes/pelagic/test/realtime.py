@@ -16,7 +16,7 @@ try:
  with sync_playwright() as p:
   browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM','/home/user/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome'),args=['--no-sandbox','--use-gl=angle','--use-angle=gl','--enable-gpu','--ignore-gpu-blocklist','--autoplay-policy=no-user-gesture-required'])
   page=browser.new_page(viewport={'width':1440,'height':1080});page.on('pageerror',lambda e:report['errors'].append(str(e)))
-  page.goto(f'http://127.0.0.1:{server.server_port}/')
+  page.goto(f'http://127.0.0.1:{server.server_port}/?prepare='+os.environ.get('PELAGIC_PREPARE_MODE','prebuilt'))
   q='document.querySelector(".view-host .view-body").pelagic'
   page.wait_for_function('window.blEd&&document.querySelector(".view-host .view-body")?.pelagic',timeout=90000)
   page.evaluate(q+'.ready()');page.evaluate(q+'.compilerReady()')

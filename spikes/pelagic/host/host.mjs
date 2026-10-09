@@ -6,8 +6,9 @@ import {LocalStore,LiveTake,validateSession} from './storage.mjs';
 import {performanceControls} from './controls.mjs';
 import {SceneStage} from './scenes.mjs';
 import {createStage} from './render-stage.mjs';
+import {prepareScore} from './prepare.mjs';
 import * as Bridge from '../../out/pelagic.bridge.mjs';
-import {conversions,download,setText,audioContext,readText,createEvaluator,afterPaint,createScoreSource,audibleTime} from './values.mjs';
+import {conversions,download,setText,audioContext,readText,createEvaluator,afterPaint,createScoreSource,audibleTime,createGraphicsWorker,continuePreparation} from './values.mjs';
 import {AudioEngine,plain,validateGraph,wav} from './audio.mjs';
 import {ShaderStage} from './shader.mjs';
 import {SampleDeck} from './deck.mjs';
@@ -18,11 +19,15 @@ const moduleURL=name=>new URL(name,import.meta.url);
 function blocks(source){const result=[];const re=/^#\+begin_src\s+(\S+)[^\n]*\n([\s\S]*?)^#\+end_src\s*$/gmi;let m;while((m=re.exec(source)))result.push({language:m[1].toLowerCase(),code:m[2]});
   if(!result.length && source.trim())result.push({language:'beam-lisp',code:source});return result;}
 export function createHost(api) {
-  const scoreVoices=createScoreSource(Score.d_step,Score.d_defaults);
+  const preparationMode=new URLSearchParams(globalThis.location?.search||'').get('prepare')||'prebuilt';
+  const scoreVoices=prepareScore(createScoreSource(Score.d_step,Score.d_defaults),()=>createGraphicsWorker(moduleURL('prepare-worker.mjs')),{mode:['prebuilt','worker','actor','none'].includes(preparationMode)?preparationMode:'prebuilt'});
+  afterPaint(()=>scoreVoices.start());
   let config={...defaults},ctx=null,ctxWall=0,audio=null,timer=null,playing=false,nextStep=0,nextTime=0,origin=0,beatOrigin=0,disposed=false;
   const store=new LocalStore();let lastTake=null,restoreGeneration=0,recordPreparing=false,lastEvaluation=null,evalCount=0;
   let model=Performance.d_initial(),active=plain(model.get(R.kw('current'))),scheduled=active,revision=null,mode='finite',pausedBeat=0,pausedTime=0,timeOrigin=0,evaluation=0;
   const ownedNamespaces=new Set();
+  const preparationTurns=new Uint32Array(2001);let preparationTurnMax=0;
+  const preparationP95=()=>{const total=preparationTurns.reduce((a,b)=>a+b,0);if(!total)return null;let count=0;for(let i=0;i<preparationTurns.length;i++){count+=preparationTurns[i];if(count>=total*.95)return i;}};
   const events=[],diagnostics={ticks:0,missed:0,late:[],frames:[],longTasks:0,compiles:[],frameHistogram:new Uint32Array(1001),av:[],handoff:[],activation:[],render:[],started:performance.now()};
   let lastFrame=0,syncing=false,avExpected=null,announcement=null;
   const log=(kind,data={})=>{events.push({kind,audioTime:ctx?.currentTime||0,beat:current().beat,...data});if(events.length>4096)events.shift();};
@@ -129,12 +134,12 @@ export function createHost(api) {
   }
   const stem=v=>({lantern:'melody',tide:'atmosphere',air:'air'})[v.synth]||v.synth;
   function schedule(){
-    if(!playing||disposed)return;applyRevision();diagnostics.ticks++;
+    if(!playing||disposed)return;const preparationStart=performance.now();applyRevision();diagnostics.ticks++;
     if(nextTime<ctx.currentTime-.04){
       const skip=Math.ceil((ctx.currentTime-nextTime)/(60/scheduled.config.bpm/4));diagnostics.missed+=skip;
       log('resync',{skipped:skip});nextStep+=skip;nextTime+=skip*60/scheduled.config.bpm/4;
     }
-    while(nextTime<ctx.currentTime+lookAhead()&&(mode==='performance'||nextStep<1024)){
+    while(nextTime<ctx.currentTime+lookAhead()&&(mode==='performance'||nextStep<1024)&&continuePreparation(nextTime,ctx.currentTime,performance.now()-preparationStart)){
       if(revision&&!revision.armed&&nextStep/4>=revision.beat){
         revision.time=nextTime;revision.armed=true;scheduled=revision.state;
         for(const v of views)v.shader?.armState?.(scheduled,revision.beat,revision.time,revision.id);
@@ -162,6 +167,7 @@ export function createHost(api) {
       }
       nextStep++;nextTime+=60/c.bpm/4;
     }
+    const preparationMs=performance.now()-preparationStart;preparationTurns[Math.min(2000,Math.round(preparationMs))]++;preparationTurnMax=Math.max(preparationTurnMax,preparationMs);
     for(const [key,id] of handles)if(!audio.voices.has(id))handles.delete(key);
     if(mode==='finite'&&nextStep>=1024&&ctx.currentTime>nextTime+8){stop();notice('The descent is complete. Everything returns as light.',false);}
   }
@@ -389,7 +395,7 @@ export function createHost(api) {
       avSubmitP95Ms:av[Math.floor(av.length*.95)]??null,avSamples:av.length,avHandoffP95Ms:diagnostics.handoff.slice().sort((a,b)=>a-b)[Math.floor(diagnostics.handoff.length*.95)]??null,
       activationMaxMs:Math.max(0,...diagnostics.activation),renderMaxMs:Math.max(0,...diagnostics.render),
       compileP95:diagnostics.compiles.slice().sort((a,b)=>a-b)[Math.floor(diagnostics.compiles.length*.95)]||0,
-      resources:audio?.resources(),gpu:[...views][0]?.shader?.resources?.(),storageTransactions:store.pending,history:model.get(R.kw('past')).cnt,namespaces:ownedNamespaces.size,evaluator:evaluatorClient?'worker':'main',
+      preparation:{...scoreVoices.stats(),nativeTurnP95Ms:preparationP95(),nativeTurnMaxMs:preparationTurnMax},resources:audio?.resources(),gpu:[...views][0]?.shader?.resources?.(),storageTransactions:store.pending,history:model.get(R.kw('past')).cnt,namespaces:ownedNamespaces.size,evaluator:evaluatorClient?'worker':'main',
       recording:recording?{bytes:recording.bytes,pendingBytes:recording.pendingBytes,chunks:recording.count,error:recording.error?.message}:null,
       audioTiming:audio?.timingReport(),avTiming:'audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured'};}
   const deckHTML=key=>`<section class="deck" data-deck="${key}"><div class="deck-head"><span class="deck-title">${key.toUpperCase()} / ${key==='a'?'ATMOSPHERE':'PULSE'}</span><label class="file-label">＋ AUDIO<input type="file" accept="audio/*" data-file="${key}" aria-label="Load audio into deck ${key.toUpperCase()}"></label></div><div class="file-name" data-file-name="${key}">${key==='a'?'harmonic field / D minor':'deep-house pulse / melodic fragments'}</div><div class="deck-meta"><button data-deck-op="play" data-deck-key="${key}" title="Play/pause imported audio">▶</button><button data-deck-op="cue" data-deck-key="${key}">CUE</button><button data-deck-op="set-cue" data-deck-key="${key}" title="Set cue at current sample position">SET</button><button data-deck-op="jog" data-value="-0.25" data-deck-key="${key}" title="Jog back">−¼</button><button data-deck-op="jog" data-value="0.25" data-deck-key="${key}" title="Jog forward">＋¼</button><label>LOOP<select data-loop="${key}" aria-label="Deck ${key.toUpperCase()} loop"><option value="0">OFF</option><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label><label>BPM<input type="number" value="${defaults.bpm}" min="40" max="240" data-sample-bpm="${key}" aria-label="Deck ${key.toUpperCase()} source BPM"></label><button data-deck-op="clear" data-deck-key="${key}" title="Remove imported audio">×</button></div><div class="eq">${['low','mid','high'].map(b=>`<label>${b.toUpperCase()}<input type="range" min="-18" max="12" step=".5" value="0" data-control="eq-${key}-${b}" aria-label="Deck ${key.toUpperCase()} ${b} EQ"></label>`).join('')}</div><div class="level-row"><span>LEVEL</span><input type="range" min="0" max="1" step=".01" value=".9" data-control="deck-${key}" aria-label="Deck ${key.toUpperCase()} level"><div class="meter"><i data-meter="${key}"></i></div></div></section>`;
@@ -466,7 +472,7 @@ export function createHost(api) {
     case 'deck':unlock();decks[e.args.deck].action(e.args.op,e.args.value);break;
     case 'record':await record();break;case 'export':await exportAudio();break;
     default:throw new Error('Unknown Pelagic effect '+e.op);}},
-    dispose(){disposed=true;++evaluation;evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
+    dispose(){disposed=true;++evaluation;scoreVoices.dispose();evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
       for(const d of Object.values(decks))d.dispose();for(const engine of offlineRenders)engine.dispose();offlineRenders.clear();audio?.dispose();ctx?.close();files.clear();handles.clear();pending=[];patterns.clear();for(const url of urls)URL.revokeObjectURL(url);
       for(const v of views)v.shader?.dispose();}
   };

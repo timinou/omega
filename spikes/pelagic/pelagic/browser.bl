@@ -1,5 +1,5 @@
 ; The browser boundary is explicit and stays outside the pure editor/package.
-(ns ^:js pelagic.browser (:require [js.worker :as worker] [js.frame :as frame]))
+(ns ^:js pelagic.browser (:require [js.worker :as worker] [js.frame :as frame] [pelagic.score :as score]))
 (defn to-js [value] (bl->js value))
 (defn to-bl [value] (js->bl value :keywordize-keys true))
 (defn set-text [node value]
@@ -75,3 +75,20 @@
 
 (defn request-frame [f] (frame/request f))
 (defn cancel-frame [handle] (frame/cancel handle))
+
+
+; A bounded CPU kernel shared by the native-worker and actor-managed profiles.
+; Native rows cross the realm boundary once; patch authors retain score/step.
+(defn score-chunk [start size]
+  (let [rows (js/Array.)]
+    (loop [index start]
+      (when (< index (+ start size))
+        (.push rows (bl->js (score/step index score/defaults)))
+        (recur (inc index))))
+    rows))
+
+
+; Fill the safety reserve promptly, then yield native graph preparation between
+; score steps. One native AudioNode graph remains an indivisible browser call.
+(defn continue-preparation? [next-time audio-time elapsed-ms]
+  (or (< next-time (+ audio-time 1)) (< elapsed-ms 4)))
