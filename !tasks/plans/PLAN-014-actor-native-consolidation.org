@@ -70,3 +70,20 @@ without migrating its consumers loses semantics. Native interop already shares
 js.emit/emit-native, but native links are still package-specified. Pelagic's
 ordinary bundle still builds the synchronous editor graph and optionally copies
 an actor artifact. Therefore optional actor preparation alone is not consolidation.
+
+* Checkpoint: compiler-owned module contracts
+Upstream ffef07b4 emits native-modules.json from the same checked compilation;
+shared system.ir callable shapes drive public names and fixed/variadic arities.
+Actor linker consumes that artifact and imports only retained references. Native
+refusal/pruning/ABI checks and focused manifest/ordinary-build checks pass.
+The package migration awaits the unified runtime/output graph, rather than adding
+another package-specific source parser or export table.
+
+* Consolidation design decision
+Actor control and canonical language values are separate responsibilities. Keep
+one actor generator/frame machine and BL scheduling policy; reuse the richer
+canonical rt.mjs value leaves and compiled BL core semantics. Direct host callbacks
+will be checked, non-suspending entrypoints into that same machine, not a second
+emitter/runtime. The legacy actor collection prelude must disappear once its
+scheduler uses the compiled common core. Production artifacts must bind both paths
+to the SAME value-module URL, not copies with distinct keyword caches/classes.
