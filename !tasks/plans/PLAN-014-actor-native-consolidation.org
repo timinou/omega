@@ -1,0 +1,72 @@
+#+title: Actor-native consolidation, Omega integration, and Pelagic experiences
+#+status: IN_PROGRESS
+
+* Objective and authority
+User requests actor-centered consolidation upstream, complete Omega/Pelagic
+migration, readable BL modules and explanatory documentation, commits throughout,
+and recorded demonstrations of all five experiences (especially safe audition).
+Latency regressions may become explicit focused follow-ups; semantic regressions
+and parallel production implementations are not acceptable completion criteria.
+
+* Invariants
+- One source reader, checked ANF, native-expression emitter, value contract,
+  package linker and actor execution model. Direct non-suspending calls are an
+  optimization of that model, not a competing runtime/profile.
+- Preserve existing language collection/numeric/error/callback semantics.
+- Remove old implementations after migrated consumers and differential checks
+  pass. Temporary migration adapters are named, bounded, and tracked here.
+- Omega packages remain pure state/effects, layered layouts, exact unload.
+- Never write to the running user world. Preserve unrelated concurrent edits.
+- One capped BL VM at a time; inspect scripts/bl-mem, stop owned processes.
+- Do not claim physical 16 ms latency from headless or median-only results.
+
+* Ordered work and acceptance
+** TODO 1. Map semantic contracts and consolidate compiler-owned native linking
+Document sync/actor values, callable dispatch, effects and registry ownership.
+Move native-link discovery/arity/privacy into upstream compiler metadata; remove
+Pelagic-maintained function/export manifests. Tests cover missing #js, aliases,
+private names, imports, discarded/finally effects and mailbox identity.
+** TODO 2. Unify value and callback contracts
+Canonical value representation and leaf ownership; actor callables dispatch via
+one runtime. Synchronous callbacks may run only checked non-suspending closures;
+suspending callbacks require actor/event entrypoints. Preserve numeric exactness,
+collection invocation, metadata, exceptions, closures and higher-order functions.
+** TODO 3. Unify lowering and ordinary build tasks around actors
+Production build/linker emits actor runtime plus direct-call specialization from
+shared checked IR. Migrate editor, live evaluator and package consumers. Eliminate
+parallel production emitters/value implementations only after semantic parity.
+** TODO 4. Specialization, scheduler and reproducible artifacts
+Use typed/system evidence for safe native numeric/argument/allocation paths;
+profile startup, turn dispatch, fairness and cancellation. Record provenance and
+conservative reachability. env.bl remains the user build/task surface.
+** TODO 5. Omega integration
+One graph for local/server frontend, owned effects/resources, attributable timing,
+measured incremental rendering and coalesced nonessential updates. Drive tests,
+real editor used/unuse screenshots, unchanged presentation-equivalence gate.
+** TODO 6. Pelagic actor-native runtime
+Readable BL modules own reusable preparation before playback, superseded-job
+cancellation, deadline admission, compilation/analysis/export backpressure and
+protection of the audio reserve. Profile first-step and AudioNode allocation tails;
+benchmark typed DSP/worklet/native experiments with explicit evidence.
+** TODO 7. Five experiences
+1. Reproducible forkable takes: source, seed, quantized edits, controller events,
+   asset hashes and shader revisions; replay/fork to editable BL.
+2. Safe audition: staged alternate patch, preview, quantized atomic commit,
+   cancellation and failure retaining the active revision.
+3. Seeded variation exploration with snapshots and bounded background jobs.
+4. Source-to-performance navigation via compilation/revision source locations.
+5. Shareable local performance bundles and source-to-result navigation.
+Record one real-editor demonstration of each, plus contract checks and exact
+unload. No private render loops, invented package interfaces or hidden IO.
+** TODO 8. Final audit and documentation
+Full pinned build, focused upstream semantic/differential tests, editor/package
+checks, five demos, measured latency/CPU/startup/artifact report, explicit latency
+follow-ups, no untracked production adapters or duplicate implementation paths.
+
+* Initial findings
+Actor host owns a separate KW/Cons/Vec/map model and generator machine; sync
+rt.mjs/abi.mjs implement a broader collection/numeric/callable ABI. Deleting one
+without migrating its consumers loses semantics. Native interop already shares
+js.emit/emit-native, but native links are still package-specified. Pelagic's
+ordinary bundle still builds the synchronous editor graph and optionally copies
+an actor artifact. Therefore optional actor preparation alone is not consolidation.
