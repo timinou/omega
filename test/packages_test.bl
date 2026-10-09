@@ -1,0 +1,77 @@
+(ns packages-test
+ (:require [omega.packages :as p] [omega.env :as env] [omega.task :as task]
+           [omega.loop :as loop]))
+(defn dir! []
+ (let [p (str "/tmp/omega-packages-test-" (erlang/unique_integer (list :positive))) ]
+  (File/mkdir_p! p) p))
+(defn desk-profile [label]
+ {:step (fn [req]
+   (if (not (some (fn [b] (= :tool-result (:type b))) (:content (last (:messages req)))))
+    (loop/call-tool "desk_identity" {} "identity")
+    (loop/say label)))
+  :tools [{:name "desk_identity" :description "Prove the selected tool table is used."
+           :input-schema {:type "object"} :run (fn [_ _] {:ok label})}]
+  :system-prompt label :max-steps 4})
+(deftest independent-worlds-retain-notebooks-and-disable-new-tasks
+ (let [a (p/registry (File/cwd!) (dir!) {:offline? true})
+       b (p/registry (File/cwd!) (dir!) {:offline? true})
+       path (str (:root a) "/spikes/atlas/desk.bl.org")]
+  (is (= "atlas" (:name (p/use! a "atlas"))))
+  (is (p/active? a "atlas")) (is (not (p/active? b "atlas")))
+  (is (seq (:tools (p/profile a "atlas"))))
+  (File/write! path "my own evidence")
+  (p/use! a "atlas") (is (= "my own evidence" (File/read! path)))
+  (is (p/active? (p/registry (:home a) (:root a) {}) "atlas"))
+  (p/unuse! a "atlas") (is (not (p/active? a "atlas")))
+  (is (= "my own evidence" (File/read! path)))
+  (is (not (File/exists? (str (:root b) "/spikes/atlas"))))
+  (is (some (fn [m] (= "atlas" (:name m))) (:packages (p/catalog b))))
+  (is (some (fn [m] (= "browser" (:name m))) (:packages (p/catalog b))))
+  (File/rm_rf! (:root a)) (File/rm_rf! (:root b))))
+(deftest tasks-use-a-pinned-profile-including-after-disable-and-recovery
+ (let [root (dir!) r (p/registry (File/cwd!) root {:offline? true})
+       e (env/open) base (task/start-system e {:root root :tools [] :step (fn [_] (loop/say "base"))})]
+  (swap! (:cache r) assoc "atlas" (desk-profile "atlas profile"))
+  (p/use! r "atlas")
+  (let [result ((get (p/intents r base) "task/open") {:package "atlas" :goal "who are you?"})
+        id (:id result) v (task/await base id 10000)]
+   (is (= :idle (:status v))) (is (= "atlas profile" (:result v)))
+   (is (= "atlas" (get-in @(:state r) [:tasks id])))
+   (is (some (fn [turn] (some (fn [b] (= "desk_identity" (:name b))) (:content turn))) (loop/turns base id)))
+   (p/unuse! r "atlas")
+   (is (try ((get (p/intents r base) "task/open") {:package "atlas" :goal "blocked"}) false (catch _ true)))
+   (task/stop-system! base)
+   (let [r2 (p/registry (File/cwd!) root {})
+         s2 (task/start-system e {:root root :tools [] :step (fn [_] (loop/say "WRONG default"))})]
+    (swap! (:cache r2) assoc "atlas" (desk-profile "recovered atlas profile"))
+    (task/recover! s2 (fn [id] (p/recover-system r2 s2 id)))
+    (task/say! s2 id "continue")
+    (let [v (loop [left 100]
+              (let [v (task/view s2 id)]
+               (if (or (= "recovered atlas profile" (:result v)) (= left 0)) v
+                (do (Process/sleep 20) (recur (dec left))))))]
+     (is (= "recovered atlas profile" (:result v))))
+    (is (not (p/active? r2 "atlas")))
+    (task/stop-system! s2)))
+  (File/rm_rf! root)))
+(deftest no-domain-name-in-core-and-unknown-packages-fail-cleanly
+ (let [r (p/registry (File/cwd!) (dir!) {})]
+  (is (try (p/use! r "../../secret") false (catch _ true)))
+  (is (empty? (:active @(:state r))))
+  (is (not (includes? (File/read! "src/omega/packages.bl") "atlas")))
+  (File/rm_rf! (:root r))))
+(deftest missing-editor-bundles-build-once-and-failed-builds-do-not-enable
+ (let [home (dir!) root (dir!) r (p/registry home root {})
+       bundle (str home "/vendor/bl-ed/web/pkg/example.mjs")]
+  (File/mkdir_p! (str home "/packages"))
+  (File/write! (str home "/packages/example.edn")
+   (pr-str {:name "example" :editor "example" :build "build.sh"}))
+  (File/write! (str home "/build.sh")
+   "set -e\ncd \"$(dirname \"$0\")\"\nmkdir -p vendor/bl-ed/web/pkg\necho built >> builds.txt\necho 'export const package = {};' > vendor/bl-ed/web/pkg/example.mjs\n")
+  (p/use! r "example") (is (File/regular? bundle))
+  (p/use! r "example") (is (= "built\n" (File/read! (str home "/builds.txt"))))
+  (p/unuse! r "example") (File/rm! bundle)
+  (File/write! (str home "/build.sh") "exit 1\n")
+  (is (try (p/use! r "example") false (catch _ true)))
+  (is (not (p/active? r "example")))
+  (File/rm_rf! home) (File/rm_rf! root)))

@@ -1,0 +1,123 @@
+; Shared trusted code; per-world activation, evidence and task profiles.
+(ns omega.packages
+ (:require [clojure.edn :as edn] [clojure.string :as str]
+           [omega.ed.providers :as pv]))
+(defn- read-state [path]
+ (if (File/regular? path) (edn/read-string (File/read! path)) {:active #{} :tasks {}}))
+(defn registry [home root opts]
+ (let [path (str root "/.omega/packages.edn")]
+  {:home home :root root :path path :state (atom (read-state path)) :cache (atom {}) :opts opts}))
+(defn- locked [r f]
+ (global/trans (tuple (tuple :omega/packages (:root r)) (erlang/self)) f))
+(defn- save! [r f]
+ (locked r (fn []
+  (let [next (f @(:state r)) tmp (str (:path r) ".tmp")]
+   (File/mkdir_p! (Path/dirname (:path r)))
+   (File/write! tmp (pr-str next)) (File/rename! tmp (:path r))
+   (reset! (:state r) next) next))))
+(defn manifests [r]
+ (let [dir (str (:home r) "/packages")]
+  (if (File/dir? dir)
+   (mapv (fn [f] (edn/read-string (File/read! (str dir "/" f))))
+    (sort (filter (fn [f] (str/ends-with? f ".edn")) (File/ls! dir)))) [])))
+(defn manifest [r nm]
+ (or (first (filter (fn [m] (= nm (:name m))) (manifests r)))
+  (if (and (string? nm) (re-matches #"[A-Za-z0-9_-]+" nm)
+           (File/regular? (str (:home r) "/vendor/bl-ed/web/pkg/" nm ".mjs")))
+   {:name nm :editor nm :editor-only true}
+   (throw (ex-info (str "Unknown shared package: " nm) {:package nm})))))
+(defn active? [r nm] (contains? (:active @(:state r)) nm))
+(defn- safe-path [root p]
+ (when (or (str/starts-with? p "/") (some (fn [s] (= s "..")) (str/split p "/")))
+  (throw (ex-info "Package paths must be relative" {:path p})))
+ (str root "/" p))
+(defn- seed! [r m]
+ (doseq [p (:seeds m)]
+  (let [src (safe-path (:home r) p) dst (safe-path (:root r) p)]
+   (when-not (File/exists? dst)
+    (File/mkdir_p! (Path/dirname dst)) (File/cp! src dst)))))
+(defn- load-factory [r b]
+ (let [previous (Process/get :bl_fixed_dirs)
+       dirs (BeamLisp.Loader/search_dirs)]
+  (Process/put :bl_fixed_dirs (cons (safe-path (:home r) (:path b)) dirs))
+  (try
+   (BeamLisp.Loader/ensure_loaded (:ns b))
+   (let [f (BeamLisp.Env/fetch (:ns b) (:factory b))]
+    (when-not (and (erlang/is_tuple f) (= :ok (elem f 0)))
+     (throw (ex-info "Missing package factory" {:backend b})))
+    ((elem f 1) {:home (:home r) :root (:root r) :offline? (:offline? (:opts r))}))
+   (finally (if previous (Process/put :bl_fixed_dirs previous) (Process/delete :bl_fixed_dirs))))))
+(defn profile [r nm]
+ (or (get @(:cache r) nm)
+  (locked r (fn []
+   (or (get @(:cache r) nm)
+    (let [m (manifest r nm) b (:backend m)
+          p (if b (load-factory r b) {})]
+     (swap! (:cache r) assoc nm p) p))))))
+(defn- build-one! [r m]
+ (when-let [script (:build m)]
+  (let [result (System/cmd "bash" (list (safe-path (:home r) script)) (list (tuple :stderr_to_stdout true)))]
+   (println (elem result 0))
+   (when-not (= 0 (elem result 1)) (throw (ex-info "Package build failed" {:package (:name m)}))))))
+(defn build! [r] (doseq [m (manifests r)] (build-one! r m)))
+(defn- ensure-editor! [r m]
+ (when (:build m)
+  (global/trans (tuple (tuple :omega/package-build (:home r)) (erlang/self))
+   (fn []
+    (when-not (File/regular? (str (:home r) "/vendor/bl-ed/web/pkg/" (or (:editor m) (:name m)) ".mjs"))
+     (build-one! r m))))))
+(defn use! [r nm]
+ (let [m (manifest r nm)]
+  (profile r nm) (ensure-editor! r m) (seed! r m)
+  (save! r (fn [s] (update s :active conj nm)))
+  {:name nm :entry (:entry m) :editor (or (:editor m) nm) :active true}))
+(defn unuse! [r nm]
+ (manifest r nm)
+ (save! r (fn [s] (update s :active disj nm)))
+ {:name nm :active false :message "Disabled for new tasks. Documents and existing task profiles are retained."})
+(defn system [r sys nm]
+ (let [p (profile r nm) emit (get-in sys [:hooks :emit] (fn [_ _] nil))]
+  (-> (merge sys (select-keys p [:step :tools :system-prompt :max-steps]))
+   (assoc-in [:hooks :emit]
+    (fn [kind data]
+     (when (= kind :task/open)
+      (save! r (fn [s] (assoc-in s [:tasks (:task data)] nm))))
+     (emit kind data))))))
+(defn recover-system [r sys id]
+ (if-let [nm (get-in @(:state r) [:tasks id])] (system r sys nm) sys))
+(defn catalog [r]
+ (let [dir (str (:home r) "/vendor/bl-ed/web/pkg")
+       known (manifests r) names (set (map :name known))
+       editors (if (File/dir? dir) (keep (fn [f]
+        (when (str/ends-with? f ".mjs") (subs f 0 (- (count f) 4)))) (File/ls! dir)) [])]
+  {:root (:root r) :offline? (boolean (:offline? (:opts r))) :packages
+   (vec (sort-by :name
+    (concat (map (fn [m] (assoc (select-keys m [:name :doc :entry :editor]) :backend (boolean (:backend m))
+                          :active (active? r (:name m)))) known)
+     (map (fn [nm] {:name nm :editor nm :doc "Shared editor package. Any external service must be configured separately."
+                    :backend false :active (active? r nm) :editor-only true})
+      (remove names editors)))))}))
+(defn intents [r sys]
+ {"package/catalog" (fn [_] (catalog r))
+  "package/use" (fn [args] (use! r (:name args)))
+  "package/unuse" (fn [args] (unuse! r (:name args)))
+  "package/intent" (fn [args]
+   (let [nm (:package args)]
+    (when-not (active? r nm) (throw (ex-info (str "Enable " nm " in package:catalog first") {})))
+    (let [p (profile r nm) s (system r sys nm)
+          handlers (when-let [factory (:intents p)] (factory s)) f (get handlers (:intent args))]
+     (when-not f (throw (ex-info "Unknown package intent" {:intent (:intent args)})))
+     (f (:args args)))))
+  "task/open" (fn [args]
+   (if-let [nm (:package args)]
+    (do (when-not (active? r nm) (throw (ex-info (str "Enable " nm " before opening a task") {})))
+     (when-not (:backend (manifest r nm)) (throw (ex-info "This package has no research task profile" {})))
+     ((get (pv/intents (system r sys nm)) "task/open") args))
+    ((get (pv/intents sys) "task/open") args)))})
+(defn provider [r]
+ {:read (fn [nm _]
+  (if (= nm "catalog")
+   {:title "Packages" :read-only? true
+    :text (str "#+TITLE: Packages\n#+USE: packages\n#+PACKAGES: catalog\n\n* Shared code, local worlds\nLoad a view, enable its world capabilities, and open its notebook.\n\n"
+           (join "\n" (map (fn [p] (str "- " (:name p) " — " (:doc p))) (:packages (catalog r)))) "\n")}
+   {:error "Unknown package document" :status 404}))})

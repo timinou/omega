@@ -8,10 +8,19 @@
 # build is made first (~3 min cold).
 ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
 V="$ROOT/vendor/bl-ed"
-if [ "${1:-}" = build ]; then exec "$V/build.sh"; fi
-[ -f "$V/web/out/ed.main.mjs" ] || "$V/build.sh" || exit 2
+if [ "${1:-}" = build ]; then
+  "$V/build.sh" && "$ROOT/spikes/packages/build.sh" && OMEGA_HOME="$ROOT" "$ROOT/bin/bl" run "$ROOT/packages/build.bl"
+  exit $?
+fi
+[ -f "$V/web/out/ed.main.mjs" ] || "$ROOT/bin/bl-ed" build || exit 2
+[ -f "$V/web/pkg/packages.mjs" ] || "$ROOT/spikes/packages/build.sh" || exit 2
 ENTRY=$(mktemp --suffix=.bl)
 trap 'rm -f "$ENTRY"' EXIT
 printf '(ns omega.ed.entry (:require [omega.ed.main :as m]))\n(m/main)\n' > "$ENTRY"
+# Preserve an explicit world root; the launcher's cwd is always the repo.
+root_args=(--root "$PWD")
+for arg in "$@"; do
+  if [ "$arg" = --root ]; then root_args=(); break; fi
+done
 set -o pipefail
-OMEGA_HOME="$ROOT" "$ROOT/bin/bl" run "$ENTRY" -- --root "$PWD" "$@" 2>&1 | grep --line-buffered -v -e '^bl-stage-hosts:' -e '^:ok$'
+OMEGA_HOME="$ROOT" "$ROOT/bin/bl" run "$ENTRY" -- "${root_args[@]}" "$@" 2>&1 | grep --line-buffered -v -e '^bl-stage-hosts:' -e '^:ok$'

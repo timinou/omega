@@ -1,0 +1,56 @@
+#+TITLE: Omega shared packages / world capabilities
+
+* Reading this implementation
+The catalog is package:catalog. Load its editor package with (ed/use "packages")
+and open the library with (ed/cmd "packages/open") or space p p.
+
+* Two lifecycle scopes
+Editor layers define commands, keys, views and layouts. Unuse removes a layer
+and its state. World capabilities define task tools, model steps and intents.
+Disable world prevents new package work while retaining data and existing tasks.
+No operation deletes notebooks or reports. Ordinary task cancellation stays
+separate from both lifecycle operations.
+
+* Shared code, local data
+Repository packages/*.edn files are trusted manifests, not world-authored code.
+Backend factories live in the shared repository. Missing-only seeds create
+local editable notebooks and captured evidence. Keys remain in Omega home.
+
+Each world's .omega/packages.edn records active package names and task profile
+bindings. Atomic replacement and a world lock serialize updates. An emit hook
+records a task binding before execution begins. Restart recovery resolves each
+task's package identity before recreating its executor. Disabling a package does
+not change the authority of tasks already opened with that package.
+
+* Generic functions and protocols
+omega.packages/registry creates a local registry handle.
+omega.packages/catalog projects shared packages plus local activation state.
+omega.packages/use! loads a factory, seeds missing files and enables new work.
+omega.packages/unuse! disables new work and keeps files and task bindings.
+omega.packages/system selects a task profile over the shared world environment.
+omega.packages/recover-system restores that selection for a durable task.
+
+package/catalog reads the catalog.
+package/use and package/unuse take a name.
+package/intent takes package, intent and nested args.
+task/open accepts package as an optional profile selector.
+
+* Atlas as the first backend package
+atlas.extension/create supplies the actual Gen step, narrow public evidence
+tools, bounded research prompt, step budget and desk intent factory. The editor
+uses generic package intents and task/open with package atlas. New worlds get
+captured datasets and the authored notebook, not other worlds' research history.
+Offline worlds return an explicit offline message for model research.
+
+* Extensibility and limits
+Editor-only packages are discovered from web/pkg/*.mjs. Their specialized
+external services are not magically installed. Adding a backend requires a
+trusted manifest and factory. Activating a package requires no server restart
+once the registry exists. A pre-registry server requires one upgrade restart.
+Profile identity persists; code and model versions are not frozen.
+
+* Evidence
+spikes/packages/packages.bl.md contains the contract and reproduction commands.
+spikes/packages/proof/ contains real editor loaded/unloaded screenshots.
+spikes/packages/test/browser.mjs drives two separate offline worlds.
+test/packages_test.bl proves profile selection, isolation and recovery.

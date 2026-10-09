@@ -1,12 +1,14 @@
 ; Isolated, persistent real Omega research desk. Never use the user's live world.
-(ns atlas.world (:require [omega.ed.main :as editor] [omega.gen :as adapter] [atlas.review :as review] [atlas.desk :as desk]))
+(ns atlas.world (:require [omega.ed.main :as editor] [omega.gen :as adapter] [atlas.review :as review] [atlas.desk :as desk] [omega.packages :as packages]))
 (def home (System/get_env "OMEGA_HOME"))
 (def root (System/get_env "ATLAS_WORLD"))
 (when-not (and root (not= root home)) (throw (ex-info "Atlas requires its own world root" {})))
 (def port (erlang/binary_to_integer (or (System/get_env "ATLAS_PORT") "8831")))
 (when (= port 8790) (throw (ex-info "Refusing live-world port" {})))
+; Keep the original default profile for tasks predating package bindings.
 (def world (editor/start! {:root root :port port :memory? (= "1" (System/get_env "ATLAS_MEMORY"))
  :step (adapter/step (review/provider home)) :tools (desk/tools home root) :max-steps 16 :system-prompt desk/prompt
  :intent-factory (fn [sys] (desk/intents home root sys))}))
+(packages/use! (:packages world) "atlas")
 (println (str "Atlas / real Omega research tools: " (:url world) "?file=spikes/atlas/desk.bl.org&use=atlas"))
 (receive :never nil)

@@ -13,19 +13,22 @@
           {:id :observatory :view [:atlas/desk :notebook] :width [:fr 2]}
           {:id :research :doc :linked :width [:fr 2]}]
   :focus :research})
-(defn adopt [ed]
+(defn adopt-view [ed]
  (cond (atlas? ed) (if (get-in ed [:pkg-state "atlas" :notebook-path]) ed
                          (assoc (assoc-in ed [:pkg-state "atlas" :notebook-path] (:path ed)) :frame/layout (layout)))
        (and (starts-with? (str (:path ed)) "task:")
         (some? (index-of (or (first (:lines (:text ed))) "") "Atlas")))
         (assoc-in ed [:pkg-state "atlas" :research?] true)
        :else ed))
+(defn adopt [ed] (adopt-view ed))
+(defn enable [ed]
+ (c/effect ed {:kind :intent :intent "package/use" :args {:name "atlas"} :then :atlas/enabled}))
 (defn return-to-desk [ed]
  (c/effect ed {:kind :frame-layout :layout "atlas" :keep {:notebook :notebook} :focus :notebook}))
 (defn home [ed]
  (if (get-in ed [:pkg-state "atlas" :research?])
   (return-to-desk ed)
-  (docs/visit ed "spikes/atlas/desk.bl.org")))
+  (c/effect ed {:kind :intent :intent "package/use" :args {:name "atlas"} :then :atlas/home-route})))
 (defn research-result [ed ev]
  (if (:ok? ev)
   (c/effect (assoc-in ed [:pkg-state "atlas" :research-id] (get-in ev [:data :id])) {:kind :frame-layout :layout "atlas-research"
@@ -43,17 +46,17 @@
 (defn run-research [ed question]
  (if (empty? (trim (or question ""))) (c/message ed "Enter a research question first.")
   (c/effect ed {:kind :intent :intent "task/open" :then :atlas/research-route
-   :args {:title "Atlas · desk research" :path (or (get-in ed [:pkg-state "atlas" :notebook-path]) (:path ed))
+   :args {:package "atlas" :title "Atlas · desk research" :path (or (get-in ed [:pkg-state "atlas" :notebook-path]) (:path ed))
     :goal (str "Research question: " question "\nSaved case: " (or (get-in ed [:pkg-state "atlas" :notebook-path]) (:path ed))
      "\nUse desk_inventory first. Read only relevant datasets; the authored case is a hypothesis, not a constraint on your conclusion. For a new market question acquire its own public evidence. Use registered tools to investigate, calculate and publish a separate cited .bl.org report and proposal. Do not overwrite the case. Label gaps and falsifiers. Source pane drafts must be saved before they are available to tasks.")}})))
 (defn research [ed]
  (prompt ed "Research question: " run-research))
 (defn refresh [ed]
- (c/effect ed {:kind :intent :intent "atlas/workspace" :then :atlas/workspace-route :args {}}))
+ (c/effect ed {:kind :intent :intent "package/intent" :then :atlas/workspace-route :args {:package "atlas" :intent "atlas/workspace" :args {}}}))
 (defn reply [ed]
  (let [id (if (starts-with? (str (:path ed)) "task:") (subs (:path ed) 5) (get-in ed [:pkg-state "atlas" :research-id]))]
   (if id (prompt ed "Follow-up to research: "
-    (fn [ed text] (c/effect ed {:kind :intent :intent "atlas/followup" :then :atlas/research-route :args {:id id :text text}})))
+    (fn [ed text] (c/effect ed {:kind :intent :intent "package/intent" :then :atlas/research-route :args {:package "atlas" :intent "atlas/followup" :args {:id id :text text}}})))
    (c/message ed "Ask a research question first."))))
 (def bl-package
  {:name "atlas" :doc "Public evidence, comparative events and strategic decisions as a live notebook."
@@ -64,7 +67,12 @@
              :atlas/home {:doc "Open the Artcraft / Adobe notebook." :run home}}
   :keys {:normal {"space s a" :atlas/home "space s q" :atlas/research "space s r" :atlas/reply}}
   :intercept (fn [ed ev]
-   (cond (and (= :intent-result (:type ev)) (= :atlas/research-route (:then ev))) (research-result ed ev)
+   (cond (and (= :intent-result (:type ev)) (= :atlas/home-route (:then ev)))
+          (if (:ok? ev) (docs/visit ed (get-in ev [:data :entry])) (c/message ed (:message ev)))
+         (= :atlas/enable (:type ev)) (enable ed)
+         (and (= :intent-result (:type ev)) (= :atlas/enabled (:then ev)))
+          (if (:ok? ev) (refresh ed) (c/message ed (str "Atlas backend: " (:message ev))))
+         (and (= :intent-result (:type ev)) (= :atlas/research-route (:then ev))) (research-result ed ev)
          (and (= :intent-result (:type ev)) (= :atlas/workspace-route (:then ev)))
           (assoc-in ed [:pkg-state "atlas" :workspace] (if (:ok? ev) (get-in ev [:data :snapshot]) "unavailable"))
          (= :atlas/refresh (:type ev)) (refresh ed)

@@ -18,6 +18,7 @@
             [omega.codemode :as cm]
             [omega.cli :as cli]
             [omega.ed.providers :as pv]
+            [omega.packages :as packages]
             [bl-ed.serve :as serve]
             [bl-ed.image :as image]))
 
@@ -45,17 +46,19 @@
         sys (task/start-system e (merge (select-keys opts [:max-steps :token-budget])
                                   {:step step :tools (or (:tools opts) cm/tools) :root root
                                    :system-prompt (or (:system-prompt opts) cli/SYSTEM-PROMPT)}))
-        interrupted (task/recover! sys)
+        registry (packages/registry home root opts)
+        interrupted (task/recover! sys (fn [id] (packages/recover-system registry sys id)))
         web (or (:web opts) (str home "/vendor/bl-ed/web"))
         ;; bl: shows THIS VM's image — omega itself, live (a project's target
         ;; VM forwards the same provider later)
         img (image/provider)
         r (serve/start! {:port (or (:port opts) 8790) :root root :web web
-                         :providers (assoc (pv/providers sys) "bl" (:provider img))
+                         :providers (assoc (pv/providers sys) "bl" (:provider img) "package" (packages/provider registry))
                          :intents (merge (pv/intents sys) (:intents img)
-                                   (when-let [factory (:intent-factory opts)] (factory sys)))})]
+                                   (when-let [factory (:intent-factory opts)] (factory sys))
+                                   (packages/intents registry sys))})]
     (when db (println (str "omega: tasks are kept in " db (when (seq interrupted) (str " · interrupted: " (clojure.string/join " " interrupted))))))
-    (assoc r :sys sys :env e :db db)))
+    (assoc r :sys sys :env e :db db :packages registry)))
 
 (defn main
   "bin/bl-ed: serve until killed."
@@ -68,5 +71,6 @@
             r (start! {:root (opt "--root") :offline? (flag? "--offline") :memory? (flag? "--memory") :db (opt "--db")
                        :port (when-let [p (opt "--port")] (erlang/binary_to_integer p))})]
         (println (str "bl-ed + omega: " (:url r) "?file=omega:overview   (documents under " (:root r) ")"))
+        (println (str "  packages: " (:url r) "?file=package:catalog&use=packages"))
         (println "  space a o  overview · space a s  scratch · space a n  new task · C-Enter on a #+begin_task block")
         (receive :never nil)))))

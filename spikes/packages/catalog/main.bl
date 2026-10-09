@@ -1,0 +1,44 @@
+(ns catalog.main
+ (:require [ed.core :as c] [ed.docs :as docs] [ed.pkg :as pkg]))
+(defn catalog? [ed] (= "package:catalog" (:path ed)))
+(defn layout []
+ {:name "packages" :doc "Shared package catalog with explicit editor and world lifecycle."
+  :panes [{:id :origin :doc :linked :width [:fr 1]}
+          {:id :catalog :view [:packages/catalog :origin] :width [:fr 4]}] :focus :origin})
+(defn refresh [ed]
+ (c/effect ed {:kind :intent :intent "package/catalog" :args {} :then :packages/catalog-result}))
+(defn adopt [ed]
+ (if (and (catalog? ed) (not= "packages" (:name (:frame/layout ed))))
+  (refresh (-> ed (assoc :frame/layout (layout)) (assoc-in [:pkg-state "packages" :opened?] true))) ed))
+(defn open [ed] (docs/visit ed "package:catalog"))
+(defn model [ed]
+ {:package "packages" :state (get-in ed [:pkg-state "packages"] {}) :loaded (pkg/names ed)})
+(defn load-editor [ed name entry]
+ (let [ed (c/effect ed {:kind :load-package :name name})]
+  (if entry (docs/visit ed entry) ed)))
+(defn intercept [ed ev]
+ (cond
+  (= :packages/refresh (:type ev)) (refresh ed)
+  (= :packages/load (:type ev))
+   (if (:editor-only ev) (load-editor ed (:name ev) nil)
+    (c/effect ed {:kind :intent :intent "package/use" :then :packages/used
+                 :args {:name (:name ev)}}))
+  (= :packages/unload (:type ev)) (c/message (pkg/unuse ed (:name ev)) (str "Unloaded editor view: " (:name ev)))
+  (= :packages/disable (:type ev))
+   (c/effect ed {:kind :intent :intent "package/unuse" :args {:name (:name ev)} :then :packages/disabled})
+  (and (= :intent-result (:type ev)) (= :packages/catalog-result (:then ev)))
+   (assoc-in ed [:pkg-state "packages" :catalog]
+    (if (:ok? ev) (:data ev) {:error (:message ev)}))
+  (and (= :intent-result (:type ev)) (= :packages/used (:then ev)))
+   (if (:ok? ev) (load-editor ed (get-in ev [:data :editor]) (get-in ev [:data :entry]))
+    (c/message ed (str "Package failed: " (:message ev))))
+  (and (= :intent-result (:type ev)) (= :packages/disabled (:then ev)))
+   (if (:ok? ev) (refresh ed) (c/message ed (:message ev)))
+  :else nil))
+(def bl-package
+ {:name "packages" :doc "Discover shared packages and manage editor views and world capabilities."
+  :commands {:packages/open {:doc "Discover/load/unload shared packages." :run open}
+             :packages/refresh {:doc "Refresh shared package catalog." :run refresh}}
+  :keys {:normal {"space p p" :packages/open}}
+  :adopt adopt :intercept intercept :owns [:frame/layout]
+  :provides {:layouts {"packages" (layout)} :views {:packages/catalog model}}})

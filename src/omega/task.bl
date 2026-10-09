@@ -329,8 +329,10 @@
 
 (defn recover!
   "Re-attach system `sys` to the tasks in its env (a durable env reopened).
-   Call once, after ext/install. Returns the ids of tasks that were interrupted."
-  [sys]
+   Call once, after ext/install. Optional resolve-system maps task id to its
+   execution profile. Returns the ids of tasks that were interrupted."
+  ([sys] (recover! sys (fn [_] sys)))
+  ([sys resolve-system]
   (let [e (:env sys)
         rows (env/q e '[:find ?id ?s :where [?t :task/id ?id] [?t :task/status ?s]])
         live (remove (fn [[_ s]] (terminal? s)) rows)
@@ -344,8 +346,8 @@
                    "interrupted: omega stopped while this task was running. Send a message to continue."]])
       (tr/leave! e id {:kind :blocker :subject id :text "interrupted: omega stopped mid-turn"})
       (set-status! sys id :idle))
-    (doseq [[id _] live] (start-executor! sys id))
-    interrupted))
+    (doseq [[id _] live] (start-executor! (resolve-system id) id))
+    interrupted)))
 
 ;; ── the system ──────────────────────────────────────────────────────────
 

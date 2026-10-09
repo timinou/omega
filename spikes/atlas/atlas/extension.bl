@@ -1,0 +1,9 @@
+; The desk is a backend capability value, independent of a launcher/world.
+(ns atlas.extension
+ (:require [atlas.desk :as desk] [atlas.review :as review] [omega.gen :as gen]
+           [omega.loop :as loop]))
+(defn create [{:keys [home root offline?]}]
+ {:step (if offline? (loop/scripted [(loop/say "Offline Atlas: captured evidence is available; live research requires an online world.")])
+          (gen/step (review/provider home)))
+  :tools (desk/tools home root) :system-prompt desk/prompt :max-steps 16
+  :intents (fn [sys] (desk/intents home root sys))})

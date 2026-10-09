@@ -1,0 +1,25 @@
+#+TITLE: Shared packages / implementation progress
+
+* Problem
+Editor assets were global; Atlas backend tools and evidence were tied to a
+special launcher. Other worlds could import its view without its capabilities.
+
+* Implemented
+Shared trusted manifests, per-world activation and missing-only seeds.
+Real task profiles with tools, prompts and Gen providers.
+Persisted task profile identity and recovery with the same capability profile.
+Explicit editor unload and world disable, preserving evidence and existing tasks.
+A discoverable catalog as a real bl-ed package and layout.
+Atlas adapter migrated to generic intents and package-tagged task/open.
+Explicit --root forwarding fixed, necessary for actual world isolation.
+
+* Validation
+134 backend/task/recovery assertions; 36 package/model/runtime tests;
+60 vendored editor checks; unchanged default presentation equivalence.
+Real editor browser flow and loaded/unloaded screenshots under proof/.
+
+* Limits
+Legacy external services still require their existing configuration.
+An offline world does not acquire fresh evidence through Gen research.
+Profile pinning preserves package identity across restart, not a frozen version.
+World disable retains existing task authority; cancel tasks separately when needed.
