@@ -3,7 +3,7 @@
 import json,os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
-ROOT=Path(__file__).resolve().parents[1];PROOF=ROOT/'proof/preparation/server';PROOF.mkdir(parents=True,exist_ok=True)
+ROOT=Path(__file__).resolve().parents[1];PROOF=Path(os.environ.get('PELAGIC_SERVER_PROOF',ROOT/'proof/preparation/server'));PROOF.mkdir(parents=True,exist_ok=True)
 url=os.environ.get('PELAGIC_SERVER_URL','http://127.0.0.1:8792/');assert ':8790' not in url,'Never test the live world'
 report={'checks':[],'errors':[],'api':[]}
 try:

@@ -331,3 +331,17 @@ is kept distinct from that final-pin evidence.
 The final-pin vendored editor drive run passes all 73 checks. No editor vendor
 source is included in this artifact commit; unrelated concurrent edits remain
 owned by their respective work. Proof includes real-editor used/unuse images.
+
+* Checkpoint: shared callable dispatch and server frontend
+Upstream b52e7209 shares canonical multi-arity arm selection/rest packing between
+ordinary invocation and actor frames. Native and frame arms, fixed-arm presence,
+one-step suspension boundaries, metadata, original throws, constant-space tail
+calls and a parked root pass. All 66 focused checks and 461 actor checks at each
+of three budgets plus hardening pass. Pelagic remains pinned to 797dc039 pending
+the next integrated graph; this upstream change is not silently attributed to it.
+
+The final 797dc039 local graph was also staged as a server frontend, without
+installing into the user's running world. A disposable loopback BEAM server
+passes document/save transport, native evaluation/render workers, actor score
+preparation, real C-Enter during playback and exact unload releasing workers.
+No browser errors. Proof: spikes/pelagic/proof/actor-consolidation/server/.

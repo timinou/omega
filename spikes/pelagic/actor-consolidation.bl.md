@@ -247,3 +247,13 @@ hash/identity and ZIP checks, real-editor offline reload and safe audition, and
 the unchanged 12-variant presentation gate. Browser checks report no uncaught
 errors or server API requests. Evidence is in
 [artifact checks](proof/actor-consolidation/artifact/artifact-summary.json).
+
+The same final graph also passes a disposable BEAM-server browser run: document
+and save APIs remain active, native evaluator/render workers run, actor score
+preparation finishes, C-Enter changes the performance during playback, and unload
+releases all package workers while preserving source. The user's running world
+was untouched. See [server proof](proof/actor-consolidation/server/report.json).
+
+Upstream `b52e7209` additionally consolidates canonical multi-arity dispatch.
+The next qualified-core integration will consume it; the verified artifact above
+remains pinned to `797dc039`. This distinction keeps build provenance honest.
