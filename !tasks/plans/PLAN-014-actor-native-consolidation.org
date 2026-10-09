@@ -210,3 +210,40 @@ The ordinary frontend is still emitted by js.emit; stage 3 remains substantial.
 A full package build passed before the final schema-default fix, which was
 incrementally rebuilt through js.build/compile-ns + emit-ns and retested. Final
 cold complete build/provenance remains stage 8, not implied by this checkpoint.
+
+* Next compiler integration gates (stage 3 refinement)
+Do these in dependency order, preserving the existing checked IR and semantics.
+- Shared pattern lowering, reader-node access, identifier/string emission. Current
+  candidate is in /tmp/actor-numeric-consolidation; not yet upstream. Fixtures
+  cover exact numeric literal matching and missing-versus-present-nil fields.
+- Move namespace declaration/staging/macro-helper discovery into one compiler
+  preparation API. js.actor still has defn-only staging and procedure declaration
+  expansion; js.build owns full ordinary defs/macros/initializers. They must use
+  one preparation API before actor output can replace the ordinary frontend.
+- Emit namespace-qualified callable bindings and initializers from checked defs;
+  retain one module table/runtime identity and compiler-owned module contracts.
+  Actual JS operations stay inline in annotated namespaces. An annotation alone
+  is not a proof that a BL-to-BL call cannot suspend.
+- Compile common rt/core through actor lowering; replace actor/runtime.bl's
+  duplicate collection prelude with imports only when higher-order and bootstrap
+  differential gates pass. The actor policy remains BL and the engine remains
+  the only frame evaluator. Do not keep a sync/actor profile selector.
+- Unknown higher-order calls require frames initially. Add conditional callable
+  contracts for argument/capture requirements as direct specialization of the
+  same IR, with runtime evidence owned by the compiler; never infer safety from
+  an arbitrary JavaScript function's shape or author annotation. This avoids
+  falsely promising a synchronous callback for a possible receiving function.
+- Migrate evaluator output, editor event entrypoints and build tasks together;
+  test cold/warm parity, native callbacks, package unload, exceptions, bootstrap
+  cycles and user-defined functions before deleting the old control emitter.
+- Protect compilation/analysis/export through actor job admission and generation
+  cancellation. Worker-only async Promise queues are still a migration target;
+  preparation's actor conversion does not complete evaluator CPU preemption.
+
+* Current environment/proof note
+A fresh capped cold package build from upstream e02b1881 passed after the schema
+fix and committed package change 2fdda65. The owned build VM was stopped before
+starting the actor-pattern candidate VM. Editor checks pass all 73 with BLED_ROOT
+pointing at Beam Lisp's source corpus; package checks pass 61. Presentation check
+remains unchanged. Uncommitted take.bl/explore.bl are initial pure data prototypes,
+not yet linked or tested and must not be reported as delivered experiences.

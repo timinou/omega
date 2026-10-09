@@ -1,0 +1,19 @@
+Running as unit: pelagic-experiences-build.service; invocation ID: e81de9d932e844009c73fcc7ec7053fd
+bl-stage-hosts: 67 pinned host beams staged into /home/user/code/undefine/beam-lisp/build (app resource beam_lisp.app)
+bl: this image's library beams are a previous toolchain's generation (first seen: vm.native).
+bl: stale libraries are compiled once and cached on first use; run `bl build` to rebuild the whole image.
+PELAGIC: compiling editor, language and package together
+js-actors: compiling /home/user/code/undefine/beam-lisp/priv/lib/js/actor/runtime.bl
+js-actors: compiling /tmp/pelagic-actors-5162/prepare.bl
+js-actors: retained 84/353 definitions
+js-actors: compiled 84 definitions from 2 sources -> /tmp/pelagic-actors-5162/out/prepare.mjs
+js-actors: 870 host references audited (736 remote, 134 global) against the allowlist
+js-actors: numeric gate — 0 raw-Number site(s) with witness, 5 checked H.arith site(s) -> /tmp/pelagic-actors-5162/out/numeric-gate.prepare.mjs.json
+PELAGIC: /home/user/code/undefine/omega/spikes/pelagic/dist/local (static files; no BEAM runtime server)
+CONSOLIDATION warm compiler ready
+nil
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 6min 34.769s
+             CPU time consumed: 4min 27.138s
+                   Memory peak: 1.3G (swap: 118.2M)
