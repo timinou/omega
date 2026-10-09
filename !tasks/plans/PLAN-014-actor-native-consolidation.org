@@ -247,3 +247,23 @@ starting the actor-pattern candidate VM. Editor checks pass all 73 with BLED_ROO
 pointing at Beam Lisp's source corpus; package checks pass 61. Presentation check
 remains unchanged. Uncommitted take.bl/explore.bl are initial pure data prototypes,
 not yet linked or tested and must not be reported as delivered experiences.
+
+* Checkpoint: shared patterns and vocabulary
+Upstream ddcb6808 removes duplicate binding-pattern traversal, reader accessors,
+identifier mangling and string escaping. Canonical structural views distinguish
+missing record fields from present nil, with one lookup per map pattern field.
+51 focused checks and 461 actor checks at default/17/41 budgets pass, alongside
+scheduler hardening and eight ordinary BEAM/JS differential groups.
+Namespace staging is the next candidate; control lowering/core migration is
+still outstanding. The package compiler pin remains e02b1881 until a new full
+package build validates the subsequent compiler changes.
+
+* Checkpoint: cancellable offline export
+Offline export now owns a cancellation lifetime from admission through DSP
+completion. AbortSignal cancellation and exact package unload promptly reject
+waiting callers, release the graph, and resume suspended native renders so the
+browser can retire them. OfflineAudioContext has no native abort API: immediate
+physical reclamation of its output buffer is not promised. Real-editor checks
+cover pre-start, prepared graph, suspension, and ed/unuse with source preserved;
+no browser errors. All 61 package checks pass using the current compiled graph.
+Proof: spikes/pelagic/proof/actor-consolidation/export/cancellation.json.

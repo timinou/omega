@@ -191,3 +191,20 @@ quantized commit, stale refusal, shader failure and export during playback.
 [unused](proof/actor-consolidation/audition/unused.jpg) show the package lifecycle.
 The original presentation check is unchanged and reports 12 variants with no
 mismatch for the Pelagic demo document. Four other experience demos remain open.
+
+Offline export lifetime
+-----------------------
+
+`renderAudio` accepts an optional `AbortSignal`. Admission waits, graph-building
+yields, native suspension barriers and completion all share that lifetime.
+Package unload cancels every owned export, which rejects with `AbortError` and
+releases its AudioNodes. Outstanding barriers resume automatically: browsers
+provide no `OfflineAudioContext.close()` or native abort operation, so the
+remaining silent render must retire through the browser. Its output allocation
+may outlive cancellation briefly; the host does not retain the result.
+
+The real-editor [cancellation proof](proof/actor-consolidation/export/cancellation.json)
+covers cancellation before work, after graph preparation, at a suspension, and
+through `ed/unuse`, preserving the document. The test is
+`python3 spikes/pelagic/test/export-cancel-browser.py`. It uses an isolated static
+world and the same compiled BL admission and graph modules as playback.

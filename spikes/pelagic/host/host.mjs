@@ -319,41 +319,57 @@ export function createHost(api) {
       }
     }
   }
-  async function waitWork(kind){
+  async function waitWork(kind,signal=null){
     while(!admitWork(kind,playing,playing?nextTime-ctx.currentTime:Infinity)){
-      await new Promise(resolve=>setTimeout(resolve,25));alive();
+      signal?.throwIfAborted();await new Promise(resolve=>setTimeout(resolve,25));alive();
     }
-    alive();
+    signal?.throwIfAborted();alive();
   }
-  async function renderAudio(values=config,{seconds=null,sampleRate=44100,onProgress=()=>{}}={}){
+  async function renderAudio(values=config,{seconds=null,sampleRate=44100,onProgress=()=>{},signal=null}={}){
     const c={...defaults,...values},duration=seconds??1024/4*60/c.bpm+10;
     if(!Number.isFinite(duration)||duration<=0||duration>600||![22050,44100,48000].includes(sampleRate))throw new Error('Invalid export duration or sample rate');
-    await waitWork('export');
-    const offline=new OfflineAudioContext(2,Math.ceil(duration*sampleRate),sampleRate),engine=new AudioEngine(offline,c);offlineRenders.add(engine);
+    // Cancellation belongs to the host IO lifetime; BL still owns admission.
+    // OfflineAudioContext has no close/abort method. Release the graph now and
+    // resume any outstanding suspension so the browser can retire its render.
+    const controller=new AbortController();let engine=null,offline=null;
+    const abort=()=>{controller.abort(new DOMException('Audio export cancelled','AbortError'));engine?.dispose();if(offline?.state==='suspended')offline.resume().catch(()=>{});};
+    const job={abort};offlineRenders.add(job);signal?.addEventListener('abort',abort,{once:true});
+    let rejectCancelled;
+    const cancelled=new Promise((_,reject)=>{rejectCancelled=reject;});cancelled.catch(()=>{});
+    const onAbort=()=>rejectCancelled(controller.signal.reason);
+    controller.signal.addEventListener('abort',onAbort,{once:true});
+    if(signal?.aborted)abort();
+    const waiting=promise=>Promise.race([promise,cancelled]);
     try{
-      engine.prewarm();onProgress('graph-ready');
+      await waiting(waitWork('export',controller.signal));
+      offline=new OfflineAudioContext(2,Math.ceil(duration*sampleRate),sampleRate);engine=new AudioEngine(offline,c);
+      engine.prewarm();onProgress('graph-ready');controller.signal.throwIfAborted();
       const state={config:c,patterns:{},variation:{density:1,transpose:0,seed:37}},stepSeconds=60/c.bpm/4;
       // Native DSP receives at most .25 seconds before the next admission gate.
       // Graph preparation shares the immutable score cache and compiled schema.
       const quantum=.25,barriers=[];
-      for(let time=quantum;time<duration-.05;time+=quantum)barriers.push({time,promise:offline.suspend(time)});
+      for(let time=quantum;time<duration-.05;time+=quantum){
+        const promise=offline.suspend(time);
+        promise.then(()=>{if(controller.signal.aborted)offline.resume().catch(()=>{});},()=>{});
+        barriers.push({time,promise});
+      }
       let cursor=0;
       const fill=async until=>{
         let started=performance.now();
         while(cursor<1024&&cursor*stepSeconds<Math.min(until,duration-1)){
-          alive();const time=cursor*stepSeconds;
+          controller.signal.throwIfAborted();alive();const time=cursor*stepSeconds;
           for(const item of playbackVoices(state,cursor,engine.serial,scoreVoices(cursor),{a:false,b:false}))
             engine.trigger(item.voice,time+item.offset*stepSeconds);
           cursor++;
-          if(performance.now()-started>=4){await new Promise(resolve=>setTimeout(resolve,0));await waitWork('export');started=performance.now();}
+          if(performance.now()-started>=4){await waiting(new Promise(resolve=>setTimeout(resolve,0)));await waiting(waitWork('export',controller.signal));started=performance.now();}
         }
       };
-      await fill(exportWindow(playing));onProgress('first-chunk');
+      await fill(exportWindow(playing));onProgress('first-chunk');controller.signal.throwIfAborted();
       const fadeStart=Math.max(0,duration-7);engine.output.gain.setValueAtTime(c.master,fadeStart);engine.output.gain.linearRampToValueAtTime(0,duration-.1);
       const rendered=offline.startRendering();rendered.catch(()=>{});
-      for(const barrier of barriers){await barrier.promise;await waitWork('export');onProgress(barrier.time);await fill(barrier.time+exportWindow(playing));await offline.resume();}
-      return await rendered;
-    }finally{engine.dispose();offlineRenders.delete(engine);}
+      for(const barrier of barriers){await waiting(barrier.promise);await waiting(waitWork('export',controller.signal));onProgress(barrier.time);await fill(barrier.time+exportWindow(playing));await waiting(offline.resume());}
+      return await waiting(rendered);
+    }finally{abort();signal?.removeEventListener('abort',abort);controller.signal.removeEventListener('abort',onAbort);engine?.dispose();offlineRenders.delete(job);}
   }
   async function exportAudio(){if(rendering)return;rendering=true;notice('Rendering the original score to stereo WAV…');try{const buffer=await renderAudio();alive();download(wav(buffer),'pelagic-original-score.wav','audio/wav');notice('Stereo WAV exported');}finally{rendering=false;}}
   function syncAssets(){
@@ -512,7 +528,7 @@ export function createHost(api) {
     case 'record':await record();break;case 'export':await exportAudio();break;
     default:throw new Error('Unknown Pelagic effect '+e.op);}},
     dispose(){disposed=true;++evaluation;stopAudition(true);scoreVoices.dispose();evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
-      for(const d of Object.values(decks))d.dispose();for(const engine of offlineRenders)engine.dispose();offlineRenders.clear();audio?.dispose();ctx?.close();files.clear();handles.clear();pending=[];patterns.clear();for(const url of urls)URL.revokeObjectURL(url);
+      for(const d of Object.values(decks))d.dispose();for(const job of offlineRenders)job.abort();offlineRenders.clear();audio?.dispose();ctx?.close();files.clear();handles.clear();pending=[];patterns.clear();for(const url of urls)URL.revokeObjectURL(url);
       for(const v of views)v.shader?.dispose();}
   };
 }
