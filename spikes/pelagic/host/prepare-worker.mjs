@@ -15,7 +15,11 @@ self.addEventListener('message',({data})=>{
    if(mode==='prebuilt')fetch(new URL('score-cache.json',import.meta.url)).then(response=>{
     if(!response.ok)throw new Error('Prepared score unavailable');return response.json();
    }).then(value=>{
-    if(value.schema!=='pelagic.score.v1'||value.steps?.length!==1024||!value.steps.every(row=>Array.isArray(row)&&row.length<=64))throw new Error('Invalid prepared score');
+    if(!['pelagic.score.v1','pelagic.score.v2'].includes(value.schema)||value.steps?.length!==1024||!value.steps.every(row=>Array.isArray(row)&&row.length<=64))throw new Error('Invalid prepared score');
+    if(value.schema==='pelagic.score.v2'){
+     if(!Array.isArray(value.graphs)||value.graphs.length>64)throw new Error('Invalid prepared graph catalog');
+     for(const row of value.steps)for(const voice of row){if(!Number.isInteger(voice.graph)||voice.graph<0||voice.graph>=value.graphs.length)throw new Error('Invalid prepared graph reference');voice.graph=value.graphs[voice.graph];}
+    }
     prebuilt=value.steps;self.postMessage({op:'ready'});
    }).catch(fail);
    else import('./values.mjs').then(B=>{

@@ -92,3 +92,24 @@
 ; score steps. One native AudioNode graph remains an indivisible browser call.
 (defn continue-preparation? [next-time audio-time elapsed-ms]
   (or (< next-time (+ audio-time 1)) (< elapsed-ms 4)))
+
+; Build-time specialization of the finite score. Graph IDs preserve field order
+; on reconstruction and avoid shipping the same seven templates thousands of times.
+(defn score-data []
+  (let [graphs (js/Array.) ids (js/Map.) steps (js/Array.)]
+    (loop [index 0]
+      (when (< index 1024)
+        (let [row (aget (score-chunk index 1) 0)]
+          (loop [voice-index 0]
+            (when (< voice-index (.-length row))
+              (let [voice (aget row voice-index)
+                    graph (.-graph voice)
+                    key (js/JSON.stringify graph)]
+                (when-not (.has ids key)
+                  (.set ids key (.-length graphs))
+                  (.push graphs graph))
+                (set! (.-graph voice) (.get ids key)))
+              (recur (inc voice-index))))
+          (.push steps row))
+        (recur (inc index))))
+    #js {:schema "pelagic.score.v2" :graphs graphs :steps steps}))

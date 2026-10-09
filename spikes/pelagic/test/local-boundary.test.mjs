@@ -137,6 +137,11 @@ test('native BL preparation uses the same score and yields only after securing i
   const chunk=B.d_score_chunk(start,16);assert.equal(chunk.length,16);
   for(let i=0;i<16;i++)assert.deepEqual(chunk[i],B.d_to_js(Score.d_step(start+i,Score.d_defaults)));
  }
+ const data=B.d_score_data();assert.equal(data.steps.length,1024);assert.ok(data.graphs.length>0&&data.graphs.length<=64);
+ for(const start of [0,128,448,640,1008])for(let i=start;i<start+16;i++){
+  const expanded=data.steps[i].map(voice=>({...voice,graph:data.graphs[voice.graph]}));
+  assert.deepEqual(expanded,B.d_score_chunk(i,1)[0]);
+ }
  assert.equal(B.d_continue_preparation$Q(0.9,0,100),true);
  assert.equal(B.d_continue_preparation$Q(2,0,3),true);
  assert.equal(B.d_continue_preparation$Q(2,0,4),false);

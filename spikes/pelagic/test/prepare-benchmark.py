@@ -6,6 +6,12 @@ from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'dist/local';PROOF=ROOT/'proof/preparation';PROOF.mkdir(parents=True,exist_ok=True)
 class Handler(http.server.SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
+ def translate_path(self,path):
+  prefix='/pkg/pelagic/actor/'
+  if path.startswith(prefix):
+   relative=path[len(prefix):].split('?')[0]
+   if relative in ['host.mjs','out/prepare.mjs']:return str(ROOT/'dist/actor'/relative)
+  return super().translate_path(path)
  def do_GET(self):
   if self.path=='/benchmark':
    self.send_response(200);self.send_header('Content-type','text/html');self.end_headers();self.wfile.write(b'<!doctype html><title>BL preparation measurement</title>');return
