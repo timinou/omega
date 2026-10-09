@@ -1,6 +1,6 @@
 #+TITLE: PELAGIC audio/video deadline architecture
 #+DATE: 2026-10-09
-#+STATUS: implementing
+#+STATUS: implemented; strict end-to-end deadline target open
 
 * Objective
 Target a 16 ms p95 work/submission budget and smooth display-paced frames while
@@ -53,3 +53,54 @@ Steady single-layer scenes bypass compositing; DOM telemetry runs at 10 Hz.
 34 package tests and the real performance drive pass, including shader rejection,
 1280x720 recorded video (ffprobe), GPU recovery and exact unuse. Keep strict
 submission acknowledgements distinct from earlier handoff-only worker timings.
+
+* Sustained pressure finding
+The first 300-second run stopped at its second injected UI stall: cached host
+telemetry advanced only one frame over the stall/probe interval. This is retained
+in proof/realtime/raf-pressure-failure.json, not counted as a successful soak.
+Use a read-only worker counter for stall checks. Add generic compiled BL js.frame
+pacing that races RAF against a one-period timer, cancels the loser, and supplies
+an opaque cancellable handle. Preserve deadline failures as evidence.
+
+
+* Native clock and allocation slice
+Generic js.frame is committed upstream (7861aa54), pinned via 341ca18d.
+Native worklet-to-renderer clocks have one packet outstanding per subscriber,
+with eight subscribers maximum. GPU timers are asynchronous and bounded to four;
+quality follows GPU cost instead of reducing resolution for editor/OS stalls.
+Native audio reserves four seconds independently of the 1.15-second revision
+preparation horizon. Pure BL audio-equivalent? preserves those reservations for
+visual-only edits. This removes redundant graph reconstruction; native cancellation
+stops sources immediately and retires disconnections in bounded batches.
+
+40 package tests and 22 native JS checks pass. A proposed native envelope fusion
+failed waveform equivalence and was reverted; retained DSP passes the reference
+render. Recording preparation now waits for submission, retrying mailbox-replaced
+frames instead of starting capture at the previous canvas dimensions.
+
+Failed pressure runs remain under proof/realtime: short audio reserves, insufficient
+edit preparation, needless audio rebuilds, and early capture are recorded separately.
+The last pre-capture-fix 300-second run had zero missed events, 5.3 ms worker CPU
+p95 and 2 ms GPU p95; cadence 21 ms and AV submission 42 ms still miss target.
+Its audio sample-onset maximum was 397 ms despite a 0.021 ms p95; native audio
+advanced at 0.769 of wall time on this heavily loaded host. Do not claim physical
+AV or a strict end-to-end 16 ms guarantee from these results.
+
+
+* Final validation
+The capture-fixed 300-second run passes functional pressure gates: 30 revisions,
+zero scheduler misses, actual 1280x720 VP8/Opus, independent worker progression
+through both UI stalls, shader rejection, worker failure transport stop, source
+preservation and exact unuse. Worker CPU p95 is 6.1 ms, GPU p95 1.9 ms at full
+quality. Cadence p95 22 ms and native-clock-to-submit p95 21 ms miss the target;
+main acknowledgement p95 is 642 ms. Sample-onset p95 is 0.022 ms but its maximum
+is 320 ms; three native graphs completed after start. Native clock rate is 0.776
+of wall time. Preserve these failures rather than equating zero scheduler misses
+with glitch-free audio. Concurrent browser contract checks also ran in this interval.
+
+Latest 19 performance-browser and 14 static/offline browser checks pass. Package
+40, upstream native JS 22, vendored editor 73 and unchanged presentation 23 pass.
+The reproducible 44-module bundle and ZIP integrity check pass. Current evidence
+is spikes/pelagic/proof/realtime/report.json; screenshots cover used and unused
+real editor states. Further strict latency work needs profiling on a controlled
+realtime-capable host and physical AV loopback; the 16 ms target stays explicit.

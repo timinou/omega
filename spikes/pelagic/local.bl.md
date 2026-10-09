@@ -70,11 +70,12 @@ patch syntax. The page evaluator starts on demand for editor commands such as
 
 ## Verification
 
-The bundle uses compiler `a8749d88`, with the runtime/compiler changes also
-committed on upstream main as `cb485ab3`. It contains 43 modules, 2,598,967 bytes
-of static files and a 591,392-byte ZIP (integrity checked).
+The bundle pins compiler `341ca18d`; generic BL frame pacing is committed on
+upstream main as `7861aa54`, following runtime improvements in `cb485ab3`.
+It contains 44 modules, 2,630,542 bytes of static files and a 602,493-byte ZIP
+(integrity checked).
 
-The bundle passes **30 PELAGIC tests**, **73 vendored editor tests**,
+The bundle passes **40 PELAGIC tests**, **73 vendored editor tests**,
 **51 runtime tests**, native live interop and **14 static browser checks**.
 The unchanged presentation gate passes all 23 variants. The browser proof
 covers real C-Enter and Overtone macros during audio playback, worker isolation,
@@ -134,8 +135,8 @@ patch authors keep using the existing scene, shader and instrument APIs.
 Synchronous shader validation preserves whole-revision rejection; a small off-DOM
 context prepares programs, while the worker owns all per-frame rendering. Actual
 1280×720 VP8 capture, invalid-shader rejection, context loss/restoration and exact
-unuse passed the real-editor drive in `test/performance-browser.py` (20 checks).
-34 package tests pass, including finite cache eviction, score/mute equivalence,
+unuse passed the real-editor drive in `test/performance-browser.py` (19 checks).
+40 package tests pass, including finite cache eviction, score/mute equivalence,
 cross-realm clock projection and stale output-timestamp fallback.
 
 Real editor with the package: ![worker stage](proof/performance/studio.jpg)
@@ -145,3 +146,61 @@ Diagnostics distinguish main-thread frame cadence, worker cadence, worker CPU
 submission work and AV submission acknowledgements. Worker acknowledgements
 include round-trip delay; neither they nor audio sample probes measure physical
 speaker/display synchronization. The 16 ms end-to-end target remains open.
+
+
+The audio worklet sends its native clock directly to each graphics worker. Each
+subscriber has one unacknowledged packet; the subscriber count is bounded at eight.
+The generic annotated BL `js.frame` namespace races RAF with a one-period timer,
+cancels the loser and owns an opaque cancellable handle. The next tick is armed
+before GL submission. Neither clock requires a responsive editor thread.
+
+Native audio reserves four seconds of score; audible revisions prepare 1.15 seconds
+ahead and replace the reservation at their quantized boundary. Pure BL
+`pelagic.performance/audio-equivalent?` identifies visual-only revisions so scene
+edits preserve those audio graphs and automation. Cancellation stops sources
+immediately and disconnects retired nodes in bounded batches. FFT windows are
+shorter, feature calibration handles their actual shape, and shader uploads retain
+their normalized texture contract. Public patch APIs are unchanged.
+
+GPU timing uses at most four asynchronous disjoint queries. Automatic quality
+responds to measured GPU cost where available, preserving full resolution when
+CPU scheduling is the bottleneck. Unsupported timing reports unavailable. Audio
+construction, native clock progress, worker submission and frame cadence have
+separate diagnostics; none substitutes for another.
+
+An attempted AudioParam envelope fusion was rejected by waveform comparison.
+The retained DSP passes the reference-render gate (peak sample difference below
+0.00000009, relative RMS difference below 0.00000015). Reproduce it with
+`python3 spikes/pelagic/test/audio-lowering.py`.
+
+The sustained pressure harness is `python3 spikes/pelagic/test/realtime.py`;
+set `PELAGIC_REALTIME_SECONDS=300` for the five-minute gate. It uses an isolated
+static server, real editor compilation, continuous scene edits, actual VP8 capture,
+250/500 ms editor-thread stalls, atomic shader rejection and worker failure/unuse.
+[Current measurements](proof/realtime/report.json) and earlier failed runs in
+`proof/realtime/` retain deadline misses and unfiltered tail measurements.
+Physical speaker/display synchronization requires a separate loopback measurement.
+
+
+Five-minute pressure result (2026-10-09, loaded Linux host; browser contract checks
+also ran during this interval):
+
+| Measurement | Result | 16 ms gate |
+| --- | ---: | --- |
+| Worker CPU submission p95 | 6.1 ms | Pass |
+| GPU execution p95 | 1.9 ms | Pass |
+| Worker frame interval p95 | 22 ms | Open (60 Hz period is 16.67 ms) |
+| Native audio clock → worker submission p95 | 21 ms | Open |
+| Main-thread submission acknowledgement p95 | 642 ms | Open |
+| Missed scheduler events | 0 | Pass |
+| Sample-onset probe p95 / maximum | 0.022 / 320 ms | Tail remains open |
+
+All 30 visual revisions ran at full internal quality. Native audio progressed at
+0.776 of wall time, and three graphs completed after their scheduled start. Zero
+scheduler misses therefore does not establish glitch-free physical audio. Actual
+1280×720 VP8/Opus capture, both injected UI stalls, atomic shader rejection,
+worker failure stopping transport, source preservation and exact unuse passed.
+The final run exits successfully; its strict cadence/AV budget flags remain false.
+
+Real editor during pressure: ![pressure run](proof/realtime/used.jpg)
+After unuse: ![restored source](proof/realtime/unused.jpg)
