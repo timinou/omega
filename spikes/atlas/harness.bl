@@ -1,0 +1,28 @@
+; Isolated generative harness proof: real omega.task + Gen, no live-world writes.
+(ns atlas.harness
+ (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
+           [gen.llm :as gen] [credential.env :as credentials]))
+(def home (System/get_env "OMEGA_HOME"))
+(def root "/tmp/omega-atlas-harness")
+(File/mkdir_p! root)
+(def public-context (File/read! (str home "/spikes/atlas/desk.bl.org")))
+(def instructions (File/read! (str home "/spikes/atlas/instructions.bl.org")))
+(def key (or (credentials/lookup (credentials/read-file (str home "/.env")) "DEEPSEEK_API_KEY") (System/get_env "DEEPSEEK_API_KEY")))
+(def step
+ (fn [req]
+  (let [r (gen/chat (assoc gen/deepseek :key key :max-tokens 3500 :timeout-ms 180000)
+            (list {:role "system" :content (str "You are an evidence research assistant. Output a concise Org memo, under 650 words, using only public context. Cite evidence IDs. Label inferences and missing data. Do not forecast prices or invent source findings.\n" instructions)}
+                  {:role "user" :content (str "Question: Which additional public observation has the highest value for deciding whether the Artcraft thesis warrants an Adobe short, and why? Give a falsifiable test and the strongest counterargument.\n\n" public-context)}))]
+   (loop/say (or (:ok r) "Gen provider unavailable. Research remains incomplete; no output invented.")))))
+(def e (env/open))
+(def sys (task/start-system e {:root root :tools [] :step step :max-steps 2 :system-prompt "Atlas bounded public-evidence review"}))
+(def id (task/open! sys {:title "Atlas / highest-value public experiment" :goal "Review the supplied Atlas notebook and propose a falsifiable next experiment." :cwd root}))
+(loop [n 0]
+ (let [v (task/view sys id)]
+  (if (and (< n 240) (contains? #{:open :running} (:status v)))
+   (do (Process/sleep 1000) (recur (inc n)))
+   (do (File/write! (str home "/spikes/atlas/proof/harness.edn") (pr-str {:task v :turns (loop/turns sys id)}))
+       (File/write! (str home "/spikes/atlas/docs/harness-review.bl.org")
+        (str "#+TITLE: Atlas / generative harness experiment review\n#+TASK: " id "\n#+MODEL: " (:model gen/deepseek)
+          "\n#+STATUS: " (:status v) "\n\n" (:result v)))
+       (println (str "Atlas harness task " id " status " (:status v)))))))

@@ -4,6 +4,11 @@ export function notebook(source){
  if(!match)throw Error('Notebook needs one #+begin_atlas JSON block');
  const d=JSON.parse(match[1]);
  if(d.version!==1||!Array.isArray(d.evidence)||!Array.isArray(d.scenarios))throw Error('Unsupported Atlas schema');
+ for(const k of ['title','subtitle','summary','bear','bull','decision','comparison'])if(typeof d[k]!=='string')throw Error('Notebook field '+k+' must be text');
+ for(const k of ['chain','claims','gates','signals','timeline','comparisonRows','experiments','report'])if(!Array.isArray(d[k]))throw Error('Notebook field '+k+' must be an array');
+ if(!d.data||!Array.isArray(d.data.acquisition)||!Array.isArray(d.data.attention)||!Array.isArray(d.data.stories)||!d.data.series||typeof d.data.at!=='string')throw Error('Notebook needs explicit snapshot data');
+ for(const e of d.evidence)if(typeof e.id!=='string'||typeof e.finding!=='string'||typeof e.title!=='string')throw Error('Evidence needs ID, title and finding');
+
  if(d.scenarios.length<2||d.scenarios.some(s=>!Number.isFinite(s.probability)||s.probability<0||!Number.isFinite(s.return)))throw Error('Invalid scenarios');
  const sum=d.scenarios.reduce((a,s)=>a+s.probability,0);if(Math.abs(sum-1)>1e-6)throw Error('Scenario probabilities must sum to one');
  const ids=new Set(d.evidence.map(e=>e.id));if(ids.size!==d.evidence.length)throw Error('Evidence IDs must be unique');
@@ -39,3 +44,16 @@ export function readiness(d){
  const missing=d.gates.filter(g=>g.status!=='met');return {label:missing.length?'WAIT / RESEARCH':'READY FOR HUMAN REVIEW',missing};
 }
 export function normalized(rows){if(!rows.length)return [];return rows.map(r=>({...r,index:100*r.close/rows[0].close}));}
+export function marketMetrics(asset,benchmark,sessions=20){
+ const a=returns(asset).slice(-sessions),bm=new Map(returns(benchmark).map(r=>[r.date,r.return]));
+ if(a.length!==sessions||a.some(r=>!bm.has(r.date)))return {status:'missing',reason:'Need fully matched lookback'};
+ const mean=a.reduce((s,r)=>s+r.return,0)/a.length,variance=a.reduce((s,r)=>s+(r.return-mean)**2,0)/(a.length-1);
+ let index=1,peak=1,drawdown=0;for(const r of a){index*=1+r.return;peak=Math.max(peak,index);drawdown=Math.min(drawdown,index/peak-1);}
+ const benchmarkReturn=Math.expm1(a.reduce((s,r)=>s+Math.log1p(bm.get(r.date)),0));
+ return {status:'ok',from:a[0].date,to:a.at(-1).date,n:a.length,return:index-1,relative:index-1-benchmarkReturn,volatility:Math.sqrt(variance*252),drawdown};
+}
+export function revenueBridge(arr,exposedShare,migration,retainedFraction){
+ if(!Number.isFinite(arr)||arr<0||[exposedShare,migration,retainedFraction].some(x=>!Number.isFinite(x)||x<0||x>1))throw Error('Invalid revenue bridge assumptions');
+ const exposed=arr*exposedShare,loss=exposed*migration*(1-retainedFraction);
+ return {exposed,loss,totalFraction:arr?loss/arr:0,kind:'sensitivity, not a revenue forecast'};
+}
