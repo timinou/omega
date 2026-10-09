@@ -1,0 +1,14 @@
+; A staged patch is never history. Its base is checked again at commit, because
+; a knob, another edit or a restore may have changed the performance meanwhile.
+(ns pelagic.audition)
+(defn stage [model candidate source]
+  (when-not (:pending candidate) (throw "No patch to audition"))
+  {:base-revision (:revision model) :base-serial (:serial model) :base (:current model)
+   :candidate candidate :source source :status "staged"})
+(defn current? [audition model]
+  (and audition (= (:base-revision audition) (:revision model))
+       (= (:base-serial audition) (:serial model)) (= (:base audition) (:current model))))
+(defn commit [audition model]
+  (when-not (current? audition model) (throw "Audition is stale; audition the current patch again"))
+  (:candidate audition))
+(defn duration [bpm] (min 8 (max 0.5 (/ 240 bpm))))

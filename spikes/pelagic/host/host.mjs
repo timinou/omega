@@ -1,14 +1,16 @@
 import * as R from '../../out/rt.mjs';
 import * as Score from '../../out/pelagic.score.mjs';
 import * as Performance from '../../out/pelagic.performance.mjs';
+import * as Audition from '../../out/pelagic.audition.mjs';
 import {errorText} from './errors.mjs';
 import {LocalStore,LiveTake,validateSession} from './storage.mjs';
 import {performanceControls} from './controls.mjs';
 import {SceneStage} from './scenes.mjs';
 import {createStage} from './render-stage.mjs';
 import {prepareScore} from './prepare.mjs';
+import {freezeGraph} from './score-wire.mjs';
 import * as Bridge from '../../out/pelagic.bridge.mjs';
-import {conversions,download,setText,audioContext,readText,createEvaluator,afterPaint,createScoreSource,audibleTime,createGraphicsWorker,continuePreparation} from './values.mjs';
+import {conversions,download,setText,audioContext,readText,createEvaluator,afterPaint,createScoreSource,audibleTime,createGraphicsWorker,continuePreparation,admitWork,exportWindow,playbackVoices} from './values.mjs';
 import {AudioEngine,plain,validateGraph,wav} from './audio.mjs';
 import {ShaderStage} from './shader.mjs';
 import {SampleDeck} from './deck.mjs';
@@ -20,7 +22,7 @@ function blocks(source){const result=[];const re=/^#\+begin_src\s+(\S+)[^\n]*\n(
   if(!result.length && source.trim())result.push({language:'beam-lisp',code:source});return result;}
 export function createHost(api) {
   const prepareEnabled=new URLSearchParams(globalThis.location?.search||'').get('prepare')!=='none';
-  const scoreVoices=prepareScore(createScoreSource(Score.d_step,Score.d_defaults),()=>createGraphicsWorker(moduleURL('prepare-worker.mjs')),{enabled:prepareEnabled});
+  const scoreVoices=prepareScore(createScoreSource(Score.d_step,Score.d_defaults),()=>createGraphicsWorker(moduleURL('prepare-worker.mjs')),{enabled:prepareEnabled,admit:()=>admitWork('prepare',playing,playing?nextTime-ctx.currentTime:Infinity)});
   afterPaint(()=>scoreVoices.start());
   let config={...defaults},ctx=null,ctxWall=0,audio=null,timer=null,playing=false,nextStep=0,nextTime=0,origin=0,beatOrigin=0,disposed=false;
   const store=new LocalStore();let lastTake=null,restoreGeneration=0,recordPreparing=false,lastEvaluation=null,evalCount=0;
@@ -35,11 +37,12 @@ export function createHost(api) {
   try{observer?.observe({type:'longtask'});}catch{}
   let evaluatorClient=createEvaluator(moduleURL('live-worker.mjs'));
   function evaluator(){if(disposed)return null;if(evaluatorClient?.closed())evaluatorClient=createEvaluator(moduleURL('live-worker.mjs'));return evaluatorClient;}
+  let auditionState=null,auditionEngine=null,auditionTimer=null,auditionEnd=0,auditionDecks=[];
   let readyVM=null,sourcePromise=null,shaderSource=null,liveN=0,patterns=new Map(),pending=[],recording=null,rendering=false;
   const views=new Set(),files=new Map(),decks={},urls=new Set(), handles=new Map(),offlineRenders=new Set();
   const notice=(message,playingValue=playing)=>{if(disposed)return;for(const v of views)v.status(message);api.dispatch({type:'pelagic/status',message,playing:playingValue});};
   const alive=()=>{if(disposed)throw new Error('Package was unloaded');};
-  function unlock(){alive();if(!ctx){ctx=audioContext();ctxWall=performance.now();audio=new AudioEngine(ctx,config);audio.startTelemetry(moduleURL('timing-worklet.mjs')).then(()=>{if(disposed)return;for(const v of views)if(v.shader?.worker)v.shader.connectClock(audio.graphicsClock());});for(const key of ['a','b'])decks[key]=new SampleDeck(audio,key);}ctx.resume();return audio;}
+  function unlock(){alive();if(!ctx){ctx=audioContext();ctxWall=performance.now();audio=new AudioEngine(ctx,config);audio.prewarm();audio.startTelemetry(moduleURL('timing-worklet.mjs')).then(()=>{if(disposed)return;for(const v of views)if(v.shader?.worker)v.shader.connectClock(audio.graphicsClock());});for(const key of ['a','b'])decks[key]=new SampleDeck(audio,key);}ctx.resume();return audio;}
   async function sources(){if(!sourcePromise)sourcePromise=Promise.all(['pelagic.glsl','overtone.bl'].map(f=>readText(moduleURL(f))));return sourcePromise;}
   async function vm(){
     if(readyVM)return readyVM;
@@ -93,11 +96,37 @@ export function createHost(api) {
   }
   // Reserve native audio independently of the next editable musical boundary.
   const lookAhead=()=>4;
-  function queueModel(candidate,quantize='bar',preview=false,assetChanges=null){
+  function queueModel(candidate,quantize='bar',preview=false,assetChanges=null,source=null){
     const value={pending:plain(candidate.get(R.kw('pending')))},state=value.pending?.state;
     if(!state)throw new Error('No pending performance state');
-    validateState(state);for(const v of views)v.shader?.validateState?.(state);
-    if(preview)return {ok:true,preview:true};
+    validateState(state);
+    for(const pattern of Object.values(state.patterns))for(const bundle of pattern.plan.bundles)for(const voice of bundle.voices)freezeGraph(voice.graph);
+    for(const v of views)v.shader?.validateState?.(state);
+    if(preview){
+      for(const [key,ref] of Object.entries(state.assets||{}))if(!decks[key]?.buffer||decks[key].hash!==ref.hash)throw new Error('Relink audition asset '+(ref.name||key));
+      const staged=Audition.d_stage(model,candidate,source);stopAudition();auditionState=staged;
+      auditionEngine=new AudioEngine(ctx,state.config,{level:.15});auditionEngine.prewarm();
+      const before=ctx.currentTime+.08,duration=plain(Audition.d_duration(state.config.bpm));
+      let step=Math.floor(current().beat*4),time=before;auditionEnd=before+duration;
+      for(const [key,ref] of Object.entries(state.assets||{})){
+        const deck=new SampleDeck(auditionEngine,key);auditionDecks.push(deck);
+        deck.install({...ref,buffer:decks[key].buffer,offset:decks[key].position()},before,true);
+      }
+      const pump=()=>{
+        if(disposed||!auditionEngine)return;
+        if(ctx.currentTime>auditionEnd+1){stopAudition();return;}
+        if(!admitWork('audition',playing,playing?nextTime-ctx.currentTime:Infinity))return;
+        const started=performance.now();
+        while(time<Math.min(auditionEnd,ctx.currentTime+.5)&&performance.now()-started<4){
+          const projected=playbackVoices(state,step,auditionEngine.serial,scoreVoices(Performance.d_score_index(step)),{a:!!state.assets?.a,b:!!state.assets?.b});
+          for(const item of projected)auditionEngine.trigger(item.voice,time+item.offset*60/state.config.bpm/4);
+          step++;time+=60/state.config.bpm/4;
+        }
+      };
+      auditionTimer=setInterval(()=>{try{pump();}catch(error){stopAudition();notice('Audition stopped · '+errorText(error));}},25);pump();
+      log('audition',{baseRevision:revisionID(),duration});notice('Audition · quiet monitor · active performance unchanged');
+      return {ok:true,preview:true,baseRevision:revisionID(),duration};
+    }
     const sameAudio=Performance.d_audio_equivalent$Q?Performance.d_audio_equivalent$Q(candidate.get(R.kw('pending')).get(R.kw('state')),model.get(R.kw('current'))):['config','patterns','assets','variation'].every(key=>JSON.stringify(state[key])===JSON.stringify(active[key]));
     const audioChanged=!sameAudio||!!assetChanges?.length;
     const inheritedAssets=revision?.originalAssetChanges||[];disarm();++restoreGeneration;
@@ -110,7 +139,13 @@ export function createHost(api) {
     log('queued',{revision:revision.id,targetBeat:beat,audioChanged});ack(playing&&!revision.armed?'QUEUED':'ARMED');
     if(!playing)applyRevision();return {ok:true,revision:value.pending.id,targetBeat:beat};
   }
-  function queueEdits(edits,options={}){if(!revision)syncAssets();return queueModel(Performance.d_stage(model,toBL(edits)),options.quantize,options.preview);}
+  function queueEdits(edits,options={}){if(!revision)syncAssets();return queueModel(Performance.d_stage(options.preview?Performance.d_cancel(model):model,toBL(edits)),options.quantize,options.preview,null,options.source);}
+  function stopAudition(forget=false){clearInterval(auditionTimer);auditionTimer=null;for(const deck of auditionDecks)deck.dispose();auditionDecks=[];auditionEngine?.dispose();auditionEngine=null;if(forget)auditionState=null;}
+  function commitAudition(quantize='bar'){
+    if(!auditionState)throw new Error('No staged audition');
+    const candidate=Audition.d_commit(auditionState,model),source=auditionState.get(R.kw('source'));
+    const result=queueModel(candidate,quantize);stopAudition(true);log('audition-commit',{source});return result;
+  }
   function validateState(state){
     for(const [key,value] of Object.entries(defaults))if(typeof state.config[key]!==typeof value)throw new Error('Missing or invalid configuration '+key);
     if(JSON.stringify(state).length>256000)throw new Error('Performance state exceeds 256 KB');
@@ -132,7 +167,6 @@ export function createHost(api) {
     }
     for(const [key,lo,hi] of [['density',0,1],['transpose',-24,24],['seed',0,2147483646]])if(!Number.isFinite(state.variation[key])||state.variation[key]<lo||state.variation[key]>hi)throw new Error('Invalid variation '+key);
   }
-  const stem=v=>({lantern:'melody',tide:'atmosphere',air:'air'})[v.synth]||v.synth;
   function schedule(){
     if(!playing||disposed)return;const preparationStart=performance.now();applyRevision();diagnostics.ticks++;
     if(nextTime<ctx.currentTime-.04){
@@ -145,26 +179,10 @@ export function createHost(api) {
         for(const v of views)v.shader?.armState?.(scheduled,revision.beat,revision.time,revision.id);
         audio.configure(scheduled.config,nextTime);installAssets(revision,nextTime);ack('ARMED');log('armed',{revision:revision.id,time:nextTime});
       }
-      const i=nextStep,c=scheduled.config,patternMap=scheduled.patterns;
+      const i=nextStep,c=scheduled.config;
       const voices=scoreVoices(mode==='performance'?Performance.d_score_index(i):i);
-      const time=nextTime+(i%2?c.swing*60/c.bpm/4:0);
-      const variation=scheduled.variation;
-      const emit=(v,voiceStem)=>{
-        if(c[voiceStem]===false)return;
-        if(!['kick','atmosphere','air'].includes(voiceStem)&&!Performance.d_chance(i+audio.serial,variation.seed,variation.density))return;
-        const value={...v,stem:voiceStem==='air'?'atmosphere':voiceStem,params:{...v.params}};
-        if(value.params.freq&&voiceStem!=='kick')value.params.freq*=2**(variation.transpose/12);
-        audio.trigger(value,time);
-      };
-      for(const v of voices)if(!patternMap[stem(v)]&&!decks[v.deck]?.buffer)emit(v,stem(v));
-      for(const pattern of Object.values(patternMap)){
-        const tick=i%(pattern.beats*4);
-        for(const bundle of pattern.plan.bundles){const local=(pattern.units==='beats'?bundle.time:bundle.time/(60000/(pattern.bpm||c.bpm)))*4;
-          if(Math.floor(local)===tick)for(const v of bundle.voices){if(c[pattern.stem]===false)continue;
-            const value={...v,stem:pattern.stem,deck:pattern.stem==='atmosphere'?'a':'b',params:{...v.params}};
-            if(value.params.freq)value.params.freq*=2**(variation.transpose/12);
-            if(Performance.d_chance(i+audio.serial,variation.seed,variation.density))audio.trigger(value,nextTime+(local-tick)*60/c.bpm/4);}}
-      }
+      const projected=playbackVoices(scheduled,i,audio.serial,voices,{a:!!decks.a?.buffer,b:!!decks.b?.buffer});
+      for(const item of projected)audio.trigger(item.voice,nextTime+item.offset*60/c.bpm/4);
       nextStep++;nextTime+=60/c.bpm/4;
     }
     const preparationMs=performance.now()-preparationStart;preparationTurns[Math.min(2000,Math.round(preparationMs))]++;preparationTurnMax=Math.max(preparationTurnMax,preparationMs);
@@ -236,7 +254,10 @@ export function createHost(api) {
   function handle(v){return typeof v==="number"?v:handles.get(voiceKey(v));}
   const reversible=new Set(['pattern','pattern-stop','configure','scene','launch','layer','visual','variation','gesture','shader','uniform']);
   function request(x){
-    unlock();applyRevision();validateEdit(x);
+    unlock();applyRevision();
+    if(x.kind==='audition-commit')return commitAudition(x.quantize);
+    if(x.kind==='audition-cancel'){stopAudition(true);log('audition-cancel');notice('Audition cancelled · active performance unchanged');return {ok:true};}
+    validateEdit(x);
     if(x.kind==='commit'||x.kind==='session'){
       const flatten=e=>['session','commit'].includes(e.kind)?e.edits.flatMap(flatten):[e];
       const edits=flatten(x);if(edits.some(e=>!reversible.has(e.kind)))throw new Error('A commit contains reversible edits only');
@@ -249,7 +270,7 @@ export function createHost(api) {
       case 'recall':return restoreSnapshot(x.name);
       case 'cancel':cancelRevision();log('cancel');return {ok:true};
       case 'pause':pause();return {ok:true};case 'resume':resume();return {ok:true};
-      case 'panic':cancelRevision();stop();audio?.cancelFrom(0);log('panic');notice('Panic · all voices stopped',false);return {ok:true};
+      case 'panic':stopAudition(true);cancelRevision();stop();audio?.cancelFrom(0);log('panic');notice('Panic · all voices stopped',false);return {ok:true};
       case 'perform':play(0,true);return {ok:true};case 'cue':play(Math.min(3,Math.max(0,x.movement))*16,mode==='performance');return {ok:true};
       case 'stop':stop();return {ok:true};
       case 'voice':trigger(x,ctx.currentTime+.04);break;
@@ -261,6 +282,7 @@ export function createHost(api) {
     return {ok:true};
   }
   async function evaluate(source,options={}){
+    if(options.preview)unlock();
     const id=++evalCount;const result=await evaluateImpl(source,options);if(id===evalCount)lastEvaluation={id,...result};return result;
   }
   async function evaluateImpl(source,options={}){
@@ -281,11 +303,11 @@ export function createHost(api) {
       const all=edits.flatMap(flatten),changes=all.filter(e=>reversible.has(e.kind)),actions=all.filter(e=>!reversible.has(e.kind));
       if(options.preview&&actions.length)throw new Error('Preview supports reversible edits only');
       let result={ok:true};
-      if(changes.length)result=queueEdits(changes,{quantize:edits.find(e=>e.kind==='commit')?.quantize,preview:options.preview});
+      if(changes.length)result=queueEdits(changes,{quantize:edits.find(e=>e.kind==='commit')?.quantize,preview:options.preview,source});
       for(const e of actions)request(e);
       diagnostics.compiles.push(performance.now()-started);if(diagnostics.compiles.length>256)diagnostics.compiles.shift();
       log('evaluate',{edits:all.length,source:source.slice(0,12000)});
-      notice(options.preview?'Preview valid · no changes applied':playing?'Live edit staged · next boundary':'Live definitions ready · press Play');
+      notice(options.preview?'Audition ready · quiet monitor · commit or cancel':playing?'Live edit staged · next boundary':'Live definitions ready · press Play');
       return {...result,edits:all.length};
     }catch(e){if(generation!==evaluation)return {ok:false,error:'Superseded edit'};const error=errorText(e);notice('Edit rejected · '+error);log('rejected',{error});return {ok:false,error};}
     finally{
@@ -297,24 +319,41 @@ export function createHost(api) {
       }
     }
   }
+  async function waitWork(kind){
+    while(!admitWork(kind,playing,playing?nextTime-ctx.currentTime:Infinity)){
+      await new Promise(resolve=>setTimeout(resolve,25));alive();
+    }
+    alive();
+  }
   async function renderAudio(values=config,{seconds=null,sampleRate=44100,onProgress=()=>{}}={}){
     const c={...defaults,...values},duration=seconds??1024/4*60/c.bpm+10;
+    if(!Number.isFinite(duration)||duration<=0||duration>600||![22050,44100,48000].includes(sampleRate))throw new Error('Invalid export duration or sample rate');
+    await waitWork('export');
     const offline=new OfflineAudioContext(2,Math.ceil(duration*sampleRate),sampleRate),engine=new AudioEngine(offline,c);offlineRenders.add(engine);
-    onProgress("timeline");const timeline=plain(Score.d_timeline(toBL(c)));onProgress("graph-ready");
-    // Bound the offline graph as well as the live graph: suspend ahead of
-    // each 8-second chunk, schedule its next horizon, then resume native DSP.
-    // Scheduling the entire concert upfront leaves thousands of future silent
-    // nodes in every render quantum and makes export needlessly quadratic.
-    const barriers=[];for(let t=7.8;t<duration-.3;t+=8)barriers.push({time:t,promise:offline.suspend(t)});
-    let cursor=0;
-    const fill=until=>{if(disposed){cursor=timeline.length;return;}while(cursor<timeline.length&&timeline[cursor].time/1000<Math.min(until,duration-1)){
-      const bundle=timeline[cursor++];for(const v of bundle.voices)engine.trigger(v,bundle.time/1000);
-    }};
-    fill(8);onProgress("first-chunk");
-    const fadeStart=Math.max(0,duration-7);engine.output.gain.setValueAtTime(c.master,fadeStart);engine.output.gain.linearRampToValueAtTime(0,duration-.1);
-    const rendered=offline.startRendering();
-    for(const barrier of barriers){await barrier.promise;onProgress(barrier.time);fill(barrier.time+8.2);await offline.resume();}
-    const buffer=await rendered;engine.dispose();offlineRenders.delete(engine);return buffer;
+    try{
+      engine.prewarm();onProgress('graph-ready');
+      const state={config:c,patterns:{},variation:{density:1,transpose:0,seed:37}},stepSeconds=60/c.bpm/4;
+      // Native DSP receives at most .25 seconds before the next admission gate.
+      // Graph preparation shares the immutable score cache and compiled schema.
+      const quantum=.25,barriers=[];
+      for(let time=quantum;time<duration-.05;time+=quantum)barriers.push({time,promise:offline.suspend(time)});
+      let cursor=0;
+      const fill=async until=>{
+        let started=performance.now();
+        while(cursor<1024&&cursor*stepSeconds<Math.min(until,duration-1)){
+          alive();const time=cursor*stepSeconds;
+          for(const item of playbackVoices(state,cursor,engine.serial,scoreVoices(cursor),{a:false,b:false}))
+            engine.trigger(item.voice,time+item.offset*stepSeconds);
+          cursor++;
+          if(performance.now()-started>=4){await new Promise(resolve=>setTimeout(resolve,0));await waitWork('export');started=performance.now();}
+        }
+      };
+      await fill(exportWindow(playing));onProgress('first-chunk');
+      const fadeStart=Math.max(0,duration-7);engine.output.gain.setValueAtTime(c.master,fadeStart);engine.output.gain.linearRampToValueAtTime(0,duration-.1);
+      const rendered=offline.startRendering();rendered.catch(()=>{});
+      for(const barrier of barriers){await barrier.promise;await waitWork('export');onProgress(barrier.time);await fill(barrier.time+exportWindow(playing));await offline.resume();}
+      return await rendered;
+    }finally{engine.dispose();offlineRenders.delete(engine);}
   }
   async function exportAudio(){if(rendering)return;rendering=true;notice('Rendering the original score to stereo WAV…');try{const buffer=await renderAudio();alive();download(wav(buffer),'pelagic-original-score.wav','audio/wav');notice('Stereo WAV exported');}finally{rendering=false;}}
   function syncAssets(){
@@ -389,7 +428,7 @@ export function createHost(api) {
   }
   function report(){const total=diagnostics.frameHistogram.reduce((a,b)=>a+b,0),q=f=>{let sum=0;for(let i=0;i<diagnostics.frameHistogram.length;i++){sum+=diagnostics.frameHistogram[i];if(sum>=total*f)return i;}return 0;};
     const av=diagnostics.av.slice().sort((a,b)=>a-b);
-    return {elapsedSeconds:(performance.now()-diagnostics.started)/1000,missedEvents:diagnostics.missed,schedulerTicks:diagnostics.ticks,longTasks:diagnostics.longTasks,
+    return {audition:auditionState?{status:auditionEngine?'playing':'staged',current:Audition.d_current$Q(auditionState,model),baseRevision:auditionState.get(R.kw('base-revision'))}:null,elapsedSeconds:(performance.now()-diagnostics.started)/1000,missedEvents:diagnostics.missed,schedulerTicks:diagnostics.ticks,longTasks:diagnostics.longTasks,
       frameP95:q(.95),frameP99:q(.99),framesOver100Percent:diagnostics.frameHistogram.slice(101).reduce((a,b)=>a+b,0)/Math.max(1,total)*100,
       audioClock:ctx?{sampleRate:ctx.sampleRate,baseLatency:ctx.baseLatency,outputLatency:ctx.outputLatency,outputTimestamp:ctx.getOutputTimestamp?.(),nativeSeconds:ctx.currentTime,wallSeconds:(performance.now()-ctxWall)/1000,rate:ctx.currentTime/Math.max(.001,(performance.now()-ctxWall)/1000)}:null,
       avSubmitP95Ms:av[Math.floor(av.length*.95)]??null,avSamples:av.length,avHandoffP95Ms:diagnostics.handoff.slice().sort((a,b)=>a-b)[Math.floor(diagnostics.handoff.length*.95)]??null,
@@ -455,8 +494,8 @@ export function createHost(api) {
       if(x.dataset.loop)dispatch({type:'pelagic/deck',deck:x.dataset.loop,op:'loop',value:+x.value});
       if(x.dataset.sampleBpm)dispatch({type:'pelagic/deck',deck:x.dataset.sampleBpm,op:'bpm',value:+x.value});});
     // Proof methods are attached to the owned DOM node, removed with the view.
-    root.pelagic={renderAt,renderAudio,evaluate,stats:()=>({playing,audioTime:ctx?.currentTime,nextStep,lastEvaluation,evalCount,voices:audio?.voices.size||0,context:ctx?.state||'none',frames:v.shader?.frames||0,recording:!!recording,patterns:Object.keys(scheduled.patterns),pending:pending.length,mode,time:current().time,beat:current().beat,revision:revisionID(),phase:revision?(revision.armed?'ARMED':'QUEUED'):'ACTIVE',resources:audio?.resources(),gpu:v.shader?.resources?.(),diagnostics:{missed:diagnostics.missed,ticks:diagnostics.ticks,longTasks:diagnostics.longTasks}}),ready:()=>init,compilerReady:()=>{alive();return evaluator()?.request(null)??vm();},
-      request,session,loadSession,record,stopRecording,exportRecording:async writable=>{if(recording)await stopRecording({save:false});if(!lastTake)throw new Error('No take');await lastTake.exportTo(writable);},midi:()=>controls,model:()=>plain(model),events:()=>events.slice(),diagnostics:report,wav,soundtrackAnalysis,shader:()=>v.shader,engine:()=>audio,config:()=>({...config}),decks:()=>decks};
+    root.pelagic={renderAt,renderAudio,evaluate,stats:()=>({playing,audioTime:ctx?.currentTime,nextStep,lastEvaluation,evalCount,voices:audio?.voices.size||0,context:ctx?.state||'none',audition:auditionState?{status:auditionEngine?'playing':'staged',current:Audition.d_current$Q(auditionState,model),baseRevision:auditionState.get(R.kw('base-revision'))}:null,frames:v.shader?.frames||0,recording:!!recording,patterns:Object.keys(scheduled.patterns),pending:pending.length,mode,time:current().time,beat:current().beat,revision:revisionID(),phase:revision?(revision.armed?'ARMED':'QUEUED'):'ACTIVE',resources:audio?.resources(),gpu:v.shader?.resources?.(),diagnostics:{missed:diagnostics.missed,ticks:diagnostics.ticks,longTasks:diagnostics.longTasks}}),ready:()=>init,compilerReady:()=>{alive();return evaluator()?.request(null)??vm();},
+      request,session,loadSession,record,stopRecording,exportRecording:async writable=>{if(recording)await stopRecording({save:false});if(!lastTake)throw new Error('No take');await lastTake.exportTo(writable);},midi:()=>controls,model:()=>plain(model),events:()=>events.slice(),diagnostics:report,wav,soundtrackAnalysis,shader:()=>v.shader,engine:()=>audio,auditionEngine:()=>auditionEngine,config:()=>({...config}),decks:()=>decks};
     return {update(model){const state=model.state||defaults;if(state.revision===undefined||state.revision>=revisionID())configure(state);
       for(const [k,value] of Object.entries(state)){const el=$(`[data-control="${k}"]`);if(el&&shadow.activeElement!==el)el.value=value;}
       shadow.querySelectorAll('[data-stem]').forEach(b=>b.classList.toggle('active',!!config[b.dataset.stem]));$('[data-freeze]').classList.toggle('active',!!config.freeze);
@@ -472,7 +511,7 @@ export function createHost(api) {
     case 'deck':unlock();decks[e.args.deck].action(e.args.op,e.args.value);break;
     case 'record':await record();break;case 'export':await exportAudio();break;
     default:throw new Error('Unknown Pelagic effect '+e.op);}},
-    dispose(){disposed=true;++evaluation;scoreVoices.dispose();evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
+    dispose(){disposed=true;++evaluation;stopAudition(true);scoreVoices.dispose();evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
       for(const d of Object.values(decks))d.dispose();for(const engine of offlineRenders)engine.dispose();offlineRenders.clear();audio?.dispose();ctx?.close();files.clear();handles.clear();pending=[];patterns.clear();for(const url of urls)URL.revokeObjectURL(url);
       for(const v of views)v.shader?.dispose();}
   };

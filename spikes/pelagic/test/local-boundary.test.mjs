@@ -133,16 +133,17 @@ test('BL audio equivalence isolates visual revisions while preserving every soun
 
 test('native BL preparation uses the same score and yields only after securing its safety reserve',{skip:!process.env.PELAGIC_OUT},async()=>{
  const [B,Score]=await Promise.all(['pelagic.browser','pelagic.score'].map(imp));
+ const {scoreDecoder}=await (await import('./host-runtime.mjs')).hostImport('score-wire.mjs');
  for(const start of [0,128,448,640,1008]){
-  const chunk=B.d_score_chunk(start,16);assert.equal(chunk.length,16);
+  const decoder=scoreDecoder(),context=B.d_preparation_context();
+  const chunk=decoder.decode(B.d_score_slice(context,start,16,0));assert.equal(chunk.length,16);
   for(let i=0;i<16;i++)assert.deepEqual(chunk[i],B.d_to_js(Score.d_step(start+i,Score.d_defaults)));
- }
- const data=B.d_score_data();assert.equal(data.steps.length,1024);assert.ok(data.graphs.length>0&&data.graphs.length<=64);
- for(const start of [0,128,448,640,1008])for(let i=start;i<start+16;i++){
-  const expanded=data.steps[i].map(voice=>({...voice,graph:data.graphs[voice.graph]}));
-  assert.deepEqual(expanded,B.d_score_chunk(i,1)[0]);
  }
  assert.equal(B.d_continue_preparation$Q(0.9,0,100),true);
  assert.equal(B.d_continue_preparation$Q(2,0,3),true);
  assert.equal(B.d_continue_preparation$Q(2,0,4),false);
+});
+test('the package boundary preserves foreign native graph identity instead of round-tripping through BL maps',async()=>{
+ const {hostImport}=await import('./host-runtime.mjs');const {plain}=await hostImport('values.mjs');
+ const foreign={graph:{ugen:'sin-osc',freq:440},params:{freq:220}};assert.equal(plain(foreign),foreign);assert.equal(plain(foreign).graph,foreign.graph);
 });

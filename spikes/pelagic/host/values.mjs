@@ -1,32 +1,15 @@
-// Compatibility boundary for Omega's older compiler. The optional local build
-// replaces this module with compiled pelagic.browser, using bl->js / js->bl.
-export function plain(x) {
-  if (x?.constructor?.name === "Flt") return x.v;
-  if (x?.entries && x.constructor?.name === 'HMap') {
-    return Object.fromEntries([...x.entries()].map(([k,v]) => [k.fq ?? String(k), plain(v)]));
-  }
-  if (x?.toArray) return x.toArray().map(plain);
-  if (x?.fq) return x.fq;
-  return x;
-}
-export function conversions(R) { const toBL=x=>Array.isArray(x)?R.vecFromArray(x.map(toBL)):x&&typeof x==='object'?R.hashMap(...Object.entries(x).flatMap(([k,v])=>[R.kw(k),toBL(v)])):x; return toBL; }
-export function download(data,name,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([data],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-export function setText(node,value){const text=String(value);if(node.textContent!==text)node.textContent=text;}
-export function audioContext(){return new AudioContext({latencyHint:'interactive'});}
-export async function readText(url){const response=await fetch(url);if(!response.ok)throw new Error('Cannot load '+url);return response.text();}
-
-// The old compiler keeps its existing in-page evaluator.
-export function createEvaluator(){return null;}
-export function afterPaint(fn){return new Promise((resolve,reject)=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>{try{resolve(fn());}catch(e){reject(e);}},0))));}
-
-export function createGraphicsWorker(){return null;}
-export function projectClock(time,beat,bpm,running,stamp,now){const elapsed=running?Math.max(0,now-stamp)/1000:0;return {time:time+elapsed,beat:beat+elapsed*bpm/60};}
-export function renderScale(scale,interval,work){return interval>24||work>12?Math.max(.25,scale*.85):interval<18&&work<6?Math.min(1,scale*1.02):scale;}
-
-export function createScoreSource(step,defaults){const cache=new Map();return index=>{if(!cache.has(index)){if(cache.size>=1024)cache.delete(cache.keys().next().value);cache.set(index,plain(step(index,defaults)));}return cache.get(index);};}
-
-export function audibleTime(context,now){const stamp=context.getOutputTimestamp?.(),age=stamp?now-stamp.performanceTime:-1;return stamp?.contextTime>0&&age>=0&&age<1000?Math.min(context.currentTime,stamp.contextTime+age/1000):context.currentTime;}
-
-export const requestFrame=f=>requestAnimationFrame(f),cancelFrame=handle=>cancelAnimationFrame(handle);
-
-export const continuePreparation=(next,audio,elapsed)=>next<audio+1||elapsed<4;
+// One conversion contract and one compiled BL graph for local and server hosts.
+import * as B from '../../out/pelagic.browser.mjs';
+import * as G from '../../out/pelagic.graph-js.mjs';
+import * as P from '../../out/pelagic.playback-js.mjs';
+import {requireNamespace,blToJS,argument} from '../../out/interop.mjs';
+const browser=requireNamespace('pelagic.browser');
+// Foreign JS objects retain identity. Passing them through requireNamespace
+// would first turn them into BL maps, copying every shared audio graph again.
+export const plain=blToJS;
+export const download=browser.download,setText=browser['set-text'],audioContext=browser['audio-context'],readText=browser['read-text'];
+export const createEvaluator=browser.evaluator,afterPaint=browser['after-paint'],createGraphicsWorker=browser['graphics-worker'],projectClock=browser['project-clock'],renderScale=browser['render-scale'],audibleTime=browser['audible-time'];
+export const continuePreparation=B.d_continue_preparation$Q,prepareSlice=B.d_score_slice,createScoreSource=B.d_score_source,requestFrame=B.d_request_frame,cancelFrame=B.d_cancel_frame;
+export const admitWork=B.d_admit_work$Q,exportWindow=playing=>blToJS(B.d_export_window(playing));
+export const playbackVoices=P.d_voices,validateGraph=G.d_validate_graph,compileGraph=graph=>argument(G.d_compile_graph(graph));
+export function conversions(){return B.d_to_bl;}

@@ -1,0 +1,11 @@
+; Musical deadlines, independent of workers, Promises and browser resources.
+; Keep the first second exclusively for playback. Background classes need more
+; reserve, so a burst of analysis/export can never authorize itself as playback.
+(ns pelagic.work)
+(def reserve-seconds {:prepare 1.5 :compile 1.25 :analysis 2 :export 2.5 :audition 1.5})
+(defn admit? [kind playing reserve]
+  (and (contains? reserve-seconds kind)
+       (or (not playing) (>= reserve (get reserve-seconds kind)))))
+(defn continue-playback? [reserve elapsed-ms]
+  (or (< reserve 1) (< elapsed-ms 4)))
+(defn export-window [playing] (if playing 0.25 2))

@@ -178,3 +178,35 @@ browser benchmark. This does not establish physical audio/video latency.
 Remaining upstream stage 3 is substantial: common compiled core, ordinary
 lowering/live evaluator and actor-aware higher-order dispatch. Shared runtime
 ownership and actor-default preparation are verified steps, not completion.
+
+
+* Checkpoint: canonical linked ABI, reusable score work, audible audition
+Upstream e02b1881 distinguishes compiled BL imports from actual JavaScript
+imports. Canonical BL collections/decimals retain identity on direct/indirect
+calls; actual JS imports still require explicit conversion. Fresh emitted BL
+fixtures and 48 Node semantic/interop checks pass.
+
+Pelagic now uses readable score-js, graph-js, playback-js, work and audition BL
+modules. Per-job bounded catalogs transfer seven graph templates once. The realm
+decoder restores identity and prepares schemas. Playback, preview and export use
+one musical projection. Removed host/values.mjs's hand-written compatibility
+implementation; its replacement binds only compiled BL and canonical conversion.
+Audio buffers are reused/prewarmed per context; native nodes retain engine owners.
+Preparation credits and export bursts obey BL reserve policy. Export consumes
+cached score work rather than rebuilding a synchronous 1024-step timeline.
+
+All 61 package tests pass, including structural and original-byte-digest parity,
+muted/timed projection, stale auditions, immutable/mutable schema cache behavior,
+buffer reuse and credit admission. Three actor runs: median work 94.68 ms,
+CPU 740.70 ms, startup 98.86 ms, chunk P95 2.73 ms; previous 180/1297/130/4.51.
+Browser actor control passes demand/stale-credit/cancel/replacement at both budgets.
+
+Experience 2 has an actual audible prototype, real-editor drive and VP8/Opus demo
+under proof/actor-consolidation/audition. Cancellation, bar commit, stale refusal,
+invalid shader, overlapping bounded export and exact unload pass with no page
+errors. Preview is a separate quiet owned bus and never changes active history.
+Other four experiences and compiler/evaluator/analysis job migration remain open.
+The ordinary frontend is still emitted by js.emit; stage 3 remains substantial.
+A full package build passed before the final schema-default fix, which was
+incrementally rebuilt through js.build/compile-ns + emit-ns and retested. Final
+cold complete build/provenance remains stage 8, not implied by this checkpoint.

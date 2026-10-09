@@ -1,41 +1,31 @@
 import {audioFeatures,waveformRms} from './features.mjs';
 // Web Audio interpreter for pure BL UGen graphs. No score/pattern logic here.
-import {plain} from './values.mjs';
+import {plain,validateGraph,compileGraph} from './values.mjs';
+export {validateGraph} from './values.mjs';
 export {plain} from './values.mjs';
 export function random(seed = 1) {
   let n = seed >>> 0;
   return () => { n ^= n << 13; n ^= n >>> 17; n ^= n << 5; return (n >>> 0) / 4294967296; };
 }
-const supported = new Set(['param','sin-osc','saw','pulse','lf-tri','white-noise','pink-noise',
-  'mul','add','sub','div','lpf','hpf','rlpf','pan2','env-gen','line','x-line']);
-export function validateGraph(g, depth=0) {
-  if (depth > 64) throw new Error('UGen graph exceeds 64 levels');
-  if (typeof g === 'number') { if (!Number.isFinite(g)) throw new Error('Non-finite UGen value'); return; }
-  if (Array.isArray(g)) { g.forEach(v => validateGraph(v,depth+1)); return; }
-  if (!g || !supported.has(g.ugen)) throw new Error(`Unsupported UGen: ${g?.ugen ?? String(g)}`);
-  for (const [k,v] of Object.entries(g)) {
-    if (['in','freq','pan','rq','from','to','dur','inputs'].includes(k)) validateGraph(v,depth+1);
-  }
-  if (g.ugen === 'env-gen' && !['perc','adsr'].includes(g.envelope?.envelope)) throw new Error('Unsupported envelope');
+const plans=new WeakMap(),bufferAssets=new WeakMap();
+function immutableTree(value,seen=new WeakSet()){
+  if(!value||typeof value!=='object'||seen.has(value))return true;
+  if(!Object.isFrozen(value))return false;seen.add(value);
+  return Object.values(value).every(child=>immutableTree(child,seen));
 }
-// Release silent voice graphs at their actual envelope end; effect tails live on
-// the shared buses. Adding :dur to a percussion release doubled silent DSP work.
-export function voiceLifetime(graph,params={}) {
-  let envelopeEnd=0,hasEnvelope=false;
-  const n=x=>x?.ugen==='param'?(params[x.key]??x.default):x;
-  const find=x=>{if(!x||typeof x!=='object')return;
-    if(x.ugen==='env-gen'){
-      hasEnvelope=true;const e=x.envelope,a=n(e.attack),r=n(e.release);
-      const end=e.envelope==='adsr'?Math.max(a+n(e.decay),params.dur??1)+r:a+r;
-      if(!Number.isFinite(end)||end<0)throw new Error('Invalid envelope lifetime');
-      envelopeEnd=Math.max(envelopeEnd,end);
-    }
-    Object.values(x).forEach(y=>{if(Array.isArray(y))y.forEach(find);else if(y&&typeof y==='object')find(y);});
-  };find(graph);
-  return Math.min(30,Math.max(.03,(hasEnvelope?envelopeEnd:(params.dur??1))+.08));
+export function prepareGraph(graph){
+  if(graph&&typeof graph==='object'&&Object.isFrozen(graph)){
+    if(plans.has(graph))return plans.get(graph);
+    const plan=compileGraph(graph);if(immutableTree(graph))plans.set(graph,plan);return plan;
+  }
+  return compileGraph(graph);
+}
+export function voiceLifetime(graph,params={}){return prepareGraph(graph)(params);}
+function assets(context){
+  if(!bufferAssets.has(context))bufferAssets.set(context,new Map());return bufferAssets.get(context);
 }
 export class AudioEngine {
-  constructor(context, config={}) {
+  constructor(context, config={}, {destination=context.destination,level=1}={}) {
     this.ctx=context; this.voices=new Map(); this.serial=0; this.disposed=false;
     this.retiredNodes=[];this.retireTimer=null;
     this.buildTimes=new Float32Array(256);this.buildCount=0;this.buildMax=0;this.buildLate=0;
@@ -56,7 +46,7 @@ export class AudioEngine {
     for (const n of [this.dry,this.wet,this.echo]) n.connect(this.compressor);
     this.output=c.createGain(); this.compressor.connect(this.output);
     this.analyser=c.createAnalyser(); this.analyser.fftSize=1024; this.analyser.smoothingTimeConstant=.18;
-    this.output.connect(this.analyser); this.analyser.connect(c.destination);
+    this.output.connect(this.analyser); this.monitor=c.createGain();this.monitor.gain.value=Math.max(0,Math.min(1,level));this.analyser.connect(this.monitor);this.monitor.connect(destination);
     this.decks={};
     for (const key of ['a','b']) {
       const input=c.createGain(), low=c.createBiquadFilter(), mid=c.createBiquadFilter(), high=c.createBiquadFilter();
@@ -73,15 +63,18 @@ export class AudioEngine {
     this.noise=new Map(); this.configure(this.config,0);
   }
   impulse(seconds,seed) {
+    const key=`impulse:${seconds}:${seed}`,shared=assets(this.ctx);if(shared.has(key))return shared.get(key);
     const c=this.ctx,n=Math.floor(c.sampleRate*seconds),buf=c.createBuffer(2,n,c.sampleRate),rng=random(seed);
     for(let ch=0;ch<2;ch++) {
       const a=buf.getChannelData(ch); let smooth=0;
       for(let i=0;i<n;i++) { smooth=.68*smooth+.32*(rng()*2-1); a[i]=smooth*Math.pow(1-i/n,2.5)*(i<600 ? i/600 : 1); }
     }
-    return buf;
+    shared.set(key,buf);return buf;
   }
+  prewarm(){this.noiseBuffer(false);this.noiseBuffer(true);}
   noiseBuffer(pink) {
-    if(this.noise.has(pink)) return this.noise.get(pink);
+    const key=`noise:${pink}`,shared=assets(this.ctx);
+    if(shared.has(key)){this.noise.set(pink,shared.get(key));return shared.get(key);}
     const c=this.ctx,buf=c.createBuffer(1,c.sampleRate*2,c.sampleRate),a=buf.getChannelData(0),rng=random(pink?8123:9187);
     let b0=0,b1=0,b2=0;
     for(let i=0;i<a.length;i++) {
@@ -89,7 +82,7 @@ export class AudioEngine {
       b0=.997*b0+.029*w; b1=.97*b1+.11*w; b2=.8*b2+.28*w;
       a[i]=pink ? (b0+b1+b2+w*.15)*.55 : w;
     }
-    this.noise.set(pink,buf); return buf;
+    shared.set(key,buf);this.noise.set(pink,buf);return buf;
   }
   configure(values,time=this.ctx.currentTime) {
     Object.assign(this.config,values); const c=this.config;
@@ -177,12 +170,12 @@ export class AudioEngine {
   trigger(input,time=this.ctx.currentTime) {
     if(this.disposed) throw new Error('Audio engine disposed');
     const buildStarted=performance.now();
-    const v=plain(input); validateGraph(v.graph);
+    const v=plain(input),plan=prepareGraph(v.graph);
     if(this.voices.size>=192)throw new Error('Voice budget exceeded (192); simplify the patch');
     const c=this.ctx, params=v.params || {}, start=Math.max(time,c.currentTime), owned=[], sources=[], controls=new Map();
     const resolve=x=>x?.ugen==='param' ? (params[x.key] ?? x.default) : x;
     const num=(x)=>{ const y=resolve(x); if(typeof y!=='number'||!Number.isFinite(y)) throw new Error('Expected numeric control'); return y; };
-    const duration=voiceLifetime(v.graph,params),end=start+duration;
+    const duration=plan(params),end=start+duration;
     const own=n=>{owned.push(n);return n;};
     const connect=(value,param)=>{
       if(typeof value==='number') param.value=value;
@@ -273,7 +266,7 @@ export class AudioEngine {
   stop(){for(const id of this.voices.keys())this.kill(id);}
   dispose(){if(this.disposed)return;this.disposed=true;this.drainRetired(true);if(this.probe){this.probe.port.onmessage=null;this.probe.disconnect();this.probe.port.close();}this.stop();for(const v of this.voices.values()){for(const s of v.sources)s.onended=null;v.owned.forEach(n=>n.disconnect());}
     for(const b of this.buses.values()){b.gain.disconnect();b.analyser.disconnect();}this.buses.clear();this.intents=[];this.noise.clear();this.tapBuffers.clear();this.reverb.buffer=null;for(const d of Object.values(this.decks))Object.values(d).forEach(n=>n.disconnect());
-    for(const n of [this.mix,this.dry,this.delay,this.feedback,this.echo,this.delayFilter,this.reverb,this.wet,this.compressor,this.output,this.analyser])n.disconnect();this.voices.clear();}
+    for(const n of [this.mix,this.dry,this.delay,this.feedback,this.echo,this.delayFilter,this.reverb,this.wet,this.compressor,this.output,this.analyser,this.monitor])n.disconnect();this.voices.clear();}
 }
 export function wav(buffer) {
   const frames=buffer.length,channels=buffer.numberOfChannels,data=new ArrayBuffer(44+frames*channels*2),v=new DataView(data);

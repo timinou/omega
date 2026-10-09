@@ -52,7 +52,9 @@
               :pelagic/perform {:doc "Start continuous performance" :run (fn [ed] (send ed :perform (state ed)))}
               :pelagic/panic {:doc "Stop voices and cancel pending edits" :run (fn [ed] (send ed :request {:kind "panic"}))}
               :pelagic/stop {:doc "Stop all voices" :run stop}
-              :pelagic/preview {:doc "Validate buffer without applying" :run (fn [ed] (send ed :evaluate {:source (t/to-string (:text ed)) :preview true}))}
+              :pelagic/preview {:doc "Audition buffer quietly without changing the active revision" :run (fn [ed] (send ed :evaluate {:source (t/to-string (:text ed)) :preview true}))}
+              :pelagic/audition-commit {:doc "Commit the audition at the next bar" :run (fn [ed] (send ed :request {:kind "audition-commit" :quantize "bar"}))}
+              :pelagic/audition-cancel {:doc "Cancel the staged audition" :run (fn [ed] (send ed :request {:kind "audition-cancel"}))}
               :pelagic/eval {:doc "Evaluate live Beam Lisp / GLSL blocks" :run evaluate}
               :pelagic/stage {:doc "Show live source and stage" :run (fn [ed] (assoc ed :frame/layout stage))}
               :pelagic/cinema {:doc "Enlarge the stage" :run (fn [ed] (assoc ed :frame/layout cinema))}}

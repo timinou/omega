@@ -1,3 +1,4 @@
+import {hostImport} from './host-runtime.mjs';
 // Same browser worker and compiled BL modules on Node Workers. CPU time separates
 // active computation from the host's substantial wall-clock scheduling/I/O noise.
 import {Worker as NodeWorker} from 'node:worker_threads';
@@ -7,7 +8,7 @@ import {tmpdir} from 'node:os';
 import {resolve,dirname,join} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
-import {prepareScore} from '../host/prepare.mjs';
+const {prepareScore}=await hostImport('prepare.mjs');
 const here=dirname(fileURLToPath(import.meta.url)),root=resolve(here,'..');
 if(process.argv[2]==='--one'){
  const mode=process.argv[3],stage=mkdtempSync(join(tmpdir(),'pelagic-native-cpu-'));

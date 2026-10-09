@@ -1,0 +1,46 @@
+; Native objects are owned here. Score authors keep immutable BL instruments.
+; A job owns one catalog; cancellation drops it without poisoning its successor.
+(ns ^:js pelagic.score-js (:require [pelagic.score :as score]))
+(defn context [] (atom {:instruments {} :next-id 0}))
+(defn- freeze-tree [value]
+  (when (.isExtensible js/Object value)
+    (doseq [key (js->bl (.keys js/Object value))]
+      (freeze-tree (aget value key)))
+    (.freeze js/Object value))
+  value)
+(defn- graph-entry [state voice introduced]
+  (let [key (:synth voice) graph (:graph voice) cached (get-in @state [:instruments key])]
+    (if (and cached (= graph (:source cached))) cached
+      (let [id (:next-id @state)]
+        (when (>= id 64) (throw (js/Error. "Score graph catalog exceeds 64 entries")))
+        (let [native (freeze-tree (bl->js graph)) entry {:id id :source graph :native native}]
+          (swap! state (fn [s] (-> s (assoc-in [:instruments key] entry) (assoc :next-id (inc id)))))
+          (.push introduced #js {:id id :graph native})
+          entry)))))
+(defn voices
+  "Convert changing voice controls once; reuse immutable native graph templates."
+  [state index]
+  (let [introduced (js/Array.) result (js/Array.)]
+    (doseq [voice (score/step index score/defaults)]
+      (let [entry (graph-entry state voice introduced) native (bl->js (assoc voice :graph nil))]
+        (set! (.-graph native) (:native entry))
+        (.push result native)))
+    result))
+(defn slice
+  "One bounded native call. Graph IDs compress the worker boundary without
+   changing BL values or the instrument API; new catalogs travel before rows."
+  [state start size budget-ms]
+  (let [rows (js/Array.) introduced (js/Array.)
+        limit (+ start (min 16 size)) before (.now js/performance)]
+    (loop [index start]
+      (when (and (< index limit)
+                 (or (= index start) (<= budget-ms 0)
+                     (< (- (.now js/performance) before) budget-ms)))
+        (let [row (js/Array.)]
+          (doseq [voice (score/step index score/defaults)]
+            (let [entry (graph-entry state voice introduced) native (bl->js (assoc voice :graph nil))]
+              (set! (.-graph native) (:id entry))
+              (.push row native)))
+          (.push rows row))
+        (recur (inc index))))
+    #js {:rows rows :graphs introduced}))

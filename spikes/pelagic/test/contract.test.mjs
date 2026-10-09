@@ -1,7 +1,8 @@
+import {hostImport} from './host-runtime.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {plain,validateGraph} from '../host/audio.mjs';
+const {plain,validateGraph}=await hostImport('audio.mjs');
 globalThis.BL_HOST={};
 import {out,imp} from './paths.mjs';
 const {start}=await imp('repl');const repl=await start(f=>fs.readFileSync(new URL('src/'+f,out),'utf8'));

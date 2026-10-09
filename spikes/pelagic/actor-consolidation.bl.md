@@ -57,9 +57,9 @@ show the removal of whole-map copying; they are not a playback latency claim.
 
 ## Remaining architectural work
 
-Callable suspension proofs, canonical float/decimal arithmetic, shared compiled
-core, ordinary actor lowering, live evaluator integration, and scheduler policy
-must still converge. Pelagic's later job admission and five experiences build on
+Canonical values, arithmetic and checked callback entry now share their
+implementation. Shared compiled core, ordinary actor lowering, live evaluator
+integration and higher-order suspension specialization must still converge. Pelagic's later job admission and five experiences build on
 those contracts. Safe audition must keep the active revision intact through
 validation, cancellation and failure, then use the existing quantized atomic
 revision boundary for commit. A validation-only preview is not an audible audition.
@@ -117,3 +117,77 @@ kernel work was 180 ms, startup 130 ms and per-run chunk P95 4.51 ms, with the
 unchanged 1024-row digest. The samples are in `proof/actor-consolidation/production`.
 Ordinary editor lowering and the legacy collection prelude remain tracked
 upstream work; actor-only preparation does not silently stand in for that work.
+
+
+## BL imports are not JavaScript conversions
+
+Upstream `e02b1881` records the compiled BL ABI in module contracts. A direct
+import of an annotated BL function keeps canonical BL maps, decimals and closures
+unchanged. An actual JavaScript import retains native conversion and `#js` checks.
+Both use direct calls; neither invents an actor frame or a messaging protocol.
+The emitted linked-values fixture tests direct and indirect calls, including
+collection identity. The upstream semantic/interop suite now passes 48 tests.
+
+## Prepare once, use the same work everywhere
+
+Read [score-js.bl](pelagic/score-js.bl) first: it owns a bounded catalog per
+preparation job, converts each immutable instrument graph once and sends only
+new graph entries plus voice controls. Cancellation drops that job's catalog;
+a replacement starts its IDs at zero. The realm decoder restores shared identity,
+checks bounds and prepares the compiled graph schema before playback.
+
+[graph-js.bl](pelagic/graph-js.bl) is the native BL schema compiler. It validates
+signal structure, collects envelope descriptors once and returns a control-only
+lifetime function. The host caches plans only for deeply immutable graphs.
+Mutable foreign graphs remain valid, but never acquire a stale cached plan.
+AudioBuffer impulse/noise assets are shared by engines in the same context and
+prewarmed before scheduling. Mutable AudioNodes are always owned by one engine.
+
+[playback-js.bl](pelagic/playback-js.bl) is now the common musical projection for
+live playback, audition and original-score export. It owns lane suppression,
+seeded chance, transposition and fractional pattern offsets. The host creates
+native nodes. Differential checks cover muted stems and canonical timeline times.
+The old hand-written conversion adapter is removed: `values.mjs` now binds only
+the canonical compiler boundary and compiled BL modules. Foreign native objects
+retain identity instead of being copied into BL maps and back at every trigger.
+
+[work.bl](pelagic/work.bl) states the deadline policy. Playback fills its first
+second even when its ordinary turn budget expires. Preparation requires 1.5 s
+reserve; export requires 2.5 s. Worker credits wait for admission, with no growing
+job queue and no timeout while intentionally waiting for the reserve. Export
+reuses score data and schemas, prepares graphs in bounded turns and suspends
+native offline DSP every .25 s before checking admission again. This bounds work;
+it does not guarantee OS-level CPU isolation or a physical 16 ms output latency.
+Compile/analysis actor admission and compiler preemption remain pending.
+
+The 1024-step output retains its original byte digest. Three actor preparation
+runs have median kernel work 94.68 ms, CPU 740.70 ms, startup 98.86 ms and
+per-run chunk P95 2.73 ms, versus the previous 180/1297/130/4.51 ms.
+Loaded-host tails vary: one run reached a 12.28 ms chunk maximum. All 61 package
+checks pass. Samples and structural/byte differential checks are in
+[reuse](proof/actor-consolidation/reuse/).
+
+## Safe audition is an audible, separate revision
+
+[audition.bl](pelagic/audition.bl) is deliberately small. Staging stores the exact
+base state, revision and serial alongside the candidate. It never changes active
+history. Commit refuses a stale base, including a direct knob change that did not
+allocate a new revision. A successful commit uses the existing quantized atomic
+revision path. Validation errors retain the active state.
+
+Run `pelagic/preview` (AUDITION CODE) to hear four beats through an owned quiet
+monitor at 15% level, using the same projection and graph schema as playback.
+COMMIT AUDITION applies it at the next bar; CANCEL AUDITION releases its voices,
+decks and monitor bus. Imported samples share immutable buffers, but their source
+nodes are owned by the preview. The preview does not enter the main take recorder.
+A staged candidate remains available after the short preview ends; intervening
+edits disable commit. Panic and package unload release the preview too.
+
+Watch [the real-editor demo](proof/actor-consolidation/audition/safe-audition.webm).
+It includes monitor audio tapped expressly for the demonstration, cancellation,
+quantized commit, stale refusal, shader failure and export during playback.
+[Drive evidence](proof/actor-consolidation/audition/browser.json) has no page errors;
+[used](proof/actor-consolidation/audition/used.jpg) and
+[unused](proof/actor-consolidation/audition/unused.jpg) show the package lifecycle.
+The original presentation check is unchanged and reports 12 variants with no
+mismatch for the Pelagic demo document. Four other experience demos remain open.

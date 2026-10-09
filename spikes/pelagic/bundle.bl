@@ -28,7 +28,7 @@
         (when-not (File/exists? alias)
           (File/write! alias (str "export * from './ns/" module ".mjs';\n")))))
     (File/write! (str stage "/build.json")
-      (str "{\"name\":\"pelagic-local\",\"compiler\":\"bb0ed533\",\"modules\":" (count (:modules result)) "}\n")))
+      (str "{\"name\":\"pelagic-local\",\"compiler\":\"e02b1881\",\"modules\":" (count (:modules result)) "}\n")))
   (copy-files! (str root "/vendor/bl-ed/web") stage [".mjs" ".css"])
   (File/write! (str stage "/index.html")
     (replace-str (File/read! (str root "/vendor/bl-ed/web/index.html"))
@@ -48,14 +48,6 @@
       (copy! (str boot "/" name) (str stage "/out/src/priv/boot/" name))))
   (File/write! (str stage "/pkg/pelagic.mjs")
     "export {d_bl_package as package} from '../out/pelagic.main.mjs';\nexport {createHost} from './pelagic/host.mjs';\n")
-  (File/write! (str stage "/pkg/pelagic/values.mjs")
-    (str "// Browser IO and conversions are compiled annotated Beam Lisp.\n"
-         "import * as B from '../../out/pelagic.browser.mjs';\n"
-         "import {requireNamespace} from '../../out/interop.mjs';\n"
-         "const browser=requireNamespace('pelagic.browser');\n"
-         "export const plain=browser['to-js'],download=browser.download,setText=browser['set-text'],audioContext=browser['audio-context'],readText=browser['read-text'];\n"
-         "export const createEvaluator=browser.evaluator,afterPaint=browser['after-paint'],createGraphicsWorker=browser['graphics-worker'],projectClock=browser['project-clock'],renderScale=browser['render-scale'],audibleTime=browser['audible-time'];
-export const continuePreparation=B.d_continue_preparation$Q,prepareChunk=B.d_score_chunk,prepareSlice=B.d_score_slice,createScoreSource=B.d_score_source,requestFrame=B.d_request_frame,cancelFrame=B.d_cancel_frame;\nexport function conversions(){return B.d_to_bl;}\n"))
   (File/write! (str stage "/.pelagic-local") "PELAGIC optional local bundle\n")
   ; Asset manifest and worker are generated from exactly this compilation.
   (let [script (str here "/local/cache-build.mjs")

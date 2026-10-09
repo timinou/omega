@@ -1,0 +1,48 @@
+; One native data projection for playback, audition and export. Web Audio node
+; ownership stays in the host; musical choices and deterministic chance live here.
+(ns ^:js pelagic.playback-js (:require [pelagic.performance :as performance]))
+(defn- stem [voice]
+  (case (.-synth voice) "lantern" "melody" "tide" "atmosphere" "air" "air" (.-synth voice)))
+(defn voices [state index serial row occupied-decks]
+  (let [result (js/Array.) next-serial (atom serial)
+        config (.-config state) patterns (.-patterns state) variation (.-variation state)
+        transpose (.pow js/Math 2 (/ (.-transpose variation) 12))]
+    (letfn [(emit [voice voice-stem offset pattern?]
+              (when (and (not= false (aget config voice-stem))
+                         (or (and (not pattern?) (contains? #{"kick" "atmosphere" "air"} voice-stem))
+                             (performance/chance (+ index @next-serial) (.-seed variation) (.-density variation))))
+                (let [native (.assign js/Object #js {} voice)
+                      params (.assign js/Object #js {} (.-params voice))]
+                  (set! (.-stem native) (if (= voice-stem "air") "atmosphere" voice-stem))
+                  (when (and (.-freq params) (or pattern? (not= voice-stem "kick")))
+                    (set! (.-freq params) (* (.-freq params) transpose)))
+                  (set! (.-params native) params)
+                  (.push result #js {:voice native :offset offset})
+                  (swap! next-serial inc))))]
+      (loop [i 0]
+        (when (< i (.-length row))
+          (let [voice (aget row i) voice-stem (stem voice)]
+            (when-not (or (aget patterns voice-stem) (aget occupied-decks (.-deck voice)))
+              (emit voice voice-stem (if (odd? index) (.-swing config) 0) false)))
+          (recur (inc i))))
+      (let [all (.values js/Object patterns)]
+        (loop [i 0]
+          (when (< i (.-length all))
+            (let [pattern (aget all i) tick (mod index (* (.-beats pattern) 4))
+                  bundles (.-bundles (.-plan pattern))]
+              (loop [j 0]
+                (when (< j (.-length bundles))
+                  (let [bundle (aget bundles j)
+                        local (* (if (= (.-units pattern) "beats") (.-time bundle)
+                                     (/ (.-time bundle) (/ 60000 (or (.-bpm pattern) (.-bpm config))))) 4)]
+                    (when (= (.floor js/Math local) tick)
+                      (let [items (.-voices bundle)]
+                        (loop [k 0]
+                          (when (< k (.-length items))
+                            (let [voice (.assign js/Object #js {} (aget items k))]
+                              (set! (.-deck voice) (if (= (.-stem pattern) "atmosphere") "a" "b"))
+                              (emit voice (.-stem pattern) (- local tick) true))
+                            (recur (inc k)))))))
+                  (recur (inc j)))))
+            (recur (inc i))))))
+    result))

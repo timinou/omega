@@ -1,5 +1,5 @@
 ; The browser boundary is explicit and stays outside the pure editor/package.
-(ns ^:js pelagic.browser (:require [js.worker :as worker] [js.frame :as frame] [pelagic.score :as score]))
+(ns ^:js pelagic.browser (:require [js.worker :as worker] [js.frame :as frame] [pelagic.score :as score] [pelagic.score-js :as native-score] [pelagic.work :as work]))
 (defn to-js [value] (bl->js value))
 (defn to-bl [value] (js->bl value :keywordize-keys true))
 (defn set-text [node value]
@@ -55,10 +55,11 @@
 ; after BL compilation/conversion, not mutable AudioNodes. Mixer/stem selection
 ; remains downstream, so muting never invalidates or duplicates this graph cache.
 (defn score-source [step defaults]
-  (let [cache (js/Map.)]
+  (let [cache (js/Map.) context (native-score/context)]
     (fn [index]
       (if (.has cache index) (.get cache index)
-        (let [voices (bl->js (step index defaults))]
+        (let [voices (if (identical? step score/step) (native-score/voices context index)
+                       (bl->js (step index defaults)))]
           (when (>= (.-size cache) 1024)
             (.delete cache (.-value (.next (.keys cache)))))
           (.set cache index voices)
@@ -77,52 +78,17 @@
 (defn cancel-frame [handle] (frame/cancel handle))
 
 
-; A bounded CPU kernel shared by the native-worker and actor-managed profiles.
-; Native rows cross the realm boundary once; patch authors retain score/step.
-(defn score-chunk [start size]
-  (let [rows (js/Array.) limit (+ start size)]
-    (loop [index start]
-      (when (< index limit)
-        (.push rows (bl->js (score/step index score/defaults)))
-        (recur (inc index))))
-    rows))
-
-
-; Actor scheduling cannot interrupt one native call. Check a wall-clock budget
-; between score steps; always make one step of progress, with at most 16 rows.
-; Zero budget selects the fixed-chunk benchmark using the same compiled kernel.
-(defn score-slice [start size budget-ms]
-  (let [rows (js/Array.) limit (+ start (min 16 size)) before (.now js/performance)]
-    (loop [index start]
-      (when (and (< index limit)
-                 (or (= index start) (<= budget-ms 0)
-                     (< (- (.now js/performance) before) budget-ms)))
-        (.push rows (bl->js (score/step index score/defaults)))
-        (recur (inc index))))
-    rows))
+ ; Public kernel entrypoints remain BL calls with canonical BL context values.
+(defn preparation-context [] (native-score/context))
+(defn score-slice [context start size budget-ms]
+  (native-score/slice context start size budget-ms))
 
 ; Fill the safety reserve promptly, then yield native graph preparation between
 ; score steps. One native AudioNode graph remains an indivisible browser call.
 (defn continue-preparation? [next-time audio-time elapsed-ms]
-  (or (< next-time (+ audio-time 1)) (< elapsed-ms 4)))
+  (work/continue-playback? (- next-time audio-time) elapsed-ms))
 
-; Build-time specialization of the finite score. Graph IDs preserve field order
-; on reconstruction and avoid shipping the same seven templates thousands of times.
-(defn score-data []
-  (let [graphs (js/Array.) ids (js/Map.) steps (js/Array.)]
-    (loop [index 0]
-      (when (< index 1024)
-        (let [row (aget (score-chunk index 1) 0)]
-          (loop [voice-index 0]
-            (when (< voice-index (.-length row))
-              (let [voice (aget row voice-index)
-                    graph (.-graph voice)
-                    key (js/JSON.stringify graph)]
-                (when-not (.has ids key)
-                  (.set ids key (.-length graphs))
-                  (.push graphs graph))
-                (set! (.-graph voice) (.get ids key)))
-              (recur (inc voice-index))))
-          (.push steps row))
-        (recur (inc index))))
-    #js {:schema "pelagic.score.v2" :graphs graphs :steps steps}))
+
+(defn admit-work? [kind playing reserve]
+  (work/admit? (keyword kind) playing reserve))
+(defn export-window [playing] (work/export-window playing))

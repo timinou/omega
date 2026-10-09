@@ -1,14 +1,14 @@
 ; One annotated namespace: actors control demand; native BL runs directly.
 (ns ^:js pelagic.prepare (:require [pelagic.browser :as browser]))
-(defn prepare-score [id start]
+(defn prepare-score [context id start]
   (if (< start 1024)
     (let [size (min 16 (- 1024 start))
           before (.now js/performance)
-          rows (browser/score-slice start size (.-pelagicPrepareBudget js/self))]
-      (.postMessage js/self #js {:op "chunk" :id id :start start :rows rows
+          packet (browser/score-slice context start size (.-pelagicPrepareBudget js/self))]
+      (.postMessage js/self #js {:op "chunk" :id id :start start :rows (.-rows packet) :graphs (.-graphs packet)
                                 :workMs (- (.now js/performance) before)})
       (receive
-        [:credit] (prepare-score id (+ start (.-length rows)))))
+        [:credit] (prepare-score context id (+ start (.-length (.-rows packet))))))
     (.postMessage js/self #js {:op "done" :id id})))
 (defn main []
   (rt-register-input!)
@@ -17,7 +17,7 @@
     (receive
       [:browser :prepare id]
         (do (when worker (rt-exit worker :kill))
-            (recur (rt-spawn prepare-score [id 0]) id))
+            (recur (rt-spawn prepare-score [(browser/preparation-context) id 0]) id))
       [:browser :credit id]
         (do (when (and worker (= id generation)) (rt-send worker [:credit])) (recur worker generation))
       [:browser :ping id]

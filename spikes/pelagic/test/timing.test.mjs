@@ -1,3 +1,4 @@
+import {hostImport} from './host-runtime.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -16,7 +17,7 @@ test('sample timestamps stay associated without message ordering and simultaneou
  assert.equal(probe.expected,undefined);
 });
 
-import {voiceLifetime} from '../host/audio.mjs';
+const {voiceLifetime}=await hostImport('audio.mjs');
 test('percussion voices stop after their envelope while ADSR retains its gate and release',()=>{
  const perc={ugen:'env-gen',envelope:{envelope:'perc',attack:.01,release:{ugen:'param',key:'dur',default:2}}};
  assert.equal(voiceLifetime(perc,{dur:2}),2.09);
@@ -38,7 +39,7 @@ test('native audio clocks bypass the UI, stay bounded and release each graphics 
  for(const port of ports.slice(0,8))port.onmessage();probe.process([],[]);assert.equal(packets.length,7);assert.ok(packets.every(x=>x.id!==3&&x.time===.2));
 });
 
-import {AudioEngine} from '../host/audio.mjs';
+const {AudioEngine}=await hostImport('audio.mjs');
 test('replacing reserved audio stops future sources immediately and retires bounded native batches',()=>{
  const engine=Object.create(AudioEngine.prototype);let stopped=0,disconnected=0;
  const nodes=Array.from({length:80},()=>({disconnect(){disconnected++;}}));
@@ -47,4 +48,19 @@ test('replacing reserved audio stops future sources immediately and retires boun
  engine.cancelFrom(3);assert.equal(stopped,1);assert.equal(source.onended,null);assert.equal(disconnected,0);assert.equal(engine.voices.has(1),false);assert.equal(engine.voices.has(2),true);assert.deepEqual(engine.intents,[{time:1}]);
  engine.drainRetired();assert.equal(disconnected,32);assert.equal(engine.retiredNodes.length,48);
  engine.drainRetired(true);assert.equal(disconnected,80);assert.equal(engine.retireTimer,null);assert.equal(engine.retiredNodes.length,0);
+});
+test('compiled graph schema retains parameter defaults and does not cache a mutable nested graph',()=>{
+ const graph={ugen:'env-gen',envelope:{envelope:'perc',attack:.01,release:{ugen:'param',key:'tail',default:.4}}};
+ assert.ok(Math.abs(voiceLifetime(graph,{})-.49)<1e-12);
+ Object.freeze(graph);graph.envelope.release.default=.8;assert.ok(Math.abs(voiceLifetime(graph,{})-.89)<1e-12);
+ assert.throws(()=>voiceLifetime(graph,{tail:NaN}),/envelope/);
+});
+test('immutable graph plans are prepared once and buffer assets are reused by engines in the same context',async()=>{
+ const {prepareGraph}=await hostImport('audio.mjs');
+ const graph=Object.freeze({ugen:'sin-osc',freq:440});assert.equal(prepareGraph(graph),prepareGraph(graph));
+ let allocations=0;const context={sampleRate:1000,createBuffer(channels,size){allocations++;const data=Array.from({length:channels},()=>new Float32Array(size));return {getChannelData:i=>data[i]};}};
+ const first=Object.assign(Object.create(AudioEngine.prototype),{ctx:context,noise:new Map()}),second=Object.assign(Object.create(AudioEngine.prototype),{ctx:context,noise:new Map()});
+ assert.equal(first.impulse(1,2607),second.impulse(1,2607));
+ assert.equal(first.noiseBuffer(false),second.noiseBuffer(false));assert.equal(first.noiseBuffer(true),second.noiseBuffer(true));
+ assert.equal(allocations,3);first.noise.clear();assert.equal(second.noiseBuffer(true),second.noise.get(true));
 });

@@ -1,0 +1,32 @@
+✔ normal-mode motions: hjkl, w selects a word, counts (32.246502ms)
+✔ insert mode types, Escape returns, undo/redo round-trip (12.894834ms)
+✔ multiple cursors: C adds a cursor below, typing goes to both (10.544919ms)
+✔ x selects lines; d deletes and yanks; p pastes (7.351843ms)
+✔ org navigation: ]h [h g u ]b (21.564133ms)
+✔ structural form motion inside a cell (16.08294ms)
+✔ paredit-style: wrap and raise (10.150395ms)
+✔ the command line evaluates Beam Lisp against the live editor (22.179876ms)
+✔ the command line is the real language: macros, defn, destructuring, threading (41.41801ms)
+✔ split cells: a local cell runs in the page; a beam cell becomes an effect (33.908349ms)
+✔ the palette finds and runs commands by fuzzy name (24.09578ms)
+✔ describe-key explains a binding (3.050586ms)
+✔ search: / n N * with smart-case and wrap (8.088905ms)
+✔ dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans (6.300068ms)
+✔ save is an effect, not a side effect (4.697995ms)
+✔ an eval reload keeps the cursor and is one undo step (5.974995ms)
+✔ render model: segments, problems, status (3.806283ms)
+✔ incremental structure == full derive, over random typing in real documents (7703.678646ms)
+✔ round trip: every repo .bl.org is reproduced byte-for-byte (197.677305ms)
+✔ deferred language: Enter keeps the draft, one effect, replays once on ready (3.967437ms)
+✔ deferred language: Escape or an edit cancels the parked run (4.584311ms)
+✔ deferred language: a failed load keeps the draft and says so; Enter retries (2.897227ms)
+✔ deferred language: a local cell keeps its text and resumes once; edits cancel stale results (7.025438ms)
+✔ named command events use normal command lookup and retain the read-only guard (1.256962ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8608.413173

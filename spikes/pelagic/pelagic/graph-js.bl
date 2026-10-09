@@ -1,0 +1,69 @@
+; Compile immutable UGen structure once. Only controls vary at voice creation.
+; Foreign graph objects enter at the annotated boundary; no per-voice tree copy.
+(ns ^:js pelagic.graph-js)
+(def supported #{"param" "sin-osc" "saw" "pulse" "lf-tri" "white-noise" "pink-noise"
+                 "mul" "add" "sub" "div" "lpf" "hpf" "rlpf" "pan2" "env-gen" "line" "x-line"})
+(defn- fail [message] (throw (js/Error. message)))
+(defn- numeric? [x] (.isFinite js/Number x))
+(defn- numeric-control [x params]
+  (let [value (if (and x (= (.-ugen x) "param"))
+                (let [given (aget params (.-key x))]
+                  (if (.hasOwn js/Object params (.-key x))
+                    (if (nil? given) (.-default x) given) (.-default x))) x)]
+    (when-not (numeric? value) (fail "Invalid envelope control"))
+    value))
+(defn- validate-node [graph depth budget]
+   (when (> (swap! budget inc) 4096) (fail "UGen graph exceeds 4096 fields"))
+   (when (> depth 64) (fail "UGen graph exceeds 64 levels"))
+   (cond
+     (numeric? graph) nil
+     (.isArray js/Array graph)
+       (loop [i 0]
+         (when (< i (.-length graph))
+           (validate-node (aget graph i) (inc depth) budget)
+           (recur (inc i))))
+     :else
+       (do
+         (when-not (and graph (contains? supported (.-ugen graph))) (fail "Unsupported UGen"))
+         (doseq [key ["in" "freq" "pan" "rq" "from" "to" "dur" "inputs"]]
+           (when (.hasOwn js/Object graph key) (validate-node (aget graph key) (inc depth) budget)))
+         (when (and (= (.-ugen graph) "env-gen")
+                    (not (contains? #{"perc" "adsr"} (.-envelope (.-envelope graph)))))
+           (fail "Unsupported envelope")))))
+(defn validate-graph
+  ([graph] (validate-node graph 0 (atom 0)))
+  ([graph depth] (validate-node graph depth (atom 0))))
+(defn compile-graph [graph]
+  (validate-graph graph)
+  (let [envelopes (atom []) count (atom 0)]
+    (letfn [(walk [value depth]
+              (when (> depth 64) (fail "UGen graph exceeds 64 levels"))
+              (when (and value (or (.isArray js/Array value)
+                                   (= (.call (.-toString (.-prototype js/Object)) value) "[object Object]")))
+                ; Traverse only graph objects, with a separate total-size bound.
+                (when (>= (swap! count inc) 4096) (fail "UGen graph exceeds 4096 fields"))
+                (when (= (.-ugen value) "env-gen") (swap! envelopes conj (.-envelope value)))
+                (doseq [key (js->bl (.keys js/Object value))]
+                  (let [child (aget value key)]
+                    (when (and child (= (.call (.-toString (.-prototype js/Object)) child) "[object Object]"))
+                      (walk child (inc depth)))
+                    (when (.isArray js/Array child)
+                      (loop [i 0]
+                        (when (< i (.-length child))
+                          (walk (aget child i) (inc depth))
+                          (recur (inc i)))))))))]
+      (walk graph 0))
+    (let [compiled @envelopes]
+      (fn [params]
+        (let [end (if (seq compiled)
+                    (reduce (fn [maximum envelope]
+                              (let [attack (numeric-control (.-attack envelope) params)
+                                    release (numeric-control (.-release envelope) params)
+                                    duration (if (= (.-envelope envelope) "adsr")
+                                               (+ (max (+ attack (numeric-control (.-decay envelope) params))
+                                                       (or (.-dur params) 1)) release)
+                                               (+ attack release))]
+                                (when (or (not (numeric? duration)) (< duration 0)) (fail "Invalid envelope lifetime"))
+                                (max maximum duration))) 0 compiled)
+                    (or (.-dur params) 1))]
+          (min 30 (max 0.03 (+ end 0.08))))))))
