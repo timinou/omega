@@ -2,6 +2,13 @@
   "name": "omega-browser-spike",
   "private": true,
   "type": "module",
-  "dependencies": { "agent-browser": "0.38.2" },
-  "scripts": { "test": "node --test test/*.test.mjs" }
+  "dependencies": {
+    "@onkernel/sdk": "0.121.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.64.0"
+  }
 }

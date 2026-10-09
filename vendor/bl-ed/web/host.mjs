@@ -708,6 +708,24 @@ function syncPanes(panes) {
 
 const MAP_ROW = 3;                          // px per screen row in a minimap
 const viewPainters = {
+  // Same-origin embedded tools. Packages supply a URL, never HTML or host IO.
+  embed(dom, p) {
+    dom.root.style.cssText = "position:relative;min-width:0;min-height:0;overflow:hidden";
+    dom.body.style.cssText = "position:absolute;inset:0";
+    const model = get(p, "view"), src = model && get(model, "src");
+    if (!src) { dom.body.replaceChildren(); return; }
+    const url = new URL(src, location.href);
+    if (url.origin !== location.origin || !["http:", "https:"].includes(url.protocol)) return;
+    if (dom.body.firstElementChild?.dataset.embedSource === url.href) return;
+    const frame = document.createElement("iframe");
+    frame.dataset.embedSource = url.href;
+    frame.title = get(model, "title") || "Embedded tool";
+    frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox");
+    frame.allow = "autoplay; clipboard-read; clipboard-write; fullscreen";
+    frame.style.cssText = "width:100%;height:100%;border:0;display:block";
+    frame.src = url.href;
+    dom.body.replaceChildren(frame);
+  },
   // Generic image view: the package supplies the model; the host paints it.
   // Optional polling stops when the pane disappears. No domain knowledge here.
   image(dom, p) {

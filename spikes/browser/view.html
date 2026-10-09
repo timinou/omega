@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kernel browser</title><link rel="stylesheet" href="/browser/view.css">
+<header>
+  <strong id="identity">Kernel browser</strong><span id="state" role="status"></span>
+  <button id="control">Take control</button><button data-action="save-profile">Save &amp; close</button>
+  <button data-action="open">Reopen saved session</button><button data-action="reconnect">Reconnect</button>
+</header>
+<details id="credentials"><summary>Sign in · 1Password or saved login</summary>
+  <p>Take control to sign in. Your profile saves site logins, tabs and browser preferences when you close the session.</p>
+  <div><button data-auth="connect">Link 1Password</button><button data-auth="request">Request this site's login</button>
+    <button data-auth="status">Check approval</button><button data-auth="fill">Fill &amp; sign in with 1Password</button></div>
+  <p>1Password approval opens on your device. Kernel installs its extension on demand. Agentic Autofill is in preview; shared vaults and passkeys are not supported by that flow.</p>
+  <div><button data-auth="collect">Store login with Kernel</button><button data-auth="fill-kernel">Fill saved Kernel login</button></div>
+  <p>Kernel's hosted form stores encrypted credentials. Omega does not receive their values. Filling a saved Kernel login does not submit the form.</p>
+  <a id="approval" target="_blank" rel="noopener noreferrer" hidden>Open provider approval</a>
+  <output id="auth-status"></output>
+</details>
+<p id="message" role="status">Connecting to your browser…</p><main id="viewport"></main>
+<footer><span id="profile"></span><button id="retry">Reload view</button><button id="forget">Forget profile &amp; stored credentials</button></footer>
+<script type="module" src="/browser/view.mjs"></script></html>

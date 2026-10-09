@@ -3,7 +3,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd -P)
 export OMEGA_HOME=$(cd "$here/../.." && pwd -P)
 export BROWSER_DEMO_ROOT=${BROWSER_DEMO_ROOT:-/tmp/omega-browser-demo}
-[ -d "$here/node_modules/agent-browser" ] || npm --prefix "$here" ci
+[ -d "$here/node_modules/@onkernel/sdk" ] || npm --prefix "$here" ci
 # Fail before launching either process if a requested port is already in use.
 node --input-type=module <<'JS'
 import net from 'node:net';

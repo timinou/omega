@@ -22,7 +22,8 @@ test('browser task C-Enter emits a host intent, ordinary tasks pass through',()=
  const [,fx]=M.d_take_effects(ed).toArray();
  const intent=fx.toArray().find(x=>get(x,'intent')==='browser/task-open');
  assert.ok(intent);assert.equal(get(get(intent,'args'),'id'),'ora');
- assert.equal(get(get(intent,'args'),'mode'),'headless');
+ assert.equal(get(get(intent,'args'),'mode'),'headful');
+ assert.equal(get(get(intent,'args'),'profile'),'omega-ora');
  assert.equal(get(intent,'then'),K('task-opened'));
  const answered=M.d_handle(ed,ev(K('type'),K('intent-result'),K('ok?'),true,K('then'),K('task-opened'),K('block'),'ora-tenders',K('data'),ev(K('id'),'t-demo')));
  const T=awaitText(answered); assert.match(T,/#omega\/task.*t-demo/);
@@ -98,4 +99,12 @@ test('watching a session arranges observation on document arrival and unuse remo
  fr=F.d_handle(fr,key('Enter'));
  assert.equal(get(get(fr,'layout'),'name'),'single');
  assert.equal(F.d_editor_ids(fr).cnt,1);
+});
+
+test('live browser is an embedded package view; bearer URLs never enter the BL model',()=>{
+ const model=P.d_live_model(M.d_boot('Session','browser:ora'));
+ assert.equal(get(model,'src'),'/browser/view/ora');
+ const pane=get(get(P.d_browser_observe,'panes').nth(1),'view');
+ assert.equal(pane.nth(0),K('embed'));
+ assert.doesNotMatch(R.printStr(model),/token|jwt|wss:/);
 });

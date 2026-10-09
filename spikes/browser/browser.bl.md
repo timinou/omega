@@ -1,248 +1,210 @@
-# Browser work as an Omega resource
+# Kernel browsers inside bl-ed
 
-Local prototype, 2026-10-07. The editor extension is `br.main/bl-package`, loaded
-in real bl-ed as `?use=present,browser`. `world.bl` creates a separate in-memory
-Omega task system with a scripted model and a real browser research tool. It
-uses the same task executor, providers, intents and editor host as `bin/bl-ed`.
-No writes to the running world on 8790. Ports 8796/8797 avoid existing offline
-worlds on 8792/8793.
+Migrated 2026-10-09. `br.main/bl-package` loads in the real editor as
+`?use=present,browser`. Kernel provisions and retains the browser; the package
+provides layouts and commands; the host embeds Kernel's interactive live view.
+There is no local Chromium launcher, agent-browser daemon, screenshot polling,
+private editor page, or alternative package implementation.
 
-## Run and try it
+## Run
 
 ```sh
 npm --prefix spikes/browser ci
-# If the presentation package has not been built:
-spikes/present/build.sh pkg
 spikes/browser/build.sh
+# Export KERNEL_API_KEY in the host environment; never put it in an org file.
 spikes/browser/run.sh
 ```
 
 Open <http://127.0.0.1:8797/?file=demo.bl.org&use=present,browser>.
-Put the cursor inside the task block and press C-Enter. The usual Omega task
-reference and card are written beneath it. The task executes the browser tool;
-`space b s` shows its browser even while Chromium is headless. With the cursor
-on that session, `space b w` opens its session buffer and enables capture.
-`:(ed/layout "browser-observe")` puts the viewport beside it.
+The runner uses an isolated in-memory world on 8796. It refuses occupied ports
+and does not change the user's running world on 8790. Existing running browser
+hosts must be restarted deliberately to load the migration; this change does
+not restart another session's processes.
 
-`:(ed/layout "browser-inbox")` shows the task rail, selected task and session
-registry. Plain `inbox` is available unchanged. `:(ed/unuse "browser")` removes
-browser keys, drawing and layouts from every pane; the underlying documents,
-existing presentations and user command tables remain intact. Unloading an
-editor package does not terminate task resources. Close a browser explicitly.
+Optional host configuration: `KERNEL_PROJECT_ID`, `KERNEL_REGION`,
+`KERNEL_BROWSER_NAMESPACE` (defaults to `omega`), `KERNEL_BASE_URL` (or the
+Beam Lisp-compatible `KERNEL_BASE`), and comma-separated
+`KERNEL_BROWSER_EXTENSIONS` naming extensions already uploaded to Kernel.
+A base URL override must implement the Kernel control-plane API. A bare
+`kernel-images` CDP port is **not** a drop-in control-plane API; self-hosting
+needs a lifecycle/profile/vault adapter and is not implemented here.
 
-The host resolves the compiled loader at `vendor/bl-ed/web/pkg/browser.mjs`.
-There is no private editor page or render loop. `serve.mjs` is a localhost host
-adapter forwarding the existing editor to the isolated world, adding browser
-providers/intents and augmenting task documents with their browser resources.
-The demo uses `npx --no-install agent-browser` from this spike's directory;
-`package-lock.json` pins 0.38.2 without replacing the system's 0.6.0 installation.
-The runner chooses an installed Playwright Chrome, or accepts
-`AGENT_BROWSER_EXECUTABLE_PATH`. If Chrome is missing, run
-`cd spikes/browser && npx agent-browser install`. Headful needs an interactive display.
+`@onkernel/sdk` is pinned to 0.121.0. Playwright Core is a development dependency
+used only for offline browser proof; production operations run beside Chromium
+through Kernel's Playwright execution endpoint, one request per operation.
+The Beam Lisp checkout contains a Kernel design and client contract tests;
+the corresponding client implementation was not found. This migration uses
+the official SDK rather than claiming that missing implementation is reusable.
 
-## The syntax
-
-A task requests a resource. A browser block declares or refers to one:
+## Open, sign in, hand off, save
 
 ```org
-#+begin_task :id ora-tenders :browser ora :browser-mode headless
-Find tender opportunities for Ora. Preserve sources and deadlines.
+#+begin_browser :id supplier :profile omega-supplier :url https://example.com
+C-Enter opens this persistent browser inside bl-ed.
+#+end_browser
+
+#+begin_task :id scan :browser supplier-scan :browser-profile omega-supplier-scan
+Read the supplier's current notices. Retain sources; do not submit anything.
 #+end_task
-
-#+begin_browser :id ora :mode headless :url https://ora-ventures.com
-#+end_browser
 ```
 
-Browser task handling calls the existing `ed.omega/eval-task`, changing only
-the new task's opening intent. Reference creation, same-body focus and edited
-body refinement stay with the task implementation. A browser ID has one active
-task owner. Close it or choose a new ID before starting another owner. The
-scripted tool is specifically an Ora discovery demonstration: arbitrary task
-goals are recorded but do not change the search strategy. This is not a new
-language evaluator or a claim of general autonomous research.
+Manual browsers start under human control. Tasks start under Omega control.
+The browser is regular, headed Chromium, with stealth disabled and the toolbar
+and tabs visible. Old `:mode headless` declarations are accepted for migration
+but now open the same headed Kernel browser; there is no mode restart toggle.
+The actual browser UA is used without spoofing. Native UA overrides are not
+exposed by the pinned Kernel creation API.
 
-User-authored browser bodies are prose; only explicit header attributes issue
-host actions. Opening a document does not open a browser. C-Enter on an ordinary
-task or code cell falls through to existing behavior. Session blocks generated
-in task livebooks are references to resources, not another browser per refresh.
+- `space b s`: sessions, owners, profiles and saved status.
+- `space b w`: live view beside the session, with sign-in and handoff controls.
+- `space b p` / `space b r`: human / Omega control, keeping the same browser.
+- `space b a` or `space b x`: save the complete profile and close.
+- `space b c`: reattach the same browser or check a pending save.
+- `space b f`: after closing, delete the profile and its credential vault.
 
-Future syntax, deliberately not interpreted by this prototype:
+The panel also provides Reopen saved session. It restores saved tabs rather
+than supplying `start_url`, which would discard them. A declaration with an
+explicit URL deliberately opens that URL when creating a new browser.
 
-```org
-#+begin_browser :id ora :provider kernel :profile ora-procurement :mode headful :view live
-#+end_browser
-```
+Kernel persists profiles on browser deletion or idle expiry, not on CDP
+connection closure. Save-and-close waits until the profile's `updated_at`
+advances; a pending or failed save blocks reopening. Full profile persistence
+preserves site data, tabs and Chromium preferences, not a running process's JS
+heap, in-progress downloads or arbitrary unsaved form state. No universal
+login-validity claim is made; resume leaves authentication `unknown`.
 
-Keep launch **mode** separate from observation **view**. `headless` describes
-Chromium, not invisibility in Omega. `:view snapshot` can show headless activity;
-a Kernel live view is a separately acquired capability. A headful browser can
-be unobserved. Switching display mode is a restart, not a CSS toggle.
+Only one local host can own a registry, and only one browser can write a
+profile. Existing remote writers are checked before creation. Kernel does not
+provide an atomic profile-writer lease: use a dedicated project/namespace if
+several independently deployed hosts might create the same profile concurrently.
+Profiles are snapshots that replace, not merge, state.
 
-## Kernel's architecture, reused at the resource boundary
+The private registry is atomic and mode 0600, its directory mode 0700, outside
+the served root. It records session IDs and profile names, not passwords,
+cookies, SDK keys, CDP URLs, OAuth tokens or live-view URLs. Host restart
+reattaches retained browser IDs under human control; old in-memory task owners
+are detached to prevent fresh task IDs from claiming an old browser. A lost
+creation response is reconciled by its durable unique name before another
+creation attempt. Old local-browser artifacts remain readable; exported local
+login state is not silently imported into Kernel.
 
-Kernel separates creating browser sessions, attaching automation transports,
-observing them, and saving profiles. Its returned session ID is the durable
-handle for lifecycle operations; CDP endpoint and live-view URL are capabilities
-of that particular running session. A profile is the reusable identity/state,
-not the execution. See [Kernel overview](https://www.kernel.sh/docs),
-[browser API](https://www.kernel.sh/docs/api-reference/browsers/list-browser-sessions)
-and [profiles](https://www.kernel.sh/docs/browsers/profiles).
+Host shutdown preserves running Kernel sessions. There is no persistent local
+CDP connection keeping them alive. With no browser operations or live viewer,
+Kernel's five-minute idle timeout ends the session and saves its profile. Hide
+or unload the pane to stop streaming; background tabs detach the viewer. The
+panel polls only local session metadata, never browser screenshots.
 
-This prototype adopts that separation, rather than Kernel's VM infrastructure:
+## Credentials and 1Password
 
-| Concept | Local proof | Remote adapter contract |
-|---|---|---|
-| Session | Omega ID plus isolated agent-browser daemon identity | Omega ID mapped to Kernel session ID |
-| Provision | agent-browser launches local Chromium | Kernel create browser with profile/mode |
-| Control | npx commands and accessibility refs | same operations via returned CDP endpoint |
-| Observe | screenshots, snapshots, task-linked event log | live-view capability, screenshots, replay IDs |
-| Persistent state | private storage-state file; explicitly restored on restart | Kernel profile with explicit `save_changes` |
-| Terminate | close CLI session | delete Kernel browser; disconnect alone is insufficient |
-| Handoff | task pauses at next browser operation; human uses desktop | pause agent; human controls authorized live view |
+Each profile gets a same-named Kernel vault. Credential controls are available
+only in human mode. Their provider URLs are delivered privately to the panel,
+never to task documents or model tool results.
 
-`sessions.mjs` owns lifecycle and state; its `run(session, argv)` seam performs
-control. `br.main` knows only IDs, document paths and intents. A production
-remote adapter must implement provisioning/deletion, attach through CDP, and
-resolve private view/profile capabilities without changing org syntax or task
-ownership. There is **no remote adapter implementation or cloud call** here.
-A remote restart must wait for profile save completion before creating the
-replacement; capabilities and generation change together. No API keys or CDP
-URLs belong in an org file or a provider object.
+**1Password Agentic Autofill**: Link 1Password opens Kernel-managed OAuth on the
+human's device. Request this site's login asks for an origin-scoped login;
+Check approval polls the request; Fill & sign in fills and submits using the
+extension Kernel installs on demand. Credential values are not returned through
+Omega. The user explicitly confirms submission. An uncertain or lost fill
+response is recorded before the call and cannot be retried in that browser.
+Declined/failed login requests can be retried with a fresh item key.
 
-Kernel profiles are complete browser user-data snapshots. This local prototype
-uses the narrower cookies/localStorage state export, plus tab URLs. It does not
-promise parity for IndexedDB, sessionStorage, service workers, form drafts,
-page JS memory, download progress or navigation history.
+This upstream feature is in preview. It supports logins in private non-shared
+vaults; shared vaults and passkeys are unsupported by this flow. It needs a
+compatible 1Password account/app and human approval. This is distinct from
+installing and manually unlocking the ordinary browser extension, and does
+not promise that local desktop biometrics work inside a remote browser.
 
-## What users need to know and do
+**Kernel-hosted saved login**: Store login with Kernel opens Kernel's encrypted
+collection form; username and password fields are write-only. Fill saved Kernel
+login requires the human to specify the current page's CSS selectors. It does
+not submit the form. Item bindings use the actual current HTTPS origin read
+from Kernel, not a client-supplied destination. Storage fallback is an explicit
+human choice; failure in 1Password never silently copies credentials to Kernel.
+Manual sign-in in the live browser remains available.
 
-| State | Meaning | Useful action |
-|---|---|---|
-| starting | resource exists; browser not ready | inspect start event; wait |
-| running / agent | task can operate at browser boundaries | watch, pause, close |
-| running / human | task yielded browser control | login on desktop; resume |
-| switching | saved state, restarting browser | inspect from/to and generation |
-| failed | launch, restart or capture failed | inspect event; reopen or close |
-| closed | execution ended; artifacts still available | inspect report; forget saved auth |
-| auth unknown | no evidence that login is valid | inspect website; do not infer signed-in |
-| auth needs-human | blocked source or requested handoff | inspect affected origin; manual login |
+For ordinary extension installation, upload the extension through Kernel's
+extension tooling and configure its name in `KERNEL_BROWSER_EXTENSIONS` before
+launch. Compatibility/unlocking with the standard 1Password extension still
+requires a real account test. Agentic Autofill's on-demand installation avoids
+manual extension sideloading for that supported flow.
 
-Session documents expose owner, local/remote provider, headless/headful mode,
-control owner, auth uncertainty, profile policy, URL, generation and timestamped
-artifacts/events. They deliberately do not expose passwords, cookies or bearer
-capabilities. `resume` does not assert authentication succeeded.
+Forgetting deletes the Kernel profile and its entire credential vault after
+closure, while retaining evidence. It does not promise to revoke an external
+1Password account grant or destroy legacy local storage exports; manage those
+separately in their owning application/private directory.
 
-The editor commands are `space b s` sessions; `space b w` watch;
-`space b h/l` headful/headless; `space b p/r` pause/resume;
-`space b x` close; `space b f` forget saved auth after closing.
-Browser mutations are serialized per session. Handoff takes effect between
-operations, not halfway through a click or navigation. No two tasks silently
-share an active session. Closing while research is paused lets its tool exit.
+Authoritative references: [profiles](https://kernel.sh/docs/browsers/profiles),
+[save and reuse](https://kernel.sh/docs/browsers/profiles/save-and-reuse),
+[live view](https://kernel.sh/docs/browsers/live-view),
+[1Password integration](https://kernel.sh/docs/vaults/1password),
+[credential collection](https://kernel.sh/docs/vaults/credentials), and
+[extensions](https://kernel.sh/docs/browsers/extensions).
 
-A light dashboard should show one status row and origin per task, opening a
-session buffer only when needed. The current `browser-inbox` adds the registry
-as the third pane instead of modifying `present` or its `inbox` definition.
-The task livebook links to the same resource. These are views of one session,
-not parallel sessions or permanent per-task screen allocations.
+## Package and host boundaries
 
-Observation is a five-second **captured viewport**, not remote desktop video.
-Navigation captures immutable screenshots and snapshots. Observation overwrites
-one explicitly labelled latest viewport, keeping disk use bounded while watching.
-Capture is on navigation by default; `watch` allows refreshed screenshots when
-the viewport is visible. It does not run a background screenshot loop while
-all panes are closed. Historical screenshot paths show that exact artifact;
-snapshot/report paths are ordinary read-only virtual text buffers. Artifact
-retention is manual in this spike: screenshots, snapshots and research reports
-remain in private storage, including after a session closes.
+`br.main` exports one pure `bl-package` value. It contributes browser-inbox,
+browser-observe and procurement-review layouts and a generic `:embed` view
+model. It does not mutate user command/key tables. `ed/unuse` restores every
+pane and removes the iframe, without deleting a task's resource.
 
-## Auth, profiles, and persistence
+The vendor host has one generic same-origin iframe painter; no Kernel or Omega
+knowledge goes into `ed/*`. The browser host owns session lifecycle, Kernel
+capabilities and credential operations. The same-origin panel nests Kernel's
+live view, supports clipboard delegation, checks message origin/source, waits
+for `KERNEL_PLAYING` and reports connection failure. The agent view is read-only;
+human/Omega switching is enforced at serialized automation boundaries. The
+read-only viewer parameter is a UI control, not an authorization boundary
+against someone who already possesses a writable live-view capability.
 
-Private state is outside the served document root: by default
-`/tmp/omega-browser-demo.private`, directories mode 0700, state files mode 0600.
-Only named public artifacts are served. `auth-state.json` is never an artifact.
-These files may contain credentials; there is no encryption-at-rest claim.
-Screenshots and snapshots can also reveal private page content: use the same
-retention/access policy in a production host.
-
-A mode restart saves storage before closing, launches a **fresh** daemon with
-`--state` at browser creation, and reopens tab URLs. The first implementation
-used the installed 0.6.0 `state load`; real-browser testing showed that command
-is a success-returning no-op. The spike now pins 0.38.2 and loads state at launch.
-The test uses synthetic localhost cookie/localStorage values and checks both
-headless → headful and headful → headless. Saved state is not printed or copied
-into proof artifacts.
-
-Ephemeral sessions are the default; this prototype saves storage for a mode
-restart. A production `browser:profiles` buffer should be distinct from
-`browser:sessions`: profile name, allowed origins, last save/check, expiration,
-read-only seed vs sole writer, attached sessions and forget action. One profile
-must have one writer, with explicit immutable clones for parallel research.
-Kernel also warns that concurrent profile snapshots do not merge.
-
-Needed next: explicit save/reuse policy across host restarts, origin-scoped auth
-checks, profile encryption and expiration, resource leases/timeouts, crash
-recovery, download artifacts, human-input audit events and credential-vault
-integration. The in-memory registry intentionally does not pretend to recover
-old running sessions after the host restarts. Files remain for inspection.
-
-## Use cases to preserve
-
-1. A scheduled tender scan stays headless. A browser status row appears as soon
-   as it opens; the task links to its screenshots and dated research report.
-2. A procurement portal needs login. Pause, switch headed, log in manually,
-   switch back and resume. Site-specific auth is checked, never inferred from
-   a successful mode restart. The prototype exposes uncertainty; it does not
-   implement a credential vault or universal login detector.
-3. A result looks suspicious. Navigate from the task to its session to the exact
-   snapshot/screenshots and original URLs; compare observation time with the
-   publication date and actual tender deadline.
-4. Two client accounts run in parallel. Independent session IDs and profile
-   writers keep cookies isolated; cloning a seed is explicit.
-5. Close an execution but retain its evidence. The task can finish before the
-   browser closes; closing a browser does not delete its report. Forgetting
-   credentials is a separate operation from deleting evidence.
-6. Move execution to Kernel. Task and session document paths stay stable;
-   backend IDs, generation, capabilities and transport change. Observation
-   reports whether it is a local captured frame or an authorized remote view.
+Only explicit navigation/agent actions retain screenshots and snapshots.
+These can contain private page content and should be treated accordingly.
+Neither document refresh nor human sign-in causes a screenshot loop.
 
 ## Verification and proof
 
-- [Browser block in real bl-ed](proof/01-browser-block.png).
-- [Task and browser registry in the inbox](proof/02-inbox-task-browser.png).
-- [Captured headless viewport beside the session](proof/03-headless-observe.png).
-- [Headful session](proof/04-headful-observe.png).
-- [After unuse, plain editor restored](proof/05-unuse-restores-editor.png).
-- [Task reference created by C-Enter](proof/06-task-browser-reference.png).
-- [Readable page snapshot opened as an editor buffer](proof/07-readable-artifact.png).
-- [Real cookie/localStorage handoff](proof/storage-handoff.json).
-- [Browser discovery report](proof/discovery.bl.org).
-- [Ora shortlist, including original-PDF deadline verification](proof/ora-shortlist.bl.org).
-- [Contract test output](proof/contract-tests.txt), [vendor tests](proof/vendor-tests.txt),
-  and [unchanged equivalence checker output](proof/equivalence.txt).
+Local migration verification passed: browser contract tests, all 73 vendor
+editor drive tests, the real-editor fixture drive, and presentation equivalence.
+Logs are under [proof/kernel](proof/kernel/). The
+[cloud check](proof/kernel/cloud-check.txt) stopped with exit 2 because this
+environment has no `KERNEL_API_KEY`; no real Kernel browser or 1Password
+account was exercised. The live deployment therefore remains unverified.
 
 ```sh
-node --test spikes/browser/test/package.test.mjs spikes/browser/test/sessions.test.mjs
-node spikes/browser/test/real-browser.mjs
+npm --prefix spikes/browser test
 BLED_OUT=vendor/bl-ed/web/out BLED_ROOT=/home/user/code/undefine/beam-lisp \
   node --test vendor/bl-ed/test/*.test.mjs
-node spikes/present/test/check.mjs vendor/bl-ed/web/welcome.bl.org \
-  spikes/browser/demo.bl.org spikes/present/web/welcome.bl.org
+PP_OUT=vendor/bl-ed/web/out node spikes/present/test/check.mjs \
+  vendor/bl-ed/web/welcome.bl.org spikes/browser/demo.bl.org \
+  spikes/present/web/welcome.bl.org
 ```
 
-The existing default-presentation equivalence checker is unchanged. Vendor
-changes are generic host support for an image view model and removal of the
-input sink from cloned pane skeletons. No Omega browser concepts went below
-`vendor/bl-ed/ed/*`. Existing workspace changes were preserved.
+Real editor proof uses an isolated offline world. Launch from its directory
+because the current `bin/bl-ed` prepends `--root "$PWD"` (existing FUP-012):
 
-The original GIZ DigiTPME DAO 10048906, scanned PDF physical page 3, confirms
-a 22/10/2026 submission deadline. Ora's fit is strongest on digital adoption;
-the required women-entrepreneur digitalisation reference and training capacity
-still need eligibility review. The attached shortlist separates that evidence
-from a second candidate whose original DAO has not yet been verified.
+```sh
+mkdir -p /tmp/omega-kernel-editor-proof
+(cd /tmp/omega-kernel-editor-proof && \
+  /home/user/code/undefine/omega/bin/bl-ed --offline --memory --port 8836)
+node spikes/browser/test/editor-proof.mjs
+```
 
-Final verification: browser contract tests 11/11; vendor suite 66/66; real
-headless/headful/headless cookie and localStorage restoration; unchanged
-default-presentation equivalence passes (11/6/11 variants). An encountered
-screenshot storage failure is recorded independently of source reading.
-Evidence has separate snapshot/screenshot timestamps, and session directories
-are unique per host run so reopening a logical ID cannot overwrite old captures.
+Screenshots: [human live panel](proof/kernel/01-human-live-panel.png),
+[Omega live panel](proof/kernel/02-omega-live-panel.png),
+[saved session](proof/kernel/03-saved-session.png),
+[after unuse](proof/kernel/04-after-unuse.png).
+[Editor drive results](proof/kernel/editor.json) explicitly identify the
+simulated Kernel service/live-view fixture. The editor, package, host and input
+are real; these screenshots **do not establish cloud or 1Password compatibility**.
+
+Contract checks cover the official SDK wire requests, lifecycle, serialization,
+writer conflicts, uncertain creation, save ordering, restart recovery, private
+capabilities, credential approval/collection and uncertain submission. The
+serialized browser operation code is also exercised against actual Chromium.
+The default-presentation equivalence checker is unchanged.
+
+With `KERNEL_API_KEY` configured, run `node spikes/browser/test/real-browser.mjs`
+for an actual cloud persistence smoke test. It creates its own isolated profile,
+sets only synthetic browser-local state, verifies regular UA and restores saved
+state, then deletes its test profile/vault. A missing key exits explicitly;
+no cloud success is inferred from fixture results. Human 1Password approval
+must be checked separately in the live panel.

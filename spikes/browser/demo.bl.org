@@ -1,7 +1,7 @@
 #+TITLE: Browser work — Ora tender watch
 
 * Find opportunities for Ora
-#+begin_task :id ora-tenders :browser ora :browser-mode headless
+#+begin_task :id ora-tenders :browser ora :browser-profile omega-ora :browser-mode headful
 Read ora-ventures.com. Find current appels d'offre for custom AI systems,
 CRM/ERP implementation, digital transformation, process audits and growth
 strategy. Keep source links and deadlines; distinguish tenders from grants
@@ -9,16 +9,16 @@ and partner registration. Never submit an application.
 #+end_task
 
 * A browser is a resource, not another task
-#+begin_browser :id manual :mode headless :url https://ora-ventures.com
-A reusable local browser; C-Enter opens it.
+#+begin_browser :id manual :profile omega-manual :mode headful :url https://ora-ventures.com
+A persistent Kernel browser; C-Enter opens it.
 #+end_browser
 
 * Controls
-space b s — sessions (including browsers opened headless)
-space b w — observe this browser; then :(ed/layout "browser-observe")
-space b h / space b l — headful / headless (restart; restores storage and tabs)
+space b s — Kernel sessions and saved profiles
+space b w — interactive live browser beside its session
+space b a — save complete profile and close; C-Enter on its declaration reopens it
 space b p / space b r — pause for human login / return control to task
-space b x — close; space b f — forget saved login state after closing
+space b x — save & close; space b c — reconnect; space b f — forget profile and credentials after closing
 :(ed/layout "browser-inbox") — tasks | selected task | browser sessions
 
 Auth state lives outside these documents. No passwords or cookie values here.

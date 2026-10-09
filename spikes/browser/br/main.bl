@@ -38,11 +38,11 @@
           (update (ow/eval-task ed) :effects
             (fn [fx] (mapv (fn [e]
               (if (= "task/open" (:intent e))
-                (assoc e :intent "browser/task-open" :args (assoc (:args e) :id (:browser a) :mode (or (:browser-mode a) "headless")))
+                (assoc e :intent "browser/task-open" :args (assoc (:args e) :id (:browser a) :profile (:browser-profile a) :mode (or (:browser-mode a) "headful")))
                 e)) fx)))
           nil)
         (if (:url a)
-          (assoc-in (c/effect ed {:kind :intent :intent "browser/open" :args {:id (:id a) :mode (or (:mode a) "headless") :url (:url a)} :then :visit-path})
+          (assoc-in (c/effect ed {:kind :intent :intent "browser/open" :args {:id (:id a) :profile (:profile a) :mode (or (:mode a) "headful") :url (:url a)} :then :visit-path})
                     [:pkg-state "browser" :observe?] true)
           (action ed "watch"))))
     nil))
@@ -52,8 +52,8 @@
         id (or (:id a) (:key o))]
     (p/head-card (:key o) "focus"
       (concat [(p/line-mark (:from o)
-                 [{:text (str "◉ browser · " id " · " (or (:mode a) "headless")) :kind :heading-1}
-                  {:text "   C-Enter open · space b w watch · h/l headful/headless" :kind :comment}] (:key o))]
+                 [{:text (str "◉ browser · " id " · " (or (:mode a) "Kernel")) :kind :heading-1}
+                  {:text "   C-Enter open · space b w live view · p/r human/Omega" :kind :comment}] (:key o))]
               (map p/text-mark (range (inc (:from o)) (:to o)))))))
 
 (def browser-entry {:type :omega/browser-block
@@ -73,17 +73,22 @@
             {:id :browsers :doc "browser:sessions" :width [:ch 48]}]))
 
 (def browser-observe
-  {:name "browser-observe" :doc "Session facts beside the latest captured browser viewport."
+  {:name "browser-observe" :doc "Session facts beside an interactive Kernel browser."
    :panes [{:id :session :doc :linked :width [:ch 64]}
-           {:id :viewport :view [:image :session] :width :fill}]
+           {:id :viewport :view [:embed :session] :width :fill}]
    :links [] :focus :session})
 
 (defn image-model [ed]
   (when-let [id (session-id ed)]
     (let [path (str (:path ed)) artifact? (ends-with? path ".png")]
       {:src (if artifact? (str "/browser/artifact/" (subs path 8)) (str "/browser/frame/" id))
-       :refresh-ms (if artifact? 0 5000)
+       :refresh-ms 0
        :alt (str "Browser " id " — captured viewport; not a live video stream")})))
+
+(defn live-model [ed]
+  (when-let [id (session-id ed)]
+    {:src (if (ends-with? (str (:path ed)) ".png") (str "/browser/artifact/" (subs (str (:path ed)) 8)) (str "/browser/view/" id))
+     :title (str "Kernel browser " id)}))
 
 (def procurement-review
   {:name "procurement-review" :doc "Opportunity report beside its company brief and executable search strategy."
@@ -119,26 +124,24 @@
                (:blocks (:struct ed))))))
 
 (def bl-package
-  {:name "browser" :doc "Task-owned local browsers, browser blocks, session buffers and observation."
-   :commands {:browser/save-profile {:doc "Save cookies/localStorage privately for later reuse." :run (fn [ed] (action ed "save-profile"))}
+  {:name "browser" :doc "Kernel browsers, persistent profiles, live viewing and human handoff."
+   :commands {:browser/save-profile {:doc "Save the complete Kernel profile and close this session." :run (fn [ed] (action ed "save-profile"))}
               :browser/run-search {:doc "Run saved curated search through a real Omega task (live world)." :run run-search}
               :browser/sessions {:doc "List browser sessions." :run (fn [ed] (c/effect ed {:kind :visit :path "browser:sessions"}))}
               :browser/open {:doc "Open this browser or browser task block." :run (fn [ed] (or (open-block ed) (c/message ed "No browser block here.")))}
-              :browser/watch {:doc "Visit the browser and start viewport capture." :run (fn [ed] (action ed "watch"))}
-              :browser/headful {:doc "Restart headed with saved storage and tabs." :run (fn [ed] (action ed "headful"))}
-              :browser/headless {:doc "Restart headless with saved storage and tabs." :run (fn [ed] (action ed "headless"))}
+              :browser/watch {:doc "Show the interactive Kernel browser beside its session." :run (fn [ed] (action ed "watch"))}
+              :browser/reconnect {:doc "Reattach the same Kernel session or check pending profile save." :run (fn [ed] (action ed "reconnect"))}
               :browser/pause {:doc "Yield browser control to the human." :run (fn [ed] (action ed "pause"))}
               :browser/resume {:doc "Return control to the task." :run (fn [ed] (action ed "resume"))}
               :browser/close {:doc "Close this session." :run (fn [ed] (action ed "close"))}
-              :browser/forget {:doc "Delete saved auth state after closing the session." :run (fn [ed] (action ed "forget"))}}
+              :browser/forget {:doc "Delete the saved Kernel profile and credential vault after closing." :run (fn [ed] (action ed "forget"))}}
    :keys {:normal {"space b a" :browser/save-profile "space b e" :browser/run-search "space b s" :browser/sessions "space b w" :browser/watch
-                   "space b h" :browser/headful "space b l" :browser/headless
-                   "space b p" :browser/pause "space b r" :browser/resume
+                   "space b c" :browser/reconnect "space b p" :browser/pause "space b r" :browser/resume
                    "space b x" :browser/close "space b f" :browser/forget}}
    :intercept (fn [ed ev] (when (and (= :key (:type ev)) (= "C-Enter" (:key ev))) (or (when (in-search-source? ed) (run-search ed)) (open-block ed) (when (and (= "browser:sessions" (:path ed)) (session-id ed)) (action ed "watch")))))
    :on-event after-event
    :adopt adopt-report :owns [:frame/layout]
    :render render
    :provides {:layouts {"browser-inbox" browser-inbox "browser-observe" browser-observe "procurement-review" procurement-review}
-              :views {:image image-model}
+              :views {:image image-model :embed live-model}
               :links {"omega/browser" (fn [o] (str "browser:" (:key o)))}}})

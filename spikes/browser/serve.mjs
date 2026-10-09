@@ -3,16 +3,18 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {Sessions,validId} from './sessions.mjs';
+import {Sessions,validId,publicSession,safeError} from './sessions.mjs';
+import {Credentials} from './credentials.mjs';
 import {Procurement} from '../procurement/service.mjs';
 import {recover} from '../procurement/lifecycle.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url));
+export async function startBrowserHost({root=process.env.BROWSER_DEMO_ROOT || '/tmp/omega-browser-demo',
+  manager=new Sessions(process.env.BROWSER_STATE_ROOT || root+'.private'),
+  upstream='http://127.0.0.1:8796',port=8797,procurement=new Procurement(root,upstream)}={}) {
 const instance=crypto.randomUUID().slice(0,8);
-const root=process.env.BROWSER_DEMO_ROOT || '/tmp/omega-browser-demo';
-const manager=new Sessions(process.env.BROWSER_STATE_ROOT || root + '.private');
+if(manager.root===path.resolve(root)||manager.root.startsWith(path.resolve(root)+path.sep))throw Error('Browser state must be outside the served document root.');
 await manager.init();
-const upstream='http://127.0.0.1:8796';
-const procurement=new Procurement(root,upstream);
+const credentials=new Credentials(manager);
 procurement.sessions=async()=>Array.from(manager.sessions.values(),s=>({id:s.id,status:s.status,mode:s.mode,control:s.control,task:s.task,auth:s.auth,profile:s.profile,frameAt:s.frameAt||s.artifacts?.findLast(a=>a.kind==='screenshot')?.at,url:s.url}));
 await recover(procurement);
 const json=(res,status,body)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(body));};
@@ -20,16 +22,12 @@ async function body(req) {
   let value=''; for await(const chunk of req) {value+=chunk;if(value.length>65536)throw Error('Request too large');}
   return JSON.parse(value || '{}');
 }
-function publicSession(s) {
-  return {id:s.id,task:s.task,provider:s.provider,mode:s.mode,status:s.status,control:s.control,
-    auth:s.auth,profile:s.profile,url:s.url,generation:s.generation,artifacts:s.artifacts,events:s.events,rev:s.rev};
-}
 function document(id) {
   const objects=[]; let lines;
   if(id==='sessions') {
     lines=['#+TITLE: Browser sessions — task resources','',
-      'Headless browsers are visible here. C-Enter / space b w to inspect.',
-      'space b h/l mode · p/r handoff · x close · f forget saved auth',''];
+      'Kernel browsers · C-Enter / space b w opens interactive live view.',
+      'space b p/r human/Omega · a save & close · c reconnect · f forget profile and credentials',''];
     for(const s of manager.sessions.values()) {
       objects.push({row:lines.length,type:'omega/browser',key:s.id});
       lines.push(`${s.id} · ${s.status} · ${s.mode} · ${s.control} · task:${s.task || 'manual'}`,
@@ -42,14 +40,14 @@ function document(id) {
       `#+begin_browser :id ${s.id} :mode ${s.mode}`,
       `Owner: task:${s.task || 'manual'} · provider: ${s.provider} · generation: ${s.generation}`,
       `Control: ${s.control} · auth: ${s.auth} · profile: ${s.profile}`,
-      `Page: ${s.url}`,`Capture: ${s.watching ? 'enabled; refreshed while viewport is displayed' : 'on navigation only'}`,
+      `Page: ${s.url}`,`Persistence: complete Kernel profile; saved on close.`,
       `Viewport timestamp: ${s.frameAt || s.artifacts.find(a=>a.name===s.frame)?.at || 'none; inspect capture errors'}`,
-      'space b h/l mode · p/r handoff · x close · f forget saved auth',
+      'space b p/r human/Omega · a save & close · c reconnect · f forget profile and credentials',
       '#+end_browser','',
-      ':(ed/layout "browser-observe") shows the captured viewport.',
-      'Mode switches restart Chromium: cookies/localStorage and tab URLs restored.',
-      'JS memory, form drafts, sessionStorage and IndexedDB are not promised.',
-      'Auth values are private; this buffer contains metadata only.','', '* Artifacts',
+      ':(ed/layout "browser-observe") shows the interactive Kernel browser.',
+      'Human/Omega handoff keeps the same browser running.',
+      'Save & close preserves the profile; reopening restores tabs and login state.',
+      'Credentials are managed through the live panel; values never enter this buffer.','', '* Artifacts',
       ...s.artifacts.map(a=>`[[browser:${s.id}/${a.name}][${a.kind}: ${a.name} · ${a.at}]]`),
       '', '* Events',...s.events.map(e=>`${e.at} · ${e.type} · ${JSON.stringify(Object.fromEntries(Object.entries(e).filter(([k])=>!['at','type'].includes(k))))}`)];
   }
@@ -77,11 +75,33 @@ function ownedDoc(doc) {
 const server=http.createServer(async(req,res)=>{
   let browserTask=null;
   try {
-    // These intents control a local browser. Only same-origin requests may mutate it.
+    // These intents control a Kernel browser. Only same-origin requests may mutate it.
     const host=req.headers.host;
-    if(!['127.0.0.1:8797','localhost:8797'].includes(host))return json(res,403,{ok:false,message:'Invalid host'});
-    if(req.method==='POST' && req.headers.origin && ![`http://${host}`,'http://127.0.0.1:8797','http://localhost:8797'].includes(req.headers.origin))return json(res,403,{ok:false,message:'Invalid origin'});
+    const actualPort=server.address()?.port || port;
+    if(![`127.0.0.1:${actualPort}`,`localhost:${actualPort}`].includes(host))return json(res,403,{ok:false,message:'Invalid host'});
+    if(req.method==='POST' && req.headers.origin && ![`http://${host}`,`http://127.0.0.1:${actualPort}`,`http://localhost:${actualPort}`].includes(req.headers.origin))return json(res,403,{ok:false,message:'Invalid origin'});
     const u=new URL(req.url,`http://${host}`);const p=u.searchParams.get('path');
+    if(u.pathname.startsWith('/browser/live/') || u.pathname.startsWith('/browser/credentials/')) {
+      if(req.headers['sec-fetch-site']==='cross-site' || req.headers['sec-fetch-site']==='same-site')return json(res,403,{ok:false,message:'Same-origin browser access required'});
+      if(req.headers['x-omega-browser']!=='human')return json(res,403,{ok:false,message:'Open the browser panel to access this capability'});
+      const id=u.pathname.split('/').at(-1);
+      if(u.pathname.startsWith('/browser/live/') && req.method==='GET')return json(res,200,{ok:true,...await manager.live(id)});
+      if(u.pathname.startsWith('/browser/credentials/') && req.method==='POST') {
+        const b=await body(req);return json(res,200,{ok:true,result:await credentials.operation(id,b.verb,b.args)});
+      }
+      return json(res,405,{ok:false,message:'Method not allowed'});
+    }
+    if(u.pathname.startsWith('/browser/view/')) {
+      manager.get(u.pathname.split('/').at(-1));
+      res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-frame-options':'SAMEORIGIN',
+        'referrer-policy':'strict-origin-when-cross-origin',
+        'content-security-policy':"default-src 'self'; frame-src https://*.onkernel.com https://*.kernel.sh https://*.kernel.com; object-src 'none'; base-uri 'none'; frame-ancestors 'self'"});
+      return res.end(await fs.readFile(path.join(here,'view.html')));
+    }
+    if(['/browser/view.mjs','/browser/view.css'].includes(u.pathname)) {
+      res.writeHead(200,{'content-type':u.pathname.endsWith('.mjs')?'text/javascript':'text/css','cache-control':'no-store'});
+      return res.end(await fs.readFile(path.join(here,path.basename(u.pathname))));
+    }
     if(u.pathname.startsWith('/procurement/artifact/')){const [id,...parts]=decodeURIComponent(u.pathname.slice('/procurement/artifact/'.length)).split('/');const a=await procurement.artifact(id,parts.join('/'));res.writeHead(200,{'content-type':a.type,'cache-control':'no-store','content-disposition':`inline; filename*=UTF-8''${encodeURIComponent(a.name)}`});return res.end(a.data);}
     if(u.pathname==='/browser/tool' && req.method==='POST') {
       const b=await body(req);
@@ -95,19 +115,20 @@ const server=http.createServer(async(req,res)=>{
         await fs.mkdir(path.dirname(dest),{recursive:true});b.args[1]=dest;
       }
       for(let i=0;i<40 && !manager.pending.has(b.task) && !manager.tasks.has(b.task);i++)await new Promise(r=>setTimeout(r,50));
-      const config=manager.pending.get(b.task) || {id:`model-${instance}-${b.task}`,mode:'headless'};
+      const config=manager.pending.get(b.task) || {id:`model-${instance}-${b.task}`,mode:'headful'};
       let s=manager.tasks.has(b.task)?manager.get(manager.tasks.get(b.task)):null;
       let created=false;
-      if(!s){if(b.action!=='open')throw Error('Open a source URL before using browser operations');s=await manager.open({...config,task:b.task,url:b.args[0]});created=true;}
+      if(!s || ['closed','forgotten'].includes(s.status)){if(b.action!=='open')throw Error('Open a source URL before using browser operations');s=await manager.open({...config,task:b.task,url:b.args[0]});created=true;}
       if(s.control!=='agent')throw Error('Browser is paused for human control; resume before continuing.');
       let result;
       if(b.action==='open')result={snapshot:created?await fs.readFile(path.join(s.dir,s.artifacts.findLast(a=>a.kind==='snapshot').name),'utf8'):await manager.navigate(s,b.args[0]),url:s.url};
       else result=await manager.lock(s,async()=>{
         const args=b.action==='links'?['eval','JSON.stringify([...document.querySelectorAll("a[href]")].map(a=>({text:a.innerText.trim(),url:a.href})).filter(a=>a.text).slice(0,100))']:
           b.action==='snapshot'?['snapshot','-c']:[b.action,...b.args];
+        manager.requireAgent(s);
         const result=await manager.run(s,args);
         if(['click','fill','scroll'].includes(b.action))await manager.capture(s);
-        manager.event(s,'model/browser-operation',{action:b.action});return result;
+        manager.event(s,'model/browser-operation',{action:b.action});await manager.persist();return result;
       });
       if(['open','click'].includes(b.action)){const snapshot=result?.snapshot||await fs.readFile(path.join(s.dir,s.artifacts.findLast(a=>a.kind==='snapshot').name),'utf8');const evidence=await procurement.retainSource(b.task,s.id,s.url,snapshot);if(b.action==='open')result.evidence=evidence;}
       await procurement.browserEvent(b.task,s.id);
@@ -128,7 +149,7 @@ const server=http.createServer(async(req,res)=>{
           if(manager.sessions.has(a.id) && !['closed','failed'].includes(manager.get(a.id).status))throw Error('Browser ID already active; choose another ID');
           const taskResponse=await fetch(upstream+'/api/intent',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({intent:'task/open',args:{goal:a.goal,path:a.path,block:a.block}})});
           const task=await taskResponse.json();if(!task.ok)throw Error(task.message);
-          manager.pending.set(task.id,{id:a.id,mode:a.mode || 'headless'});
+          manager.pending.set(task.id,{id:a.id,mode:a.mode || 'headful',profile:a.profile});
           return json(res,200,{ok:true,id:task.id,path:`task:${task.id}`});
         }
         const s=verb==='open'?await manager.open(a):await manager.action(a.id,verb);
@@ -161,7 +182,6 @@ const server=http.createServer(async(req,res)=>{
     }
     if(u.pathname.startsWith('/browser/frame/')) {
       const s=manager.get(u.pathname.slice('/browser/frame/'.length));
-      if(s.watching && s.status==='running' && !s.busy)await manager.lock(s,()=>manager.refreshFrame(s));
       if(!s.frame)throw Error('No captured viewport yet');
       res.writeHead(200,{'content-type':'image/png','cache-control':'no-store'});return res.end(await fs.readFile(path.join(s.dir,s.frame)));
     }
@@ -182,8 +202,14 @@ const server=http.createServer(async(req,res)=>{
     const r=await fetch(upstream+req.url,{method:req.method});
     const headers={};for(const k of ['content-type','cache-control'])if(r.headers.has(k))headers[k]=r.headers.get(k);
     res.writeHead(r.status,headers);res.end(Buffer.from(await r.arrayBuffer()));
-  } catch(e) {if(browserTask)await procurement.browserEvent(browserTask,null,e.message).catch(()=>{});if(!res.destroyed)json(res,400,{ok:false,message:e.message});}
+  } catch(e) {if(browserTask)await procurement.browserEvent(browserTask,null,e.message).catch(()=>{});if(!res.destroyed)json(res,400,{ok:false,message:e.status?safeError(e):e.message});}
 });
-server.listen(8797,'127.0.0.1',()=>console.log('Browser demo: http://127.0.0.1:8797/?file=demo.bl.org&use=present,browser'));
-async function stop() {server.close();await manager.shutdown();process.exit(0);}
-process.on('SIGINT',stop);process.on('SIGTERM',stop);
+await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',resolve);});
+const stop=async()=>{server.close();server.closeAllConnections();await manager.shutdown();};
+return {server,manager,stop,url:`http://127.0.0.1:${server.address().port}`};
+}
+if(process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
+  const host=await startBrowserHost();
+  console.log(`Kernel browser desk: ${host.url}/?file=demo.bl.org&use=present,browser`);
+  for(const signal of ['SIGINT','SIGTERM'])process.on(signal,async()=>{await host.stop();process.exit(0);});
+}

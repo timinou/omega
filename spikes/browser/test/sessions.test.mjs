@@ -3,94 +3,36 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {Sessions,validId,publicURL} from '../sessions.mjs';
-async function fixture() {
-  const root=await fs.mkdtemp(path.join(os.tmpdir(),'browser-contract-'));const calls=[];
-  const m=new Sessions(root,{run:async(s,a)=>{
-    calls.push(a);
-    if(a[0]==='snapshot')return {snapshot:'- heading "Test"'};
-    if(a[0]==='screenshot')await fs.writeFile(a[1],'png');
-    if(a[0]==='state' && a[1]==='save')await fs.writeFile(a[2],'{"cookies":[]}');
-    if(a[0]==='get')return {url:'https://example.com/'};
-    if(a[0]==='tab' && a[1]==='list')return {tabs:[{url:'https://example.com/'}]};
-    return {};
-  }});await m.init();return {m,root,calls};
-}
-test('IDs cannot escape private storage; URLs cannot carry credentials',()=>{
- assert.equal(validId('../auth'),false);assert.throws(()=>publicURL('file:///etc/passwd'));
- assert.throws(()=>publicURL('https://user:secret@example.com'));assert.equal(validId('ora-t1'),true);
+import {Sessions,validId,publicURL,publicSession} from '../sessions.mjs';
+import {fixture} from './fixture.mjs';
+async function setup(t){const root=await fs.mkdtemp(path.join(os.tmpdir(),'omega-kernel-test-'));const f=fixture();const m=new Sessions(root,{adapter:f.adapter});await m.init();t.after(async()=>{await m.shutdown();await fs.rm(root,{recursive:true,force:true});});return {...f,m,root};}
+test('IDs and credential-bearing URLs are rejected',()=>{assert.equal(validId('../auth'),false);assert.throws(()=>publicURL('file:///etc/passwd'));assert.throws(()=>publicURL('https://user:password@example.com'));});
+test('Kernel receives a headed regular browser, full writer profile and scoped vault',async t=>{const {m,calls,root}=await setup(t);const s=await m.open({id:'ora',task:'t-1',url:'https://example.com'});const [,body]=calls.find(c=>c[0]==='browsers.create');assert.equal(body.headless,false);assert.equal(body.stealth,false);assert.equal(body.kiosk_mode,false);assert.equal(body.profile.save_changes,true);assert.equal(body.timeout_seconds,300);assert.equal(body.vaults.length,1);assert.equal(s.provider,'kernel');assert.equal((await fs.stat(root)).mode&0o777,0o700);assert.equal(s.artifacts.length,2);await assert.rejects(m.open({id:'ora',task:'t-2'}),/another task/);});
+test('simultaneous opens provision exactly one browser; same profile has one writer',async t=>{const {m,calls}=await setup(t);const [a,b]=await Promise.all([m.open({id:'ora'}),m.open({id:'ora'})]);assert.equal(a.kernelId,b.kernelId);assert.equal(calls.filter(c=>c[0]==='browsers.create').length,1);await assert.rejects(m.open({id:'other',profile:a.profile}),/writer/);});
+test('handoff serializes with in-flight automation and blocks queued model input',async t=>{const {m}=await setup(t);const s=await m.open({id:'ora',task:'t-1'});let release;const gate=new Promise(r=>release=r);const active=m.lock(s,()=>gate);const pause=m.action(s.id,'pause');const input=m.execute(s,['click','@e1']);release();await active;await pause;await assert.rejects(input,/paused/);assert.equal(s.control,'human');await m.action(s.id,'resume');assert.equal(s.auth,'unknown');});
+test('save closes through Kernel and waits for profile state before reopening restored tabs',async t=>{const {m,calls}=await setup(t);const s=await m.open({id:'ora'}),id=s.kernelId;await m.action('ora','save-profile');assert.equal(s.status,'closed');assert.ok(s.savedAt);assert.ok(calls.find(c=>c[0]==='browsers.delete'&&c[1]===id));await m.open({id:'ora'});const body=calls.filter(c=>c[0]==='browsers.create').at(-1)[1];assert.equal(body.start_url,undefined,'do not discard restored tabs');assert.equal(body.profile.save_changes,true);});
+test('pending save blocks reopen until persistence is acknowledged',async t=>{const {m,adapter}=await setup(t);const s=await m.open({id:'ora'});const saved=adapter.saved.bind(adapter);adapter.saved=async()=>{throw Error('save pending');};await assert.rejects(m.action('ora','save-profile'),/pending/);assert.equal(s.status,'saving');await assert.rejects(m.open({id:'ora'}),/pending/);adapter.saved=saved;await m.action('ora','reconnect');assert.equal(s.status,'closed');});
+test('host restart reattaches the exact browser and defaults to human control',async t=>{const {m,adapter,root,calls}=await setup(t);const s=await m.open({id:'ora',task:'t-1'}),id=s.kernelId;await m.shutdown();const fresh=new Sessions(root,{adapter});await fresh.init();assert.equal(fresh.get('ora').kernelId,id);assert.equal(fresh.get('ora').control,'human');assert.equal(fresh.tasks.get('t-1'),undefined);assert.equal(fresh.get('ora').task,null);assert.equal(calls.filter(c=>c[0]==='browsers.create').length,1);await fresh.shutdown();});
+test('live capabilities stay out of public metadata and disk registry',async t=>{const {m,root}=await setup(t);const s=await m.open({id:'ora'});const live=await m.live('ora');assert.match(live.liveURL,/readOnly=false/);await m.action('ora','resume');assert.match((await m.live('ora')).liveURL,/readOnly=true/);const stored=await fs.readFile(path.join(root,'sessions.json'),'utf8');assert.doesNotMatch(stored,/private-live-token|private-cdp-token|secret-approval/);assert.doesNotMatch(JSON.stringify(publicSession(s)),/kernelId|liveURL|vaultId/);});
+test('forget deletes profile and credential vault only after close; retains evidence',async t=>{const {m,calls}=await setup(t);const s=await m.open({id:'ora',task:'t-1'});await assert.rejects(m.action('ora','forget'),/Close/);await m.action('ora','close');await m.action('ora','forget');assert.equal(s.status,'forgotten');assert.ok(calls.some(c=>c[0]==='vaults.delete'));assert.ok(calls.some(c=>c[0]==='profiles.delete'));assert.ok(await fs.stat(path.join(s.dir,s.artifacts[0].name)));});
+test('a lost create response is reconciled by name without a second browser',async t=>{const {m,sdk,calls}=await setup(t);const create=sdk.browsers.create;sdk.browsers.create=async body=>{await create(body);throw Error('transport lost');};const s=await m.open({id:'ora'});assert.equal(s.status,'running');assert.equal(calls.filter(c=>c[0]==='browsers.create').length,1);});
+test('one private registry cannot be opened by two hosts',async t=>{const {m,root,adapter}=await setup(t);await assert.rejects(new Sessions(root,{adapter}).init(),/running host/);assert.equal(m.sessions.size,0);});
+test('reconnect recognizes an expired browser even when Kernel returns 404',async t=>{
+  const {m,sdk,profiles}=await setup(t);const s=await m.open({id:'expired'});
+  profiles.get(s.profile).updated_at=new Date(s.saveBaseline+1000).toISOString();
+  sdk.browsers.retrieve=async()=>{throw Object.assign(Error('gone'),{status:404});};
+  await m.action(s.id,'reconnect');assert.equal(s.status,'closed');assert.ok(s.savedAt);
 });
-test('task ownership, lifecycle and private artifacts',async()=>{
- const {m,root}=await fixture();try {
- const s=await m.open({id:'ora',task:'t-1',url:'https://example.com'});
- assert.equal(m.tasks.get('t-1'),'ora');assert.equal(s.mode,'headless');assert.equal(s.status,'running');
- await assert.rejects(m.open({id:'ora',task:'t-2'}),/another task/);
- assert.equal((await fs.stat(root)).mode & 0o777,0o700);
- await m.action('ora','pause');assert.equal(s.control,'human');assert.equal(s.auth,'needs-human');
- await m.action('ora','resume');assert.equal(s.auth,'unknown');
- await assert.rejects(m.action('ora','forget'),/Close/);
- await m.action('ora','close');assert.equal(s.status,'closed');await m.action('ora','forget');
- }finally{await fs.rm(root,{recursive:true,force:true});}
+test('uncertain deletion reconciles the original save baseline before retrying',async t=>{
+  const {m,adapter}=await setup(t);const s=await m.open({id:'uncertain'}),close=adapter.close.bind(adapter);
+  adapter.close=async id=>{await close(id);throw Object.assign(Error('lost response'),{status:502});};
+  await assert.rejects(m.action(s.id,'close'));assert.equal(s.status,'disconnected');
+  await m.action(s.id,'close');assert.equal(s.status,'closed');assert.ok(s.savedAt);
 });
-test('mode switching saves state before close, uses fresh launch identity and restores tabs',async()=>{
- const {m,root,calls}=await fixture();const display=process.env.DISPLAY;process.env.DISPLAY=':test';
- try {
- const s=await m.open({id:'ora',url:'https://example.com'});const identity=s.agentSession;calls.length=0;
- await m.switchMode(s,'headful');assert.notEqual(s.agentSession,identity);assert.equal(s.mode,'headful');
- assert.deepEqual(calls.slice(0,3).map(a=>a.slice(0,2)),[['tab','list'],['state','save'],['close']]);
- assert.deepEqual(calls[3].slice(0,2),['--headed','--state']);
- assert.equal((await fs.stat(path.join(s.dir,'auth-state.json'))).mode & 0o777,0o600);
- assert.equal(s.events.at(-2).type,'mode/switched');
- }finally{if(display===undefined)delete process.env.DISPLAY;else process.env.DISPLAY=display;await fs.rm(root,{recursive:true,force:true});}
-});
-test('no desktop means a mode refusal leaves the running browser intact',async()=>{
- const {m,root}=await fixture();const d=process.env.DISPLAY,w=process.env.WAYLAND_DISPLAY;
- delete process.env.DISPLAY;delete process.env.WAYLAND_DISPLAY;
- try {const s=await m.open({id:'ora'});await assert.rejects(m.switchMode(s,'headful'),/display|DISPLAY/);assert.equal(s.status,'running');assert.equal(s.mode,'headless');}
- finally{if(d!==undefined)process.env.DISPLAY=d;if(w!==undefined)process.env.WAYLAND_DISPLAY=w;await fs.rm(root,{recursive:true,force:true});}
-});
-test('a host restart does not overwrite retained artifacts for the same logical ID',async()=>{
- const {m,root}=await fixture();
- try {
- const first=await m.open({id:'ora'});
- const second=new Sessions(root,{run:m.run});await second.init();
- const reopened=await second.open({id:'ora'});
- assert.equal(first.dir,reopened.dir);
- assert.notEqual(first.frame,reopened.frame);
- assert.equal(reopened.artifacts.length,4);
- assert.ok(await fs.stat(path.join(first.dir,first.frame)));
- }finally{await fs.rm(root,{recursive:true,force:true});}
-});
-test('a screenshot failure is visible but does not discard readable page evidence',async()=>{
- const {m,root}=await fixture();const original=m.run;
- m.run=async(s,a)=>{if(a[0]==='screenshot')throw Error('capture unavailable');return original(s,a);};
- try {
- const s=await m.open({id:'ora'});assert.equal(s.status,'running');
- assert.equal(s.frame,undefined);assert.equal(s.artifacts[0].kind,'snapshot');
- assert.equal(s.events.at(-1).type,'artifact/capture-failed');
- assert.equal(await m.navigate(s,'https://example.com'),'- heading "Test"');
- }finally{await fs.rm(root,{recursive:true,force:true});}
-});
-test('watch refresh keeps one mutable image and leaves navigation artifacts intact',async()=>{
- const {m,root}=await fixture();
- try {
- const s=await m.open({id:'ora'});const original=s.frame;
- await m.action('ora','watch');await m.refreshFrame(s);await m.refreshFrame(s);
- assert.equal(s.frame,'watch-viewport.png');
- assert.equal(s.artifacts.filter(a=>a.name==='watch-viewport.png').length,1);
- assert.ok(s.artifacts.some(a=>a.name===original));
- }finally{await fs.rm(root,{recursive:true,force:true});}
-});
-
-test('explicit saved storage survives restart and can be forgotten without claiming login validity',async()=>{
- const {m,root,calls}=await fixture();try{
- const s=await m.open({id:'saved'});await m.action('saved','save-profile');assert.equal(s.profile,'saved-storage');
- const fresh=new Sessions(root,{run:m.run});await fresh.init();assert.equal(fresh.get('saved').status,'closed');assert.equal(fresh.get('saved').auth,'unknown');
- await fresh.open({id:'saved'});assert.ok(calls.some(a=>a.includes('--state')));await fresh.action('saved','close');await fresh.action('saved','forget');
- assert.equal(fresh.get('saved').profile,'ephemeral');await assert.rejects(fs.access(path.join(s.dir,'auth-state.json')));
- }finally{await fs.rm(root,{recursive:true,force:true});}
-});
-
-test('watching a closed session does not silently start another browser',async()=>{
- const {m,root,calls}=await fixture();try{await m.open({id:'closed'});await m.action('closed','close');const before=calls.length;await assert.rejects(m.action('closed','watch'),/closed/);assert.equal(calls.length,before);}finally{await fs.rm(root,{recursive:true,force:true});}
+test('save after remote idle expiry keeps the launch baseline',async t=>{
+  const {m,adapter,sdk,profiles}=await setup(t);const s=await m.open({id:'idle'}),baseline=s.saveBaseline;
+  await adapter.close(s.kernelId);
+  sdk.browsers.deleteByID=async()=>{throw Object.assign(Error('gone'),{status:404});};
+  adapter.saved=async(name,since)=>{assert.equal(since,baseline);assert.ok(Date.parse(profiles.get(name).updated_at)>since);};
+  await m.action(s.id,'save-profile');assert.equal(s.status,'closed');
 });

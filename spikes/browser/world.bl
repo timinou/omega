@@ -6,7 +6,7 @@
 (def home (System/get_env "OMEGA_HOME"))
 (def root (System/get_env "BROWSER_DEMO_ROOT"))
 (def browser-tool
-  {:name "browser/research" :description "Local browser research with visible session artifacts."
+  {:name "browser/research" :description "Kernel browser research with visible session artifacts."
    :input-schema {:type "object" :properties {}}
    :run (fn [ctx input]
      (let [r (System/cmd "node" (list (str home "/spikes/browser/client.mjs") (:task ctx))
@@ -32,7 +32,7 @@
      :step (fn [req]
        (if (some (fn [b] (= :tool-result (:type b))) (:content (last (:messages req))))
          (loop/say "Browser research stopped with an error; inspect browser:sessions and its event log.")
-         (loop/call-tool "browser/research" {} "local-browser")))})))
+         (loop/call-tool "browser/research" {} "kernel-browser")))})))
 (def intents (assoc (pv/intents sys) "browser/run-proof"
   (fn [a] {:task (task/view sys (:id a)) :turns (loop/turns sys (:id a))
            :model (when live? (:model model)) :live live?})))

@@ -287,6 +287,18 @@ history and pitch parsing likewise use explicit finite-vector and digit logic.
 Reverse search uses ascending ranges plus `reverse`, which both pinned JS
 compilers support, preserving its wraparound behavior.
 
+### 2026-10-09 — generic embedded tool view
+
+`web/host.mjs` paints a package-provided `:embed` view model with `:src` and
+`:title` in a same-origin iframe. It retains the iframe across editor renders,
+fills the bounds of its pane,
+delegates clipboard/autoplay/fullscreen permissions, and removes it when the
+view pane is disposed. Remote URLs and executable HTML are not accepted by this
+painter. Browser-provider capabilities, live-view connection handling and
+credential UI remain in the browser package's host. The browser editor proof
+checks input, iframe retention, pane-wide unload and absence of page errors;
+vendor drive tests and the unchanged default-presentation gate are run as well.
+
 ### 2026-10-09 — browser geometry and optional evaluator startup
 
 `web/host.mjs` caches repeated row/column measurements within each paint and
