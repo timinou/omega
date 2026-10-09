@@ -213,13 +213,11 @@ cold complete build/provenance remains stage 8, not implied by this checkpoint.
 
 * Next compiler integration gates (stage 3 refinement)
 Do these in dependency order, preserving the existing checked IR and semantics.
-- Shared pattern lowering, reader-node access, identifier/string emission. Current
-  candidate is in /tmp/actor-numeric-consolidation; not yet upstream. Fixtures
-  cover exact numeric literal matching and missing-versus-present-nil fields.
-- Move namespace declaration/staging/macro-helper discovery into one compiler
-  preparation API. js.actor still has defn-only staging and procedure declaration
-  expansion; js.build owns full ordinary defs/macros/initializers. They must use
-  one preparation API before actor output can replace the ordinary frontend.
+- DONE shared pattern lowering, reader-node access, identifier/string emission
+  (ddcb6808). Fixtures cover exact numeric matching and missing/present nil.
+- DONE shared namespace declaration/staging/macro-helper discovery and function
+  form preparation (98f3dee9). Both consumers use js.build/prepare-ns. Actor
+  definition/initializer compilation is the next candidate, not yet committed.
 - Emit namespace-qualified callable bindings and initializers from checked defs;
   retain one module table/runtime identity and compiler-owned module contracts.
   Actual JS operations stay inline in annotated namespaces. An annotation alone
@@ -267,3 +265,17 @@ physical reclamation of its output buffer is not promised. Real-editor checks
 cover pre-start, prepared graph, suspension, and ed/unuse with source preserved;
 no browser errors. All 61 package checks pass using the current compiled graph.
 Proof: spikes/pelagic/proof/actor-consolidation/export/cancellation.json.
+
+* Checkpoint: shared namespace staging
+Upstream 98f3dee9 makes namespace preparation, forward placeholders, macro-helper
+discovery and definition-form conversion common to both emitters. Expansion
+helpers retain their build-time BEAM implementations while runtime lowering
+receives masked links in an isolated environment. A transitive-helper/forward-ref
+fixture runs as STAGED 42; throwing application initializer compiles without
+executing or leaking its binding. All 461 actor checks at default/17/41 budgets,
+hardening, and eight ordinary BEAM/JS differential groups pass.
+
+The next candidate removes duplicate definition compilation, admits actor value
+definitions/source-ordered initializers, and bounds initialization turns through
+the same frame machine. Focused generated fixtures pass; a fresh capped cold
+compiler validation is running before any upstream commit or package repin.
