@@ -33,3 +33,42 @@
             (fn [_]
               (js/setTimeout
                 (fn [] (try (resolve (f)) (catch error (reject error)))) 0))))))))
+
+; Native clock projection is shared by the UI and graphics realm. Absolute
+; performance timestamps make realm time origins explicit; a paused clock stays put.
+(defn project-clock [time beat bpm running stamp now]
+  (let [elapsed (if running (/ (max 0 (- now stamp)) 1000) 0)]
+    #js {:time (+ time elapsed) :beat (+ beat (* elapsed (/ bpm 60)))}))
+
+; Rendering quality is an implementation detail, never a performance-edit API.
+; Respond to missed display periods as well as CPU submission cost. Hysteresis
+; and a minimum resolution keep pressure bounded without oscillating every frame.
+(defn render-scale [scale interval work]
+  (cond
+    (or (> interval 24) (> work 12)) (max 0.25 (* scale 0.85))
+    (and (< interval 18) (< work 6)) (min 1 (* scale 1.02))
+    :else scale))
+
+(defn graphics-worker [url] (js/Worker. url #js {:type "module"}))
+
+; The score is finite (1024 sixteenths) and immutable. Cache native voice data
+; after BL compilation/conversion, not mutable AudioNodes. Mixer/stem selection
+; remains downstream, so muting never invalidates or duplicates this graph cache.
+(defn score-source [step defaults]
+  (let [cache (js/Map.)]
+    (fn [index]
+      (if (.has cache index) (.get cache index)
+        (let [voices (bl->js (step index defaults))]
+          (when (>= (.-size cache) 1024)
+            (.delete cache (.-value (.next (.keys cache)))))
+          (.set cache index voices)
+          voices)))))
+
+(defn audible-time [context now]
+  (let [current (.-currentTime context)]
+    (if (.-getOutputTimestamp context)
+      (let [stamp (.getOutputTimestamp context)
+            age (- now (.-performanceTime stamp))]
+        (if (and (> (.-contextTime stamp) 0) (>= age 0) (< age 1000))
+          (min current (+ (.-contextTime stamp) (/ age 1000))) current))
+      current)))

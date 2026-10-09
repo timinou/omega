@@ -22,107 +22,134 @@
   ],
   "stats": {
     "playing": true,
-    "audioTime": 25.336,
-    "nextStep": 207,
+    "audioTime": 32.52,
+    "nextStep": 270,
     "lastEvaluation": {
       "id": 9,
       "ok": true,
       "revision": 12,
-      "targetBeat": 40,
+      "targetBeat": 48,
       "edits": 1
     },
     "evalCount": 9,
-    "voices": 17,
+    "voices": 16,
     "context": "running",
-    "frames": 1216,
+    "frames": 1549,
     "recording": false,
     "patterns": [
       "melody"
     ],
     "pending": 0,
     "mode": "performance",
-    "time": 24.16933333333333,
-    "beat": 49.50354535519127,
+    "time": 31.729333333333336,
+    "beat": 65.2593194899818,
     "revision": 13,
     "phase": "ACTIVE",
     "resources": {
-      "voices": 17,
-      "peakVoices": 28,
-      "triggered": 140,
-      "nodes": 184,
+      "voices": 16,
+      "peakVoices": 26,
+      "triggered": 195,
+      "nodes": 192,
       "buses": 6,
-      "intents": 139
+      "intents": 194
     },
     "gpu": {
-      "programs": 3,
+      "worker": true,
+      "frames": 1549,
+      "frameP95": 48,
+      "frameP99": 93,
+      "workP95Ms": 3.8,
+      "workMaxMs": 350.5,
+      "frameMaxMs": 351.19999998807907,
+      "scale": 0.25,
+      "programs": 4,
       "targets": 3,
       "renderSize": [
-        774,
-        447
+        194,
+        112
       ],
       "outputSize": [
         774,
         447
       ],
-      "transition": false
+      "transition": false,
+      "inFlight": true,
+      "pending": 1,
+      "validationPrograms": 4
     },
     "diagnostics": {
       "missed": 0,
-      "ticks": 920,
-      "longTasks": 10
+      "ticks": 738,
+      "longTasks": 106
     }
   },
   "metrics": {
-    "elapsedSeconds": 27.28069999998808,
+    "elapsedSeconds": 36.332099999964235,
     "missedEvents": 0,
-    "schedulerTicks": 920,
-    "longTasks": 10,
-    "frameP95": 49,
-    "frameP99": 93,
-    "framesOver100Percent": 0.8042895442359249,
+    "schedulerTicks": 739,
+    "longTasks": 106,
+    "frameP95": 115,
+    "frameP99": 262,
+    "framesOver100Percent": 6.030701754385965,
     "audioClock": {
       "sampleRate": 48000,
       "baseLatency": 0.010666666666666666,
       "outputLatency": 0.04,
-      "nativeSeconds": 25.354666666666667,
-      "wallSeconds": 26.079100000023843,
-      "rate": 0.9722216896535343
+      "outputTimestamp": {
+        "contextTime": 32.52163266666667,
+        "performanceTime": 37973.10000002384
+      },
+      "nativeSeconds": 32.562666666666665,
+      "wallSeconds": 34.209100000023845,
+      "rate": 0.9518714805897837
     },
-    "avSubmitP95Ms": 33.12021857924208,
+    "avSubmitP95Ms": 76.25136612023731,
     "avSamples": 9,
-    "activationMaxMs": 10.300000011920929,
-    "renderMaxMs": 25.600000023841858,
-    "compileP95": 268.80000001192093,
+    "activationMaxMs": 33.19999998807907,
+    "renderMaxMs": 47.200000047683716,
+    "compileP95": 658.6999999880791,
     "resources": {
       "voices": 16,
-      "peakVoices": 28,
-      "triggered": 140,
-      "nodes": 173,
+      "peakVoices": 26,
+      "triggered": 195,
+      "nodes": 192,
       "buses": 6,
-      "intents": 139
+      "intents": 194
     },
     "gpu": {
-      "programs": 3,
+      "worker": true,
+      "frames": 1553,
+      "frameP95": 48,
+      "frameP99": 93,
+      "workP95Ms": 3.8,
+      "workMaxMs": 350.5,
+      "frameMaxMs": 351.19999998807907,
+      "scale": 0.25,
+      "programs": 4,
       "targets": 3,
       "renderSize": [
-        774,
-        447
+        194,
+        112
       ],
       "outputSize": [
         774,
         447
       ],
-      "transition": false
+      "transition": false,
+      "inFlight": true,
+      "pending": 0,
+      "validationPrograms": 4
     },
     "storageTransactions": 0,
     "history": 7,
     "namespaces": 0,
+    "evaluator": "worker",
     "recording": null,
     "audioTiming": {
       "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
-      "samples": 19,
-      "p95Ms": 0.019332885742073813,
-      "maxMs": 0.019332885742073813,
+      "samples": 30,
+      "p95Ms": 0.017283121746203278,
+      "maxMs": 0.019180297851306705,
       "ready": true,
       "error": null
     },

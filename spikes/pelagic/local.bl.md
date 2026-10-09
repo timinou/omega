@@ -116,3 +116,32 @@ The browser proof and `test/startup.py` start temporary static servers and need 
 Playwright/Chromium; `CHROMIUM` overrides its executable. This optional build
 does not resolve the timing release failures recorded in the sustained
 performance proof.
+
+## Audio/video execution lanes
+
+The optional local bundle uses an owned OffscreenCanvas worker when supported.
+The real editor and controls keep their normal host lifecycle. Rendering has one
+frame in flight and one replaceable pending snapshot, with a 15-second failure
+watchdog. Unuse terminates the worker and releases its validation context. Browsers
+without this capability retain the original main-thread stage.
+
+Clock projection, adaptive resolution, output-clock selection and the bounded
+immutable score cache are written in the annotated `pelagic.browser` namespace
+and compiled with the same BL pipeline. Web Audio continues to render through
+native browser audio nodes. Automatic quality changes are private to rendering;
+patch authors keep using the existing scene, shader and instrument APIs.
+
+Synchronous shader validation preserves whole-revision rejection; a small off-DOM
+context prepares programs, while the worker owns all per-frame rendering. Actual
+1280×720 VP8 capture, invalid-shader rejection, context loss/restoration and exact
+unuse passed the real-editor drive in `test/performance-browser.py` (20 checks).
+34 package tests pass, including finite cache eviction, score/mute equivalence,
+cross-realm clock projection and stale output-timestamp fallback.
+
+Real editor with the package: ![worker stage](proof/performance/studio.jpg)
+After unuse: ![restored editor](proof/performance/unused.jpg)
+
+Diagnostics distinguish main-thread frame cadence, worker cadence, worker CPU
+submission work and AV submission acknowledgements. Worker acknowledgements
+include round-trip delay; neither they nor audio sample probes measure physical
+speaker/display synchronization. The 16 ms end-to-end target remains open.

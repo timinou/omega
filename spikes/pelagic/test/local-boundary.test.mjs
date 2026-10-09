@@ -88,3 +88,38 @@ test('BL worker server waits for boot, serializes data and reports fatal boot fa
   assert.deepEqual(replies.at(-1),{id:3,fatal:true,error:'bootstrap failed'});
  } finally {if(prior)globalThis.self=prior;else delete globalThis.self;}
 });
+
+test('compiled BL projects realm clocks and bounds adaptive rendering with hysteresis', {skip:!process.env.PELAGIC_OUT}, async()=>{
+ const J=await imp('interop');await imp('pelagic.browser');const b=J.requireNamespace('pelagic.browser');
+ const project=b['project-clock'],scale=b['render-scale'];
+ assert.deepEqual(project(10,20,120,true,100000,100250),{time:10.25,beat:20.5});
+ assert.deepEqual(project(10,20,120,false,100000,105000),{time:10,beat:20});
+ assert.deepEqual(project(10,20,120,true,100000,99000),{time:10,beat:20});
+ assert.equal(scale(1,16.67,3),1);assert.equal(scale(.25,40,20),.25);
+ assert.equal(scale(.5,16.67,7),.5);assert.equal(scale(.5,30,3),.425);
+ assert.equal(scale(.5,16.67,13),.425);assert.equal(scale(.5,16.67,3),.51);
+});
+
+test('compiled score cache retains native graphs, evicts bounded entries and preserves muted score behavior', {skip:!process.env.PELAGIC_OUT}, async()=>{
+ const [R,B,S,J]=await Promise.all(['rt','pelagic.browser','pelagic.score','interop'].map(imp));
+ let calls=0;const cached=B.d_score_source(index=>{calls++;return R.vec(index);},null);
+ assert.deepEqual(cached(1),[1]);assert.equal(cached(1),cached(1));assert.equal(calls,1);
+ for(let i=2;i<=1025;i++)cached(i);cached(1);assert.equal(calls,1026);
+ const score=B.d_score_source(S.d_step,S.d_defaults),plain=J.blToJS;
+ const stem=v=>({lantern:'melody',tide:'atmosphere',air:'air'})[v.synth]||v.synth;
+ for(const index of [0,64,128,130,132,134,191,255,514,766,896,1023]){
+  for(const disabled of ['kick','bass','hat','snare','melody']){
+   const config=S.d_defaults.assoc(R.kw(disabled),false);
+   assert.deepEqual(score(index).filter(v=>stem(v)!==disabled),plain(S.d_step(index,config)),`${index}:${disabled}`);
+  }
+ }
+});
+
+test('audible clock extrapolates fresh output timestamps and rejects stale or ahead samples', {skip:!process.env.PELAGIC_OUT}, async()=>{
+ const J=await imp('interop');await imp('pelagic.browser');const audible=J.requireNamespace('pelagic.browser')['audible-time'];
+ class Clock{currentTime=4;getOutputTimestamp(){return {contextTime:3.9,performanceTime:1000};}}
+ const context=new Clock();
+ assert.equal(audible(context,1050),3.9499999999999997);
+ assert.equal(audible(context,1500),4);assert.equal(audible(context,3000),4);assert.equal(audible(context,900),4);
+ assert.equal(audible(new(class{currentTime=4;})(),1050),4);
+});

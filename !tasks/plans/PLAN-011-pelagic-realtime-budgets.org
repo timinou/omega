@@ -42,3 +42,14 @@ waveforms without unused FFTs. GPU locations and texture allocations are reused.
 frame p95 164 -> 125 ms, missed scheduler steps 9 -> 0, and sample-onset maximum
 66.67 -> 0.022 ms on this busy host. These runs are profiling evidence, not the
 final frame-budget gate. The 16 ms target remains open; isolation follows.
+
+* Worker and BL policy slice
+Owned OffscreenCanvas rendering has a bounded latest-frame mailbox, explicit
+absolute performance-clock stamps, failure watchdogs and transport suspension.
+BL policies project time, select fresh audio output timestamps and adjust internal
+resolution with hysteresis. A bounded per-host BL cache reuses converted immutable
+score graphs; mute/config behavior is checked against the original score.
+Steady single-layer scenes bypass compositing; DOM telemetry runs at 10 Hz.
+34 package tests and the real performance drive pass, including shader rejection,
+1280x720 recorded video (ffprobe), GPU recovery and exact unuse. Keep strict
+submission acknowledgements distinct from earlier handoff-only worker timings.

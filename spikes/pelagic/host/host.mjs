@@ -5,8 +5,9 @@ import {errorText} from './errors.mjs';
 import {LocalStore,LiveTake,validateSession} from './storage.mjs';
 import {performanceControls} from './controls.mjs';
 import {SceneStage} from './scenes.mjs';
+import {createStage} from './render-stage.mjs';
 import * as Bridge from '../../out/pelagic.bridge.mjs';
-import {conversions,download,setText,audioContext,readText,createEvaluator,afterPaint} from './values.mjs';
+import {conversions,download,setText,audioContext,readText,createEvaluator,afterPaint,createScoreSource,audibleTime} from './values.mjs';
 import {AudioEngine,plain,validateGraph,wav} from './audio.mjs';
 import {ShaderStage} from './shader.mjs';
 import {SampleDeck} from './deck.mjs';
@@ -17,11 +18,12 @@ const moduleURL=name=>new URL(name,import.meta.url);
 function blocks(source){const result=[];const re=/^#\+begin_src\s+(\S+)[^\n]*\n([\s\S]*?)^#\+end_src\s*$/gmi;let m;while((m=re.exec(source)))result.push({language:m[1].toLowerCase(),code:m[2]});
   if(!result.length && source.trim())result.push({language:'beam-lisp',code:source});return result;}
 export function createHost(api) {
+  const scoreVoices=createScoreSource(Score.d_step,Score.d_defaults);
   let config={...defaults},ctx=null,ctxWall=0,audio=null,timer=null,playing=false,nextStep=0,nextTime=0,origin=0,beatOrigin=0,disposed=false;
   const store=new LocalStore();let lastTake=null,restoreGeneration=0,recordPreparing=false,lastEvaluation=null,evalCount=0;
   let model=Performance.d_initial(),active=plain(model.get(R.kw('current'))),scheduled=active,revision=null,mode='finite',pausedBeat=0,pausedTime=0,timeOrigin=0,evaluation=0;
   const ownedNamespaces=new Set();
-  const events=[],diagnostics={ticks:0,missed:0,late:[],frames:[],longTasks:0,compiles:[],frameHistogram:new Uint32Array(1001),av:[],activation:[],render:[],started:performance.now()};
+  const events=[],diagnostics={ticks:0,missed:0,late:[],frames:[],longTasks:0,compiles:[],frameHistogram:new Uint32Array(1001),av:[],handoff:[],activation:[],render:[],started:performance.now()};
   let lastFrame=0,syncing=false,avExpected=null,announcement=null;
   const log=(kind,data={})=>{events.push({kind,audioTime:ctx?.currentTime||0,beat:current().beat,...data});if(events.length>4096)events.shift();};
   const observer=globalThis.PerformanceObserver?new PerformanceObserver(list=>{diagnostics.longTasks+=list.getEntries().length;}):null;
@@ -131,7 +133,7 @@ export function createHost(api) {
         audio.configure(scheduled.config,nextTime);installAssets(revision,nextTime);ack('ARMED');log('armed',{revision:revision.id,time:nextTime});
       }
       const i=nextStep,c=scheduled.config,patternMap=scheduled.patterns;
-      const voices=plain(Score.d_step(mode==='performance'?Performance.d_score_index(i):i,toBL(c)));
+      const voices=scoreVoices(mode==='performance'?Performance.d_score_index(i):i);
       const time=nextTime+(i%2?c.swing*60/c.bpm/4:0);
       const variation=scheduled.variation;
       const emit=(v,voiceStem)=>{
@@ -363,7 +365,7 @@ export function createHost(api) {
     if(typeof v.canvas.captureStream!=='function'||typeof MediaRecorder==='undefined')throw new Error('Live recording is unavailable in this browser');
     if(v.shader.gl.isContextLost())throw new Error('Restore the stage before recording');
     const dest=ctx.createMediaStreamDestination();audio.output.connect(dest);
-    const now=current();v.shader.draw({time:now.time,beat:now.beat,width:1280,height:720,analyser:audio?.analyser,signals:audio?.signals()||{}});
+    const now=current();await v.shader.draw({time:now.time,beat:now.beat,bpm:config.bpm,running:playing,animate:true,width:1280,height:720,audioFrame:audio?.visualFrame()});
     const video=v.canvas.captureStream(30),stream=new MediaStream([...video.getVideoTracks(),...dest.stream.getAudioTracks()]);
     try{const take=new LiveTake(store,stream);take.capture={width:1280,height:720,requestedFPS:30,geometryScale:.75};take.dest=dest;take.start();recording=take;}catch(error){audio.output.disconnect(dest);stream.getTracks().forEach(track=>track.stop());throw error;}log('record-start',{id:recording.id});notice('Recording live mix + stage · chunks saved incrementally');
     }finally{recordPreparing=false;}
@@ -372,46 +374,48 @@ export function createHost(api) {
     const av=diagnostics.av.slice().sort((a,b)=>a-b);
     return {elapsedSeconds:(performance.now()-diagnostics.started)/1000,missedEvents:diagnostics.missed,schedulerTicks:diagnostics.ticks,longTasks:diagnostics.longTasks,
       frameP95:q(.95),frameP99:q(.99),framesOver100Percent:diagnostics.frameHistogram.slice(101).reduce((a,b)=>a+b,0)/Math.max(1,total)*100,
-      audioClock:ctx?{sampleRate:ctx.sampleRate,baseLatency:ctx.baseLatency,outputLatency:ctx.outputLatency,nativeSeconds:ctx.currentTime,wallSeconds:(performance.now()-ctxWall)/1000,rate:ctx.currentTime/Math.max(.001,(performance.now()-ctxWall)/1000)}:null,
-      avSubmitP95Ms:av[Math.floor(av.length*.95)]??null,avSamples:av.length,
+      audioClock:ctx?{sampleRate:ctx.sampleRate,baseLatency:ctx.baseLatency,outputLatency:ctx.outputLatency,outputTimestamp:ctx.getOutputTimestamp?.(),nativeSeconds:ctx.currentTime,wallSeconds:(performance.now()-ctxWall)/1000,rate:ctx.currentTime/Math.max(.001,(performance.now()-ctxWall)/1000)}:null,
+      avSubmitP95Ms:av[Math.floor(av.length*.95)]??null,avSamples:av.length,avHandoffP95Ms:diagnostics.handoff.slice().sort((a,b)=>a-b)[Math.floor(diagnostics.handoff.length*.95)]??null,
       activationMaxMs:Math.max(0,...diagnostics.activation),renderMaxMs:Math.max(0,...diagnostics.render),
       compileP95:diagnostics.compiles.slice().sort((a,b)=>a-b)[Math.floor(diagnostics.compiles.length*.95)]||0,
       resources:audio?.resources(),gpu:[...views][0]?.shader?.resources?.(),storageTransactions:store.pending,history:model.get(R.kw('past')).cnt,namespaces:ownedNamespaces.size,evaluator:evaluatorClient?'worker':'main',
       recording:recording?{bytes:recording.bytes,pendingBytes:recording.pendingBytes,chunks:recording.count,error:recording.error?.message}:null,
-      audioTiming:audio?.timingReport(),avTiming:'visual activation samples the same audio clock; physical output latency is not measured'};}
+      audioTiming:audio?.timingReport(),avTiming:'audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured'};}
   const deckHTML=key=>`<section class="deck" data-deck="${key}"><div class="deck-head"><span class="deck-title">${key.toUpperCase()} / ${key==='a'?'ATMOSPHERE':'PULSE'}</span><label class="file-label">＋ AUDIO<input type="file" accept="audio/*" data-file="${key}" aria-label="Load audio into deck ${key.toUpperCase()}"></label></div><div class="file-name" data-file-name="${key}">${key==='a'?'harmonic field / D minor':'deep-house pulse / melodic fragments'}</div><div class="deck-meta"><button data-deck-op="play" data-deck-key="${key}" title="Play/pause imported audio">▶</button><button data-deck-op="cue" data-deck-key="${key}">CUE</button><button data-deck-op="set-cue" data-deck-key="${key}" title="Set cue at current sample position">SET</button><button data-deck-op="jog" data-value="-0.25" data-deck-key="${key}" title="Jog back">−¼</button><button data-deck-op="jog" data-value="0.25" data-deck-key="${key}" title="Jog forward">＋¼</button><label>LOOP<select data-loop="${key}" aria-label="Deck ${key.toUpperCase()} loop"><option value="0">OFF</option><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label><label>BPM<input type="number" value="${defaults.bpm}" min="40" max="240" data-sample-bpm="${key}" aria-label="Deck ${key.toUpperCase()} source BPM"></label><button data-deck-op="clear" data-deck-key="${key}" title="Remove imported audio">×</button></div><div class="eq">${['low','mid','high'].map(b=>`<label>${b.toUpperCase()}<input type="range" min="-18" max="12" step=".5" value="0" data-control="eq-${key}-${b}" aria-label="Deck ${key.toUpperCase()} ${b} EQ"></label>`).join('')}</div><div class="level-row"><span>LEVEL</span><input type="range" min="0" max="1" step=".01" value=".9" data-control="deck-${key}" aria-label="Deck ${key.toUpperCase()} level"><div class="meter"><i data-meter="${key}"></i></div></div></section>`;
   function mount(root,dispatch){
     const shadow=root.shadowRoot||root.attachShadow({mode:'open'});
     shadow.innerHTML=`<link rel="stylesheet" href="${moduleURL('style.css')}"><div class="app"><header class="header"><div><div class="brand">PELAGIC</div><div class="edition">OMEGA / PERFORMANCE INSTRUMENT 002</div></div><div class="clock"><b data-time>00:00</b><span data-bar>BAR 01 · ${defaults.bpm} BPM</span></div></header><div class="visual"><canvas aria-label="Audio-reactive Pelagic shader"></canvas><div class="corner"><span class="live-dot"></span>PROCEDURAL / SOUND → LIGHT</div><div class="visual-actions"><button data-command="pelagic/eval">EVALUATE ↵</button><button data-freeze>FREEZE</button><button data-fullscreen aria-label="Fullscreen stage">⛶</button></div><div class="caption"><div class="act">I / THE DESCENT</div><h1>BATHYMETRY</h1><p>a signal beneath the surface</p></div></div><nav class="timeline" aria-label="Movement cues">${movements.map((m,i)=>`<button data-cue="${i}">${String(i+1).padStart(2,'0')} / ${m.name}<span>${String(i*16+1).padStart(2,'0')}—${(i+1)*16} BARS</span></button>`).join('')}</nav><div class="transport"><button class="primary" data-command="pelagic/play">▶ PLAY THE DESCENT</button><button data-command="pelagic/stop">■ STOP</button><label>BPM <input type="number" min="60" max="180" value="${defaults.bpm}" data-control="bpm" aria-label="Performance BPM"></label><label>SCENE <select data-control="scene" aria-label="Visual scene"><option value="-1">NARRATIVE</option>${movements.map((m,i)=>`<option value="${i}">${m.name}</option>`).join('')}</select></label><div class="spacer"></div><button data-record>● REC</button><button data-export title="Export original score, with current mixer settings">SCORE WAV ↗</button></div><div class="decks">${deckHTML('a')}${deckHTML('b')}</div><div class="mixer"><label>FILTER<input type="range" min=".15" max="2" step=".01" value="1" data-control="filter" aria-label="Master filter"></label><label>CROSSFADE<input type="range" min="0" max="1" step=".01" value=".5" data-control="crossfade" aria-label="Equal-power crossfade"><div class="cross-label"><span>ATMOSPHERE</span><span>PULSE</span></div></label><label>SPACE<input type="range" min="0" max=".9" step=".01" value=".45" data-control="space" aria-label="Reverb space"></label></div><div class="mixer"><label>SWING<input type="range" min="0" max=".45" step=".01" value=".12" data-control="swing" aria-label="Swing"></label><label>ECHO<input type="range" min="0" max=".7" step=".01" value=".32" data-control="echo" aria-label="Echo feedback"></label><label>MASTER<input type="range" min="0" max="1" step=".01" value=".72" data-control="master" aria-label="Master volume"></label></div><footer class="bottom"><div class="stems">${['kick','bass','hat','snare','melody'].map(s=>`<button class="active" data-stem="${s}">${s.toUpperCase()}</button>`).join('')}</div><div class="status" role="status">Ready · a four-movement descent / headphones welcome</div></footer></div>`;
     const $=s=>shadow.querySelector(s),canvas=$('canvas');let raf=0,dead=false,freezeTime=null,init=null,contextLost=false;
-    let controls=null,lastControls=0,nextFrame=0;
+    let controls=null,lastControls=0,nextFrame=0,lastTelemetry=-Infinity;
     const v={canvas,shader:null,frozen:false,revision(phase,id,targetBeat){controls?.update(controlModel(),{phase,revision:id,targetBeat,...report()});},status(s){$('.status').textContent=s;$('.status').classList.toggle('error',s.startsWith('Edit rejected'));}};views.add(v);
     controls=performanceControls(shadow,{request,notice,perform:()=>dispatch({type:'command',command:'pelagic/perform'}),
       mix:(control,value)=>dispatch({type:'pelagic/control',control,value}),
       save:()=>download(JSON.stringify(validateSession(session()),null,2),'pelagic-session.pelagic.json','application/json'),load:loadSession,take:exportTake});
     const lost=event=>{event.preventDefault();contextLost=true;pause();if(recording)stopRecording({save:false}).catch(()=>{});notice('GPU context lost · transport paused',false);};
-    const restored=async()=>{if(dead||disposed)return;const [source]=await sources();v.shader?.dispose({lose:false});v.shader=new SceneStage(canvas);v.shader.compile(shaderSource||source);if(mode==='performance'){v.shader.validateState(active);v.shader.setState(active,pausedBeat);}contextLost=false;notice('GPU restored · press RESUME',false);};
+    const restored=async()=>{if(dead||disposed)return;const [source]=await sources();if(!v.shader?.worker){v.shader?.dispose({lose:false});v.shader=new SceneStage(canvas);v.shader.compile(shaderSource||source);if(mode==='performance'){v.shader.validateState(active);v.shader.setState(active,pausedBeat);}}contextLost=false;notice('GPU restored · press RESUME',false);};
     canvas.addEventListener('webglcontextlost',lost);canvas.addEventListener('webglcontextrestored',restored);
-    init=sources().then(([s])=>afterPaint(()=>{if(dead||disposed)return;v.shader=new SceneStage(canvas);v.shader.compile(shaderSource||s);if(mode==='performance'){v.shader.validateState(active);v.shader.setState(active,current().beat);}frame();})).catch(e=>{if(!dead&&!disposed)v.status('Stage unavailable · '+e.message);});
+    init=sources().then(([s])=>afterPaint(()=>{if(dead||disposed)return;v.shader=createStage(canvas,{lost,restored,error:e=>{pause();notice('Stage unavailable · '+e.message,false);}});v.shader.compile(shaderSource||s);if(mode==='performance'){v.shader.validateState(active);v.shader.setState(active,current().beat);}return Promise.resolve(v.shader.ready).then(()=>{if(!dead&&!disposed)frame();});})).catch(e=>{if(!dead&&!disposed)v.status('Stage unavailable · '+e.message);});
     function renderAt(time,options={}){
       if(ctx)applyRevision();
       const drawStarted=performance.now(),beat=options.beat??time*config.bpm/60,bar=beat/4,act=Math.min(3,Math.floor((bar%64)/16)),scene=config.scene<0?Math.max(0,Math.min(3,bar/16-.15)):config.scene;
       const breakdown=(bar>=28&&bar<32)||(bar>=52&&bar<56);
       const energy=bar<8?.1:breakdown?.25:bar<16?.65:bar<32?.85:bar<48?1:bar<60?.8:.1;
-      v.shader?.draw({time,beat,scene,energy,accent:Math.exp(-(beat%1)*8)*energy,width:recording?1280:undefined,height:recording?720:undefined,audioFrame:audio?.visualFrame(),...options});
+      const submitted=v.shader?.draw({time,beat,scene,energy,accent:Math.exp(-(beat%1)*8)*energy,width:(recording||recordPreparing)?1280:undefined,height:(recording||recordPreparing)?720:undefined,audioFrame:options.analyser?null:audio?.visualFrame(),bpm:config.bpm,running:playing,animate:playing||(audio?.voices.size||0)>0||Object.values(decks).some(d=>d.running),...options});
       diagnostics.render.push(performance.now()-drawStarted);if(diagnostics.render.length>256)diagnostics.render.shift();
-      if(avExpected!==null){diagnostics.av.push(Math.max(0,(ctx.currentTime-avExpected)*1000));if(diagnostics.av.length>4096)diagnostics.av.shift();avExpected=null;}
+      if(avExpected!==null){const expected=avExpected;avExpected=null;diagnostics.handoff.push(Math.max(0,(ctx.currentTime-expected)*1000));if(diagnostics.handoff.length>4096)diagnostics.handoff.shift();const completed=ok=>{if(disposed||ok===false)return;diagnostics.av.push(Math.max(0,(ctx.currentTime-expected)*1000));if(diagnostics.av.length>4096)diagnostics.av.shift();};if(submitted?.then)submitted.then(completed);else completed();}
       if(announcement!==null){const id=announcement;announcement=null;setTimeout(()=>{if(!disposed){ack('ACTIVE');for(const view of views)view.status('Revision '+id+' active');}},0);}
+      if(performance.now()-lastTelemetry<100)return submitted;lastTelemetry=performance.now();
       const selected=mode==='performance'?['bathymetry','current','cathedral','afterglow'].indexOf(active.visual.scene):act,m=movements[Math.max(0,selected)];setText($('.caption h1'),selected<0?active.visual.scene.toUpperCase():m.name);setText($('.caption p'),selected<0?'a live scene':m.subtitle);setText($('.caption .act'),selected<0?'LIVE / CUSTOM SCENE':['I / THE DESCENT','II / THE PULSE','III / THE OPENING','IV / THE RETURN'][selected]);
       setText($('[data-time]'),String(Math.floor(time/60)).padStart(2,'0')+':'+String(Math.floor(time%60)).padStart(2,'0'));setText($('[data-bar]'),`BAR ${String(Math.floor(bar)+1).padStart(2,'0')} · ${config.bpm} BPM`);
       if(mode!=='performance')shadow.querySelectorAll('[data-cue]').forEach(b=>b.classList.toggle('current',+b.dataset.cue===act));
       for(const key of ['a','b'])$(`[data-meter="${key}"]`).style.width=Math.min(100,(v.shader?.volume||0)*400*config['deck-'+key])+'%';
+      return submitted;
     }
     function frame(){if(dead||disposed)return;if(!root.isConnected){raf=requestAnimationFrame(frame);return;}
       const stamp=performance.now();if(ctx)applyRevision();if(stamp<nextFrame-2&&avExpected===null){raf=requestAnimationFrame(frame);return;}
       nextFrame=Math.max(nextFrame+1000/60,stamp);if(lastFrame){diagnostics.frameHistogram[Math.min(1000,Math.max(0,Math.round(stamp-lastFrame)))]++;}lastFrame=stamp;
-      const now=current();if(ctx)applyRevision();if(config.freeze||v.frozen){freezeTime??=now.time;}else freezeTime=null;
-      if(!contextLost&&((!config.freeze&&!v.frozen&&(playing||(audio?.voices.size||0)>0||Object.values(decks).some(d=>d.running))) || v.shader?.frames===0))renderAt(freezeTime??now.time,{beat:now.beat});
+      const now=current();if(playing&&ctx){const delta=audibleTime(ctx,stamp)-ctx.currentTime;now.time=Math.max(0,now.time+delta);now.beat=Math.max(0,now.beat+delta*config.bpm/60);}if(ctx)applyRevision();if(config.freeze||v.frozen){freezeTime??=now.time;}else freezeTime=null;
+      if(!contextLost&&((!config.freeze&&!v.frozen&&(playing||(audio?.voices.size||0)>0||Object.values(decks).some(d=>d.running))) || v.shader?.frames===0))renderAt(freezeTime??now.time,{beat:now.beat});else v.shader?.suspend?.();
       raf=requestAnimationFrame(frame);
       for(const key of ['a','b']){const button=$(`[data-deck-op="play"][data-deck-key="${key}"]`);button.classList.toggle('active',!!decks[key]?.running);setText(button,decks[key]?.running?'Ⅱ':'▶');}
       if(stamp-lastControls>500){controls.update(controlModel(),{phase:revision?(revision.armed?'ARMED':'QUEUED'):'ACTIVE',targetBeat:revision?.beat,mode,...report()});lastControls=stamp;}

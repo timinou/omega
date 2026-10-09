@@ -51,7 +51,8 @@
          "import {requireNamespace} from '../../out/interop.mjs';\n"
          "const browser=requireNamespace('pelagic.browser');\n"
          "export const plain=browser['to-js'],download=browser.download,setText=browser['set-text'],audioContext=browser['audio-context'],readText=browser['read-text'];\n"
-         "export const createEvaluator=browser.evaluator,afterPaint=browser['after-paint'];\nexport function conversions(){return B.d_to_bl;}\n"))
+         "export const createEvaluator=browser.evaluator,afterPaint=browser['after-paint'],createGraphicsWorker=browser['graphics-worker'],projectClock=browser['project-clock'],renderScale=browser['render-scale'],audibleTime=browser['audible-time'];
+export const createScoreSource=B.d_score_source;\nexport function conversions(){return B.d_to_bl;}\n"))
   (File/write! (str stage "/.pelagic-local") "PELAGIC optional local bundle\n")
   ; Asset manifest and worker are generated from exactly this compilation.
   (let [script (str here "/local/cache-build.mjs")

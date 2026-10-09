@@ -44,7 +44,7 @@ export class SceneStage extends ShaderStage {
   draw(options={}){
     if(!this.visual){super.draw(options);return;}
     const g=this.gl,c=this.canvas,outputW=options.width||Math.max(2,Math.round(c.clientWidth*.8)),outputH=options.height||Math.max(2,Math.round(c.clientHeight*.8));
-    const scale=options.width?.75:1,w=Math.round(outputW*scale),h=Math.round(outputH*scale);this.renderSize=[w,h];
+    const scale=options.renderScale??(options.width?.75:1),w=Math.round(outputW*scale),h=Math.round(outputH*scale);this.renderSize=[w,h];
     if(c.width!==outputW||c.height!==outputH){c.width=outputW;c.height=outputH;}
     if(this.size!==w+'x'+h){this.size=w+'x'+h;
       for(const target of this.targets){g.bindTexture(g.TEXTURE_2D,target.texture);g.texImage2D(g.TEXTURE_2D,0,g.RGBA,w,h,0,g.RGBA,g.UNSIGNED_BYTE,null);
@@ -54,6 +54,7 @@ export class SceneStage extends ShaderStage {
     this.sampleAudio(options.analyser,options.audioFrame);
     const outputFrame=this.frames;
     const visual=this.visual.visual,progress=this.transition?Math.max(0,Math.min(1,(options.beat-this.transition.start)/(this.transition.end-this.transition.start))):1;
+    const direct=!this.transition&&!visual.overlay&&w===outputW&&h===outputH;
     const layers=[this.transition?.from||null,this.visual,visual.overlay?this.visual:null];
     const savedUniforms=this.uniforms;
     layers.forEach((state,index)=>{
@@ -69,9 +70,10 @@ export class SceneStage extends ShaderStage {
         controls[key]=(controls[key]||0)+value*mapping.amount;
       }
       for(const [key,lo,hi] of [['zoom',0,.5],['accent',0,1],['intensity',.1,2],['symmetry',3,16],['feedback',0,.7],['palette',0,1]])if(controls[key]!==undefined)controls[key]=Math.max(lo,Math.min(hi,controls[key]));
-      super.draw({...options,width:w,height:h,scene:definition.scene??Math.max(0,NAMES.indexOf(name)),target:target.framebuffer,audioPrepared:true,controls});
+      super.draw({...options,width:w,height:h,scene:definition.scene??Math.max(0,NAMES.indexOf(name)),target:direct?null:target.framebuffer,audioPrepared:true,controls});
     });
     this.uniforms=savedUniforms;this.previous=this.defaultPrevious;
+    if(direct){this.frames=outputFrame+1;return;}
     this.activate(this.compositor,true);g.bindFramebuffer(g.FRAMEBUFFER,null);g.viewport(0,0,outputW,outputH);this.uniform('iResolution',[outputW,outputH,1]);
     this.targets.forEach((target,index)=>{g.activeTexture(g.TEXTURE0+index);g.bindTexture(g.TEXTURE_2D,target.texture);g.uniform1i(this.location(['a','b','c'][index]),index);});
     this.uniform('progress',progress);this.uniform('overlay',visual.mix);this.uniform('mode',visual.transition==='iris'?2:visual.transition==='dissolve'?1:0);
