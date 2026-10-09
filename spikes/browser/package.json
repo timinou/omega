@@ -3,12 +3,16 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@onkernel/sdk": "0.121.0"
+    "@novnc/novnc": "1.5.0",
+    "@onkernel/sdk": "0.121.0",
+    "playwright-core": "1.64.0",
+    "ws": "8.21.0"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "build:native-view": "esbuild native-view.mjs --bundle --format=esm --platform=browser --outfile=.native/native-view.mjs"
   },
   "devDependencies": {
-    "playwright-core": "1.64.0"
+    "esbuild": "0.25.12"
   }
 }

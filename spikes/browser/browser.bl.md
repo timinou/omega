@@ -1,42 +1,48 @@
-# Kernel browsers inside bl-ed
+# Native browser inside bl-ed
 
-Migrated 2026-10-09. `br.main/bl-package` loads in the real editor as
-`?use=present,browser`. Kernel provisions and retains the browser; the package
-provides layouts and commands; the host embeds Kernel's interactive live view.
-There is no local Chromium launcher, agent-browser daemon, screenshot polling,
-private editor page, or alternative package implementation.
+The default backend is a native Linux external process. `br.main/bl-package`
+loads into the real editor with `?use=present,browser`, contributes layouts and
+commands, and emits effects to the browser host. The host owns `bl-browser-port`,
+a Rust executable speaking packet-4 JSON. The same executable has a Beam Lisp
+`browser.port` client upstream, ready for supervised BEAM callers.
 
-## Run
+The executable starts regular, headed Chromium, Xvfb and x11vnc. bl-ed embeds
+the desktop through noVNC over a local WebSocket; clicks and typing reach the
+actual browser, including its toolbar and extension UI. This is a desktop
+stream, rather than a supplier-site iframe or periodic screenshots. Chromium
+keeps its normal UA and sandbox. No Docker, Podman, VM or NIF is required.
+The existing Node host currently owns the executable; BEAM ownership is tested
+through the upstream client and is available for future scenario integration.
+
+## Prepare and run
 
 ```sh
 npm --prefix spikes/browser ci
+spikes/browser/native-setup.sh --nix
 spikes/browser/build.sh
-# Export KERNEL_API_KEY in the host environment; never put it in an org file.
 spikes/browser/run.sh
 ```
 
+Nix provides pinned Chromium, Xvfb and x11vnc without requiring NixOS. If those
+executables are already installed, run `native-setup.sh` without `--nix` instead;
+set `CHROMIUM`, `XVFB` and `X11VNC` when they are outside PATH. Rust/Cargo and Node
+are build prerequisites. Setup compiles the helper and viewer and writes local
+executable paths to ignored `.native/paths.json`. Runtime starts browsers on
+request and does not silently install services or extensions.
+
 Open <http://127.0.0.1:8797/?file=demo.bl.org&use=present,browser>.
-The runner uses an isolated in-memory world on 8796. It refuses occupied ports
-and does not change the user's running world on 8790. Existing running browser
-hosts must be restarted deliberately to load the migration; this change does
-not restart another session's processes.
+The demo runs an isolated in-memory world on 8796 and refuses occupied ports.
+It never writes to the user's live world on 8790. Existing hosts must be
+restarted deliberately to load changes.
 
-Optional host configuration: `KERNEL_PROJECT_ID`, `KERNEL_REGION`,
-`KERNEL_BROWSER_NAMESPACE` (defaults to `omega`), `KERNEL_BASE_URL` (or the
-Beam Lisp-compatible `KERNEL_BASE`), and comma-separated
-`KERNEL_BROWSER_EXTENSIONS` naming extensions already uploaded to Kernel.
-A base URL override must implement the Kernel control-plane API. A bare
-`kernel-images` CDP port is **not** a drop-in control-plane API; self-hosting
-needs a lifecycle/profile/vault adapter and is not implemented here.
+`BROWSER_NATIVE_ROOT` selects the private profile store (default
+`~/.local/share/omega/browser`). `BROWSER_NATIVE_CONFIG` selects a JSON file of
+executable paths; environment variables override it. Set `BL_BROWSER_PORT`,
+`CHROMIUM`, `XVFB`, and `X11VNC` directly for an independently built runtime.
+Native and cloud hosts use separate private registries. Switching backend does
+not import credentials or reinterpret an old cloud session as a local browser.
 
-`@onkernel/sdk` is pinned to 0.121.0. Playwright Core is a development dependency
-used only for offline browser proof; production operations run beside Chromium
-through Kernel's Playwright execution endpoint, one request per operation.
-The Beam Lisp checkout contains a Kernel design and client contract tests;
-the corresponding client implementation was not found. This migration uses
-the official SDK rather than claiming that missing implementation is reusable.
-
-## Open, sign in, hand off, save
+## Sign in, hand off, save
 
 ```org
 #+begin_browser :id supplier :profile omega-supplier :url https://example.com
@@ -48,163 +54,104 @@ Read the supplier's current notices. Retain sources; do not submit anything.
 #+end_task
 ```
 
-Manual browsers start under human control. Tasks start under Omega control.
-The browser is regular, headed Chromium, with stealth disabled and the toolbar
-and tabs visible. Old `:mode headless` declarations are accepted for migration
-but now open the same headed Kernel browser; there is no mode restart toggle.
-The actual browser UA is used without spoofing. Native UA overrides are not
-exposed by the pinned Kernel creation API.
+Manual browsers start under human control; tasks start under Omega control.
+Human/Omega handoff keeps the same browser and profile. The host independently
+filters keyboard, pointer, clipboard and resize input during agent control,
+including input from a previously connected viewer. Observation continues.
 
 - `space b s`: sessions, owners, profiles and saved status.
-- `space b w`: live view beside the session, with sign-in and handoff controls.
-- `space b p` / `space b r`: human / Omega control, keeping the same browser.
+- `space b w`: interactive desktop beside its session.
+- `space b p` / `space b r`: human / Omega control.
 - `space b a` or `space b x`: save the complete profile and close.
-- `space b c`: reattach the same browser or check a pending save.
-- `space b f`: after closing, delete the profile and its credential vault.
+- `space b c`: reconnect, or recover a retained profile after process loss.
+- `space b f`: after closing, forget the managed profile.
 
-The panel also provides Reopen saved session. It restores saved tabs rather
-than supplying `start_url`, which would discard them. A declaration with an
-explicit URL deliberately opens that URL when creating a new browser.
+Save requests `Browser.close`, waits for the browser to exit, and acknowledges
+only a clean close. The normal Chromium profile retains cookies, local storage,
+preferences, extensions and restored tabs. It does not retain a running JS heap.
+Reopen without an explicit URL restores tabs; an explicit URL opens that site.
+Host shutdown closes and saves its native browsers. Abrupt helper loss retains
+the profile for Chromium recovery and cannot claim a new successful save.
+An OS writer lock prevents two helpers from opening the same profile. Forget
+requires that lock and a managed-profile marker; arbitrary directories and
+symlink profiles are refused. Retained reports and screenshots are separate.
 
-Kernel persists profiles on browser deletion or idle expiry, not on CDP
-connection closure. Save-and-close waits until the profile's `updated_at`
-advances; a pending or failed save blocks reopening. Full profile persistence
-preserves site data, tabs and Chromium preferences, not a running process's JS
-heap, in-progress downloads or arbitrary unsaved form state. No universal
-login-validity claim is made; resume leaves authentication `unknown`.
+## 1Password
 
-Only one local host can own a registry, and only one browser can write a
-profile. Existing remote writers are checked before creation. Kernel does not
-provide an atomic profile-writer lease: use a dedicated project/namespace if
-several independently deployed hosts might create the same profile concurrently.
-Profiles are snapshots that replace, not merge, state.
+In human control, expand **Sign in**, then choose **Install 1Password** to open
+the official Chrome Web Store listing inside this Chromium profile. Approve
+installation using Chromium's UI; **Manage extensions** opens its extension
+manager. Pin and unlock the extension there, sign in to the supplier, then hand
+control back to Omega. Save and close retains the extension's profile storage.
+No account password or Secret Key is sent through an Omega credential form.
 
-The private registry is atomic and mode 0600, its directory mode 0700, outside
-the served root. It records session IDs and profile names, not passwords,
-cookies, SDK keys, CDP URLs, OAuth tokens or live-view URLs. Host restart
-reattaches retained browser IDs under human control; old in-memory task owners
-are detached to prevent fresh task IDs from claiming an old browser. A lost
-creation response is reconciled by its durable unique name before another
-creation attempt. Old local-browser artifacts remain readable; exported local
-login state is not silently imported into Kernel.
+The browser extension can be installed on supported desktop browsers; desktop
+app integration has additional browser checks. For a custom/Nix Chromium,
+follow 1Password's [additional-browser instructions](https://support.1password.com/additional-browsers/)
+and its [Linux installation guidance](https://support.1password.com/install-linux/)
+if app unlock integration is wanted. A working standalone extension does not
+prove desktop app integration or biometric unlock. Omega does not rewrite the
+system's trusted-browser configuration or install 1Password desktop itself.
+See the official [extension setup](https://support.1password.com/browser-extension/).
 
-Host shutdown preserves running Kernel sessions. There is no persistent local
-CDP connection keeping them alive. With no browser operations or live viewer,
-Kernel's five-minute idle timeout ends the session and saves its profile. Hide
-or unload the pane to stop streaming; background tabs detach the viewer. The
-panel polls only local session metadata, never browser screenshots.
+The proof exercises the real Chromium extension manager and the official
+installation entry point is implemented. Installing and unlocking a user's
+1Password account, desktop integration and autofill remain human acceptance
+checks; no automated proof claims they succeeded. Prefer a dedicated profile
+and vault access appropriate to the work: browser automation can observe pages
+after credentials have been filled.
 
-## Credentials and 1Password
+## Local boundaries
 
-Each profile gets a same-named Kernel vault. Credential controls are available
-only in human mode. Their provider URLs are delivered privately to the panel,
-never to task documents or model tool results.
+Profiles and runtime directories are mode 0700; Xauthority cookie files are
+0600. Xvfb has no TCP listener and requires a random MIT cookie. VNC uses a Unix
+socket inside the private runtime directory with no TCP VNC listener. The local
+host validates viewer Origin and a per-browser random capability; public session
+documents omit CDP endpoints, filesystem paths, viewer tokens and credential
+values. Viewer image CSP permits noVNC's local data/blob tiles.
 
-**1Password Agentic Autofill**: Link 1Password opens Kernel-managed OAuth on the
-human's device. Request this site's login asks for an origin-scoped login;
-Check approval polls the request; Fill & sign in fills and submits using the
-extension Kernel installs on demand. Credential values are not returned through
-Omega. The user explicitly confirms submission. An uncertain or lost fill
-response is recorded before the call and cannot be retried in that browser.
-Declined/failed login requests can be retried with a fresh item key.
+CDP binds a random loopback TCP port. Other processes able to reach host
+loopback can access it; this is a trusted local workstation backend, not a
+multi-tenant isolation boundary. Chromium's sandbox stays enabled. No password
+storage API is added to the external-port protocol. Private diagnostics are
+retained on startup failure; browser artifacts may contain page content.
 
-This upstream feature is in preview. It supports logins in private non-shared
-vaults; shared vaults and passkeys are unsupported by this flow. It needs a
-compatible 1Password account/app and human approval. This is distinct from
-installing and manually unlocking the ordinary browser extension, and does
-not promise that local desktop biometrics work inside a remote browser.
+## Other backend choices
 
-**Kernel-hosted saved login**: Store login with Kernel opens Kernel's encrypted
-collection form; username and password fields are write-only. Fill saved Kernel
-login requires the human to specify the current page's CSS selectors. It does
-not submit the form. Item bindings use the actual current HTTPS origin read
-from Kernel, not a client-supplied destination. Storage fallback is an explicit
-human choice; failure in 1Password never silently copies credentials to Kernel.
-Manual sign-in in the live browser remains available.
+`BROWSER_BACKEND=kernel KERNEL_API_KEY=… spikes/browser/run.sh` retains the hosted
+Kernel backend, its SDK, persistent cloud profiles and cloud credential controls.
+Optional settings are `KERNEL_PROJECT_ID`, `KERNEL_REGION`,
+`KERNEL_BROWSER_NAMESPACE`, `KERNEL_BASE_URL`/`KERNEL_BASE` and
+`KERNEL_BROWSER_EXTENSIONS`. Kernel saves must be confirmed by its profile
+metadata, and uncertain mutations are never retried blindly. The native backend
+requires no Kernel service or key. Hypeman/MicroVM support remains a possible
+backend choice; it is not implemented by this native change.
 
-For ordinary extension installation, upload the extension through Kernel's
-extension tooling and configure its name in `KERNEL_BROWSER_EXTENSIONS` before
-launch. Compatibility/unlocking with the standard 1Password extension still
-requires a real account test. Agentic Autofill's on-demand installation avoids
-manual extension sideloading for that supported flow.
-
-Forgetting deletes the Kernel profile and its entire credential vault after
-closure, while retaining evidence. It does not promise to revoke an external
-1Password account grant or destroy legacy local storage exports; manage those
-separately in their owning application/private directory.
-
-Authoritative references: [profiles](https://kernel.sh/docs/browsers/profiles),
-[save and reuse](https://kernel.sh/docs/browsers/profiles/save-and-reuse),
-[live view](https://kernel.sh/docs/browsers/live-view),
-[1Password integration](https://kernel.sh/docs/vaults/1password),
-[credential collection](https://kernel.sh/docs/vaults/credentials), and
-[extensions](https://kernel.sh/docs/browsers/extensions).
-
-## Package and host boundaries
-
-`br.main` exports one pure `bl-package` value. It contributes browser-inbox,
-browser-observe and procurement-review layouts and a generic `:embed` view
-model. It does not mutate user command/key tables. `ed/unuse` restores every
-pane and removes the iframe, without deleting a task's resource.
-
-The vendor host has one generic same-origin iframe painter; no Kernel or Omega
-knowledge goes into `ed/*`. The browser host owns session lifecycle, Kernel
-capabilities and credential operations. The same-origin panel nests Kernel's
-live view, supports clipboard delegation, checks message origin/source, waits
-for `KERNEL_PLAYING` and reports connection failure. The agent view is read-only;
-human/Omega switching is enforced at serialized automation boundaries. The
-read-only viewer parameter is a UI control, not an authorization boundary
-against someone who already possesses a writable live-view capability.
-
-Only explicit navigation/agent actions retain screenshots and snapshots.
-These can contain private page content and should be treated accordingly.
-Neither document refresh nor human sign-in causes a screenshot loop.
-
-## Verification and proof
-
-Local migration verification passed: browser contract tests, all 73 vendor
-editor drive tests, the real-editor fixture drive, and presentation equivalence.
-Logs are under [proof/kernel](proof/kernel/). The
-[cloud check](proof/kernel/cloud-check.txt) stopped with exit 2 because this
-environment has no `KERNEL_API_KEY`; no real Kernel browser or 1Password
-account was exercised. The live deployment therefore remains unverified.
+## Verification
 
 ```sh
 npm --prefix spikes/browser test
-BLED_OUT=vendor/bl-ed/web/out BLED_ROOT=/home/user/code/undefine/beam-lisp \
-  node --test vendor/bl-ed/test/*.test.mjs
-PP_OUT=vendor/bl-ed/web/out node spikes/present/test/check.mjs \
-  vendor/bl-ed/web/welcome.bl.org spikes/browser/demo.bl.org \
-  spikes/present/web/welcome.bl.org
+BROWSER_NATIVE_CONFIG="$PWD/spikes/browser/.native/paths.json" \
+  node spikes/browser/test/native-real.mjs
+# Start a separate offline editor for the real package proof:
+bin/bl-ed --offline --memory --port 8838 --root /tmp/omega-native-editor-proof
+BROWSER_NATIVE_CONFIG="$PWD/spikes/browser/.native/paths.json" \
+  node spikes/browser/test/native-editor-proof.mjs
+BLED_OUT=vendor/bl-ed/web/out node --test vendor/bl-ed/test/*.test.mjs
+node spikes/present/test/check.mjs vendor/bl-ed/web/welcome.bl.org \
+  spikes/browser/demo.bl.org spikes/present/web/welcome.bl.org
 ```
 
-Real editor proof uses an isolated offline world. Launch from its directory
-because the current `bin/bl-ed` prepends `--root "$PWD"` (existing FUP-012):
+The real native drive covers rendered framebuffer pixels, mouse/keyboard input,
+localhost access, normal UA, old-viewer input denial, profile writer conflicts,
+viewer authorization, clean save/reopen, cookies/storage/tabs, raw CDP, helper
+crash recovery, host restart and guarded forgetting. Editor proof uses the real
+package, verifies same-browser handoff and extension controls, then `unuse`
+restores the single layout with every embed removed. Screenshots and reports
+are in `proof/native/`; earlier hosted fixture proofs remain in `proof/`.
+Upstream Rust framing tests and Beam Lisp external-port tests are retained with
+the vendored source. The default-presentation equivalence checker is unchanged.
 
-```sh
-mkdir -p /tmp/omega-kernel-editor-proof
-(cd /tmp/omega-kernel-editor-proof && \
-  /home/user/code/undefine/omega/bin/bl-ed --offline --memory --port 8836)
-node spikes/browser/test/editor-proof.mjs
-```
-
-Screenshots: [human live panel](proof/kernel/01-human-live-panel.png),
-[Omega live panel](proof/kernel/02-omega-live-panel.png),
-[saved session](proof/kernel/03-saved-session.png),
-[after unuse](proof/kernel/04-after-unuse.png).
-[Editor drive results](proof/kernel/editor.json) explicitly identify the
-simulated Kernel service/live-view fixture. The editor, package, host and input
-are real; these screenshots **do not establish cloud or 1Password compatibility**.
-
-Contract checks cover the official SDK wire requests, lifecycle, serialization,
-writer conflicts, uncertain creation, save ordering, restart recovery, private
-capabilities, credential approval/collection and uncertain submission. The
-serialized browser operation code is also exercised against actual Chromium.
-The default-presentation equivalence checker is unchanged.
-
-With `KERNEL_API_KEY` configured, run `node spikes/browser/test/real-browser.mjs`
-for an actual cloud persistence smoke test. It creates its own isolated profile,
-sets only synthetic browser-local state, verifies regular UA and restores saved
-state, then deletes its test profile/vault. A missing key exits explicitly;
-no cloud success is inferred from fixture results. Human 1Password approval
-must be checked separately in the live panel.
+Scenario runner work is tracked separately in
+`!tasks/follow-ups/native-browser-scenario-runner.org`: reuse the port and the
+existing scenario world contract; build editor presentation later.

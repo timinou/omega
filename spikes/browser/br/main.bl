@@ -52,7 +52,7 @@
         id (or (:id a) (:key o))]
     (p/head-card (:key o) "focus"
       (concat [(p/line-mark (:from o)
-                 [{:text (str "◉ browser · " id " · " (or (:mode a) "Kernel")) :kind :heading-1}
+                 [{:text (str "◉ browser · " id " · " (or (:mode a) "Chromium")) :kind :heading-1}
                   {:text "   C-Enter open · space b w live view · p/r human/Omega" :kind :comment}] (:key o))]
               (map p/text-mark (range (inc (:from o)) (:to o)))))))
 
@@ -73,7 +73,7 @@
             {:id :browsers :doc "browser:sessions" :width [:ch 48]}]))
 
 (def browser-observe
-  {:name "browser-observe" :doc "Session facts beside an interactive Kernel browser."
+  {:name "browser-observe" :doc "Session facts beside an interactive Chromium browser."
    :panes [{:id :session :doc :linked :width [:ch 64]}
            {:id :viewport :view [:embed :session] :width :fill}]
    :links [] :focus :session})
@@ -88,7 +88,7 @@
 (defn live-model [ed]
   (when-let [id (session-id ed)]
     {:src (if (ends-with? (str (:path ed)) ".png") (str "/browser/artifact/" (subs (str (:path ed)) 8)) (str "/browser/view/" id))
-     :title (str "Kernel browser " id)}))
+     :title (str "Browser " id)}))
 
 (def procurement-review
   {:name "procurement-review" :doc "Opportunity report beside its company brief and executable search strategy."
@@ -124,17 +124,17 @@
                (:blocks (:struct ed))))))
 
 (def bl-package
-  {:name "browser" :doc "Kernel browsers, persistent profiles, live viewing and human handoff."
-   :commands {:browser/save-profile {:doc "Save the complete Kernel profile and close this session." :run (fn [ed] (action ed "save-profile"))}
+  {:name "browser" :doc "Native or Kernel browsers, persistent profiles, live viewing and human handoff."
+   :commands {:browser/save-profile {:doc "Save the complete browser profile and close this session." :run (fn [ed] (action ed "save-profile"))}
               :browser/run-search {:doc "Run saved curated search through a real Omega task (live world)." :run run-search}
               :browser/sessions {:doc "List browser sessions." :run (fn [ed] (c/effect ed {:kind :visit :path "browser:sessions"}))}
               :browser/open {:doc "Open this browser or browser task block." :run (fn [ed] (or (open-block ed) (c/message ed "No browser block here.")))}
-              :browser/watch {:doc "Show the interactive Kernel browser beside its session." :run (fn [ed] (action ed "watch"))}
-              :browser/reconnect {:doc "Reattach the same Kernel session or check pending profile save." :run (fn [ed] (action ed "reconnect"))}
+              :browser/watch {:doc "Show the interactive Chromium browser beside its session." :run (fn [ed] (action ed "watch"))}
+              :browser/reconnect {:doc "Reattach the same browser session or check pending profile save." :run (fn [ed] (action ed "reconnect"))}
               :browser/pause {:doc "Yield browser control to the human." :run (fn [ed] (action ed "pause"))}
               :browser/resume {:doc "Return control to the task." :run (fn [ed] (action ed "resume"))}
               :browser/close {:doc "Close this session." :run (fn [ed] (action ed "close"))}
-              :browser/forget {:doc "Delete the saved Kernel profile and credential vault after closing." :run (fn [ed] (action ed "forget"))}}
+              :browser/forget {:doc "Delete the saved browser profile and its provider credentials after closing." :run (fn [ed] (action ed "forget"))}}
    :keys {:normal {"space b a" :browser/save-profile "space b e" :browser/run-search "space b s" :browser/sessions "space b w" :browser/watch
                    "space b c" :browser/reconnect "space b p" :browser/pause "space b r" :browser/resume
                    "space b x" :browser/close "space b f" :browser/forget}}

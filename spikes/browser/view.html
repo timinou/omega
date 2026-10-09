@@ -8,11 +8,13 @@
 </header>
 <details id="credentials"><summary>Sign in · 1Password or saved login</summary>
   <p>Take control to sign in. Your profile saves site logins, tabs and browser preferences when you close the session.</p>
-  <div><button data-auth="connect">Link 1Password</button><button data-auth="request">Request this site's login</button>
+  <div id="native-credentials" hidden><p>Credentials stay in your local 1Password extension. Install it, sign in and unlock using its browser toolbar button.</p><button data-auth="install-extension">Install 1Password</button><button data-auth="extensions">Manage extensions</button></div>
+  <div id="kernel-credentials" hidden><div><button data-auth="connect">Link 1Password</button><button data-auth="request">Request this site's login</button>
     <button data-auth="status">Check approval</button><button data-auth="fill">Fill &amp; sign in with 1Password</button></div>
   <p>1Password approval opens on your device. Kernel installs its extension on demand. Agentic Autofill is in preview; shared vaults and passkeys are not supported by that flow.</p>
   <div><button data-auth="collect">Store login with Kernel</button><button data-auth="fill-kernel">Fill saved Kernel login</button></div>
   <p>Kernel's hosted form stores encrypted credentials. Omega does not receive their values. Filling a saved Kernel login does not submit the form.</p>
+  </div>
   <a id="approval" target="_blank" rel="noopener noreferrer" hidden>Open provider approval</a>
   <output id="auth-status"></output>
 </details>

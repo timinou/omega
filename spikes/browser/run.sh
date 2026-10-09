@@ -4,6 +4,17 @@ here=$(cd "$(dirname "$0")" && pwd -P)
 export OMEGA_HOME=$(cd "$here/../.." && pwd -P)
 export BROWSER_DEMO_ROOT=${BROWSER_DEMO_ROOT:-/tmp/omega-browser-demo}
 [ -d "$here/node_modules/@onkernel/sdk" ] || npm --prefix "$here" ci
+export BROWSER_BACKEND=${BROWSER_BACKEND:-native}
+if [ "$BROWSER_BACKEND" = native ]; then
+  if [ -f "$here/.native/paths.json" ]; then
+    # Pass path configuration as data to the host; never source executable shell.
+    export BROWSER_NATIVE_CONFIG="$here/.native/paths.json"
+  elif [ -z "${BL_BROWSER_PORT:-}" ]; then
+    echo "Prepare native dependencies with spikes/browser/native-setup.sh (or --nix)." >&2
+    exit 2
+  fi
+  npm --prefix "$here" run build:native-view
+fi
 # Fail before launching either process if a requested port is already in use.
 node --input-type=module <<'JS'
 import net from 'node:net';

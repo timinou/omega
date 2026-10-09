@@ -11,7 +11,7 @@ export function publicURL(value) {
 }
 export function safeError(e) {
   if(e.status)return `Kernel request failed (HTTP ${e.status}${e.error?.code?', '+String(e.error.code).replace(/[^a-zA-Z0-9_-]/g,''):''}).`;
-  if(/^(Set KERNEL_API_KEY|This Kernel profile|Kernel profile save|Close every browser)/.test(e.message||''))return e.message;
+  if(/^(Set KERNEL_API_KEY|Set BL_BROWSER_PORT|Set CHROMIUM|Set XVFB|Set X11VNC|Native profile|This Kernel profile|Kernel profile save|Close every browser)/.test(e.message||''))return e.message;
   return 'Browser operation failed. Inspect the live browser or retry its status.';
 }
 const fields=['id','dir','task','provider','mode','status','control','auth','profile','vaultId','url','kernelId','remoteName',
@@ -38,7 +38,8 @@ export class Sessions {
     const records=JSON.parse(await fs.readFile(path.join(this.root,'sessions.json'),'utf8').catch(e=>{if(e.code==='ENOENT')return '[]';throw e;}));
     for(const s of records){
       if(!validId(s.id)||!validProfile(s.profile)||!path.resolve(s.dir).startsWith(this.root+path.sep))continue;
-      if(s.provider!=='kernel'){s.provider='kernel';s.profile=`${this.namespace}-${s.id}`;s.mode='headful';s.status='closed';s.kernelId=null;s.credentialKeys={};}
+      if(this.adapter.kind==='native'){s.provider='native';s.status='closed';s.kernelId=null;s.liveURL=null;s.vaultId=null;this.event(s,'profile/recovery-available');}
+      else if(s.provider!=='kernel'){s.provider='kernel';s.profile=`${this.namespace}-${s.id}`;s.mode='headful';s.status='closed';s.kernelId=null;s.credentialKeys={};}
       s.credentialKeys ||= {};
       Object.assign(s,{control:'human',auth:'unknown',busy:false});this.sessions.set(s.id,s);
       if(s.task){this.event(s,'task/detached',{previousTask:s.task});s.task=null;}
@@ -63,7 +64,7 @@ export class Sessions {
     if(!s){
       profile=profile||`${this.namespace}-${id}`;if(!validProfile(profile))throw Error('Invalid Kernel profile name');
       const dir=path.join(this.root,id,crypto.randomBytes(6).toString('hex'));
-      s={id,dir,task,provider:'kernel',mode:'headful',status:'closed',control:task?'agent':'human',auth:'unknown',profile,
+      s={id,dir,task,provider:this.adapter.kind||'kernel',mode:'headful',status:'closed',control:task?'agent':'human',auth:'unknown',profile,
         url:url||'https://example.com',events:[],artifacts:[],rev:0,generation:0,idleSeconds:300,credentialKeys:{}};this.sessions.set(id,s);
     }
     return this.lock(s,async()=>{
@@ -74,7 +75,7 @@ export class Sessions {
       if(s.status==='running'){await this.persist();return s;}if(s.status==='saving')await this.finishSave(s);
       if(['starting','failed','disconnected'].includes(s.status)&&s.remoteName){
         try{const b=await this.adapter.retrieve(s.kernelId||s.remoteName);if(!b.deleted_at){this.attach(s,b);s.status='running';await this.persist();return s;}s.status='saving';await this.finishSave(s);}
-        catch(e){if(e.status!==404)throw Error(safeError(e));if(s.kernelId){s.status='saving';await this.finishSave(s);}}
+        catch(e){if(e.status!==404)throw Error(safeError(e));if(s.kernelId){if(this.adapter.kind==='native'){s.status='closed';s.kernelId=null;}else{s.status='saving';await this.finishSave(s);}}}
       }
       for(const other of this.sessions.values())if(other.id!==id&&other.profile===s.profile&&!['closed','forgotten'].includes(other.status))throw Error('Profile already has a writer; use its existing browser.');
       s.status='starting';s.control=task?'agent':'human';s.generation++;s.remoteName=`${this.namespace}-${id}-${s.generation}`;
@@ -126,20 +127,20 @@ export class Sessions {
         try{b=await this.adapter.retrieve(s.kernelId||s.remoteName);}catch(e){if(e.status!==404)throw e;}
         if(!b||b.deleted_at){
           s.liveURL=null;
-          if(s.kernelId){s.status='saving';await this.finishSave(s);}else s.status='closed';
+          if(s.kernelId){if(this.adapter.kind==='native'){s.status='closed';s.kernelId=null;}else{s.status='saving';await this.finishSave(s);}}else s.status='closed';
         }else{this.attach(s,b);s.status='running';s.control='human';this.event(s,'session/reattached');}
       }
     }else if(['watch','pause','resume','headful','headless'].includes(verb)){
       if(s.status!=='running')throw Error('Session is closed or disconnected; reopen or reconnect it.');
-      if(verb==='headless')throw Error('Kernel stays headed for live viewing and 1Password. Hide the pane to stop viewing; no browser restart is needed.');
+      if(verb==='headless')throw Error('The browser stays headed for live viewing and 1Password. Hide the pane to stop viewing; no browser restart is needed.');
       if(verb==='pause'){s.control='human';s.auth='needs-human';this.event(s,'control/paused');}
       if(verb==='resume'){s.control='agent';s.auth='unknown';this.event(s,'control/resumed');}
     }else throw Error('Unknown browser action');await this.persist();return s;
   });}
   async live(id){const s=this.get(id);if(s.status!=='running')return {session:publicSession(s)};
     if(!s.liveURL){const b=await this.adapter.retrieve(s.kernelId);if(b.deleted_at){s.status='saving';await this.finishSave(s);return {session:publicSession(s)};}this.attach(s,b);}
-    const url=new URL(s.liveURL);if(url.protocol!=='https:')throw Error('Kernel live view must use HTTPS');url.searchParams.set('readOnly',String(s.control!=='human'));
-    return {session:publicSession(s),liveURL:url.href};
+    const url=new URL(s.liveURL,'http://native.local');if(this.adapter.kind!=='native'&&url.protocol!=='https:')throw Error('Kernel live view must use HTTPS');url.searchParams.set('readOnly',String(s.control!=='human'));
+    return {session:publicSession(s),liveURL:this.adapter.kind==='native'?url.pathname+url.search:url.href};
   }
   async waitControl(s){while(s.control==='human'&&s.status==='running')await new Promise(r=>setTimeout(r,250));if(s.status!=='running')throw Error('Browser research stopped because its session closed');}
   async research(task) {
@@ -197,5 +198,7 @@ export class Sessions {
       return `Browser discovery complete: ${findings.filter(f=>!f.error).length}/${findings.length} sources read.\nSession browser:${s.id}; report browser:${s.id}/research.bl.org.\nCandidates require deadline/eligibility verification; discovery does not certify open tenders.`;
     } finally {s.busy=false;}
   }
-  async shutdown(){if(this.stopped)return;this.stopped=true;await Promise.allSettled([...this.sessions.values()].map(s=>s.queue));await this.persist();await this.lease?.close();await fs.unlink(path.join(this.root,'host.lock')).catch(()=>{});}
+  async shutdown(){if(this.stopped)return;this.stopped=true;
+    if(this.adapter.kind==='native'){for(const s of this.sessions.values()){if(!['closed','forgotten'].includes(s.status)){try{await this.action(s.id,'close');}catch{s.status='closed';s.kernelId=null;s.liveURL=null;this.event(s,'profile/recovery-available');}}}await this.adapter.shutdown();}
+    await Promise.allSettled([...this.sessions.values()].map(s=>s.queue));await this.persist();await this.lease?.close();await fs.unlink(path.join(this.root,'host.lock')).catch(()=>{});}
 }

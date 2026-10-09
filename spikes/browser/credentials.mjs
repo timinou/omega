@@ -9,6 +9,12 @@ export class Credentials {
     const m=this.manager,s=m.get(id);
     return m.lock(s,async()=>{
       if(s.status!=='running'||s.control!=='human')throw Error('Take human control before managing credentials.');
+      if(m.adapter.kind==='native'){
+        if(!['install-extension','extensions'].includes(verb))throw Error('Native credentials live in the browser extension. Use 1Password in the browser toolbar.');
+        const url=verb==='extensions'?'chrome://extensions/':'https://chromewebstore.google.com/detail/1password-%E2%80%93-password-manag/aeblfdkhhhdcdjpifhhbdiojplfjncoa';
+        const h=m.adapter.handles.get(s.kernelId),page=h.browser.contexts()[0].pages().at(-1);
+        await page.goto(url);s.url=url;m.event(s,'credentials/'+verb);await m.persist();return {status:'opened',type:'native-extension'};
+      }
       const api=m.adapter.api(),vault=s.vaultId;
       if(!vault)throw Error('This browser has no credential vault. Reopen it with Kernel.');
       const options={id_or_name:vault};

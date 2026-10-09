@@ -1,0 +1,53 @@
+#+TITLE: Reuse the native browser external port in the scenario runner
+#+STATE: ITEM
+#+CUSTOM_ID: native-browser-scenario-runner
+
+* Scope
+
+Follow up the native browser implementation in spikes/browser. The upstream
+browser.port client and packet-4 helper are reusable without the Omega Node
+host. Keep scenario values independent of the backend. An editor harness is a
+later package; it is not implemented by this browser change.
+
+* Implementation path
+
+Use scenario/run-world's existing world contract (:open, :step!, :claim!,
+:observe, :liveness, :close!, :views-fn). First inspect the existing
+priv/lib/scenario/runner backends in beam-lisp; extend the native/local choice
+rather than adding another scenario language or assertion engine. Current
+runner modules are adapt/app/frame/kit/nle: they present normalized Run values,
+not a native browser lifecycle backend. scenario.runner.adapt/of-scenario
+normalizes model/world runs, while of-browser validates descriptor, manifest,
+provenance and available captures before marking browser evidence :witnessed.
+Produce that existing evidence contract instead of bypassing it with a new
+"green" browser report. The media slot already supports step/time marks; it
+can receive native captures without changing the runner language.
+
+Run one supervised BEAM owner per browser.port. Use dedicated profiles per
+actor or deliberate shared-profile ownership; the helper enforces one writer.
+Use raw CDP target/session IDs for navigation, evaluation, DOM observations,
+screenshots and action execution. Keep the port request API serialized. Add an
+event subscription contract deliberately when needed; current CDP requests
+consume unmatched events and are not a telemetry stream.
+
+A run owns its fixture server, helper processes, temporary profile directories
+and cleanup. Use readiness conditions and bounded waits instead of sleep-driven
+correctness. Record backend/version, actor, step, timing, failure, screenshot and
+observation as artifacts; never log passwords or viewer capabilities. Browser
+observations are :witnessed, not model proofs. Crashes/timeouts must yield a
+failed/unknown result and retain diagnostics, never a false saved state.
+
+* First acceptance scenario
+
+Two actors open a synthetic localhost fixture; A edits shared state, B witnesses
+the update. Capture named observations, refute a deliberately incorrect claim,
+exercise timeout/crash cleanup, and prove no children remain. Make persistent
+login/extension profiles an explicit opt-in separate from disposable test runs.
+Reuse the native helper tests as lifecycle checks, not as evidence that the full
+scenario runner is implemented.
+
+* Later editor integration
+
+Expose scenario progress, actor desktops, observations and replay via a real
+bl-ed package with :provides layouts. Keep IO in host effects and test unuse
+restoration. Never run the harness against world 8790.

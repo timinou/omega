@@ -1,4 +1,9 @@
 import http from 'node:http';
+import net from 'node:net';
+import {WebSocketServer} from 'ws';
+import {NativeBrowser} from './native.mjs';
+import {KernelBrowser} from './kernel.mjs';
+import {RfbInput} from './rfb.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -9,15 +14,17 @@ import {Procurement} from '../procurement/service.mjs';
 import {recover} from '../procurement/lifecycle.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url));
 export async function startBrowserHost({root=process.env.BROWSER_DEMO_ROOT || '/tmp/omega-browser-demo',
-  manager=new Sessions(process.env.BROWSER_STATE_ROOT || root+'.private'),
+  manager,backend=process.env.BROWSER_BACKEND || 'native',
   upstream='http://127.0.0.1:8796',port=8797,procurement=new Procurement(root,upstream)}={}) {
+if(!['native','kernel'].includes(backend))throw Error('Choose native or kernel browser backend');
+manager ||= new Sessions(process.env.BROWSER_STATE_ROOT || root+'.'+backend+'.private',{adapter:backend==='native'?new NativeBrowser():new KernelBrowser()});
 const instance=crypto.randomUUID().slice(0,8);
 if(manager.root===path.resolve(root)||manager.root.startsWith(path.resolve(root)+path.sep))throw Error('Browser state must be outside the served document root.');
 await manager.init();
 const credentials=new Credentials(manager);
 procurement.sessions=async()=>Array.from(manager.sessions.values(),s=>({id:s.id,status:s.status,mode:s.mode,control:s.control,task:s.task,auth:s.auth,profile:s.profile,frameAt:s.frameAt||s.artifacts?.findLast(a=>a.kind==='screenshot')?.at,url:s.url}));
 await recover(procurement);
-const json=(res,status,body)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(body));};
+const json=(res,status,body)=>{if(res.headersSent){res.destroy();return;}res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(body));};
 async function body(req) {
   let value=''; for await(const chunk of req) {value+=chunk;if(value.length>65536)throw Error('Request too large');}
   return JSON.parse(value || '{}');
@@ -26,7 +33,7 @@ function document(id) {
   const objects=[]; let lines;
   if(id==='sessions') {
     lines=['#+TITLE: Browser sessions — task resources','',
-      'Kernel browsers · C-Enter / space b w opens interactive live view.',
+      'Browsers · C-Enter / space b w opens interactive live view.',
       'space b p/r human/Omega · a save & close · c reconnect · f forget profile and credentials',''];
     for(const s of manager.sessions.values()) {
       objects.push({row:lines.length,type:'omega/browser',key:s.id});
@@ -40,13 +47,13 @@ function document(id) {
       `#+begin_browser :id ${s.id} :mode ${s.mode}`,
       `Owner: task:${s.task || 'manual'} · provider: ${s.provider} · generation: ${s.generation}`,
       `Control: ${s.control} · auth: ${s.auth} · profile: ${s.profile}`,
-      `Page: ${s.url}`,`Persistence: complete Kernel profile; saved on close.`,
+      `Page: ${s.url}`,`Persistence: complete ${s.provider==='native'?'native':'Kernel'} profile; saved on close.`,
       `Viewport timestamp: ${s.frameAt || s.artifacts.find(a=>a.name===s.frame)?.at || 'none; inspect capture errors'}`,
       'space b p/r human/Omega · a save & close · c reconnect · f forget profile and credentials',
       '#+end_browser','',
-      ':(ed/layout "browser-observe") shows the interactive Kernel browser.',
+      ':(ed/layout "browser-observe") shows the interactive Chromium browser.',
       'Human/Omega handoff keeps the same browser running.',
-      'Save & close preserves the profile; reopening restores tabs and login state.',
+      'Save & close preserves the profile; reopening restores tabs and site session state.',
       'Credentials are managed through the live panel; values never enter this buffer.','', '* Artifacts',
       ...s.artifacts.map(a=>`[[browser:${s.id}/${a.name}][${a.kind}: ${a.name} · ${a.at}]]`),
       '', '* Events',...s.events.map(e=>`${e.at} · ${e.type} · ${JSON.stringify(Object.fromEntries(Object.entries(e).filter(([k])=>!['at','type'].includes(k))))}`)];
@@ -81,26 +88,30 @@ const server=http.createServer(async(req,res)=>{
     if(![`127.0.0.1:${actualPort}`,`localhost:${actualPort}`].includes(host))return json(res,403,{ok:false,message:'Invalid host'});
     if(req.method==='POST' && req.headers.origin && ![`http://${host}`,`http://127.0.0.1:${actualPort}`,`http://localhost:${actualPort}`].includes(req.headers.origin))return json(res,403,{ok:false,message:'Invalid origin'});
     const u=new URL(req.url,`http://${host}`);const p=u.searchParams.get('path');
-    if(u.pathname.startsWith('/browser/live/') || u.pathname.startsWith('/browser/credentials/')) {
+    if(u.pathname.startsWith('/browser/live/') || u.pathname.startsWith('/browser/credentials/') || u.pathname.startsWith('/browser/native-stream/')) {
       if(req.headers['sec-fetch-site']==='cross-site' || req.headers['sec-fetch-site']==='same-site')return json(res,403,{ok:false,message:'Same-origin browser access required'});
       if(req.headers['x-omega-browser']!=='human')return json(res,403,{ok:false,message:'Open the browser panel to access this capability'});
       const id=u.pathname.split('/').at(-1);
+      if(u.pathname.startsWith('/browser/native-stream/') && req.method==='GET'){const stream=manager.adapter.stream(manager.get(id).kernelId);return json(res,200,{ok:true,url:`/browser/vnc/${id}?token=${stream.token}`});}
       if(u.pathname.startsWith('/browser/live/') && req.method==='GET')return json(res,200,{ok:true,...await manager.live(id)});
       if(u.pathname.startsWith('/browser/credentials/') && req.method==='POST') {
         const b=await body(req);return json(res,200,{ok:true,result:await credentials.operation(id,b.verb,b.args)});
       }
       return json(res,405,{ok:false,message:'Method not allowed'});
     }
+    if(u.pathname.startsWith('/browser/native/')){
+      manager.get(u.pathname.split('/').at(-1));res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'self'; script-src 'self'; img-src 'self' data: blob:; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'self'"});return res.end(await fs.readFile(path.join(here,'native-view.html')));
+    }
     if(u.pathname.startsWith('/browser/view/')) {
       manager.get(u.pathname.split('/').at(-1));
       res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-frame-options':'SAMEORIGIN',
         'referrer-policy':'strict-origin-when-cross-origin',
-        'content-security-policy':"default-src 'self'; frame-src https://*.onkernel.com https://*.kernel.sh https://*.kernel.com; object-src 'none'; base-uri 'none'; frame-ancestors 'self'"});
+        'content-security-policy':"default-src 'self'; frame-src 'self' https://*.onkernel.com https://*.kernel.sh https://*.kernel.com; object-src 'none'; base-uri 'none'; frame-ancestors 'self'"});
       return res.end(await fs.readFile(path.join(here,'view.html')));
     }
-    if(['/browser/view.mjs','/browser/view.css'].includes(u.pathname)) {
+    if(['/browser/view.mjs','/browser/view.css','/browser/native-view.mjs'].includes(u.pathname)) {
       res.writeHead(200,{'content-type':u.pathname.endsWith('.mjs')?'text/javascript':'text/css','cache-control':'no-store'});
-      return res.end(await fs.readFile(path.join(here,path.basename(u.pathname))));
+      return res.end(await fs.readFile(u.pathname==='/browser/native-view.mjs'?path.join(here,'.native/native-view.mjs'):path.join(here,path.basename(u.pathname))));
     }
     if(u.pathname.startsWith('/procurement/artifact/')){const [id,...parts]=decodeURIComponent(u.pathname.slice('/procurement/artifact/'.length)).split('/');const a=await procurement.artifact(id,parts.join('/'));res.writeHead(200,{'content-type':a.type,'cache-control':'no-store','content-disposition':`inline; filename*=UTF-8''${encodeURIComponent(a.name)}`});return res.end(a.data);}
     if(u.pathname==='/browser/tool' && req.method==='POST') {
@@ -205,11 +216,28 @@ const server=http.createServer(async(req,res)=>{
   } catch(e) {if(browserTask)await procurement.browserEvent(browserTask,null,e.message).catch(()=>{});if(!res.destroyed)json(res,400,{ok:false,message:e.status?safeError(e):e.message});}
 });
 await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',resolve);});
-const stop=async()=>{server.close();server.closeAllConnections();await manager.shutdown();};
+const sockets=new WebSocketServer({noServer:true,maxPayload:1024*1024,perMessageDeflate:false});
+server.on('upgrade',(req,socket,head)=>{
+  try{
+    const host=req.headers.host,actualPort=server.address()?.port;
+    if(![`127.0.0.1:${actualPort}`,`localhost:${actualPort}`].includes(host)||req.headers.origin!==`http://${host}`)throw Error('Invalid viewer origin');
+    const u=new URL(req.url,`http://${host}`),match=u.pathname.match(/^\/browser\/vnc\/([a-zA-Z0-9_-]+)$/);
+    if(!match||manager.adapter.kind!=='native')throw Error('Invalid viewer');
+    const session=manager.get(match[1]),stream=manager.adapter.stream(session.kernelId);
+    if(u.searchParams.get('token')!==stream.token)throw Error('Invalid viewer capability');
+    sockets.handleUpgrade(req,socket,head,ws=>{
+      const upstream=net.createConnection({path:stream.socket}),filter=new RfbInput(()=>session.status==='running'&&session.control==='human');
+      upstream.on('data',bytes=>{if(ws.readyState!==1)return;if(ws.bufferedAmount>4*1024*1024){ws.close();return;}ws.send(bytes);});
+      ws.on('message',bytes=>{try{for(const packet of filter.push(bytes))if(!upstream.destroyed)upstream.write(packet);if(upstream.writableLength>1024*1024)ws.close();}catch{ws.close();}});
+      upstream.on('error',()=>ws.close());upstream.on('close',()=>ws.close());ws.on('close',()=>upstream.destroy());ws.on('error',()=>upstream.destroy());
+    });
+  }catch{socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();}
+});
+const stop=async()=>{for(const ws of sockets.clients)ws.terminate();sockets.close();server.close();server.closeAllConnections();await manager.shutdown();};
 return {server,manager,stop,url:`http://127.0.0.1:${server.address().port}`};
 }
 if(process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   const host=await startBrowserHost();
-  console.log(`Kernel browser desk: ${host.url}/?file=demo.bl.org&use=present,browser`);
+  console.log(`Browser desk: ${host.url}/?file=demo.bl.org&use=present,browser`);
   for(const signal of ['SIGINT','SIGTERM'])process.on(signal,async()=>{await host.stop();process.exit(0);});
 }

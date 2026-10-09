@@ -9,13 +9,13 @@ async function request(url,body){
 function detach(){clearTimeout(watchdog);frame?.remove();frame=null;liveURL=null;}
 function mount(url){
   if(liveURL===url&&frame)return;
-  detach();frame=document.createElement('iframe');frame.title='Interactive Kernel Chromium';frame.allow='autoplay; clipboard-read; clipboard-write; fullscreen';
+  detach();frame=document.createElement('iframe');frame.title='Interactive Chromium desktop';frame.allow='autoplay; clipboard-read; clipboard-write; fullscreen';
   frame.referrerPolicy='strict-origin-when-cross-origin';frame.src=url;liveURL=url;viewport.replaceChildren(frame);
-  message.textContent='Connecting to Kernel live view…';
+  message.textContent='Connecting to browser desktop…';
   watchdog=setTimeout(()=>{message.textContent='Live view has not started. Use Reload view or Reconnect.';},15000);
 }
 function paint(s){
-  session=s;$('#identity').textContent=`Browser ${s.id}`;$('#state').textContent=`${s.status} · ${s.control==='human'?'You have control':'Omega has control'}`;
+  session=s;$('#native-credentials').hidden=s.provider!=='native';$('#kernel-credentials').hidden=s.provider==='native';$('#identity').textContent=`Browser ${s.id}`;$('#state').textContent=`${s.status} · ${s.control==='human'?'You have control':'Omega has control'}`;
   $('#profile').textContent=`Profile ${s.profile}${s.savedAt?' · saved '+new Date(s.savedAt).toLocaleString():''}`;
   $('#control').textContent=s.control==='human'?'Give control to Omega':'Take control';$('#control').disabled=busy||s.status!=='running';
   for(const b of document.querySelectorAll('[data-auth]'))b.disabled=busy||s.status!=='running'||s.control!=='human';
@@ -39,7 +39,7 @@ async function action(verb){
 $('#control').onclick=()=>action(session.control==='human'?'resume':'pause');
 for(const b of document.querySelectorAll('[data-action]'))b.onclick=()=>action(b.dataset.action);
 $('#retry').onclick=()=>{detach();retries=0;refresh();};
-$('#forget').onclick=()=>{if(confirm(`Delete profile ${session.profile} and its Kernel credential vault? Retained screenshots and reports stay available.`))action('forget');};
+$('#forget').onclick=()=>{if(confirm(`Delete profile ${session.profile} ${session.provider==='native'?'including its local cookies and extensions':'and its Kernel credential vault'}? Retained screenshots and reports stay available.`))action('forget');};
 for(const b of document.querySelectorAll('[data-auth]'))b.onclick=async()=>{
   const verb=b.dataset.auth,args={};
   if(verb==='fill'&&!confirm('1Password will fill and submit the login form for the current website. Continue?'))return;
@@ -52,14 +52,14 @@ for(const b of document.querySelectorAll('[data-auth]'))b.onclick=async()=>{
     const j=await request(`/browser/credentials/${id}`,{verb,args}),result=j.result;
     $('#auth-status').textContent=`${result.status}${result.errorCode?' · '+result.errorCode:''}${result.origin?' · '+result.origin:''}. Check the website before handing control back.`;
     if(result.action?.url){const url=new URL(result.action.url);if(url.protocol!=='https:')throw Error('Invalid provider approval URL');$('#approval').href=url.href;$('#approval').textContent=result.action.name==='collect'?'Open secure credential form':'Open provider approval';$('#approval').hidden=false;}
-  }catch(e){$('#auth-status').textContent=e.message+' You can sign in manually in the live browser or choose Store login with Kernel.';}
+  }catch(e){$('#auth-status').textContent=e.message+(session.provider==='native'?' Use the extension in the browser toolbar.':' You can sign in manually in the live browser or choose Store login with Kernel.');}
   finally{busy=false;paint(session);}
 };
 window.addEventListener('message',event=>{
-  if(!frame||event.source!==frame.contentWindow||event.origin!==new URL(liveURL).origin)return;
+  if(!frame||event.source!==frame.contentWindow||event.origin!==new URL(liveURL,location.href).origin)return;
   if(event.data?.type==='KERNEL_PLAYING'){clearTimeout(watchdog);message.textContent=session.control==='human'?'Click the browser to type. You have control.':'Live view · Omega is browsing. Take control to interact.';retries=0;}
   if(['KERNEL_CONNECTION_FAILED','KERNEL_CONNECTION_TIMEOUT'].includes(event.data?.type)){
-    clearTimeout(watchdog);message.textContent='Kernel live view disconnected. Use Reload view or Reconnect.';
+    clearTimeout(watchdog);message.textContent='Browser live view disconnected. Use Reload view or Reconnect.';
     if(event.data.reason==='transport'&&retries++<1){detach();refresh();}
   }
 });
