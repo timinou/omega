@@ -52,29 +52,55 @@ removing handwritten generated-name mangling. The DSP/GL interpreters remain
 native JS. The legacy Omega build uses a small compatibility boundary because
 its older compiler does not have annotated native interop.
 
+## Transparent browser performance
+
+Live patches use the same functions, aliases and Overtone macros. The bundle
+preloads `pelagic.overtone` functions and private macro helpers, and captures
+its macros during the build. `pelagic.worker` reads and evaluates patches;
+`js.worker` implements the bounded message transport in annotated BL. The
+host applies the returned data to its audio and graphics resources. Unload
+terminates the worker, and failed evaluations release their temporary names.
+
+String operations use automatic ASCII fast paths and a bounded Unicode
+segmentation cache. The editor batches geometry measurements and coalesces
+resizes. Graphics initialization starts after the first paint through
+`pelagic.browser/after-paint`. These optimizations require no changes in live
+patch syntax. The page evaluator starts on demand for editor commands such as
+`ed/unuse`; those commands retain access to the live editor on the main thread.
+
 ## Verification
 
-The installed-launcher build passed with compiler `26073421`: 41 modules,
-2,562,016 bytes of static files and a 581,805-byte ZIP (integrity checked).
-The compiler also rebuilt all 363 of its own sources with zero failures, and
-its focused native-interop suite passed all 21 checks. The pin includes the
-ordinary BEAM `set!` compatibility fix committed upstream as `407a87d7`.
+The bundle uses compiler `a8749d88`, with the runtime/compiler changes also
+committed on upstream main as `cb485ab3`. It contains 43 modules, 2,598,967 bytes
+of static files and a 591,392-byte ZIP (integrity checked).
 
-The final bundle passed all **27 PELAGIC tests**, **73 vendored editor tests**
-and **11 static browser checks**.
-The older-pin scratch compilation also passed its hash, reverse-search, package
-and live-binding checks. The unchanged presentation gate passed all 23 variants.
-The browser drive exercises real C-Enter live evaluation and audio, native JS
-interop in the bundled language, invalid-code recovery, C-s persistence, failed
-save/retry, atomic concurrent revision conflicts, bounded history, reload,
-complete offline reload and real `ed/unuse`. It made **zero server API requests**
-and reported **zero uncaught browser errors**.
+The bundle passes **30 PELAGIC tests**, **73 vendored editor tests**,
+**51 runtime tests**, native live interop and **14 static browser checks**.
+The unchanged presentation gate passes all 23 variants. The browser proof
+covers real C-Enter and Overtone macros during audio playback, worker isolation,
+main-thread heartbeats during a long evaluation, overlapping edits, failed
+compilation cleanup, local saves, offline reload and real package unload.
+It makes zero server API requests and reports zero uncaught browser errors.
 
-[Build log](proof/local/build.log), [upstream interop tests](proof/local/upstream-interop-tests.log), [package tests](proof/local/contract-tests.log),
-[editor tests](proof/local/editor-tests.log), [browser drive](proof/local/browser.log), [browser report](proof/local/report.json),
-[real editor with PELAGIC](proof/local/01-used.png),
-[after unuse](proof/local/02-unused.png), [older-pin build](proof/local/legacy-build.log),
-[unchanged presentation equivalence](proof/local/equivalence.log).
+Three fresh browser contexts per bundle on this host gave these medians
+([raw timing report](proof/local/startup.json)):
+
+| Measurement | Previous bundle | Optimized bundle |
+| --- | ---: | ---: |
+| Editor ready | 4,805 ms | 3,005 ms |
+| Graphics ready | 7,351 ms | 4,675 ms |
+| First patch evaluation | 1,520 ms | 280 ms |
+| Repeated small evaluation | 79 ms | 229 ms |
+
+The worker keeps the UI responsive, but adds scheduling overhead and starts
+with a cold compiler. Repeated tiny edits are slower in this run; this is a
+responsiveness tradeoff rather than a uniform latency improvement. GPU compilation still runs on the main thread after first paint. These measurements do not establish sustained audio timing limits.
+
+[Build log](proof/local/build.log), [runtime tests](proof/local/runtime-tests.log),
+[native live interop](proof/local/native-live.log), [package tests](proof/local/contract-tests.log),
+[editor tests](proof/local/editor-tests.log), [browser drive](proof/local/browser.log),
+[browser report](proof/local/report.json), [real editor with PELAGIC](proof/local/01-used.png),
+[after unuse](proof/local/02-unused.png), [presentation equivalence](proof/local/equivalence.log).
 
 Reproduce the checks after building:
 
@@ -86,7 +112,7 @@ python3 spikes/pelagic/test/local-browser.py
 bin/bl run spikes/pelagic/test/legacy-build.bl
 ```
 
-The browser proof starts its own temporary static server and needs Python
+The browser proof and `test/startup.py` start temporary static servers and need Python
 Playwright/Chromium; `CHROMIUM` overrides its executable. This optional build
 does not resolve the timing release failures recorded in the sustained
 performance proof.

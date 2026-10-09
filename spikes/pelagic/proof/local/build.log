@@ -1,11 +1,24 @@
-Running as unit: run-p1798332-i106444662.service
-bl: building ~/.cache/bl/build-trees/26073421d1be (several minutes; log ~/.local/share/drop/store/logs/85dee472c5e6f937.log)
-bl: built ~/.cache/bl/build-trees/26073421d1be → cd91a2ee
+Running as unit: run-p526950-i109376241.service; invocation ID: 79daa1f726564f959602cec4c0b99e42
+bl-stage-hosts: 67 pinned host beams staged into /tmp/pelagic-speed-bl/build (app resource beam_lisp.app)
 PELAGIC: compiling editor, language and package together
 PELAGIC: /home/user/code/undefine/omega/spikes/pelagic/dist/local (static files; no BEAM runtime server)
 :ok
           Finished with result: success
 Main processes terminated with: code=exited, status=0/SUCCESS
-               Service runtime: 47min 59.830s
-             CPU time consumed: 56min 25.875s
-                   Memory peak: 2.1G (swap: 197.6M)
+               Service runtime: 22min 52.103s
+             CPU time consumed: 13min 28.910s
+                   Memory peak: 1.1G (swap: 210.8M)
+
+Final worker emission through js.build/compile-ns and emit-ns:
+Running as unit: run-p910905-i109764836.service; invocation ID: dbc5d12924354c0a8add1a65654159a2
+bl-stage-hosts: 67 pinned host beams staged into /tmp/pelagic-speed-bl/build (app resource beam_lisp.app)
+Refreshed js.worker with the static BL compiler and existing bundle link table
+:ok
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 39.168s
+             CPU time consumed: 25.802s
+                   Memory peak: 184.8M (swap: 0B)
+
+Final bundle metadata:
+{"name":"pelagic-local","compiler":"a8749d88","modules":43}

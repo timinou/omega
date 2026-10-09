@@ -1,5 +1,5 @@
 ; The browser boundary is explicit and stays outside the pure editor/package.
-(ns ^:js pelagic.browser)
+(ns ^:js pelagic.browser (:require [js.worker :as worker]))
 (defn to-js [value] (bl->js value))
 (defn to-bl [value] (js->bl value :keywordize-keys true))
 (defn set-text [node value]
@@ -21,3 +21,15 @@
       (if (.-ok response)
         (.text response)
         (throw (js/Error. (str "Cannot load " url)))))))
+
+(defn evaluator [url] (worker/client url))
+
+(defn after-paint [f]
+  (js/Promise.
+    (fn [resolve reject]
+      (js/requestAnimationFrame
+        (fn [_]
+          (js/requestAnimationFrame
+            (fn [_]
+              (js/setTimeout
+                (fn [] (try (resolve (f)) (catch error (reject error)))) 0))))))))

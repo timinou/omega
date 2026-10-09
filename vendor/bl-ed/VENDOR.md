@@ -286,3 +286,12 @@ signed 32-bit results preserve existing browser document IDs. PELAGIC's bounded
 history and pitch parsing likewise use explicit finite-vector and digit logic.
 Reverse search uses ascending ranges plus `reverse`, which both pinned JS
 compilers support, preserving its wraparound behavior.
+
+### 2026-10-09 — browser geometry and optional evaluator startup
+
+`web/host.mjs` caches repeated row/column measurements within each paint and
+measures selection/caret geometry before writing their styles. Resize events
+and observer callbacks share one animation-frame callback; unchanged pane
+sizes do not dispatch redundant editor resizes. Embeddings may set
+`BL_DOCUMENTS.eagerLanguage` to `false` to start the page evaluator on demand.
+PELAGIC's optional bundle uses that setting with its own BL worker evaluator.

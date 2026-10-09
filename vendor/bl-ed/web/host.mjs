@@ -797,7 +797,12 @@ window.addEventListener("mouseup", () => { mapDrag = null; });
 function paint(dom, v, focused) {
   const { view, gutter, selLayer, caret, frameLayer } = dom;
   const lineNode = (row) => lineNodeIn(view, row);
-  const xOf = (row, col) => xOfIn(view, row, col);
+  const positions = new Map();
+  const xOf = (row, col) => {
+    const key = row + ":" + col;
+    if (!positions.has(key)) positions.set(key, xOfIn(view, row, col));
+    return positions.get(key);
+  };
   const lineLen = (row) => lineLenIn(view, row);
   const lines = get(v, "lines");
   const top = get(v, "top");
@@ -931,7 +936,8 @@ function paint(dom, v, focused) {
   // a row's y: its viewport row offset (:vy, when a presentation sized rows), else its slot
   const slotOf = new Map(frag.filter((f) => f[0] != null).map((f, i) => [f[0], f[10] ?? frag.indexOf(f)]));
   const yOf = (row) => { const i = slotOf.get(row); return i === undefined ? null : i * metrics.line; };
-  // selections: reuse box elements by index
+  // Read every geometry value before writing any selection/caret styles.
+  const rectangles = [];
   let boxI = 0;
   const box = () => { let b = selLayer.children[boxI++]; if (!b) { b = document.createElement("div"); selLayer.appendChild(b); } return b; };
   for (const s of get(v, "sels")) {
@@ -941,20 +947,21 @@ function paint(dom, v, focused) {
       const c0 = r === from[0] ? from[1] : 0;
       const c1 = r === to[0] ? to[1] : lineLen(r) + 1;
       if (c1 <= c0 && !(r < to[0])) continue;
-      const b = box();
-      b.className = "sel" + (get(s, "primary?") ? " primary" : "");
+      const cls = "sel" + (get(s, "primary?") ? " primary" : "");
       const x0 = xOf(r, c0), x1 = xOf(r, Math.max(c1, c0 + (r < to[0] ? 1 : 0)));
-      b.style.cssText = `top:${y}px;left:${x0}px;width:${Math.max(2, x1 - x0)}px;height:${metrics.line}px`;
+      rectangles.push([cls, `top:${y}px;left:${x0}px;width:${Math.max(2, x1 - x0)}px;height:${metrics.line}px`]);
     }
   }
-  while (selLayer.children.length > boxI) selLayer.lastChild.remove();
   const cur = get(v, "cursor").toArray();
   const cy = yOf(cur[0]);
   const m = get(v, "mode").name;
+  const cursorX = cy == null ? 0 : xOf(cur[0], cur[1]);
+  const cursorWidth = cy == null || m === "insert" ? 2 : Math.max(metrics.ch, xOf(cur[0], cur[1] + 1) - cursorX);
+  for (const [cls, css] of rectangles) {const b = box(); b.className = cls; b.style.cssText = css;}
+  while (selLayer.children.length > boxI) selLayer.lastChild.remove();
   if (focused) document.body.dataset.mode = m;
   if (cy != null) {
-    caret.style.cssText = `top:${cy}px;left:${xOf(cur[0], cur[1])}px;height:${metrics.line}px;` +
-      (m === "insert" ? "width:2px" : `width:${Math.max(metrics.ch, xOf(cur[0], cur[1] + 1) - xOf(cur[0], cur[1]))}px`);
+    caret.style.cssText = `top:${cy}px;left:${cursorX}px;height:${metrics.line}px;width:${cursorWidth}px;`;
     caret.hidden = false;
     // keep the hidden input under the caret so the IME popup appears there
     if (focused && sink.parentElement !== dom.page) {
@@ -962,7 +969,7 @@ function paint(dom, v, focused) {
       dom.page.appendChild(sink);
       if (heldFocus) sink.focus({ preventScroll: true });
     }
-    if (focused) { sink.style.top = cy + "px"; sink.style.left = xOf(cur[0], cur[1]) + "px"; }
+    if (focused) { sink.style.top = cy + "px"; sink.style.left = cursorX + "px"; }
   } else caret.hidden = true;
 
   // scrollbar hint
@@ -1233,6 +1240,7 @@ panesEl.addEventListener("wheel", (e) => {
 }, { passive: false });
 
 // every editor pane learns its height (rows) and width (cells)
+let lastFit = "", fitFrame = 0;
 function fitHeight() {
   const first = [...paneDom.values()].find((d) => d.page);
   if (!first || !fr) return;
@@ -1245,11 +1253,18 @@ function fitHeight() {
   const h = Math.floor((first.root.clientHeight - pad) / metrics.line);
   let cols = R.EMPTY_MAP;
   for (const [id, d] of paneDom) if (d.page) cols = cols.assoc(K(id), Math.floor((d.page.clientWidth - 24) / metrics.ch));
+  const signature = h + ":" + R.printStr(cols);
+  if (signature === lastFit) return;
+  lastFit = signature;
   dispatch(ev(K("type"), K("resize"), K("height"), h, K("cols"), cols));
 }
-window.addEventListener("resize", () => { if (fr) fitHeight(); });
+function scheduleFit() {
+  if (!fr || fitFrame) return;
+  fitFrame = requestAnimationFrame(() => {fitFrame = 0; fitHeight();});
+}
+window.addEventListener("resize", scheduleFit);
 // the boot-time fit measures before the status line lays out: refit on any change
-new ResizeObserver(() => { if (fr) fitHeight(); }).observe(panesEl);
+new ResizeObserver(scheduleFit).observe(panesEl);
 document.addEventListener("click", () => sink.focus());
 
 
@@ -1329,7 +1344,7 @@ if (wantLayout) {
 }
 if (init.notice) fr = F.d_handle(fr, ev(K("type"), K("eval-result"), K("id"), "load", K("text"), init.notice));
 settle();
-fitHeight();
+scheduleFit();
 watchDocs(); watchCards(true);
 panesEl.removeAttribute("aria-busy");
 const queued = bootQueue; bootQueue = [];
@@ -1337,7 +1352,7 @@ for (const e of queued) dispatch(e);        // keys typed during boot, in order
 sink.focus();
 window.blEd = { dispatch, state: () => ed$(), frame: () => fr, render: () => paneView(get(fr, "focus").name), R, K, F };
 window.blHost = { lang, gate, glide, loading };
-setTimeout(() => lang.start(), 0);          // the language: off the first-display path
+if (documents?.eagerLanguage !== false) setTimeout(() => lang.start(), 0);          // the language: off the first-display path
 }
 
 if (typeof document !== "undefined") {

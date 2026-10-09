@@ -1,0 +1,27 @@
+; The worker does only BL read/compile/eval. Its results are ordinary edit data;
+; the package host validates and applies them to audio/graphics on the main thread.
+(ns pelagic.worker
+  (:require [js.eval :as eval] [reader :as reader] [pelagic.bridge :as bridge]))
+(def session-namespace "pelagic.live.worker-session")
+(defn install! []
+  (doseq [ns ["overtone.live" "shadertone.tone" "av"]] (BeamLisp.Env/declare_ns ns))
+  (doseq [name bridge/overtone-names]
+    (BeamLisp.Env/intern "overtone.live" name (BeamLisp.Env/fetch! "pelagic.overtone" name)))
+  (doseq [[ns bindings] bridge/live-bindings [name value] bindings]
+    (BeamLisp.Env/intern ns name value)))
+(defn evaluate [pieces]
+  (BeamLisp.Env/declare_ns session-namespace)
+  (BeamLisp.Env/add_alias session-namespace "o" "overtone.live")
+  (BeamLisp.Env/add_alias session-namespace "t" "shadertone.tone")
+  (reduce
+    (fn [edits piece]
+      (cond
+        (contains? #{"beam-lisp" "clojure" "bl"} (:language piece))
+          (reduce (fn [out form]
+                    (BeamLisp.Env/in_ns session-namespace)
+                    (let [value (eval/eval-form form)]
+                      (if (and (map? value) (:kind value)) (conj out value) out)))
+                  edits (reader/read-string (:code piece) "pelagic-live"))
+        (contains? #{"glsl" "fragment"} (:language piece))
+          (conj edits {:kind :shader :source (:code piece)})
+        :else edits)) [] pieces))

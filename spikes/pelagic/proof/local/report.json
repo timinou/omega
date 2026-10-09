@@ -1,9 +1,12 @@
 {
   "checks": [
     "real editor loads PELAGIC from static bundle",
-    "native JS interop compiles in the bundled live BL language",
+    "preloaded live BL compiler runs in a worker; main compiler stays lazy",
+    "native JS interop compiles in the worker with unchanged BL patch APIs",
     "real C-Enter evaluates bundled patch during browser audio transport",
     "invalid live BL retains performance with a readable error",
+    "worker evaluation keeps main-thread heartbeats running; latest edit wins",
+    "failed evaluation releases temporary definitions and worker remains usable",
     "real editor save persists source locally",
     "local save failure retains the draft and retry persists it",
     "atomic local revisions reject concurrent stale saves; history stays bounded",
@@ -13,5 +16,11 @@
     "zero server API requests and zero uncaught browser errors"
   ],
   "errors": [],
-  "apiRequests": []
+  "apiRequests": [],
+  "metrics": {
+    "workerHeartbeat": {
+      "beats": 86,
+      "maxGapMs": 46.60000002384186
+    }
+  }
 }

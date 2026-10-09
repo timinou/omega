@@ -9,7 +9,7 @@ export async function localDocuments(seeds, {name='pelagic-documents-v1', indexe
   const missing=path=>({ok:false,message:'No local document: '+path});
   const seed=path=>Object.hasOwn(seeds,path)?{ok:true,path,text:seeds[path],rev:'seed',title:path}:missing(path);
   return {
-    initialPath:'live-set.bl.org', packages:['pelagic'], layout:'pelagic',
+    initialPath:'live-set.bl.org', eagerLanguage:false, packages:['pelagic'], layout:'pelagic',
     read(path,signal) {
       signal?.throwIfAborted();
       return new Promise((resolve,reject)=>{

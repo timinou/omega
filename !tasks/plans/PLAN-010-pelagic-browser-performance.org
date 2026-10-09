@@ -1,0 +1,46 @@
+#+TITLE: Transparent BL browser performance for PELAGIC
+#+DATE: 2026-10-09
+#+STATUS: complete
+
+* Scope
+Optimize the existing local PELAGIC bundle without changing the BL namespace
+APIs used by live patches. Preserve the real editor and package lifecycle.
+
+* Implementation
+- Runtime: ASCII grapheme fast paths and bounded Unicode segmentation cache.
+- Host: measure selection/caret geometry before DOM writes; deduplicate resize.
+- Graphics: initialize after first paint, with cancellable package ownership.
+- Build: precompiled namespace functions plus captured macro/support boot cache.
+- Evaluation: BL worker transport and BL evaluation; return data to the host.
+  Audio, DOM and graphics remain owned by the main-thread package host.
+
+* Proof
+Measure startup and first/repeat evaluation, including main-thread long tasks.
+Drive real patches/macros, compile failure recovery, overlapping evaluation,
+worker responsiveness and unload cleanup. Rerun package/editor contracts and
+unchanged presentation equivalence. Use only own offline static servers.
+
+* Baseline
+Local cold page: about 9 s editor / 11.5 s language ready on this machine.
+Profile: repeated segmentation, forced DOM layout, synchronous WebGL setup.
+Core cached macro boot is only about 70 ms; do not replace BL with handwritten JS.
+
+* Result
+Compiler pin a8749d88; upstream main commit cb485ab3. All five optimizations
+are implemented behind existing patch APIs. Worker transport and evaluation,
+conversion and post-paint scheduling are BL compiled to JS.
+
+30 package tests, 73 editor tests, 51 runtime tests, native live interop,
+14 static browser checks and all 23 unchanged presentation variants pass.
+The final browser drive makes no API requests and has no uncaught errors.
+Worker heartbeat proof: 86 ticks during long evaluation, max gap about 47 ms;
+latest edit wins, failure cleanup and unload termination pass.
+
+Three-context timing comparison: editor 4805 -> 3005 ms; graphics 7351 -> 4675 ms;
+first evaluation 1520 -> 280 ms. Repeated tiny edits are 79 -> 229 ms in this
+run: worker scheduling/compiler warmup trades latency for UI responsiveness.
+Raw measurements and lifecycle screenshots are in spikes/pelagic/proof/local.
+The long source build was followed by a focused static re-emission of js.worker
+through js.build/compile-ns and emit-ns against the completed bundle's links.
+This avoids repeating the full compiler/editor graph to incorporate the final
+transport failure handling. The final cache manifest and ZIP were regenerated.

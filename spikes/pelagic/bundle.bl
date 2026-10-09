@@ -19,7 +19,7 @@
   (println "PELAGIC: compiling editor, language and package together")
   (let [result (js/build! "pelagic.bundle"
                  {:paths (list (str root "/vendor/bl-ed") here)
-                  :stub "lower" :with "reader" :host "run,eval-ed,eval-cells"
+                  :stub "lower" :with "reader" :preload ["pelagic.overtone"] :host "run,eval-ed,eval-cells"
                   :out (str stage "/out")})]
     ; Compatibility entrypoints let the same real editor and package host work
     ; with the new compiler's ns/ layout, without copying a second runtime.
@@ -28,7 +28,7 @@
         (when-not (File/exists? alias)
           (File/write! alias (str "export * from './ns/" module ".mjs';\n")))))
     (File/write! (str stage "/build.json")
-      (str "{\"name\":\"pelagic-local\",\"compiler\":\"26073421\",\"modules\":" (count (:modules result)) "}\n")))
+      (str "{\"name\":\"pelagic-local\",\"compiler\":\"a8749d88\",\"modules\":" (count (:modules result)) "}\n")))
   (copy-files! (str root "/vendor/bl-ed/web") stage [".mjs" ".css"])
   (File/write! (str stage "/index.html")
     (replace-str (File/read! (str root "/vendor/bl-ed/web/index.html"))
@@ -51,7 +51,7 @@
          "import {requireNamespace} from '../../out/interop.mjs';\n"
          "const browser=requireNamespace('pelagic.browser');\n"
          "export const plain=browser['to-js'],download=browser.download,setText=browser['set-text'],audioContext=browser['audio-context'],readText=browser['read-text'];\n"
-         "export function conversions(){return B.d_to_bl;}\n"))
+         "export const createEvaluator=browser.evaluator,afterPaint=browser['after-paint'];\nexport function conversions(){return B.d_to_bl;}\n"))
   (File/write! (str stage "/.pelagic-local") "PELAGIC optional local bundle\n")
   ; Asset manifest and worker are generated from exactly this compilation.
   (let [script (str here "/local/cache-build.mjs")
