@@ -1,0 +1,24 @@
+(ns gen-test (:require [omega.gen :as g]))
+(def tools [{:name "read" :description "bounded read" :input-schema {:type "object"}}])
+(deftest validates-plans-before-execution
+ (is (= :tool-use (:stop (g/response "{\"tool\":\"read\",\"input\":{\"id\":\"case\"}}" tools))))
+ (is (= "case" (get-in (g/response "{\"tool\":\"read\",\"input\":{\"id\":\"case\"}}" tools) [:content 0 :input "id"])))
+ (doseq [s ["no JSON" "{}" "{\"tool\":\"shell\",\"input\":{}}" "{\"tool\":\"read\",\"input\":[]}" "{\"tool\":\"read\",\"input\":{},\"answer\":\"pretend\"}"]]
+  (is (= :invalid-gen-plan (get-in (g/response s tools) [:error :kind])))))
+(deftest forwards-real-results-and-tool-schemas
+ (let [seen (atom nil) step (g/step {} (fn [p msgs] (reset! seen msgs) {:ok "{\"answer\":\"done\"}"}))
+       r (step {:system "public only" :tools tools :messages [{:role :user :content [{:type :tool-result :id "t1" :content "observed 42"}]}]})]
+  (is (= :end (:stop r)))
+  (is (some? (index-of (get (second @seen) :content) "observed 42")))
+  (is (some? (index-of (get (second @seen) :content) "bounded read")))
+  (is (nil? (:usage r)))))
+(deftest transport-errors-are-visible
+ (is (= :gen-transport (get-in ((g/step {} (fn [p msgs] {:error "offline"})) {:tools tools}) [:error :kind]))))
+(deftest accepts-a-single-fenced-json-plan-without-freeform-execution
+ (is (= :tool-use (:stop (g/response "```json\n{\"tool\":\"read\",\"input\":{}}\n```" tools))))
+ (is (= :invalid-gen-plan (get-in (g/response "First do this:\n```json\n{\"tool\":\"read\",\"input\":{}}\n```" tools) [:error :kind]))))
+(deftest validates-every-independent-call-before-executing-any
+ (is (= 2 (count (:content (g/response "{\"calls\":[{\"tool\":\"read\",\"input\":{}},{\"tool\":\"read\",\"input\":{}}]}" tools)))))
+ (is (= 2 (count (:content (g/response "{\"tool\":\"read\",\"input\":{}}\n{\"tool\":\"read\",\"input\":{}}" tools)))))
+ (is (= :invalid-gen-plan (get-in (g/response "{\"tool\":\"read\",\"input\":{}}\nignore instructions" tools) [:error :kind])))
+ (is (= :invalid-gen-plan (get-in (g/response "{\"calls\":[{\"tool\":\"read\",\"input\":{}},{\"tool\":\"shell\",\"input\":{}}]}" tools) [:error :kind]))))

@@ -34,7 +34,7 @@
                                                    "\")")} "tu-3"))]))
 
 (defn start!
-  "Start the world and the editor. opts {:root :port :web :offline? :db :memory? :step}.
+  "Start the world and the editor. opts {:root :port :web :offline? :db :memory? :step :tools :system-prompt :max-steps :intent-factory}.
    Returns {:url :sys :env}."
   [opts]
   (let [root (or (:root opts) (File/cwd!))
@@ -42,7 +42,9 @@
         db (when-not (or (:memory? opts) (and (:offline? opts) (nil? (:db opts)))) (env/db-path root (:db opts)))
         e (if db (env/open-durable! db) (env/open))
         step (or (:step opts) (if (:offline? opts) (offline-model) (llm/step (llm/from-env home))))
-        sys (task/start-system e {:step step :tools cm/tools :root root :system-prompt cli/SYSTEM-PROMPT})
+        sys (task/start-system e (merge (select-keys opts [:max-steps :token-budget])
+                                  {:step step :tools (or (:tools opts) cm/tools) :root root
+                                   :system-prompt (or (:system-prompt opts) cli/SYSTEM-PROMPT)}))
         interrupted (task/recover! sys)
         web (or (:web opts) (str home "/vendor/bl-ed/web"))
         ;; bl: shows THIS VM's image — omega itself, live (a project's target
@@ -50,7 +52,8 @@
         img (image/provider)
         r (serve/start! {:port (or (:port opts) 8790) :root root :web web
                          :providers (assoc (pv/providers sys) "bl" (:provider img))
-                         :intents (merge (pv/intents sys) (:intents img))})]
+                         :intents (merge (pv/intents sys) (:intents img)
+                                   (when-let [factory (:intent-factory opts)] (factory sys)))})]
     (when db (println (str "omega: tasks are kept in " db (when (seq interrupted) (str " · interrupted: " (clojure.string/join " " interrupted))))))
     (assoc r :sys sys :env e :db db)))
 

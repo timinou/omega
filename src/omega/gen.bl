@@ -1,0 +1,38 @@
+; Text-only Gen providers participating in Omega's real tool loop.
+; JSON plans are validated here; tool execution remains omega.loop's job.
+(ns omega.gen (:require [gen.llm :as gen] [omega.llm :as llm] [omega.loop :as loop]))
+(defn encode [x] (erlang/iolist_to_binary (json/encode (llm/jsonable x))))
+(def protocol "Return JSON only: {\"tool\":\"registered_tool_name\",\"input\":{...}} to call one tool, {\"calls\":[{\"tool\":\"name\",\"input\":{...}}]} for up to three independent calls, or {\"answer\":\"text\"} to stop. Never invent tool results or native tool markup. Tool results in the transcript are actual observations. Read each result before dependent actions. A final answer alone does not publish an artifact. Publication must be a separate step. You have bounded steps. No markdown fences.")
+(defn- plan [text]
+ (let [clean (trim text) fenced (Regex/run (Regex/compile! "(?s)^```(?:json)?\\s*\n(.*?)\n```$") clean)
+       clean (if fenced (nth fenced 1) clean)]
+  (try (json/decode clean)
+   (catch _
+    ; Some text providers emit compact JSONL for independent calls. Decode
+    ; EVERY complete line; no substring extraction or ignored trailing prose.
+    (let [lines (filter (fn [s] (not (empty? (trim s)))) (clojure.string/split-lines clean))]
+     (if (and (> (count lines) 1) (<= (count lines) 3)) {"calls" (mapv json/decode lines)}
+      (throw (ex-info "Invalid JSON plan" {}))))))))
+(defn- valid-call? [c tools]
+ (and (map? c) (nil? (get c "answer")) (nil? (get c "calls")) (map? (get c "input"))
+  (some (fn [t] (= (get c "tool") (:name t))) tools)))
+(defn response [text tools]
+ (try
+  (let [d (plan text) calls (or (get d "calls") (when (get d "tool") [d])) answer (get d "answer")]
+   (cond calls (if (and (sequential? calls) (> (count calls) 0) (<= (count calls) 3) (nil? answer)
+                        (every? (fn [c] (valid-call? c tools)) calls))
+                {:stop :tool-use :content (mapv (fn [c] {:type :tool-use :id (str "gen-" (erlang/unique_integer (list :positive))) :name (get c "tool") :input (get c "input")}) calls)}
+                {:error {:kind :invalid-gen-plan :message "Unregistered tool, invalid batch, non-object input, or ambiguous plan"}})
+         (and (string? answer) (not (empty? answer))) (loop/say answer)
+         :else {:error {:kind :invalid-gen-plan :message "Expected tool/input, calls or answer"}}))
+  (catch err {:error {:kind :invalid-gen-plan :detail (ex-message err) :message (str "Gen returned invalid JSON: " (subs text 0 (min 300 (count text))))}})))
+(defn step
+ "Adapt Gen to Omega. Optional chat function makes transport independently testable.
+  Gen's text seam does not expose token usage; no token accounting is fabricated."
+ ([provider] (step provider gen/chat))
+ ([provider chat]
+  (fn [req]
+   (let [r (chat provider (list {:role "system" :content (str (:system req) "\n" protocol)}
+                               {:role "user" :content (encode {:tools (:tools req) :transcript (:messages req)})}))]
+    (if (:ok r) (response (:ok r) (:tools req))
+     {:error {:kind :gen-transport :message "Gen request failed; no result was fabricated"}})))))
