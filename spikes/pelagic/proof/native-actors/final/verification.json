@@ -1,0 +1,47 @@
+{
+  "pelagicTests": {
+    "pass": 48,
+    "fail": 0
+  },
+  "editorTests": {
+    "pass": 73,
+    "fail": 0,
+    "fixtureRoot": "Beam Lisp checkout",
+    "coldFixture": "isolated ephemeral server; no live-world writes"
+  },
+  "presentationVariants": {
+    "pass": 23,
+    "fail": 0,
+    "gateChanged": false
+  },
+  "upstreamActorABI": {
+    "positivePass": 7,
+    "refusalPass": 9
+  },
+  "upstreamNativeRefusals": 7,
+  "upstreamNativePruning": [
+    "function values retained",
+    "hidden receive support retained",
+    "dynamic host/ref disables pruning"
+  ],
+  "upstreamNativeFixture": "direct ES import, mailbox identity, conversions, methods, undefined, statement/finally effects pass",
+  "upstreamNativeValueTests": {
+    "pass": 3,
+    "fail": 0
+  },
+  "upstreamLongPreloadSource": {
+    "tests": 1,
+    "assertions": 1,
+    "fail": 0,
+    "error": 0
+  },
+  "controlProfiles": 6,
+  "pressureRuns": {
+    "actorSeconds": 60,
+    "defaultSeconds": 60,
+    "lifecyclePass": true,
+    "strict16msEndToEndAchieved": false
+  },
+  "build": "incremental five-namespace refresh through js.build; existing common editor graph reused; macro cache and both actor programs regenerated",
+  "logs": "verification/"
+}

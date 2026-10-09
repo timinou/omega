@@ -15,7 +15,7 @@ bin/bl-ed
 `bl frontend` from `spikes/pelagic` stages a server frontend under `dist/server`
 alongside `dist/local`. `build.sh` installs its editor/runtime graph and PELAGIC
 loader in the real editor's web directory, preserving unrelated package files.
-Omega's server compiler pin is unchanged. The frontend pin is `a5f51eae`.
+Omega's server compiler pin is unchanged. The current frontend pin is `c9e95080`; the historical measurements below used `a5f51eae`.
 
 ## CPU placement and actors — original bridged prototype
 

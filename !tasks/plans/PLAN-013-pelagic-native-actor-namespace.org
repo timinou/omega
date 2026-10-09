@@ -9,3 +9,14 @@ Cross-thread Worker messages remain explicit. Keep old closed-data input intact.
 Commit implementation and semantic tests first, exercise from PELAGIC, benchmark
 bridged/direct/prebuilt alternatives, optimize from measurements, document limits
 and real-editor lifecycle proof. Do not modify unrelated shared work or live worlds.
+
+* DONE Native namespace prototype and optimization rounds
+Upstream main commits: ddceb2df, 3485d726, dab34779, 24065c6a.
+PELAGIC integration/optimization commits: 9beeab8, e2e7dad; final proof follows.
+Native calls use direct ES imports inside annotated actor namespaces. Checked
+pruning and native evidence reuse the existing ANF/emitter/logic modules.
+Instrument plans/default merge optimization preserve the complete score digest.
+Five fresh browser/Node runs per profile, warmed before/after kernel samples,
+six control profiles, two 60-second real-editor lifecycle/AV runs completed.
+Conclusions and reproducible evidence: spikes/pelagic/native-actors.bl.md.
+The strict 16 ms end-to-end target remains open; default stays prebuilt.
