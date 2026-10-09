@@ -12,7 +12,8 @@ import {Sessions} from '../sessions.mjs';
 import {startBrowserHost} from '../serve.mjs';
 import {executable} from './executable.mjs';
 if(process.env.BROWSER_NATIVE_CONFIG){const config=JSON.parse(await fs.readFile(process.env.BROWSER_NATIVE_CONFIG,'utf8'));for(const [key,value]of Object.entries(config))process.env[key] ||= value;}
-for(const name of ['BL_BROWSER_PORT','CHROMIUM','XVFB','X11VNC'])assert.ok(process.env[name],`Configure ${name} to run the real native proof`);
+const displayBackend=process.env.BROWSER_DISPLAY_BACKEND||'wayland';
+for(const name of ['BL_BROWSER_PORT','CHROMIUM',...(displayBackend==='wayland'?['SWAY','WAYVNC']:['XVFB','X11VNC'])])assert.ok(process.env[name],`Configure ${name} to run the real native proof`);
 let proofPage;
 const root=await fs.mkdtemp(path.join(os.tmpdir(),'omega-native-real-'));
 const site=http.createServer((req,res)=>{res.setHeader('content-type','text/html; charset=utf-8');res.end('<!doctype html><title>Native localhost proof</title><style>body{font:20px system-ui;padding:30px}input{font:inherit;padding:10px}</style><h1>Local supplier fixture</h1><label>Operator <input id="operator"></label>');});
@@ -20,15 +21,17 @@ await new Promise(r=>site.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:$
 const adapter=new NativeBrowser({root:path.join(root,'profiles-private')}),manager=new Sessions(path.join(root,'registry-private'),{adapter});
 const host=await startBrowserHost({root:path.join(root,'docs'),manager,port:0});
 const viewer=await chromium.launch({executablePath:await executable(),headless:true});
-const proof=new URL('../proof/native/',import.meta.url);await fs.mkdir(proof,{recursive:true});
+const proof=new URL(process.env.NATIVE_PROOF_DIR||'../proof/native/',import.meta.url);await fs.mkdir(proof,{recursive:true});
 try{
- const s=await manager.open({id:'supplier',url}),id=s.kernelId;
+ const started=performance.now();const s=await manager.open({id:'supplier',url}),id=s.kernelId;
  assert.equal(s.provider,'native');assert.equal(s.control,'human');
- const h=adapter.handles.get(id);
+ const startupMs=performance.now()-started;const h=adapter.handles.get(id);
  assert.equal((await fs.stat(h.runtime)).mode&0o777,0o700);
+ if(displayBackend==='x11'){
  assert.equal((await fs.stat(path.join(h.runtime,'client.auth'))).mode&0o777,0o600);
  // The X11 display must refuse clients without its private cookie.
  await new Promise((resolve,reject)=>{const socket=net.createConnection({path:'/tmp/.X11-unix/X'+h.info.display.slice(1)});socket.setTimeout(5000,()=>{socket.destroy();reject(Error('X11 authentication check timed out'));});socket.once('connect',()=>{const hello=Buffer.alloc(12);hello[0]=108;hello.writeUInt16LE(11,2);socket.write(hello);});socket.once('data',data=>{socket.destroy();try{assert.equal(data[0],0,'Unauthenticated X11 client accepted');resolve();}catch(e){reject(e);}});socket.once('error',reject);});
+ }else{assert.equal(h.info.displayBackend,'wayland');assert.match(h.info.display,/^wayland-/);assert.equal(await fs.access(path.join(h.runtime,'client.auth')).then(()=>true,()=>false),false);}
  const context=h.browser.contexts()[0],page=context.pages().at(-1);
  await page.waitForSelector('#operator');
  assert.doesNotMatch(await page.evaluate(()=>navigator.userAgent),/HeadlessChrome/);
@@ -40,9 +43,9 @@ try{
  await desktop.locator('canvas').evaluate(c=>new Promise((resolve,reject)=>{const start=Date.now();const check=()=>{const pixels=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let painted=0;for(let i=3;i<pixels.length;i+=400)if(pixels[i])painted++;if(painted>100)return resolve();if(Date.now()-start>15000)return reject(Error('Streamed framebuffer did not paint'));setTimeout(check,50);};check();}));
  const canvas=desktop.locator('canvas'),box=await canvas.boundingBox();
  const point={x:(left+input.x+input.width/2)*box.width/1280,y:(top+input.y+input.height/2)*box.height/900};
- await canvas.click({position:point});await outer.keyboard.type('Native input');
+ const inputStarted=performance.now();await canvas.click({position:point});await outer.keyboard.press('Shift+N');await outer.keyboard.type('ative input');
  await page.waitForFunction(()=>document.querySelector('#operator').value==='Native input');
- await outer.screenshot({path:new URL('01-real-desktop.png',proof).pathname});
+ const inputRoundTripMs=performance.now()-inputStarted;await outer.screenshot({path:new URL('01-real-desktop.png',proof).pathname});
  await page.evaluate(()=>{localStorage.setItem('native-proof','retained');document.cookie='native-proof=retained; Max-Age=3600; SameSite=Lax';});
  // Keep the old viewer connected: the server must independently block its input.
  await manager.action(s.id,'resume');assert.equal(s.kernelId,id);
@@ -76,6 +79,6 @@ try{
  const savedProfile=s.profile;await host.stop();const fresh=new Sessions(manager.root,{adapter:new NativeBrowser({root:adapter.root})});await fresh.init();assert.equal(fresh.get(s.id).status,'closed');
  await fresh.open({id:s.id});await fresh.action(s.id,'close');await fresh.action(s.id,'forget');assert.equal(await fs.access(adapter.profilePath(savedProfile)).then(()=>true,()=>false),false);await fresh.shutdown();
  assert.deepEqual(errors,[]);
- const result={ok:true,backend:'native',realHeadedChromium:true,realVncInput:true,visibleFramebuffer:true,privateX11:true,crashChildrenExit:true,localhost:true,profilePersistence:true,existingViewerInputGated:true,exclusiveProfileWriter:true,privateViewer:true,rawCdp:true,gracefulHostRestart:true,crashRecovery:true,guardedDeletion:true,forget:true,onePasswordAccountVerified:false};
+ const result={ok:true,backend:'native',realHeadedChromium:true,realVncInput:true,startupMs:Math.round(startupMs),inputRoundTripMs:Math.round(inputRoundTripMs),visibleFramebuffer:true,displayBackend,privateDisplay:true,crashChildrenExit:true,localhost:true,profilePersistence:true,existingViewerInputGated:true,exclusiveProfileWriter:true,privateViewer:true,rawCdp:true,gracefulHostRestart:true,crashRecovery:true,guardedDeletion:true,forget:true,onePasswordAccountVerified:false};
  await fs.writeFile(new URL('real.json',proof),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
 }catch(e){if(proofPage){await proofPage.screenshot({path:'/tmp/omega-native-failure.png'});console.error(await proofPage.locator('#error').textContent());for(const frame of proofPage.frames())console.error(frame.url());}throw e;}finally{await viewer.close();await host.stop();site.closeAllConnections();await new Promise(r=>site.close(r));await fs.rm(root,{recursive:true,force:true});}

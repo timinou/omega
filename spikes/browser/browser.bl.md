@@ -6,7 +6,8 @@ commands, and emits effects to the browser host. The host owns `bl-browser-port`
 a Rust executable speaking packet-4 JSON. The same executable has a Beam Lisp
 `browser.port` client upstream, ready for supervised BEAM callers.
 
-The executable starts regular, headed Chromium, Xvfb and x11vnc. bl-ed embeds
+The executable starts regular, headed Chromium on a private headless Sway
+compositor with wayvnc. Wayland is the default; Xwayland is disabled. bl-ed embeds
 the desktop through noVNC over a local WebSocket; clicks and typing reach the
 actual browser, including its toolbar and extension UI. This is a desktop
 stream, rather than a supplier-site iframe or periodic screenshots. Chromium
@@ -23,9 +24,9 @@ spikes/browser/build.sh
 spikes/browser/run.sh
 ```
 
-Nix provides pinned Chromium, Xvfb and x11vnc without requiring NixOS. If those
+Nix provides pinned Chromium, Sway and wayvnc without requiring NixOS. If those
 executables are already installed, run `native-setup.sh` without `--nix` instead;
-set `CHROMIUM`, `XVFB` and `X11VNC` when they are outside PATH. Rust/Cargo and Node
+set `CHROMIUM`, `SWAY` and `WAYVNC` when they are outside PATH. Rust/Cargo and Node
 are build prerequisites. Setup compiles the helper and viewer and writes local
 executable paths to ignored `.native/paths.json`. Runtime starts browsers on
 request and does not silently install services or extensions.
@@ -38,9 +39,31 @@ restarted deliberately to load changes.
 `BROWSER_NATIVE_ROOT` selects the private profile store (default
 `~/.local/share/omega/browser`). `BROWSER_NATIVE_CONFIG` selects a JSON file of
 executable paths; environment variables override it. Set `BL_BROWSER_PORT`,
-`CHROMIUM`, `XVFB`, and `X11VNC` directly for an independently built runtime.
+`CHROMIUM`, `SWAY`, and `WAYVNC` directly for an independently built runtime.
 Native and cloud hosts use separate private registries. Switching backend does
 not import credentials or reinterpret an old cloud session as a local browser.
+
+## Opt in or turn off
+
+The upstream package lives under `optional/browser-port`, outside the core
+native build scan and production release `priv/` tree. Its client source path
+must be added explicitly and `browser.port` imported by the application. Cargo
+builds no helper and resolves no browser dependencies by default; the binary
+requires `--features native-browser`. Requiring the client alone never starts or
+downloads a browser. The application must explicitly package the helper/runtime.
+The browser feature is absent from default Beam Lisp production releases.
+
+`BL_BROWSER_ENABLED=0` disables new ports/launches before profile creation.
+`BROWSER_BACKEND=off` disables both providers in the Omega host; neither native
+Playwright nor the cloud SDK is imported. Remove the application import/package
+to omit the entire runtime from production. Stop existing browsers normally to
+save them; the switch does not kill sessions or discard profiles.
+
+To explicitly select compatibility mode, run
+`BROWSER_DISPLAY_BACKEND=x11 spikes/browser/native-setup.sh --nix`. This builds
+the additional `x11` feature and chooses the separate Xvfb/x11vnc Nix output.
+There is no automatic fallback from Wayland. Set `BROWSER_DISPLAY_BACKEND=x11`
+when supplying independently built X11 paths; a Wayland-only helper refuses it.
 
 ## Sign in, hand off, save
 
@@ -55,7 +78,8 @@ Read the supplier's current notices. Retain sources; do not submit anything.
 ```
 
 Manual browsers start under human control; tasks start under Omega control.
-Human/Omega handoff keeps the same browser and profile. The host independently
+Human/Omega handoff keeps the same browser, profile and native viewer connection.
+The control switch updates immediately without a desktop reconnect. The host independently
 filters keyboard, pointer, clipboard and resize input during agent control,
 including input from a previously connected viewer. Observation continues.
 
@@ -103,8 +127,10 @@ after credentials have been filled.
 
 ## Local boundaries
 
-Profiles and runtime directories are mode 0700; Xauthority cookie files are
-0600. Xvfb has no TCP listener and requires a random MIT cookie. VNC uses a Unix
+Profiles and runtime directories are mode 0700. Wayland sockets stay in the
+private runtime directory; the helper never attaches to the user compositor.
+Compatibility X11 cookie files are 0600; Xvfb requires a random MIT cookie and
+has no TCP listener. VNC uses a Unix
 socket inside the private runtime directory with no TCP VNC listener. The local
 host validates viewer Origin and a per-browser random capability; public session
 documents omit CDP endpoints, filesystem paths, viewer tokens and credential
@@ -134,7 +160,8 @@ npm --prefix spikes/browser test
 BROWSER_NATIVE_CONFIG="$PWD/spikes/browser/.native/paths.json" \
   node spikes/browser/test/native-real.mjs
 # Start a separate offline editor for the real package proof:
-bin/bl-ed --offline --memory --port 8838 --root /tmp/omega-native-editor-proof
+# Work around the existing launcher root-precedence issue by starting in the root.
+(cd /tmp/omega-native-editor-proof && /absolute/path/to/omega/bin/bl-ed --offline --memory --port 8838)
 BROWSER_NATIVE_CONFIG="$PWD/spikes/browser/.native/paths.json" \
   node spikes/browser/test/native-editor-proof.mjs
 BLED_OUT=vendor/bl-ed/web/out BLED_ROOT=../beam-lisp node --test vendor/bl-ed/test/*.test.mjs
@@ -155,3 +182,12 @@ the vendored source. The default-presentation equivalence checker is unchanged.
 Scenario runner work is tracked separately in
 `!tasks/follow-ups/native-browser-scenario-runner.org`: reuse the port and the
 existing scenario world contract; build editor presentation later.
+
+## Responsiveness evidence
+
+The Wayland proof records real helper startup and typing/verification duration;
+the editor proof records same-viewer handoff duration and checks that the iframe
+document survives both directions. These are local samples, not production SLAs.
+The viewer streams damage with a 30 fps cap. Hidden/unloaded panes disconnect
+the viewer, and providers load only when selected. Focus indicators, local
+backend labels, save progress and compact panel sizing support human operation.

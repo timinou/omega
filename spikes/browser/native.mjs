@@ -4,7 +4,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import {chromium} from 'playwright-core';
 import {BrowserPort} from './port.mjs';
-import {browserOperation} from './kernel.mjs';
+import {browserOperation} from './operations.mjs';
 const missing=()=>Object.assign(Error('Native browser is no longer running'),{status:404});
 export class NativeBrowser {
   constructor({root=process.env.BROWSER_NATIVE_ROOT||path.join(os.homedir(),'.local/share/omega/browser'),env=process.env}={}){
@@ -19,15 +19,18 @@ export class NativeBrowser {
     if(!this.env.BL_BROWSER_PORT)throw Error('Set BL_BROWSER_PORT or run spikes/browser/native-setup.sh.');
   }
   async create(s,url){
+    if(this.env.BL_BROWSER_ENABLED==='0')throw Error('Native browser is disabled (BL_BROWSER_ENABLED=0).');
     await this.ensureProfile(s.profile);s.saveBaseline=0;s.vaultId=null;
     await this.configure();
     const executable=this.env.BL_BROWSER_PORT;
     if(!executable)throw Error('Set BL_BROWSER_PORT or run spikes/browser/native-setup.sh.');
-    for(const key of ['CHROMIUM','XVFB','X11VNC'])if(!this.env[key])throw Error(`Set ${key} or run native setup.`);
+    const displayBackend=this.env.BROWSER_DISPLAY_BACKEND||'wayland';
+    if(!['wayland','x11'].includes(displayBackend))throw Error('Choose wayland or x11 BROWSER_DISPLAY_BACKEND.');
+    for(const key of ['CHROMIUM',...(displayBackend==='wayland'?['SWAY','WAYVNC']:['XVFB','X11VNC'])])if(!this.env[key])throw Error(`Set ${key} or run native setup.`);
     const runtime=await fs.mkdtemp(path.join(os.tmpdir(),'omega-browser-'));await fs.chmod(runtime,0o700);
     const port=new BrowserPort(executable);let browser;
     try{
-      const info=await port.request({op:'launch',profile:this.profilePath(s.profile),runtime,chromium:this.env.CHROMIUM,xvfb:this.env.XVFB,vnc:this.env.X11VNC,...(url?{url}:{}),width:1280,height:900});
+      const info=await port.request({op:'launch',profile:this.profilePath(s.profile),runtime,chromium:this.env.CHROMIUM,displayBackend,compositor:this.env.SWAY,xvfb:this.env.XVFB,vnc:displayBackend==='wayland'?this.env.WAYVNC:this.env.X11VNC,...(url?{url}:{}),width:1280,height:900});
       browser=await chromium.connectOverCDP(info.cdp);
       const id=crypto.randomUUID(),token=crypto.randomBytes(24).toString('hex');
       const h={id,session:s.id,name:s.remoteName,profile:s.profile,port,browser,info,runtime,token};this.handles.set(id,h);this.capabilities.set(token,h);
@@ -35,7 +38,7 @@ export class NativeBrowser {
       return this.descriptor(h);
     }catch(e){await browser?.close().catch(()=>{});await port.close();throw Error(`${e.message}. Private startup logs: ${runtime}`);}
   }
-  descriptor(h){return {session_id:h.id,browser_live_view_url:`/browser/native/${h.session}`,name:h.name,profile:{name:h.profile}};}
+  descriptor(h){return {session_id:h.id,browser_live_view_url:`/browser/native/${h.session}`,name:h.name,displayBackend:h.info.displayBackend,profile:{name:h.profile}};}
   async retrieve(id){const h=this.handles.get(id)||[...this.handles.values()].find(h=>h.name===id);if(!h||h.port.error)throw missing();await h.port.request({op:'info'});return this.descriptor(h);}
   async close(id){const h=this.handles.get(id);if(!h)throw missing();
     const result=await h.port.request({op:'stop'});if(!result.saved)throw Error('Native profile save was not acknowledged');

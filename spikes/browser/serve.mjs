@@ -1,8 +1,6 @@
 import http from 'node:http';
 import net from 'node:net';
 import {WebSocketServer} from 'ws';
-import {NativeBrowser} from './native.mjs';
-import {KernelBrowser} from './kernel.mjs';
 import {RfbInput} from './rfb.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
@@ -16,8 +14,15 @@ const here=path.dirname(fileURLToPath(import.meta.url));
 export async function startBrowserHost({root=process.env.BROWSER_DEMO_ROOT || '/tmp/omega-browser-demo',
   manager,backend=process.env.BROWSER_BACKEND || 'native',
   upstream='http://127.0.0.1:8796',port=8797,procurement=new Procurement(root,upstream)}={}) {
-if(!['native','kernel'].includes(backend))throw Error('Choose native or kernel browser backend');
-manager ||= new Sessions(process.env.BROWSER_STATE_ROOT || root+'.'+backend+'.private',{adapter:backend==='native'?new NativeBrowser():new KernelBrowser()});
+if(process.env.BL_BROWSER_ENABLED==='0')backend='off';
+if(!['native','kernel','off'].includes(backend))throw Error('Choose native, kernel or off browser backend');
+if(!manager){
+  let adapter;
+  if(backend==='off')adapter={kind:'off',shutdown:async()=>{}};
+  else if(backend==='native'){const {NativeBrowser}=await import('./native.mjs');adapter=new NativeBrowser();}
+  else{const {KernelBrowser}=await import('./kernel.mjs');adapter=new KernelBrowser();}
+  manager=new Sessions(process.env.BROWSER_STATE_ROOT || root+'.'+backend+'.private',{adapter});
+}
 const instance=crypto.randomUUID().slice(0,8);
 if(manager.root===path.resolve(root)||manager.root.startsWith(path.resolve(root)+path.sep))throw Error('Browser state must be outside the served document root.');
 await manager.init();

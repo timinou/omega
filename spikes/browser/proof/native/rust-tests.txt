@@ -1,11 +1,23 @@
-   Compiling bl-browser-port v0.1.0 (/tmp/omega-native-upstream/native/browser_port)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.87s
-     Running unittests src/main.rs (/home/user/.cache/cargo-target/debug/deps/bl_browser_port-0397ba4c5a0cbb66)
+   Compiling bl-browser-port v0.1.0 (/tmp/omega-native-publish/optional/browser-port)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.29s
+     Running unittests src/main.rs (/home/user/.cache/cargo-target/debug/deps/bl_browser_port-ec4147811a699408)
 
-running 3 tests
+running 4 tests
+test tests::framing_roundtrip ... ok
 test tests::malformed_frames ... ok
 test tests::clean_eof ... ok
+test tests::x11_is_rejected_without_the_explicit_feature ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Compiling bl-browser-port v0.1.0 (/tmp/omega-native-publish/optional/browser-port)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.97s
+     Running unittests src/main.rs (/home/user/.cache/cargo-target/debug/deps/bl_browser_port-00160fe55be0044f)
+
+running 3 tests
+test tests::clean_eof ... ok
+test tests::malformed_frames ... ok
 test tests::framing_roundtrip ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 

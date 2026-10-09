@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import {KernelBrowser} from './kernel.mjs';
 export const validId = id => typeof id === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(id);
 export const validProfile = name => typeof name === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(name);
 export function publicURL(value) {
@@ -11,22 +10,23 @@ export function publicURL(value) {
 }
 export function safeError(e) {
   if(e.status)return `Kernel request failed (HTTP ${e.status}${e.error?.code?', '+String(e.error.code).replace(/[^a-zA-Z0-9_-]/g,''):''}).`;
-  if(/^(Set KERNEL_API_KEY|Set BL_BROWSER_PORT|Set CHROMIUM|Set XVFB|Set X11VNC|Native profile|This Kernel profile|Kernel profile save|Close every browser)/.test(e.message||''))return e.message;
+  if(/^(Set KERNEL_API_KEY|Set BL_BROWSER_PORT|Set CHROMIUM|Set XVFB|Set X11VNC|Set SWAY|Set WAYVNC|Native browser is disabled|Native profile|This Kernel profile|Kernel profile save|Close every browser)/.test(e.message||''))return e.message;
   return 'Browser operation failed. Inspect the live browser or retry its status.';
 }
-const fields=['id','dir','task','provider','mode','status','control','auth','profile','vaultId','url','kernelId','remoteName',
+const fields=['id','dir','task','provider','displayBackend','mode','status','control','auth','profile','vaultId','url','kernelId','remoteName',
   'idleSeconds','events','artifacts','rev','generation','frame','frameAt','savedAt','saveBaseline','credentialKeys'];
 const stored=s=>Object.fromEntries(fields.map(k=>[k,s[k]]));
-export const publicSession=s=>Object.fromEntries(['id','task','provider','mode','status','control','auth','profile','url',
+export const publicSession=s=>Object.fromEntries(['id','task','provider','displayBackend','mode','status','control','auth','profile','url',
   'generation','artifacts','events','rev','savedAt','idleSeconds'].map(k=>[k,s[k]]));
 export class Sessions {
-  constructor(root,{adapter=new KernelBrowser(),namespace=process.env.KERNEL_BROWSER_NAMESPACE||'omega'}={}) {
+  constructor(root,{adapter,namespace=process.env.KERNEL_BROWSER_NAMESPACE||'omega'}={}) {
     if(!validProfile(namespace))throw Error('Invalid Kernel namespace');
     this.root=path.resolve(root);this.adapter=adapter;this.namespace=namespace;
     this.sessions=new Map();this.tasks=new Map();this.pending=new Map();this.registryWrite=Promise.resolve();
     this.run=(s,args)=>this.adapter.run(s,args);
   }
   async init() {
+    if(!this.adapter){if(process.env.BL_BROWSER_ENABLED==='0')this.adapter={kind:'off'};else{const {KernelBrowser}=await import('./kernel.mjs');this.adapter=new KernelBrowser();}}
     await fs.mkdir(this.root,{recursive:true,mode:0o700});await fs.chmod(this.root,0o700);
     const lease=path.join(this.root,'host.lock');
     try{this.lease=await fs.open(lease,'wx',0o600);}catch(e){
@@ -57,8 +57,9 @@ export class Sessions {
   get(id){if(!validId(id))throw Error('Invalid session ID');const s=this.sessions.get(id);if(!s)throw Error('Unknown browser session');return s;}
   event(s,type,detail={}){s.events.push({at:new Date().toISOString(),type,...detail});if(s.events.length>200)s.events.splice(0,s.events.length-200);s.rev++;}
   async lock(s,fn){const next=(s.queue||Promise.resolve()).catch(()=>{}).then(fn);s.queue=next;return next;}
-  attach(s,b){s.kernelId=b.session_id;s.liveURL=b.browser_live_view_url;}
+  attach(s,b){s.displayBackend=b.displayBackend||null;s.kernelId=b.session_id;s.liveURL=b.browser_live_view_url;}
   async open({id,mode='headful',url,task=null,profile}){
+    if(this.adapter.kind==='off'||process.env.BL_BROWSER_ENABLED==='0')throw Error('Browser support is disabled.');
     if(!validId(id))throw Error('Invalid session ID');if(!['headless','headful'].includes(mode))throw Error('Invalid browser mode');if(url)url=publicURL(url);
     let s=this.sessions.get(id);
     if(!s){
