@@ -1,0 +1,32 @@
+Running as unit: run-p42197-i121462790.service; invocation ID: 44d9bb4faa734b4d97c0a70d6a093e3c
+bl-stage-hosts: 67 pinned host beams staged into /home/user/code/undefine/beam-lisp/build (app resource beam_lisp.app)
+PELAGIC: compiling editor, language and package together
+POSITIVE OK   canonical rt/not_ lowers through the actor prelude
+POSITIVE OK   try with a catch lowers
+POSITIVE OK   try with a finalizer lowers
+POSITIVE OK   try/catch/finally lowers
+POSITIVE OK   a receive in the body and the finalizer lowers
+POSITIVE OK   a typed catch lowers
+POSITIVE OK   an unsafe integer literal is emitted exact
+NEGATIVE OK   an unknown remote inside a try body is refused
+NEGATIVE OK   an unknown erlang bif inside a catch handler is refused
+NEGATIVE OK   an unresolved global inside a finalizer is refused
+NEGATIVE OK   an unknown remote module is refused
+NEGATIVE OK   an unresolved global is refused
+NEGATIVE OK   a hand-built unresolved global ref is refused
+NEGATIVE OK   an unresolved global nested in a value is refused
+NEGATIVE OK   an unknown erlang bif is refused
+NEGATIVE OK   the earlier missed shape (vector subject, vector binder pattern) is refused
+js-actors: compiling /tmp/pelagic-actors-15618/runtime.bl
+js-actors: compiling /tmp/pelagic-actors-15618/prepare.bl
+js-actors: retained 84/353 definitions
+js-actors: compiled 84 definitions from 2 sources -> /tmp/pelagic-actors-15618/out/prepare.mjs
+js-actors: 864 host references audited (732 remote, 132 global) against the allowlist
+js-actors: numeric gate — 0 raw-Number site(s) with witness, 5 checked H.arith site(s) -> /tmp/pelagic-actors-15618/out/numeric-gate.prepare.mjs.json
+PELAGIC: /home/user/code/undefine/omega/spikes/pelagic/dist/local (static files; no BEAM runtime server)
+:ok
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 11min 18.976s
+             CPU time consumed: 9min 24.037s
+                   Memory peak: 1G (swap: 197.7M)

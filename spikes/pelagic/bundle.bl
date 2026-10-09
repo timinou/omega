@@ -1,5 +1,5 @@
 ; Run with the PELAGIC env.bl: `bl bundle`. One VM, one compiler, one runtime.
-(ns pelagic.build-local (:require [bl.js :as js]))
+(ns pelagic.build-local (:require [bl.js :as build] [pelagic.actor-build :as actors]))
 (def here (Path/expand (BeamLisp/cwd)))
 (def root (Path/expand (str here "/../..")))
 (def dist (str here "/dist"))
@@ -17,7 +17,7 @@
 (File/mkdir_p! stage)
 (try
   (println "PELAGIC: compiling editor, language and package together")
-  (let [result (js/build! "pelagic.bundle"
+  (let [result (build/build! "pelagic.bundle"
                  {:paths (list (str root "/vendor/bl-ed") here)
                   :stub "lower" :with "reader" :preload ["pelagic.overtone"] :host "run,eval-ed,eval-cells"
                   :out (str stage "/out")})]
@@ -28,7 +28,7 @@
         (when-not (File/exists? alias)
           (File/write! alias (str "export * from './ns/" module ".mjs';\n")))))
     (File/write! (str stage "/build.json")
-      (str "{\"name\":\"pelagic-local\",\"compiler\":\"c9e95080\",\"modules\":" (count (:modules result)) "}\n")))
+      (str "{\"name\":\"pelagic-local\",\"compiler\":\"957b9ac3\",\"modules\":" (count (:modules result)) "}\n")))
   (copy-files! (str root "/vendor/bl-ed/web") stage [".mjs" ".css"])
   (File/write! (str stage "/index.html")
     (replace-str (File/read! (str root "/vendor/bl-ed/web/index.html"))
@@ -37,12 +37,8 @@
   (doseq [name ["boot.mjs" "documents.mjs"]]
     (copy! (str here "/local/" name) (str stage "/local/" name)))
   (copy-files! (str here "/host") (str stage "/pkg/pelagic") [".mjs" ".css"])
-  ; Actor profile is optional: compile it explicitly with `bl actors`.
-  (when (= "1" (System/get_env "PELAGIC_ACTORS"))
-    (when-not (File/exists? (str here "/dist/actor/out/prepare.mjs"))
-      (throw (ex-info "Run bl actors before enabling PELAGIC_ACTORS" {})))
-    (doseq [name ["host.mjs" "native.mjs" "out/prepare.mjs"]]
-      (copy! (str here "/dist/actor/" name) (str stage "/pkg/pelagic/actor/" name))))
+  ; One checked build graph: actor links and values belong to this frontend.
+  (actors/build! here (str stage "/out") (str stage "/pkg/pelagic/actor"))
   (copy-files! (str here "/shaders") (str stage "/pkg/pelagic") [".glsl"])
   (copy! (str here "/pelagic/overtone.bl") (str stage "/pkg/pelagic/overtone.bl"))
   (doseq [name ["live-set.bl.org" "demo.bl.org"]]

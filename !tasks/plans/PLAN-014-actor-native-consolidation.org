@@ -21,7 +21,7 @@ and parallel production implementations are not acceptable completion criteria.
 - Do not claim physical 16 ms latency from headless or median-only results.
 
 * Ordered work and acceptance
-** TODO 1. Map semantic contracts and consolidate compiler-owned native linking
+** DONE 1. Map semantic contracts and consolidate compiler-owned native linking
 Document sync/actor values, callable dispatch, effects and registry ownership.
 Move native-link discovery/arity/privacy into upstream compiler metadata; remove
 Pelagic-maintained function/export manifests. Tests cover missing #js, aliases,
@@ -87,3 +87,34 @@ will be checked, non-suspending entrypoints into that same machine, not a second
 emitter/runtime. The legacy actor collection prelude must disappear once its
 scheduler uses the compiled common core. Production artifacts must bind both paths
 to the SAME value-module URL, not copies with distinct keyword caches/classes.
+
+* Checkpoint: canonical collections and equality
+Upstream 957b9ac3 removes actor-owned keyword/list/tuple/vector/map/set classes
+and language equality in favor of canonical rt.mjs. Persistent maps no longer
+copy all entries on update. Integration revealed and fixed equal Number/BigInt
+keys hashing differently, mixed numeric equality rounding, and improper-list
+equality dropping tails. Dedicated cross-module identity/key/immutability tests,
+37 exact-numeric checks and 96 BEAM ordering answers pass. Before the final
+equality delegation, the full actor suite passed 457 checks at default, 17-step
+and 41-step budgets plus hardening, codec and numeric-gate checks; rerun the
+full suite after final changes. Mutable table lifecycle/bounds pass; changed-value
+HAMT updates measure 0.0047/0.0029 ms at 4k/64k entries on this loaded host.
+These are samples, not portable latency promises.
+
+write-runtime! binds packaged actor control to the frontend's canonical runtime
+URL. Pelagic migration is in progress: its build module now consumes the checked
+native manifest and is called from the frontend graph. Do not mark stage 2 or 3
+complete: callable suspension proofs, float boxing, common compiled prelude,
+lowering and live evaluator integration remain required.
+
+
+* Checkpoint: Pelagic consumes the compiler graph
+Fresh capped checkout build succeeds (44 frontend modules); all 50 Pelagic tests
+pass against that output. The actor is included by the same env.bl bundle task,
+uses native-modules.json, and imports the shared frontend rt.mjs. No bridge
+benchmark artifact is shipped. The CPU benchmark reads the actor from this graph,
+rather than copying an independently built dist/actor. One sample produced the
+same 1024-row digest: chunk p95 5.63 ms, CPU 1521 ms, startup 192 ms. Full build,
+contract output and measured JSON are under proof/actor-consolidation/linking.
+Production preparation default and ordinary editor lowering are not yet migrated;
+this checkpoint does not claim the full architecture or five experiences done.

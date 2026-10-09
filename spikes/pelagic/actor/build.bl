@@ -1,34 +1,4 @@
-; Reuse the checked actor compiler/runtime; never fork their scheduler.
-(ns pelagic.build-actors)
-(let [home (Path/expand (str (Path/dirname (BeamLisp.Loader/source_path "js.build")) "/../../.."))
-      actor-dir (some (fn [candidate]
-                        (when (and candidate (File/exists? (str candidate "/research/js-actors/compiler.bl")))
-                          (Path/expand (str candidate "/research/js-actors"))))
-                      [(System/get_env "PELAGIC_ACTOR_ROOT") home (str home "/../../..")])
-      source (if actor-dir (File/read! (str actor-dir "/compiler.bl")) (throw (ex-info "Actor source checkout required; set PELAGIC_ACTOR_ROOT" {})))
-      ending (index-of source "\n(main (BeamLisp/argv))")
-      scratch (str (System/tmp_dir!) "/pelagic-actors-" (System/unique_integer (list :positive)))
-      here (Path/expand (BeamLisp/cwd))]
-  (when-not ending (throw (ex-info "Actor compiler entrypoint changed" {})))
-  (File/mkdir_p! scratch)
-  (try
-    (File/cp! (str actor-dir "/runtime.bl") (str scratch "/runtime.bl"))
-    (doseq [name ["prepare.bl" "prepare-bridge.bl"]]
-      (File/cp! (str here "/actor/" name) (str scratch "/" name)))
-    (when-not (BeamLisp.Env/bound? "js-actors-compiler" "build-one")
-      (BeamLisp/eval (subs source 0 ending)))
-    (let [positive (BeamLisp.Env/fetch! "js-actors-compiler" "positive-tests")
-          negative (BeamLisp.Env/fetch! "js-actors-compiler" "negative-tests")
-          _ (when-not (zero? (+ (positive) (negative))) (throw (ex-info "Actor ABI tests failed" {})))
-          build (BeamLisp.Env/fetch! "js-actors-compiler" "build-one")]
-      (build scratch "prepare.bl" "prepare.mjs" []
-        {:prune true :native-links {"pelagic.browser/score-slice"
-                        {:path "../../values.mjs" :export "prepareSlice" :arities #{3}}}})
-      (build scratch "prepare-bridge.bl" "prepare-bridge.mjs" [] {:prune true}))
-    (let [out (str here "/dist/actor")]
-      (File/mkdir_p! (str out "/out"))
-      (File/cp! (str actor-dir "/host.mjs") (str out "/host.mjs"))
-      (File/cp! (str actor-dir "/native.mjs") (str out "/native.mjs"))
-      (doseq [name ["prepare.mjs" "prepare-bridge.mjs"]]
-        (File/cp! (str scratch "/out/" name) (str out "/out/" name))))
-    (finally (File/rm_rf! scratch))))
+; Standalone artifact task. The frontend graph owns native export contracts.
+(ns pelagic.build-actors (:require [pelagic.actor-build :as actors]))
+(let [here (Path/expand (BeamLisp/cwd))]
+  (actors/build! here (str here "/dist/local/out") (str here "/dist/actor")))

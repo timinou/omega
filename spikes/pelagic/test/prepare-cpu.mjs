@@ -14,7 +14,7 @@ if(process.argv[2]==='--one'){
  const local=resolve(process.env.PELAGIC_LOCAL_OUT||join(root,'dist/local')),pkg=join(stage,'pkg/pelagic');
  mkdirSync(join(pkg,'actor/out'),{recursive:true});symlinkSync(join(local,'out'),join(stage,'out'),'dir');
  for(const name of ['prepare-worker.mjs','values.mjs','score-cache.json'])copyFileSync(join(local,'pkg/pelagic',name),join(pkg,name));
- for(const name of ['host.mjs','native.mjs','out/prepare.mjs','out/prepare-bridge.mjs'])copyFileSync(join(root,'dist/actor',name),join(pkg,'actor',name));
+ for(const name of ['host.mjs','native.mjs','out/prepare.mjs'])copyFileSync(join(local,'pkg/pelagic/actor',name),join(pkg,'actor',name));
  const bootstrap=join(stage,'realm.mjs');
  writeFileSync(bootstrap,`import {parentPort,workerData} from 'node:worker_threads';
  import {readFile} from 'node:fs/promises';
@@ -41,7 +41,7 @@ if(process.argv[2]==='--one'){
   console.log(JSON.stringify({mode,...stats,cpuMs:(cpu.user+cpu.system)/1000,peakRssKiB:process.resourceUsage().maxRSS,bytes:Buffer.byteLength(data),digest:createHash('sha256').update(data).digest('hex')}));
  }finally{source.dispose();await ended;rmSync(stage,{recursive:true,force:true});}
 }else{
- const modes=(process.env.PELAGIC_BENCH_MODES||'worker,actor-bridge,actor,prebuilt').split(','),results=[];
+ const modes=(process.env.PELAGIC_BENCH_MODES||'actor,actor-fixed').split(','),results=[];
  const repeats=Number(process.env.PELAGIC_BENCH_REPEATS||3);
  for(let repeat=0;repeat<repeats;repeat++)for(const mode of [...modes.slice(repeat%modes.length),...modes.slice(0,repeat%modes.length)]){
   const run=spawnSync(process.execPath,[fileURLToPath(import.meta.url),'--one',mode],{encoding:'utf8',timeout:120000});
