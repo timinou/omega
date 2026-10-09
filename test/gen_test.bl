@@ -22,3 +22,6 @@
  (is (= 2 (count (:content (g/response "{\"tool\":\"read\",\"input\":{}}\n{\"tool\":\"read\",\"input\":{}}" tools)))))
  (is (= :invalid-gen-plan (get-in (g/response "{\"tool\":\"read\",\"input\":{}}\nignore instructions" tools) [:error :kind])))
  (is (= :invalid-gen-plan (get-in (g/response "{\"calls\":[{\"tool\":\"read\",\"input\":{}},{\"tool\":\"shell\",\"input\":{}}]}" tools) [:error :kind]))))
+(deftest hard-deadline-bounds-even-a-stalled-provider
+ (let [step (g/step {:timeout-ms 20} (fn [p msgs] (Process/sleep 5000) {:ok "{\"answer\":\"late\"}"}))]
+  (is (= :gen-transport (get-in (step {:tools tools}) [:error :kind])))))

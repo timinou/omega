@@ -26,13 +26,18 @@
          (and (string? answer) (not (empty? answer))) (loop/say answer)
          :else {:error {:kind :invalid-gen-plan :message "Expected tool/input, calls or answer"}}))
   (catch err {:error {:kind :invalid-gen-plan :detail (ex-message err) :message (str "Gen returned invalid JSON: " (subs text 0 (min 300 (count text))))}})))
+(defn chat-bounded [provider chat messages]
+ (let [job (Task/async (fn [] (try (chat provider messages) (catch _ {:error :transport}))))
+       result (Task/yield job (get provider :timeout-ms 180000))]
+  (if result (elem result 1)
+   (do (Task/shutdown job :brutal_kill) {:error :deadline}))))
 (defn step
  "Adapt Gen to Omega. Optional chat function makes transport independently testable.
   Gen's text seam does not expose token usage; no token accounting is fabricated."
  ([provider] (step provider gen/chat))
  ([provider chat]
   (fn [req]
-   (let [r (chat provider (list {:role "system" :content (str (:system req) "\n" protocol)}
+   (let [r (chat-bounded provider chat (list {:role "system" :content (str (:system req) "\n" protocol)}
                                {:role "user" :content (encode {:tools (:tools req) :transcript (:messages req)})}))]
     (if (:ok r) (response (:ok r) (:tools req))
      {:error {:kind :gen-transport :message "Gen request failed; no result was fabricated"}})))))
