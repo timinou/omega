@@ -1,0 +1,132 @@
+{
+  "ok": true,
+  "run": {
+    "actions": [
+      {
+        "at": "2026-10-09T08:21:17.517Z",
+        "input": {},
+        "name": "inventory",
+        "status": "ok"
+      },
+      {
+        "at": "2026-10-09T08:21:20.099Z",
+        "input": {
+          "dataset": "scan"
+        },
+        "name": "read",
+        "status": "ok"
+      },
+      {
+        "at": "2026-10-09T08:21:26.893Z",
+        "error": "Every observation needs recorded source IDs; all citations must resolve",
+        "input": {
+          "findings": [
+            {
+              "kind": "observation",
+              "sources": [
+                "D-scan"
+              ],
+              "text": "Saved scan capture D-scan (sha256 ff3c907c…, written 2026-10-09T01:37:40Z) covers 20 matched sessions 2026-09-11→2026-10-08: ADBE −3.13% vs QQQ +5.60% (relative −8.72%, annualized vol 37.6%, max drawdown −13.0%); CRM (−11.7% rel), ORCL (−16.9% rel) also lag, while MSFT and NVDA are near-flat relative."
+            },
+            {
+              "kind": "gap",
+              "sources": [
+                "gen-506",
+                "D-scan"
+              ],
+              "text": "No live or borrow data are captured anywhere in inventory (case, movement, sentiment, scan, snapshot): short interest, borrow fee, borrow availability and live quotes are absent, so current borrow conditions are unknown and unverified."
+            }
+          ],
+          "next": [
+            "What were ADBE short interest and borrow fee/availability during 2026-09-11→2026-10-08?",
+            "Which permitted source could supply live borrow and quote data to close this gap?"
+          ],
+          "summary": "Inventory-and-read-only audit of the saved scan capture. No external requests were made; no forecast is offered.",
+          "title": "UI capability audit: saved scan capture (ADBE relative weakness); live/borrow data unavailable"
+        },
+        "name": "publish",
+        "status": "error"
+      },
+      {
+        "at": "2026-10-09T08:21:30.811Z",
+        "input": {},
+        "name": "inventory",
+        "status": "ok"
+      },
+      {
+        "at": "2026-10-09T08:21:35.981Z",
+        "input": {
+          "findings": [
+            {
+              "kind": "observation",
+              "sources": [
+                "D-scan"
+              ],
+              "text": "Saved scan D-scan (sha256 ff3c907c…, captured 2026-10-09T01:37Z) covers 20 matched sessions 2026-09-11→2026-10-08: ADBE −3.13% vs QQQ +5.60%, i.e. relative −8.72%, annualized vol 37.6%, max drawdown −13.0%; CRM (−11.7% rel) and ORCL (−16.9% rel) also lag."
+            },
+            {
+              "kind": "gap",
+              "sources": [
+                "D-scan"
+              ],
+              "text": "No live or borrow data are present in the scanned capture: short interest, borrow fee, borrow availability and live quotes are absent, so current borrow conditions are unknown and unverified."
+            }
+          ],
+          "next": [
+            "What were ADBE short interest and borrow fee/availability during 2026-09-11→2026-10-08?",
+            "Which permitted source could supply live borrow and quote data to close this gap?"
+          ],
+          "summary": "Inventory-and-read-only audit of the saved scan capture only. No external requests and no forecast.",
+          "title": "UI capability audit: saved scan capture (ADBE relative weakness); live/borrow data unavailable"
+        },
+        "name": "publish",
+        "status": "ok"
+      }
+    ],
+    "artifacts": [],
+    "at": "2026-10-09T08:21:35.981Z",
+    "goal": "Research question: UI capability audit: using desk_inventory and desk_read scan only, publish under 120 words one cited observation about the saved scan capture and one gap about unavailable live/borrow data. No external requests, no forecast.\nSaved case: spikes/atlas/desk.bl.org\nUse desk_inventory first. Read only relevant datasets; the authored case is a hypothesis, not a constraint on your conclusion. For a new market question acquire its own public evidence. Use registered tools to investigate, calculate and publish a separate cited .bl.org report and proposal. Do not overwrite the case. Label gaps and falsifiers. Source pane drafts must be saved before they are available to tasks.",
+    "id": "t-59",
+    "network": 0,
+    "report": {
+      "baseHash": "6bf367de2c2c80b135c3d0aa35bdbfbf4198833d568acf909c84ac4eff2469f9",
+      "file": "data/runs/t-59/report-3c46f7d0b8f4.bl.org",
+      "findings": [
+        {
+          "kind": "observation",
+          "sources": [
+            "D-scan"
+          ],
+          "text": "Saved scan D-scan (sha256 ff3c907c…, captured 2026-10-09T01:37Z) covers 20 matched sessions 2026-09-11→2026-10-08: ADBE −3.13% vs QQQ +5.60%, i.e. relative −8.72%, annualized vol 37.6%, max drawdown −13.0%; CRM (−11.7% rel) and ORCL (−16.9% rel) also lag."
+        },
+        {
+          "kind": "gap",
+          "sources": [
+            "D-scan"
+          ],
+          "text": "No live or borrow data are present in the scanned capture: short interest, borrow fee, borrow availability and live quotes are absent, so current borrow conditions are unknown and unverified."
+        }
+      ],
+      "next": [
+        "What were ADBE short interest and borrow fee/availability during 2026-09-11→2026-10-08?",
+        "Which permitted source could supply live borrow and quote data to close this gap?"
+      ],
+      "proposal": "data/runs/t-59/report-3c46f7d0b8f4-proposal.bl.org",
+      "summary": "Inventory-and-read-only audit of the saved scan capture only. No external requests and no forecast.",
+      "title": "UI capability audit: saved scan capture (ADBE relative weakness); live/borrow data unavailable"
+    },
+    "sources": [
+      {
+        "at": "2026-10-09T08:21:20.093Z",
+        "capturedAt": "2026-10-09T01:37:40.708Z",
+        "file": "data/scan.json",
+        "id": "D-scan",
+        "kind": "captured dataset",
+        "sha256": "ff3c907c74a39c355e771091047ae97b9cfe0ea9d8cf9741912091efe12960a5",
+        "url": null
+      }
+    ],
+    "status": "published",
+    "taskStatus": "done"
+  }
+}

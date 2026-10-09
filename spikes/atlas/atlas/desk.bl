@@ -35,7 +35,7 @@
    (let [v (task/view sys (:id args))]
     (when-not v (throw (ex-info "Unknown research task" {})))
     (if (task/terminal? (:status v))
-     (let [id (task/open! sys {:title "Atlas · follow-up research" :cwd (:cwd v)
+     (let [id (task/open! sys {:title "Atlas · follow-up research" :cwd (str root "/spikes/atlas")
                :goal (str "Follow-up to " (:id args) ": " (:text args)
                       "\nInventory first, then read prior published draft run:" (:id args)
                       " if available. Prior model reports are hypotheses, not independent evidence. Acquire or recompute as needed and publish a separate cited report.")})]

@@ -200,3 +200,32 @@ failed task creates a new research task with the prior report as an optional
 input, because Omega's terminal tasks cannot be reopened. Published reports
 can be read by new tasks with run:<id>, including their computation artifacts.
 A failed task without a publication has no report to pretend to reuse.
+
+The narrow audit completed as task t-49. Omega read the prior artifact ledger,
+recomputed the February shock-session anchor, encountered a rejected citation
+on its first publication attempt, corrected the citation and published. The
+corrected draft distinguishes the February 4 news dateline from the February 3
+shock session, preserving both computed paths rather than silently replacing
+one. See docs/omega-followup-report.bl.org and proof/followup-task.json. This
+verifies the review loop; it is not a claim that every interpretation in a
+model-written report has been independently certified.
+
+* Ready-to-use verified world
+
+The verified research world is retained at .omega/atlas-desk-v3, ignored by Git.
+It includes the actual task store, public captures, computations, reports and
+proposals. It is served on port 8833. To restart this exact world:
+
+#+begin_src sh
+ATLAS_WORLD="$PWD/.omega/atlas-desk-v3" ATLAS_PORT=8833 spikes/atlas/run-gen.sh
+#+end_src
+
+The repository retains proof and shareable reports; full public article inputs
+and the durable store remain local. The form-launched capability task t-59 also
+published after inspecting the saved scan, without any public-data request.
+
+Workspace data loads as soon as the package mounts. Each published report also
+has Read this draft on Decision, which selects the draft to compare with the
+authored starting hypothesis. This reading choice is transient package state;
+it does not apply the proposed revision or rewrite source facts. The Research
+screen retains every published report and failed task for inspection.

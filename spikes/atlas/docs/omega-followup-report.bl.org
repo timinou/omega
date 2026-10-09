@@ -1,0 +1,284 @@
+#+TITLE: Correction (run:t-49): t-17 February baseline ledger vs event anchor
+#+TASK: t-49
+#+RECORDED: 2026-10-09T08:18:26.582Z
+#+BASE_SHA256: 6bf367de2c2c80b135c3d0aa35bdbfbf4198833d568acf909c84ac4eff2469f9
+
+* Omega-generated draft / review before adoption
+Correction to run:t-17. Its gap finding said the February 2026 baseline was not recomputed, but its own ledger holds a baseline analysis anchored 2026-02-04. ADBE's shock session was 2026-02-03. That anchor was recomputed from the same captured tape; matched 20-session metrics are unchanged, only event-day residual and beta differ.
+
+* Findings
+** observation
+run:t-17's ledger contains artifact A4 (analysis-9e040ca16a4d): a deterministic ADBE/QQQ analysis whose event field is 'baseline', anchor 2026-02-04, fit 2025-10-09 to 2026-02-03, n=80. Its beta is 0.481; event-day return +2.86% versus QQQ -1.75% (residual +4.00%), and its path shows 2026-02-03 return -7.31% the prior session.
+Sources: D-run:t-17
+
+** observation
+On the same captured baseline tape the largest single-session decline is 2026-02-03: ADBE -7.31% versus QQQ -1.54%, volume 1.68x the 20-session mean. The captured financial item N07 (Reuters/MarketScreener selloff) is dated 2026-02-04.
+Sources: D-run:t-17, D-movement
+
+** observation
+New recomputation A1 (sha256 773577018349...), anchor 2026-02-03, fit 2025-10-08 to 2026-02-02, n=80: beta 0.372, event residual -6.52%. Matched 20-session metrics 2026-01-16 to 2026-02-13 are return -13.19%, relative -10.00%, volatility 0.384, drawdown -15.61% - identical to A4's, because that window is anchor-independent.
+Sources: A1
+
+** inference
+The inconsistency is an anchor/label error, not a data error: t-17 anchored February on the 2026-02-04 news dateline/rebound session (+2.86%), not the 2026-02-03 shock session (-7.31%). Corrected wording: a 2026-02-04 February baseline was computed; a 2026-02-03 one was not, until now. Both betas are below 0.5, so t-17's unstable-beta caveat stands.
+Sources: D-run:t-17, A1
+
+** gap
+Unverified in this run: which anchor the case text itself labels 'the February baseline', and whether the raw Yahoo baseline tape needs adjustment around 2026-02-03/04. Falsifier: this correction fails if A4's event field is not 'baseline' or its anchor is not 2026-02-04. Lesson: distinguish news-dateline anchors from shock-session anchors when citing pre-existing baselines.
+Sources: D-run:t-17, D-movement
+
+* Next evidence
+- Confirm from the case text and N07 wording whether the February baseline anchor is the news dateline (2026-02-04) or the shock session (2026-02-03).
+- Verify raw baseline prices for splits/adjustments around 2026-02-03/04 before comparing the two betas.
+
+* Acquisition ledger
+D-run:t-17 | captured dataset | data/runs/t-17/manifest.json | 167bc64e3ae232b4c47ef53b9a6b78fff2070c16960988b5145bbf8928a743af | captured 2026-10-09T08:12:01.581Z
+D-movement | captured dataset | data/movement.json | 3ee68075d92ea77eb27ee5225d79063eef28f203fdc69e64deef232654d73ed5 | captured 2026-10-09T07:07:27.779Z
+A1 | deterministic analysis | data/runs/t-49/analysis-773577018349.json | 7735770183496d01e0590134eec2fab792477c7ddd8578ddf2ceb1a53998d120 | captured 2026-10-09T08:18:26.582Z
+
+* Structured proposal
+#+begin_atlas_proposal
+{
+  "findings": [
+    {
+      "kind": "observation",
+      "sources": [
+        "D-run:t-17"
+      ],
+      "text": "run:t-17's ledger contains artifact A4 (analysis-9e040ca16a4d): a deterministic ADBE/QQQ analysis whose event field is 'baseline', anchor 2026-02-04, fit 2025-10-09 to 2026-02-03, n=80. Its beta is 0.481; event-day return +2.86% versus QQQ -1.75% (residual +4.00%), and its path shows 2026-02-03 return -7.31% the prior session."
+    },
+    {
+      "kind": "observation",
+      "sources": [
+        "D-run:t-17",
+        "D-movement"
+      ],
+      "text": "On the same captured baseline tape the largest single-session decline is 2026-02-03: ADBE -7.31% versus QQQ -1.54%, volume 1.68x the 20-session mean. The captured financial item N07 (Reuters/MarketScreener selloff) is dated 2026-02-04."
+    },
+    {
+      "kind": "observation",
+      "sources": [
+        "A1"
+      ],
+      "text": "New recomputation A1 (sha256 773577018349...), anchor 2026-02-03, fit 2025-10-08 to 2026-02-02, n=80: beta 0.372, event residual -6.52%. Matched 20-session metrics 2026-01-16 to 2026-02-13 are return -13.19%, relative -10.00%, volatility 0.384, drawdown -15.61% - identical to A4's, because that window is anchor-independent."
+    },
+    {
+      "kind": "inference",
+      "sources": [
+        "D-run:t-17",
+        "A1"
+      ],
+      "text": "The inconsistency is an anchor/label error, not a data error: t-17 anchored February on the 2026-02-04 news dateline/rebound session (+2.86%), not the 2026-02-03 shock session (-7.31%). Corrected wording: a 2026-02-04 February baseline was computed; a 2026-02-03 one was not, until now. Both betas are below 0.5, so t-17's unstable-beta caveat stands."
+    },
+    {
+      "kind": "gap",
+      "sources": [
+        "D-run:t-17",
+        "D-movement"
+      ],
+      "text": "Unverified in this run: which anchor the case text itself labels 'the February baseline', and whether the raw Yahoo baseline tape needs adjustment around 2026-02-03/04. Falsifier: this correction fails if A4's event field is not 'baseline' or its anchor is not 2026-02-04. Lesson: distinguish news-dateline anchors from shock-session anchors when citing pre-existing baselines."
+    }
+  ],
+  "next": [
+    "Confirm from the case text and N07 wording whether the February baseline anchor is the news dateline (2026-02-04) or the shock session (2026-02-03).",
+    "Verify raw baseline prices for splits/adjustments around 2026-02-03/04 before comparing the two betas."
+  ],
+  "summary": "Correction to run:t-17. Its gap finding said the February 2026 baseline was not recomputed, but its own ledger holds a baseline analysis anchored 2026-02-04. ADBE's shock session was 2026-02-03. That anchor was recomputed from the same captured tape; matched 20-session metrics are unchanged, only event-day residual and beta differ.",
+  "title": "Correction (run:t-49): t-17 February baseline ledger vs event anchor",
+  "baseHash": "6bf367de2c2c80b135c3d0aa35bdbfbf4198833d568acf909c84ac4eff2469f9",
+  "task": "t-49",
+  "at": "2026-10-09T08:18:26.582Z",
+  "sources": [
+    {
+      "id": "D-run:t-17",
+      "kind": "captured dataset",
+      "file": "data/runs/t-17/manifest.json",
+      "sha256": "167bc64e3ae232b4c47ef53b9a6b78fff2070c16960988b5145bbf8928a743af",
+      "at": "2026-10-09T08:17:23.215Z",
+      "capturedAt": "2026-10-09T08:12:01.581Z",
+      "url": null
+    },
+    {
+      "id": "D-movement",
+      "kind": "captured dataset",
+      "file": "data/movement.json",
+      "sha256": "3ee68075d92ea77eb27ee5225d79063eef28f203fdc69e64deef232654d73ed5",
+      "at": "2026-10-09T08:17:30.900Z",
+      "capturedAt": "2026-10-09T07:07:27.779Z",
+      "url": null
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "A1",
+      "kind": "deterministic analysis",
+      "file": "data/runs/t-49/analysis-773577018349.json",
+      "sha256": "7735770183496d01e0590134eec2fab792477c7ddd8578ddf2ceb1a53998d120",
+      "result": {
+        "symbol": "ADBE",
+        "benchmark": "QQQ",
+        "anchor": "2026-02-03",
+        "event": "baseline",
+        "tape": {
+          "status": "ok",
+          "anchor": "2026-02-03",
+          "firstSession": "2026-02-03",
+          "fitFrom": "2025-10-08",
+          "fitTo": "2026-02-02",
+          "n": 80,
+          "alpha": -0.002165801340572836,
+          "beta": 0.37219899628797104,
+          "path": [
+            {
+              "date": "2026-01-27",
+              "return": -0.02395637885181523,
+              "market": 0.009065231755267522,
+              "volume": 4166300,
+              "offset": -5,
+              "residual": -0.025164647671670808,
+              "car": null,
+              "assetCumulative": null,
+              "relative": null,
+              "volumeRatio": 0.9485290434798447
+            },
+            {
+              "date": "2026-01-28",
+              "return": 0.007262366508688389,
+              "market": 0.0033113909811974818,
+              "volume": 3942800,
+              "offset": -4,
+              "residual": 0.008195671449742483,
+              "car": null,
+              "assetCumulative": null,
+              "relative": null,
+              "volumeRatio": 0.8707712558028596
+            },
+            {
+              "date": "2026-01-29",
+              "return": -0.026470368620129303,
+              "market": -0.00598522437627802,
+              "volume": 7410800,
+              "offset": -3,
+              "residual": -0.02207687277414749,
+              "car": null,
+              "assetCumulative": null,
+              "relative": null,
+              "volumeRatio": 1.6161801202953736
+            },
+            {
+              "date": "2026-01-30",
+              "return": 0.0054860488153603,
+              "market": -0.01201090373626934,
+              "volume": 5713000,
+              "offset": -2,
+              "residual": 0.012122296471084027,
+              "car": null,
+              "assetCumulative": null,
+              "relative": null,
+              "volumeRatio": 1.1795700856236153
+            },
+            {
+              "date": "2026-02-02",
+              "return": 0.0004433244085677579,
+              "market": 0.006866562242869634,
+              "volume": 4357000,
+              "offset": -1,
+              "residual": 0.00005339817439563733,
+              "car": null,
+              "assetCumulative": null,
+              "relative": null,
+              "volumeRatio": 0.8673874655842074
+            },
+            {
+              "date": "2026-02-03",
+              "return": -0.07311340871917715,
+              "market": -0.01536396384183314,
+              "volume": 8324900,
+              "offset": 0,
+              "residual": -0.06522915545766933,
+              "car": -0.06522915545766933,
+              "assetCumulative": -0.07311340871917715,
+              "relative": -0.057749444877344014,
+              "volumeRatio": 1.6788117298421696
+            },
+            {
+              "date": "2026-02-04",
+              "return": 0.028610300403945743,
+              "market": -0.017469240412525178,
+              "volume": 8554200,
+              "offset": 1,
+              "residual": 0.03727813549197371,
+              "car": -0.02795101996569562,
+              "assetCumulative": -0.046594904902243495,
+              "relative": -0.014030097425927535,
+              "volumeRatio": 1.6692929673359749
+            },
+            {
+              "date": "2026-02-05",
+              "return": -0.036895274112144216,
+              "market": -0.014395221638106248,
+              "volume": 6293600,
+              "offset": 2,
+              "residual": -0.029371585726525352,
+              "car": -0.057322605692220974,
+              "assetCumulative": -0.0817710472257901,
+              "relative": -0.03527979573259177,
+              "volumeRatio": 1.1670407776315948
+            },
+            {
+              "date": "2026-02-06",
+              "return": -0.0037492472278272126,
+              "market": 0.021137936669279433,
+              "volume": 5448400,
+              "offset": 3,
+              "residual": -0.00945096469915888,
+              "car": -0.06677357039137985,
+              "assetCumulative": -0.08521371458148952,
+              "relative": -0.05887767062783189,
+              "volumeRatio": 0.9819927148987709
+            },
+            {
+              "date": "2026-02-09",
+              "return": -0.005514609730238207,
+              "market": 0.007660074439934883,
+              "volume": 6576300,
+              "offset": 4,
+              "residual": -0.006199880407700276,
+              "car": -0.07297345079908013,
+              "assetCumulative": -0.0902584039321469,
+              "relative": -0.07138069836128569,
+              "volumeRatio": 1.1607942676041794
+            },
+            {
+              "date": "2026-02-10",
+              "return": -0.00835511622235141,
+              "market": -0.004639285022135731,
+              "volume": 5718600,
+              "offset": 5,
+              "residual": -0.0044625776530458384,
+              "car": -0.07743602845212597,
+              "assetCumulative": -0.0978594006996013,
+              "relative": -0.07442998916331156,
+              "volumeRatio": 0.9806135651028739
+            }
+          ],
+          "observedThrough": "2026-02-13",
+          "method": "OLS daily alpha/beta fit on up to 80 pre-event matched sessions; CAR is arithmetic residual sum from session 0; volume / prior 20-session mean. Descriptive, not causal."
+        },
+        "metrics": {
+          "status": "ok",
+          "from": "2026-01-16",
+          "to": "2026-02-13",
+          "n": 20,
+          "return": -0.13193461014945085,
+          "relative": -0.09999403414704935,
+          "volatility": 0.383808640433941,
+          "drawdown": -0.15607770204800897
+        },
+        "limit": "Descriptive pre-event OLS residuals and matched returns; not causal attribution, significance or calibrated probabilities"
+      }
+    }
+  ],
+  "method": "Gen authored from actual Omega tool results. Citation existence checked; semantic accuracy requires review. No auto-adoption or trading."
+}
+#+end_atlas_proposal

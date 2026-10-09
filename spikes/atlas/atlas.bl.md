@@ -208,3 +208,23 @@ real follow-up investigation. Citation IDs alone do not certify semantic truth.
 
 - [Task-generated findings](proof/22-omega-findings.png)
 - [Published .bl.org report beside retained source](proof/23-report-beside-source.png)
+
+Follow-up proof: [actual review task](proof/followup-task.json) and
+[Omega-authored correction](docs/omega-followup-report.bl.org). Omega checked
+the prior artifacts, recomputed the shock-session anchor and repaired a rejected
+citation before publishing. Both drafts remain reviewable. Gen adapter checks
+now include 21 assertions, with bounded provider-error diagnostics.
+
+The verified world is retained locally at `.omega/atlas-desk-v3` and served on
+8833. Restart with `ATLAS_WORLD="$PWD/.omega/atlas-desk-v3" ATLAS_PORT=8833
+spikes/atlas/run-gen.sh`. It contains the actual durable task store, full public
+captures, reports and proposals. The repo stores source, proofs and shareable
+reports; no credentials or full publisher articles were committed.
+
+[Form-launched task proof](proof/form-task.json) and
+[real submitted form with retained panes](proof/26-form-launched-task.png) show
+the new question form opening an actual Omega task that published a result.
+
+[Selected task draft on Decision](proof/27-selected-decision-draft.png) verifies
+that a reader can choose which generated account to compare with the authored
+hypothesis. This changes package reading state, not the source notebook.
