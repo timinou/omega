@@ -54,6 +54,7 @@ export function createStage(canvas,{lost=()=>{},restored=()=>{},error=()=>{}}={}
    value.capture=!!options.width;value.mouse=mouse.slice();value.stamp??=performance.timeOrigin+performance.now();
    return new Promise(resolve=>{if(inFlight){pending?.resolve(false);pending={value,resolve};}else submit(value,resolve);});
   },resources:()=>({...metrics,inFlight,pending:pending?1:0,validationPrograms:validator.resources().programs}),dispose};
+ Object.defineProperty(proxy,'baseSource',{get:()=>validator.baseSource});
  Object.defineProperty(proxy,'visual',{get:()=>validator.visual,set:value=>{validator.visual=value;if(!value)send('clear');}});
  try{const offscreen=canvas.transferControlToOffscreen();send('init',offscreen,[offscreen]);}catch(e){dispose();throw e;}
  return proxy;
