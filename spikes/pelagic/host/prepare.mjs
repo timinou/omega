@@ -17,15 +17,15 @@ export function prepareScore(base,createWorker,{mode='prebuilt',delay=4,onError=
    worker.addEventListener('error',event=>fail(new Error(event.message||'Preparation worker failed')));
    worker.addEventListener('messageerror',()=>fail(new Error('Preparation message could not be decoded')));
    worker.addEventListener('message',({data})=>{
-    if(closed)return;
+    if(closed||done)return;
     if(data.op==='error'){fail(new Error(data.error));return;}
     if(data.op==='ready'){readyAt=performance.now();state.ready=true;worker.postMessage({op:'prepare',id:1});guard();}
     else if(data.op==='chunk'){
-     if(data.id!==1||data.start!==rows||!Array.isArray(data.rows)||!data.rows.length||data.rows.length>16||rows+data.rows.length>1024){fail(new Error('Invalid preparation chunk'));return;}
+     if(data.id!==1||data.start!==rows||!Array.isArray(data.rows)||!data.rows.length||data.rows.length>16||rows+data.rows.length>1024||!Number.isFinite(data.workMs)||data.workMs<0){fail(new Error('Invalid preparation chunk'));return;}
      for(const row of data.rows)cache.set(rows++,row);
      samples.push(data.workMs);state.workMs+=data.workMs;state.chunkMaxMs=Math.max(state.chunkMaxMs,data.workMs);
-     guard();credit=setTimeout(()=>{if(!closed)worker.postMessage({op:'credit',id:1});},delay);
-    }else if(data.op==='done'&&data.id===1){done=true;state.done=true;state.elapsedMs=performance.now()-started;clearTimeout(timer);worker.terminate();worker=null;}
+     guard();clearTimeout(credit);credit=setTimeout(()=>{if(!closed&&worker)worker.postMessage({op:'credit',id:1});},delay);
+    }else if(data.op==='done'&&data.id===1){if(rows!==1024){fail(new Error('Incomplete preparation score'));return;}done=true;state.done=true;state.elapsedMs=performance.now()-started;clearTimeout(timer);clearTimeout(credit);worker.terminate();worker=null;}
    });guard();worker.postMessage({op:'init',mode});
   }catch(error){fail(error);}
  };

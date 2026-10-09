@@ -133,7 +133,7 @@ capture. These are headless browser results, with no physical audio loopback.
 | Worker frame interval | 20 ms | 22 ms | Open |
 | Worker audio-clock activation → render submission | 9 ms | 11 ms | Pass; 6 samples each |
 | Main-thread submission acknowledgement | 261.4 ms | 277.5 ms | Open |
-| Editor UI frame interval | 84 ms | 119 ms | Open |
+| Main-thread frame callback interval | 84 ms | 119 ms | Open |
 
 The actor run's score-preparation chunk p95 was 14.8 ms, maximum 90.6 ms.
 Main-thread native audio-preparation turns had p95 4/7 ms and maxima 169.5/408.8 ms
@@ -181,3 +181,18 @@ variants, 16 actor ABI checks, seven native refusal cases, direct-call/mailbox
 identity and side-effect checks, three native-value tests, and the long-source
 preload regression pass. All six control profiles pass.
 [Verification record and logs](proof/native-actors/final/verification.json).
+
+Implementation review: the preparation adapter now rejects completion before all
+1,024 rows arrive and rejects negative/nonfinite work-time samples. Completed jobs
+ignore late worker messages; pending credits are cleared. The working score
+fallback survives malformed input. All 50 Pelagic tests pass after this change;
+one real prebuilt and one real actor Worker integration run preserve the score
+digest. These integration runs are not additional performance comparisons, and
+the earlier pressure measurements precede this protocol hardening.
+[Worker integration results](proof/native-actors/protocol-review/cpu.json).
+
+The 84/119 ms figures above measure the main-thread frame callback interval;
+they do not establish that editor rendering alone caused the delay. Profiling must
+separate BL execution, DOM/layout, AudioNode construction, capture and host
+contention. The actor pressure run reports `outputLatency` of 40 ms and
+`baseLatency` of 10.67 ms; physical end-to-end latency needs its own measurement.

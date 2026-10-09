@@ -20,3 +20,62 @@ Five fresh browser/Node runs per profile, warmed before/after kernel samples,
 six control profiles, two 60-second real-editor lifecycle/AV runs completed.
 Conclusions and reproducible evidence: spikes/pelagic/native-actors.bl.md.
 The strict 16 ms end-to-end target remains open; default stays prebuilt.
+
+* Roadmap from the implementation review
+Status: the native actor prototype and recorded optimization rounds are implemented.
+The following items are proposed follow-up work, not measured improvements.
+
+** P0 Measurement and completion contracts
+- DONE Reject incomplete worker completion and invalid work-time samples, preserve
+  fallback on failure, ignore late completion messages, clear pending credits.
+- Distinguish cold startup, warmed CPU, host scheduling, native graph allocation,
+  main-thread frame intervals, GPU work, and physical device latency in reports.
+- Profile the main thread before attributing 84–119 ms frame callback intervals
+  to BL rendering, DOM/layout, AudioNode construction, capture, or host contention.
+- Quiet-machine repetitions and physical loopback are prerequisites for a claim
+  about the 16 ms end-to-end goal. The observed outputLatency estimate is 40 ms.
+
+** P1 Upstream Beam Lisp
+- Compiler-owned native linking from checked source metadata; preserve ordinary
+  require/privacy/arity semantics and eliminate package-maintained export wiring.
+- Explicit sync/actor/native value contracts and callback effects. Unify collection
+  representation where practical; never erase a conversion merely by assertion.
+- Extend typed/system evidence for safe numeric specialization and allocation
+  reduction. Unknown JS effects remain unknown; no fictitious timing proofs.
+- Profile generator/scheduler startup and per-turn work; preserve bounded fairness,
+  cancellation, mailbox behavior, and host task yielding while optimizing.
+- Conservative package/module reachability, build provenance, and reproducible
+  output; retain whole registries when dynamic lookup prevents safe pruning.
+- Ordinary env.bl tasks remain the package build surface. Promote reusable pieces
+  only after another package exercises the contract.
+
+** P1 Omega and editor packages
+- Maintain pure package state/effects, exact unload, and a single compiled graph
+  shared by local/server frontends. Do not turn each package into a private app.
+- Trace input -> package transition -> effect -> native submission -> visible or
+  audible result, with attributable timings and source locations.
+- Cache derived editor structures by immutable identities, measure DOM updates,
+  and coalesce nonessential chrome updates after identifying actual hot paths.
+- Keep user saves/intents distinct from local build/cache work; benchmark against
+  isolated worlds, never the running user world.
+
+** P1 Pelagic runtime
+- Keep finite-score specialization/prebuilt loading as the default. Actors own
+  dynamic jobs and lifetimes where useful, rather than executing every cheap call.
+- Profile first-step/JIT and indivisible AudioNode allocation tails, then warm or
+  stage reusable work before performance starts without hiding startup cost.
+- Evaluate typed BL DSP in AudioWorklet/native lowering as a separate measured
+  experiment, with bounded allocation and rendering compatibility requirements.
+- Add deadline-aware admission and cancellation for speculative work; protect the
+  audio reserve and active performance from compilation/analysis/export bursts.
+
+** P2 Enjoyable instrument features
+- Reproducible takes: source, seed, quantized edits, controller events, asset hashes,
+  and shader revisions; replay or fork a take as editable BL. Existing recording,
+  event manifests, snapshots, and undo/redo provide part of the foundation.
+- Safe audition: prepare an alternate patch, preview it, then commit atomically on
+  a musical boundary; keep the active revision when compilation/preparation fails.
+- Performance-aware exploration: audition seeded variations and scene gestures
+  while keeping timing and resource limits internal to namespaces.
+- Shareable local performance bundles and source-to-result navigation. Generalize
+  packaging only after Pelagic's contract and another consumer justify it.
