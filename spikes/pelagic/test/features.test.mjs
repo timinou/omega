@@ -33,9 +33,10 @@ test('transients respond to an actual amplitude attack, not a beat clock',()=>{
 });
 
 test('cached feature plans preserve decibel calibration across analyser shapes',()=>{
- const fft=Uint8Array.from({length:1024},(_,i)=>(i*73+19)%256),wave=new Uint8Array(2048).fill(128);
+ for(const fftSize of [512,1024,2048]){
+ const fft=Uint8Array.from({length:fftSize/2},(_,i)=>(i*73+19)%256),wave=new Uint8Array(fftSize).fill(128);
  for(let i=0;i<24;i++){
-  const sampleRate=22050+i*1000,fftSize=2048,minDecibels=-110+i,maxDecibels=-25;
+  const sampleRate=22050+i*1000,minDecibels=-110+i,maxDecibels=-25;
   const result=audioFeatures(fft,wave,{sampleRate,fftSize,minDecibels,maxDecibels});
   for(const [key,lo,hi,gain] of [['bass',35,180,22],['mid',250,2500,55],['high',4500,14000,240]]){
    const first=Math.max(1,Math.ceil(lo*fftSize/sampleRate)),last=Math.min(fft.length-1,Math.floor(hi*fftSize/sampleRate));let power=0;
@@ -44,4 +45,17 @@ test('cached feature plans preserve decibel calibration across analyser shapes',
    assert.ok(Math.abs(result[key]-expected)<1e-12,`${key}: ${result[key]} vs ${expected}`);
   }
  }
+ }
+});
+
+import {ShaderStage} from '../host/shader.mjs';
+test('audio textures preserve normalized spectrum and waveform across FFT window sizes',()=>{
+ const stage=Object.create(ShaderStage.prototype),images=[];
+ Object.assign(stage,{fft:new Uint8Array(1024),wave:new Uint8Array(2048),audio:new Uint8Array(512*2*4),audioTex:{},gl:{activeTexture(){},bindTexture(){},texSubImage2D(...args){images.push([...args.at(-1)]);}}});
+ for(const size of [2048,1024,512,2048]){
+  const fft=Uint8Array.from({length:size/2},(_,i)=>Math.floor(i*256/(size/2)));
+  const wave=Uint8Array.from({length:size},(_,i)=>Math.floor(i*256/size));
+  stage.sampleAudio(null,{fft,wave,features:{volume:.1}});
+ }
+ for(const image of images.slice(1))assert.deepEqual(image,images[0]);
 });

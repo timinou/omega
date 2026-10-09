@@ -20,8 +20,8 @@ uniform float iChannelTime[4];
 uniform vec3 iChannelResolution[4];
 `;
 export class ShaderStage {
-  constructor(canvas) {
-    this.canvas=canvas;this.gl=canvas.getContext('webgl',{antialias:false,preserveDrawingBuffer:true,alpha:false});
+  constructor(canvas,{preserve=true}={}) {
+    this.canvas=canvas;this.gl=canvas.getContext('webgl',{antialias:false,preserveDrawingBuffer:preserve,alpha:false});
     if(!this.gl)throw new Error('WebGL unavailable');
     const g=this.gl;
     this.buffer=g.createBuffer();g.bindBuffer(g.ARRAY_BUFFER,this.buffer);g.bufferData(g.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),g.STATIC_DRAW);
@@ -59,15 +59,15 @@ export class ShaderStage {
   }
   location(name){let value=this.locations.get(name);if(value===undefined){value=this.gl.getUniformLocation(this.program,name);this.locations.set(name,value);}return value;}
   sampleAudio(analyser,audioFrame){
-    if(audioFrame){this.fft.set(audioFrame.fft);this.wave.set(audioFrame.wave);this.features=audioFrame.features;}
+    if(audioFrame){if(this.fft.length!==audioFrame.fft.length)this.fft=new Uint8Array(audioFrame.fft.length);if(this.wave.length!==audioFrame.wave.length)this.wave=new Uint8Array(audioFrame.wave.length);this.fft.set(audioFrame.fft);this.wave.set(audioFrame.wave);this.features=audioFrame.features;}
     else{
-      if(analyser){analyser.getByteFrequencyData(this.fft);analyser.getByteTimeDomainData(this.wave);}
+      if(analyser){const size=analyser.fftSize||2048;if(this.fft.length!==size/2)this.fft=new Uint8Array(size/2);if(this.wave.length!==size)this.wave=new Uint8Array(size);analyser.getByteFrequencyData(this.fft);analyser.getByteTimeDomainData(this.wave);}
       else{this.fft.fill(0);this.wave.fill(128);}
       this.features=audioFeatures(this.fft,this.wave,{sampleRate:analyser?.context?.sampleRate??analyser?.sampleRate??44100,
         fftSize:analyser?.fftSize??2048,minDecibels:analyser?.minDecibels??-100,maxDecibels:analyser?.maxDecibels??-30});
     }
     this.volume=this.features.volume;
-    for(let i=0;i<512;i++)for(let row=0;row<2;row++){const x=row===0?this.fft[i*2]:this.wave[i*4],at=(row*512+i)*4;this.audio[at]=x;this.audio[at+1]=x;this.audio[at+2]=x;this.audio[at+3]=255;}
+    for(let i=0;i<512;i++)for(let row=0;row<2;row++){const x=row===0?this.fft[Math.floor(i*this.fft.length/512)]:this.wave[Math.floor(i*this.wave.length/512)],at=(row*512+i)*4;this.audio[at]=x;this.audio[at+1]=x;this.audio[at+2]=x;this.audio[at+3]=255;}
     const g=this.gl;g.activeTexture(g.TEXTURE0);g.bindTexture(g.TEXTURE_2D,this.audioTex);
     g.texSubImage2D(g.TEXTURE_2D,0,0,0,512,2,g.RGBA,g.UNSIGNED_BYTE,this.audio);
   }

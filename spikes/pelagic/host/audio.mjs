@@ -37,6 +37,8 @@ export function voiceLifetime(graph,params={}) {
 export class AudioEngine {
   constructor(context, config={}) {
     this.ctx=context; this.voices=new Map(); this.serial=0; this.disposed=false;
+    this.retiredNodes=[];this.retireTimer=null;
+    this.buildTimes=new Float32Array(256);this.buildCount=0;this.buildMax=0;this.buildLate=0;
     this.config={bpm:122,filter:1,space:.45,echo:.32,master:.72,crossfade:.5,'deck-a':.9,'deck-b':.9,...config};
     const c=context;
     this.mix=c.createGain(); this.dry=c.createGain(); this.dry.gain.value=.85;
@@ -53,7 +55,7 @@ export class AudioEngine {
     this.compressor.ratio.value=12; this.compressor.attack.value=.003; this.compressor.release.value=.22;
     for (const n of [this.dry,this.wet,this.echo]) n.connect(this.compressor);
     this.output=c.createGain(); this.compressor.connect(this.output);
-    this.analyser=c.createAnalyser(); this.analyser.fftSize=2048; this.analyser.smoothingTimeConstant=.18;
+    this.analyser=c.createAnalyser(); this.analyser.fftSize=1024; this.analyser.smoothingTimeConstant=.18;
     this.output.connect(this.analyser); this.analyser.connect(c.destination);
     this.decks={};
     for (const key of ['a','b']) {
@@ -64,7 +66,7 @@ export class AudioEngine {
       const filter=c.createBiquadFilter(); filter.type='lowpass'; filter.Q.value=.45;
       const duck=c.createGain(), gain=c.createGain();
       input.connect(low); low.connect(mid); mid.connect(high); high.connect(filter); filter.connect(duck); duck.connect(gain); gain.connect(this.mix);
-      const analyser=c.createAnalyser();analyser.fftSize=2048;analyser.smoothingTimeConstant=.18;gain.connect(analyser);
+      const analyser=c.createAnalyser();analyser.fftSize=1024;analyser.smoothingTimeConstant=.18;gain.connect(analyser);
       this.decks[key]={input,low,mid,high,filter,duck,gain,analyser};
     }
     this.tapBuffers=new Map();this.buses=new Map();this.intents=[];this.peakVoices=0;this.triggered=0;
@@ -112,6 +114,12 @@ export class AudioEngine {
       this.probe.connect(this.ctx.destination);this.timing.ready=true;
     }catch(e){this.timing.error=e.message;}
   }
+  graphicsClock(){
+    if(!this.probe||this.disposed)return null;
+    const id=crypto.randomUUID(),channel=new MessageChannel(),probe=this.probe;
+    probe.port.postMessage({op:'clock',id,port:channel.port1},[channel.port1]);
+    let closed=false;return {port:channel.port2,dispose:()=>{if(closed)return;closed=true;try{probe.port.postMessage({op:'unclock',id});}catch{}}};
+  }
   timingReport(){const values=this.timing?.samples.slice().sort((a,b)=>a-b)||[];
     return {method:'AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback',samples:values.length,
       p95Ms:values[Math.floor(values.length*.95)]??null,maxMs:values.at(-1)??null,ready:!!this.timing?.ready,error:this.timing?.error||null};}
@@ -137,7 +145,7 @@ export class AudioEngine {
         this.config[b.stem]===false?0:(intent?Math.exp(-Math.max(0,time-intent.time)*12)*intent.velocity*fade:0)),pitch:intent?.pitch||0};
     }
     for(const [key,analyser] of [...Object.entries(this.decks).map(([key,d])=>['deck-'+key,d.analyser]),['master',this.analyser]]){
-      if(!this.tapBuffers.has(key))this.tapBuffers.set(key,{fft:new Uint8Array(1024),wave:new Uint8Array(2048)});
+      if(!this.tapBuffers.has(key))this.tapBuffers.set(key,{fft:new Uint8Array(analyser.frequencyBinCount),wave:new Uint8Array(analyser.fftSize)});
       const {fft,wave}=this.tapBuffers.get(key);analyser.getByteFrequencyData(fft);analyser.getByteTimeDomainData(wave);
       const f=audioFeatures(fft,wave,{sampleRate:this.ctx.sampleRate});out[key]={...f,level:Math.min(1,f.volume*10),pitch:0};
     }
@@ -145,16 +153,30 @@ export class AudioEngine {
   }
   visualFrame(time=this.ctx.currentTime){
     const signals=this.signals(time),master=this.tapBuffers.get('master');
-    return {signals,fft:master.fft,wave:master.wave,features:signals.master};
+    return {signals,fft:master.fft,wave:master.wave,features:signals.master,contextTime:time};
+  }
+  drainRetired(all=false){
+    clearTimeout(this.retireTimer);this.retireTimer=null;
+    const count=all?this.retiredNodes.length:Math.min(32,this.retiredNodes.length);
+    for(const node of this.retiredNodes.splice(0,count))node.disconnect();
+    if(this.retiredNodes.length)this.retireTimer=setTimeout(()=>this.drainRetired(),0);
   }
   cancelFrom(time) {
-    for(const [id,v] of this.voices)if(v.start>=time){for(const n of v.sources){n.onended=null;try{n.stop();}catch{}}v.owned.forEach(n=>n.disconnect());this.voices.delete(id);}
+    for(const [id,v] of this.voices)if(v.start>=time){
+      for(const n of v.sources){n.onended=null;try{n.stop();}catch{}}
+      // Stop sound synchronously; retire disconnected native graph storage in
+      // small batches so replacing a reserved score cannot monopolize the UI.
+      if(this.retiredNodes.length+v.owned.length>4096)this.drainRetired(true);
+      this.retiredNodes.push(...v.owned);this.voices.delete(id);
+    }
+    if(this.retiredNodes.length&&this.retireTimer===null)this.retireTimer=setTimeout(()=>this.drainRetired(),0);
     this.intents=this.intents.filter(x=>x.time<time);
   }
-  resources(){return {voices:this.voices.size,peakVoices:this.peakVoices,triggered:this.triggered,
+  resources(){const builds=[...this.buildTimes.slice(0,Math.min(this.buildCount,256))].sort((a,b)=>a-b);return {buildP95Ms:builds[Math.floor(builds.length*.95)]??null,buildMaxMs:this.buildMax,graphsCompletedAfterStart:this.buildLate,retiredNodes:this.retiredNodes.length,voices:this.voices.size,peakVoices:this.peakVoices,triggered:this.triggered,
     nodes:[...this.voices.values()].reduce((n,v)=>n+v.owned.length,0),buses:this.buses.size,intents:this.intents.length};}
   trigger(input,time=this.ctx.currentTime) {
     if(this.disposed) throw new Error('Audio engine disposed');
+    const buildStarted=performance.now();
     const v=plain(input); validateGraph(v.graph);
     if(this.voices.size>=192)throw new Error('Voice budget exceeded (192); simplify the patch');
     const c=this.ctx, params=v.params || {}, start=Math.max(time,c.currentTime), owned=[], sources=[], controls=new Map();
@@ -236,6 +258,7 @@ export class AudioEngine {
     this.voices.set(id,{id,params,level,owned,sources,controls,start,end,synth:v.synth,stem});
     const last=sources[sources.length-1];
     if(last)last.onended=()=>{owned.forEach(n=>n.disconnect());this.voices.delete(id);};
+    const buildMs=performance.now()-buildStarted;this.buildTimes[this.buildCount++%256]=buildMs;this.buildMax=Math.max(this.buildMax,buildMs);if(c.currentTime>start+128/c.sampleRate)this.buildLate++;
     return id;
   }
   ctl(id,params,time=this.ctx.currentTime) {
@@ -248,7 +271,7 @@ export class AudioEngine {
   }
   kill(id){const v=this.voices.get(id);if(v){v.level.gain.setTargetAtTime(0,this.ctx.currentTime,.005);for(const s of v.sources){try{s.stop(this.ctx.currentTime+.03);}catch{}}}}
   stop(){for(const id of this.voices.keys())this.kill(id);}
-  dispose(){if(this.disposed)return;this.disposed=true;if(this.probe){this.probe.port.onmessage=null;this.probe.disconnect();this.probe.port.close();}this.stop();for(const v of this.voices.values()){for(const s of v.sources)s.onended=null;v.owned.forEach(n=>n.disconnect());}
+  dispose(){if(this.disposed)return;this.disposed=true;this.drainRetired(true);if(this.probe){this.probe.port.onmessage=null;this.probe.disconnect();this.probe.port.close();}this.stop();for(const v of this.voices.values()){for(const s of v.sources)s.onended=null;v.owned.forEach(n=>n.disconnect());}
     for(const b of this.buses.values()){b.gain.disconnect();b.analyser.disconnect();}this.buses.clear();this.intents=[];this.noise.clear();this.tapBuffers.clear();this.reverb.buffer=null;for(const d of Object.values(this.decks))Object.values(d).forEach(n=>n.disconnect());
     for(const n of [this.mix,this.dry,this.delay,this.feedback,this.echo,this.delayFilter,this.reverb,this.wet,this.compressor,this.output,this.analyser])n.disconnect();this.voices.clear();}
 }

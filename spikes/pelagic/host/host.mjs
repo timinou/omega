@@ -34,7 +34,7 @@ export function createHost(api) {
   const views=new Set(),files=new Map(),decks={},urls=new Set(), handles=new Map(),offlineRenders=new Set();
   const notice=(message,playingValue=playing)=>{if(disposed)return;for(const v of views)v.status(message);api.dispatch({type:'pelagic/status',message,playing:playingValue});};
   const alive=()=>{if(disposed)throw new Error('Package was unloaded');};
-  function unlock(){alive();if(!ctx){ctx=audioContext();ctxWall=performance.now();audio=new AudioEngine(ctx,config);audio.startTelemetry(moduleURL('timing-worklet.mjs'));for(const key of ['a','b'])decks[key]=new SampleDeck(audio,key);}ctx.resume();return audio;}
+  function unlock(){alive();if(!ctx){ctx=audioContext();ctxWall=performance.now();audio=new AudioEngine(ctx,config);audio.startTelemetry(moduleURL('timing-worklet.mjs')).then(()=>{if(disposed)return;for(const v of views)if(v.shader?.worker)v.shader.connectClock(audio.graphicsClock());});for(const key of ['a','b'])decks[key]=new SampleDeck(audio,key);}ctx.resume();return audio;}
   async function sources(){if(!sourcePromise)sourcePromise=Promise.all(['pelagic.glsl','overtone.bl'].map(f=>readText(moduleURL(f))));return sourcePromise;}
   async function vm(){
     if(readyVM)return readyVM;
@@ -56,9 +56,10 @@ export function createHost(api) {
   function configure(values){
     values=Object.fromEntries(Object.entries(values).filter(([key])=>key in defaults));
     if(Object.entries(values).every(([key,value])=>config[key]===value))return;
+    const soundChanged=Object.entries(values).some(([key,value])=>!['scene','freeze'].includes(key)&&config[key]!==value);
     const old=current(),tempoChanged=values.bpm!==undefined&&values.bpm!==config.bpm;Object.assign(config,values);
     if(playing&&tempoChanged){timeOrigin=old.time;origin=ctx.currentTime;beatOrigin=old.beat;nextTime=ctx.currentTime+Math.max(0,nextStep/4-old.beat)*60/config.bpm;}
-    audio?.configure(config);for(const d of Object.values(decks))d.configure();
+    if(soundChanged){audio?.configure(config);for(const d of Object.values(decks))d.configure();}
     if(!syncing){++restoreGeneration;active={...active,config:{...config}};model=model.assoc(R.kw('current'),toBL(active));if(!revision)scheduled=active;}
 
   }
@@ -67,7 +68,8 @@ export function createHost(api) {
     for(const v of views)v.revision?.(phase,revisionID(),revision?.beat);
   }
   function disarm(){
-    if(revision?.armed){
+    for(const v of views)v.shader?.cancelState?.();
+    if(revision?.armed&&revision.audioChanged){
       audio.cancelFrom(revision.time);nextStep=Math.round(revision.beat*4);nextTime=revision.time;audio.configure(active.config);
       for(const backup of revision.backups||[]){const elapsed=(ctx.currentTime-backup.capturedAt)*config.bpm/backup.bpm;decks[backup.deck].install({...backup,offset:backup.offset+elapsed},ctx.currentTime,playing);}
     }
@@ -80,22 +82,27 @@ export function createHost(api) {
     if(!revision?.armed||ctx.currentTime+0.0001<revision.time)return;
     const activationStarted=performance.now(),r=revision;if(!playing)installAssets(r,ctx.currentTime);model=Performance.d_activate(model,r.id);active=plain(model.get(R.kw('current')));
     timeOrigin=playing?current().time-Math.max(0,ctx.currentTime-r.time):pausedTime;beatOrigin=r.beat;origin=r.time;config={...active.config};scheduled=active;patterns=new Map(Object.entries(active.patterns));
-    revision=null;pending=[];audio?.configure(config,r.time);
-    for(const v of views){v.shader?.setState?.(active,r.beat);v.frozen=false;}
+    revision=null;pending=[];if(r.audioChanged)audio?.configure(config,r.time);
+    for(const v of views){v.shader?.setState?.(active,r.beat,r.time,r.id,playing);v.frozen=false;}
     avExpected=r.time;log('active',{revision:r.id});announcement=r.id;if(!playing){ack('ACTIVE');announcement=null;}diagnostics.activation.push(performance.now()-activationStarted);if(diagnostics.activation.length>256)diagnostics.activation.shift();
   }
-  const lookAhead=()=>mode==='performance'?1:.35;
+  // Reserve native audio independently of the next editable musical boundary.
+  const lookAhead=()=>4;
   function queueModel(candidate,quantize='bar',preview=false,assetChanges=null){
     const value={pending:plain(candidate.get(R.kw('pending')))},state=value.pending?.state;
     if(!state)throw new Error('No pending performance state');
     validateState(state);for(const v of views)v.shader?.validateState?.(state);
     if(preview)return {ok:true,preview:true};
+    const sameAudio=Performance.d_audio_equivalent$Q?Performance.d_audio_equivalent$Q(candidate.get(R.kw('pending')).get(R.kw('state')),model.get(R.kw('current'))):['config','patterns','assets','variation'].every(key=>JSON.stringify(state[key])===JSON.stringify(active[key]));
+    const audioChanged=!sameAudio||!!assetChanges?.length;
     const inheritedAssets=revision?.originalAssetChanges||[];disarm();++restoreGeneration;
     model=candidate;scheduled=active;
     const quantum=quantize==='beat'?1:quantize==='phrase'?16:4;
-    const beat=playing?Performance.d_boundary(current().beat,quantum,(lookAhead()+.15)*config.bpm/60):pausedBeat;
-    revision={id:value.pending.id,beat,state,assetChanges:assetChanges??inheritedAssets,originalAssetChanges:assetChanges??inheritedAssets,armed:!playing,time:ctx?.currentTime||0};pending=[revision];
-    log('queued',{revision:revision.id,targetBeat:beat});ack(playing?'QUEUED':'ARMED');
+    const beat=playing?Performance.d_boundary(current().beat,quantum,1.15*config.bpm/60):pausedBeat;
+    if(playing&&audioChanged&&nextStep/4>=beat){const target=origin+(beat-beatOrigin)*60/config.bpm;audio.cancelFrom(target);nextStep=Math.round(beat*4);nextTime=target;}
+    revision={id:value.pending.id,beat,state,assetChanges:assetChanges??inheritedAssets,originalAssetChanges:assetChanges??inheritedAssets,audioChanged,armed:!playing||!audioChanged,time:playing?origin+(beat-beatOrigin)*60/config.bpm:ctx?.currentTime||0};pending=[revision];
+    if(playing&&!audioChanged)for(const v of views)v.shader?.armState?.(state,beat,revision.time,revision.id);
+    log('queued',{revision:revision.id,targetBeat:beat,audioChanged});ack(playing&&!revision.armed?'QUEUED':'ARMED');
     if(!playing)applyRevision();return {ok:true,revision:value.pending.id,targetBeat:beat};
   }
   function queueEdits(edits,options={}){if(!revision)syncAssets();return queueModel(Performance.d_stage(model,toBL(edits)),options.quantize,options.preview);}
@@ -130,6 +137,7 @@ export function createHost(api) {
     while(nextTime<ctx.currentTime+lookAhead()&&(mode==='performance'||nextStep<1024)){
       if(revision&&!revision.armed&&nextStep/4>=revision.beat){
         revision.time=nextTime;revision.armed=true;scheduled=revision.state;
+        for(const v of views)v.shader?.armState?.(scheduled,revision.beat,revision.time,revision.id);
         audio.configure(scheduled.config,nextTime);installAssets(revision,nextTime);ack('ARMED');log('armed',{revision:revision.id,time:nextTime});
       }
       const i=nextStep,c=scheduled.config,patternMap=scheduled.patterns;
@@ -365,7 +373,10 @@ export function createHost(api) {
     if(typeof v.canvas.captureStream!=='function'||typeof MediaRecorder==='undefined')throw new Error('Live recording is unavailable in this browser');
     if(v.shader.gl.isContextLost())throw new Error('Restore the stage before recording');
     const dest=ctx.createMediaStreamDestination();audio.output.connect(dest);
-    const now=current();await v.shader.draw({time:now.time,beat:now.beat,bpm:config.bpm,running:playing,animate:true,width:1280,height:720,audioFrame:audio?.visualFrame()});
+    const deadline=performance.now()+15000;
+    // The latest-frame mailbox may replace a queued request. Capture must wait
+    // for its dimensions to be submitted, rather than treating cancellation as success.
+    while(true){const now=current();const submitted=await v.shader.draw({time:now.time,beat:now.beat,bpm:config.bpm,running:playing,animate:true,width:1280,height:720,audioFrame:audio?.visualFrame()});if(submitted!==false)break;if(disposed||v.shader.disposed||performance.now()>deadline){audio.output.disconnect(dest);throw new Error('Recording stage preparation timed out');}}
     const video=v.canvas.captureStream(30),stream=new MediaStream([...video.getVideoTracks(),...dest.stream.getAudioTracks()]);
     try{const take=new LiveTake(store,stream);take.capture={width:1280,height:720,requestedFPS:30,geometryScale:.75};take.dest=dest;take.start();recording=take;}catch(error){audio.output.disconnect(dest);stream.getTracks().forEach(track=>track.stop());throw error;}log('record-start',{id:recording.id});notice('Recording live mix + stage · chunks saved incrementally');
     }finally{recordPreparing=false;}
@@ -394,13 +405,13 @@ export function createHost(api) {
     const lost=event=>{event.preventDefault();contextLost=true;pause();if(recording)stopRecording({save:false}).catch(()=>{});notice('GPU context lost · transport paused',false);};
     const restored=async()=>{if(dead||disposed)return;const [source]=await sources();if(!v.shader?.worker){v.shader?.dispose({lose:false});v.shader=new SceneStage(canvas);v.shader.compile(shaderSource||source);if(mode==='performance'){v.shader.validateState(active);v.shader.setState(active,pausedBeat);}}contextLost=false;notice('GPU restored · press RESUME',false);};
     canvas.addEventListener('webglcontextlost',lost);canvas.addEventListener('webglcontextrestored',restored);
-    init=sources().then(([s])=>afterPaint(()=>{if(dead||disposed)return;v.shader=createStage(canvas,{lost,restored,error:e=>{pause();notice('Stage unavailable · '+e.message,false);}});v.shader.compile(shaderSource||s);if(mode==='performance'){v.shader.validateState(active);v.shader.setState(active,current().beat);}return Promise.resolve(v.shader.ready).then(()=>{if(!dead&&!disposed)frame();});})).catch(e=>{if(!dead&&!disposed)v.status('Stage unavailable · '+e.message);});
+    init=sources().then(([s])=>afterPaint(()=>{if(dead||disposed)return;v.shader=createStage(canvas,{lost,restored,error:e=>{pause();if(recording)stopRecording({save:false}).catch(()=>{});notice('Stage unavailable · '+e.message,false);}});v.shader.compile(shaderSource||s);if(v.shader.worker&&audio?.probe)v.shader.connectClock(audio.graphicsClock());if(mode==='performance'){v.shader.validateState(active);v.shader.setState(active,current().beat);}return Promise.resolve(v.shader.ready).then(()=>{if(!dead&&!disposed)frame();});})).catch(e=>{if(!dead&&!disposed)v.status('Stage unavailable · '+e.message);});
     function renderAt(time,options={}){
       if(ctx)applyRevision();
       const drawStarted=performance.now(),beat=options.beat??time*config.bpm/60,bar=beat/4,act=Math.min(3,Math.floor((bar%64)/16)),scene=config.scene<0?Math.max(0,Math.min(3,bar/16-.15)):config.scene;
       const breakdown=(bar>=28&&bar<32)||(bar>=52&&bar<56);
       const energy=bar<8?.1:breakdown?.25:bar<16?.65:bar<32?.85:bar<48?1:bar<60?.8:.1;
-      const submitted=v.shader?.draw({time,beat,scene,energy,accent:Math.exp(-(beat%1)*8)*energy,width:(recording||recordPreparing)?1280:undefined,height:(recording||recordPreparing)?720:undefined,audioFrame:options.analyser?null:audio?.visualFrame(),bpm:config.bpm,running:playing,animate:playing||(audio?.voices.size||0)>0||Object.values(decks).some(d=>d.running),...options});
+      const submitted=v.shader?.draw({time,beat,scene,energy,accent:Math.exp(-(beat%1)*8)*energy,audioTime:ctx?.currentTime||0,audioStamp:performance.timeOrigin+performance.now(),width:(recording||recordPreparing)?1280:undefined,height:(recording||recordPreparing)?720:undefined,audioFrame:options.analyser?null:audio?.visualFrame(),bpm:config.bpm,running:playing,animate:playing||(audio?.voices.size||0)>0||Object.values(decks).some(d=>d.running),...options});
       diagnostics.render.push(performance.now()-drawStarted);if(diagnostics.render.length>256)diagnostics.render.shift();
       if(avExpected!==null){const expected=avExpected;avExpected=null;diagnostics.handoff.push(Math.max(0,(ctx.currentTime-expected)*1000));if(diagnostics.handoff.length>4096)diagnostics.handoff.shift();const completed=ok=>{if(disposed||ok===false)return;diagnostics.av.push(Math.max(0,(ctx.currentTime-expected)*1000));if(diagnostics.av.length>4096)diagnostics.av.shift();};if(submitted?.then)submitted.then(completed);else completed();}
       if(announcement!==null){const id=announcement;announcement=null;setTimeout(()=>{if(!disposed){ack('ACTIVE');for(const view of views)view.status('Revision '+id+' active');}},0);}
@@ -414,8 +425,8 @@ export function createHost(api) {
     function frame(){if(dead||disposed)return;if(!root.isConnected){raf=requestAnimationFrame(frame);return;}
       const stamp=performance.now();if(ctx)applyRevision();if(stamp<nextFrame-2&&avExpected===null){raf=requestAnimationFrame(frame);return;}
       nextFrame=Math.max(nextFrame+1000/60,stamp);if(lastFrame){diagnostics.frameHistogram[Math.min(1000,Math.max(0,Math.round(stamp-lastFrame)))]++;}lastFrame=stamp;
-      const now=current();if(playing&&ctx){const delta=audibleTime(ctx,stamp)-ctx.currentTime;now.time=Math.max(0,now.time+delta);now.beat=Math.max(0,now.beat+delta*config.bpm/60);}if(ctx)applyRevision();if(config.freeze||v.frozen){freezeTime??=now.time;}else freezeTime=null;
-      if(!contextLost&&((!config.freeze&&!v.frozen&&(playing||(audio?.voices.size||0)>0||Object.values(decks).some(d=>d.running))) || v.shader?.frames===0))renderAt(freezeTime??now.time,{beat:now.beat});else v.shader?.suspend?.();
+      const now=current(),clockStamp=performance.now();if(playing&&ctx){const delta=audibleTime(ctx,clockStamp)-ctx.currentTime;now.time=Math.max(0,now.time+delta);now.beat=Math.max(0,now.beat+delta*config.bpm/60);}if(ctx)applyRevision();if(config.freeze||v.frozen){freezeTime??=now.time;}else freezeTime=null;
+      if(!contextLost&&((!config.freeze&&!v.frozen&&(playing||(audio?.voices.size||0)>0||Object.values(decks).some(d=>d.running))) || v.shader?.frames===0))renderAt(freezeTime??now.time,{beat:now.beat,stamp:performance.timeOrigin+clockStamp});else v.shader?.suspend?.();
       raf=requestAnimationFrame(frame);
       for(const key of ['a','b']){const button=$(`[data-deck-op="play"][data-deck-key="${key}"]`);button.classList.toggle('active',!!decks[key]?.running);setText(button,decks[key]?.running?'Ⅱ':'▶');}
       if(stamp-lastControls>500){controls.update(controlModel(),{phase:revision?(revision.armed?'ARMED':'QUEUED'):'ACTIVE',targetBeat:revision?.beat,mode,...report()});lastControls=stamp;}

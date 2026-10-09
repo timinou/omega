@@ -123,3 +123,10 @@ test('audible clock extrapolates fresh output timestamps and rejects stale or ah
  assert.equal(audible(context,1500),4);assert.equal(audible(context,3000),4);assert.equal(audible(context,900),4);
  assert.equal(audible(new(class{currentTime=4;})(),1050),4);
 });
+
+test('BL audio equivalence isolates visual revisions while preserving every sound-affecting field', {skip:!process.env.PELAGIC_OUT}, async()=>{
+ const [R,P]=await Promise.all(['rt','pelagic.performance'].map(imp));
+ const state=P.d_initial().get(R.kw('current'));
+ assert.equal(P.d_audio_equivalent$Q(state,state.assoc(R.kw('visual'),R.hashMap(R.kw('scene'),'afterglow'))),true);
+ for(const field of ['config','patterns','assets','variation'])assert.equal(P.d_audio_equivalent$Q(state,state.assoc(R.kw(field),R.hashMap(R.kw('changed'),true))),false,field);
+});

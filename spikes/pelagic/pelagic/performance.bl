@@ -69,3 +69,9 @@
   (if-let [state (get-in model [:snapshots (keyword nm)])]
     (let [id (inc (:serial model))] (assoc model :serial id :pending {:id id :state state :history "normal"}))
     (throw (str "Missing snapshot: " nm))))
+
+(defn audio-equivalent?
+  "Visual edits preserve the native audio reservation and its automation."
+  [a b]
+  (and (= (:config a) (:config b)) (= (:patterns a) (:patterns b))
+       (= (:assets a) (:assets b)) (= (:variation a) (:variation b))))

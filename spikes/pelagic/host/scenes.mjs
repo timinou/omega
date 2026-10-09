@@ -10,7 +10,7 @@ void main(){vec2 uv=gl_FragCoord.xy/iResolution.xy;float f=progress;
  vec3 accent=texture2D(c,uv).rgb;gl_FragColor=vec4(1.-(1.-base)*(1.-accent*overlay),1.);}`;
 const NAMES=['bathymetry','current','cathedral','afterglow'];
 export class SceneStage extends ShaderStage {
-  constructor(canvas){super(canvas);this.pool=new Map();this.targets=[];this.visual=null;this.transition=null;this.size='';
+  constructor(canvas,options){super(canvas,options);this.pool=new Map();this.targets=[];this.visual=null;this.transition=null;this.size='';
     this.compositor=this.prepare(COMPOSITE);this.defaultPrevious=this.previous;
     for(let i=0;i<3;i++)this.targets.push({texture:this.texture(),framebuffer:this.gl.createFramebuffer(),previous:this.texture()});
   }

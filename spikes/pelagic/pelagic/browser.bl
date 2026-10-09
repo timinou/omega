@@ -1,5 +1,5 @@
 ; The browser boundary is explicit and stays outside the pure editor/package.
-(ns ^:js pelagic.browser (:require [js.worker :as worker]))
+(ns ^:js pelagic.browser (:require [js.worker :as worker] [js.frame :as frame]))
 (defn to-js [value] (bl->js value))
 (defn to-bl [value] (js->bl value :keywordize-keys true))
 (defn set-text [node value]
@@ -72,3 +72,6 @@
         (if (and (> (.-contextTime stamp) 0) (>= age 0) (< age 1000))
           (min current (+ (.-contextTime stamp) (/ age 1000))) current))
       current)))
+
+(defn request-frame [f] (frame/request f))
+(defn cancel-frame [handle] (frame/cancel handle))

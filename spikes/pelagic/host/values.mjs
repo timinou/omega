@@ -26,3 +26,5 @@ export function renderScale(scale,interval,work){return interval>24||work>12?Mat
 export function createScoreSource(step,defaults){const cache=new Map();return index=>{if(!cache.has(index)){if(cache.size>=1024)cache.delete(cache.keys().next().value);cache.set(index,plain(step(index,defaults)));}return cache.get(index);};}
 
 export function audibleTime(context,now){const stamp=context.getOutputTimestamp?.(),age=stamp?now-stamp.performanceTime:-1;return stamp?.contextTime>0&&age>=0&&age<1000?Math.min(context.currentTime,stamp.contextTime+age/1000):context.currentTime;}
+
+export const requestFrame=f=>requestAnimationFrame(f),cancelFrame=handle=>cancelAnimationFrame(handle);
