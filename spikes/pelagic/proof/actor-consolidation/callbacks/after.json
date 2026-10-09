@@ -1,0 +1,20 @@
+{
+  "node": "v26.4.0",
+  "description": "batched CPU microbenchmark; not end-to-end media latency",
+  "results": [
+    {
+      "route": "direct",
+      "calls": 40000,
+      "medianUs": 0.5377849999999995,
+      "p95BatchMeanUs": 4.783848000000006,
+      "cpuMs": 60.789
+    },
+    {
+      "route": "actor",
+      "calls": 40000,
+      "medianUs": 1.8160070000000132,
+      "p95BatchMeanUs": 6.537898000000013,
+      "cpuMs": 113.334
+    }
+  ]
+}

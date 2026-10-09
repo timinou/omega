@@ -1,0 +1,13 @@
+PASS host numeric, structural-key and atomic-park boundaries
+PASS default scheduling budget: 457 BL checks
+PASS 17-step actor budget: 457 BL checks
+PASS 41-step actor budget: 457 BL checks
+PASS actor failure propagation: nonzero exit
+PASS host inbox wake, bounded FIFO drain and typed input boundary
+PASS BL inbox queued-before-boot, timed wake, indefinite wake and stop
+PASS stop before boot cancels BL timer and completes promptly
+PASS fractional host deadline rounds upward
+PASS pre-sink input sleeps, preserves FIFO and wakes after registration
+PASS retired sink cannot swallow input or mask blocked-peer error
+PASS crashed sink releases registration and preserves scheduler errors
+js-actors: HARDENING PASS

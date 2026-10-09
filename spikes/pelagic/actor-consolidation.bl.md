@@ -71,3 +71,26 @@ from the compiler-generated module. The ordinary bundle task includes that actor
 without an optional copy step. The benchmark also consumes this graph, making
 runtime identity part of the exercised package rather than a source-only test.
 Build and measurement evidence is in `proof/actor-consolidation/linking/`.
+
+## Callbacks do not need another evaluator
+
+Upstream `43c8174e` gives an actor closure a checked synchronous entry into the
+same frame machine. The compiler proves every arity and reachable call avoids
+suspension; a `receive` in even one arity prevents use as a JavaScript callback.
+Unknown calls stay unproved. A captured BL value stays a BL value, while the
+shared native boundary handles float boxes and JavaScript results consistently.
+Metadata wrappers preserve the callable's execution target.
+
+This proof is separate from purity. Updating a DOM element can be synchronous;
+waiting for a mailbox cannot. Actor-state operations need an actor event
+entrypoint because a browser callback has no current actor identity. Long work
+also belongs in an actor: the synchronous entry has a machine-step limit and a
+bounded finalizer reserve on cancellation.
+
+Measuring this path exposed allocation we could remove without inventing a fast
+parallel evaluator. Callback completion no longer constructs a BL result map
+that only JavaScript consumes. One sample's median fell from 5.31 to 1.82 µs;
+40,000 calls consumed 341 versus 113 ms CPU. The direct route's timings also
+varied on this loaded host. These batched numbers explain the optimization;
+they do not establish end-to-end P95 audio/video latency. Both JSON samples and
+semantic checks are in `proof/actor-consolidation/callbacks`.

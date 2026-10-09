@@ -133,3 +133,25 @@ worktree Z3 binary; after binding the bundled binary the exact failed lemma pass
 system.suspension now provides conservative checked-ANF non-suspension proofs,
 including all arity arms and call-graph propagation. This is foundation work;
 compiler/runtime callback integration is underway, and stages 2–8 remain open.
+
+* Checkpoint: one callback engine and native conversion implementation
+Upstream 43c8174e runs checked non-suspending callbacks through the actor frame
+machine, retaining closure capture, fixed/multiple arities, metadata wrappers,
+nested re-entry and original thrown values. Actor-state operations require an
+actor event entrypoint; host callbacks cannot borrow an arbitrary actor identity.
+Budget exhaustion injects cancellation with a bounded finalizer reserve. Ordinary
+and actor native boundaries now share native-values.mjs, removing duplicate
+conversion policy. Compilation masks ambient BEAM links in an isolated scope;
+explicit tests prove warm/cold output parity and unchanged parent bindings.
+
+Fresh emitted native/numeric/callback fixtures pass. Node semantic/interop suite:
+47 tests pass. Full actor suite: 457 checks at default, 17 and 41-step budgets,
+plus ingress/shutdown/failure hardening. Benchmarking revealed unnecessary BL
+result-map allocation on callback completion; skipping that conversion within the
+same frame engine reduced one sample's median 5.31 to 1.82 microseconds/call and
+CPU 341 to 113 ms/40k calls. These are noisy batched microbenchmarks, not media
+latency measurements. Evidence: proof/actor-consolidation/callbacks.
+
+Stage 3 has started by separating production js.actor compiler/runtime modules
+from research fixtures. Ordinary editor/core lowering still needs migration;
+no claim of complete consolidation or five delivered experiences is warranted.
