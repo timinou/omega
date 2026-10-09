@@ -60,18 +60,30 @@
   [bpm]
   (fn ([] 0) ([beat] (if (= :bpm beat) bpm (beat-ms beat bpm)))))
 
-(defn parameter-map [defaults args]
-  (loop [xs args names (map first defaults) out (into {} defaults)]
+(defn parameter-plan [defaults]
+  ; Immutable instrument metadata is prepared once at definition time.
+  [(mapv first defaults) (into {} defaults)])
+(defn parameter-map
+  ([defaults args] (let [[names initial] (parameter-plan defaults)]
+                     (parameter-map names initial args)))
+  ([names initial args]
+   (loop [xs args names names out initial]
     (cond (empty? xs) out
           (keyword? (first xs))
           (do (when (odd? (count xs)) (throw "Instrument keyword arguments need values"))
-              (when (some (fn [k] (not (contains? out k))) (map first (partition 2 xs)))
-                (throw "Unknown instrument parameter"))
-              (merge out (apply hash-map xs)))
+              (loop [pairs xs result out]
+                (if (empty? pairs) result
+                  (let [key (first pairs)]
+                    (when-not (contains? initial key) (throw "Unknown instrument parameter"))
+                    (recur (rest (rest pairs)) (assoc result key (second pairs)))))))
           (empty? names) (throw "Too many positional instrument arguments")
-          :else (recur (rest xs) (rest names) (assoc out (first names) (first xs))))))
+          :else (recur (rest xs) (rest names) (assoc out (first names) (first xs)))))))
 (defn instantiate [nm defaults graph args]
   {:kind :voice :synth nm :params (parameter-map defaults args) :graph graph})
+
+(defn instantiate-prepared [nm plan graph args]
+  {:kind :voice :synth nm
+   :params (parameter-map (nth plan 0) (nth plan 1) args) :graph graph})
 
 ; Arithmetic in a UGen body creates graph operators, as Overtone's overloaded
 ; arithmetic does. Rewrite only call heads, recursively; preserve bindings.
@@ -93,9 +105,10 @@
         bindings (vec (mapcat (fn [[k v]] [k (list 'pelagic.overtone/param (keyword (name k)) v)]) pairs))]
     (list 'def nm
       (list 'let bindings
-        (list 'let ['graph (graph-form (last body))]
+        (list 'let ['graph (graph-form (last body))
+                    'parameter-plan (list 'pelagic.overtone/parameter-plan defaults)]
           (list 'fn ['& 'args]
-            (list 'pelagic.overtone/instantiate (name nm) defaults 'graph 'args))))))))
+            (list 'pelagic.overtone/instantiate-prepared (name nm) 'parameter-plan 'graph 'args))))))))
 (defmacro definst [nm params & body] (inst-form nm params body))
 (defmacro defsynth [nm params & body] (inst-form nm params body))
 (defn at [time & voices] {:kind :bundle :time time :voices (vec voices)})

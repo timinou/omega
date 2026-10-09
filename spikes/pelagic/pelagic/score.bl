@@ -45,7 +45,7 @@
         breakdown (or (and (>= bar 28) (< bar 32)) (and (>= bar 52) (< bar 56)))
         rhythmic (and (>= bar 8) (< bar 60) (not breakdown))
         energy (cond (< bar 8) 0.0 (< bar 16) 0.65 breakdown 0.25 (= act 1) 0.85 (= act 2) 1.0 :else 0.8)
-        c (merge defaults config)
+        c (if (identical? defaults config) defaults (merge defaults config))
         pads (when (= 0 (mod index 64))
                (mapv (fn [n] (event (tide :freq (o/midi->hz n) :amp 0.032
                   :pan (/ (- (mod n 7) 3) 4.0) :dur 6.9 :cutoff (+ 600 (* 850 energy))) "a")) notes))

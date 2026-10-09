@@ -80,13 +80,26 @@
 ; A bounded CPU kernel shared by the native-worker and actor-managed profiles.
 ; Native rows cross the realm boundary once; patch authors retain score/step.
 (defn score-chunk [start size]
-  (let [rows (js/Array.)]
+  (let [rows (js/Array.) limit (+ start size)]
     (loop [index start]
-      (when (< index (+ start size))
+      (when (< index limit)
         (.push rows (bl->js (score/step index score/defaults)))
         (recur (inc index))))
     rows))
 
+
+; Actor scheduling cannot interrupt one native call. Check a wall-clock budget
+; between score steps; always make one step of progress, with at most 16 rows.
+; Zero budget selects the fixed-chunk benchmark using the same compiled kernel.
+(defn score-slice [start size budget-ms]
+  (let [rows (js/Array.) limit (+ start (min 16 size)) before (.now js/performance)]
+    (loop [index start]
+      (when (and (< index limit)
+                 (or (= index start) (<= budget-ms 0)
+                     (< (- (.now js/performance) before) budget-ms)))
+        (.push rows (bl->js (score/step index score/defaults)))
+        (recur (inc index))))
+    rows))
 
 ; Fill the safety reserve promptly, then yield native graph preparation between
 ; score steps. One native AudioNode graph remains an indivisible browser call.

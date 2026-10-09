@@ -22,9 +22,9 @@
           _ (when-not (zero? (+ (positive) (negative))) (throw (ex-info "Actor ABI tests failed" {})))
           build (BeamLisp.Env/fetch! "js-actors-compiler" "build-one")]
       (build scratch "prepare.bl" "prepare.mjs" []
-        {:native-links {"pelagic.browser/score-chunk"
-                        {:path "../../values.mjs" :export "prepareChunk" :arities #{2}}}})
-      (build scratch "prepare-bridge.bl" "prepare-bridge.mjs"))
+        {:prune true :native-links {"pelagic.browser/score-slice"
+                        {:path "../../values.mjs" :export "prepareSlice" :arities #{3}}}})
+      (build scratch "prepare-bridge.bl" "prepare-bridge.mjs" [] {:prune true}))
     (let [out (str here "/dist/actor")]
       (File/mkdir_p! (str out "/out"))
       (File/cp! (str actor-dir "/host.mjs") (str out "/host.mjs"))

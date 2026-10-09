@@ -21,7 +21,7 @@ results=[]
 try:
  with sync_playwright() as p:
   browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM','/home/user/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome'),args=['--no-sandbox'])
-  for mode in ['worker','actor-bridge','actor','prebuilt']:
+  for mode in ['worker','worker-slice','actor-bridge','actor-fixed','actor','prebuilt']:
    page=browser.new_page();page.goto(f'http://127.0.0.1:{s.server_port}/control')
    result=page.evaluate('''async mode=>{
     const worker=new Worker('/pkg/pelagic/prepare-worker.mjs',{type:'module'}),events=[];
@@ -33,7 +33,7 @@ try:
      await new Promise(r=>setTimeout(r,100));if(events.filter(e=>e.op==='chunk').length!==1)throw new Error('Unbounded preparation');
      const before=performance.now();worker.postMessage({op:'ping',id:7});const pong=await wait(()=>events.find(e=>e.op==='pong'&&e.id===7));
      worker.postMessage({op:'credit',id:999});await new Promise(r=>setTimeout(r,50));if(events.filter(e=>e.op==='chunk').length!==1)throw new Error('Stale credit advanced job');
-     worker.postMessage({op:'credit',id:1});await wait(()=>events.find(e=>e.op==='chunk'&&e.start===16));
+     worker.postMessage({op:'credit',id:1});await wait(()=>events.find(e=>e.op==='chunk'&&e.start===events.find(e=>e.op==='chunk').rows.length));
      worker.postMessage({op:'cancel',id:1});await wait(()=>events.find(e=>e.op==='cancelled'));
      worker.postMessage({op:'prepare',id:2});await wait(()=>events.find(e=>e.op==='chunk'&&e.id===2&&e.start===0));
      worker.postMessage({op:'credit',id:1});await new Promise(r=>setTimeout(r,50));if(events.filter(e=>e.op==='chunk'&&e.id===2).length!==1)throw new Error('Cancelled credit advanced replacement');

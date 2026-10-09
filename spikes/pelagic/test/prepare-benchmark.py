@@ -17,12 +17,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
    self.send_response(200);self.send_header('Content-type','text/html');self.end_headers();self.wfile.write(b'<!doctype html><title>BL preparation measurement</title>');return
   super().do_GET()
 s=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Handler,directory=str(OUT)));threading.Thread(target=s.serve_forever,daemon=True).start()
-results=[];errors=[]
+pressure=lambda:{name:Path('/proc/pressure/'+name).read_text() for name in ['cpu','io','memory']}
+startedPressure=pressure();results=[];errors=[]
 try:
  with sync_playwright() as p:
   browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM','/home/user/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome'),args=['--no-sandbox'])
   for repeat in range(int(os.environ.get('PELAGIC_BENCH_REPEATS','3'))):
-   for mode in os.environ.get('PELAGIC_BENCH_MODES','main,cooperative,worker,actor-bridge,actor,prebuilt').split(','):
+   modes=os.environ.get('PELAGIC_BENCH_MODES','main,cooperative,worker,actor-bridge,actor,prebuilt').split(',')
+   for mode in modes[repeat%len(modes):]+modes[:repeat%len(modes)]:
     page=browser.new_page();page.on('pageerror',lambda e:errors.append(str(e)));page.goto(f'http://127.0.0.1:{s.server_port}/benchmark')
     value=page.evaluate('''async mode=>{
      const [P,Score,B]=await Promise.all([import('/pkg/pelagic/prepare.mjs'),import('/out/pelagic.score.mjs'),import('/pkg/pelagic/values.mjs')]);
@@ -44,4 +46,4 @@ try:
  assert not errors,errors
  assert len({r['digest'] for r in results})==1,'Score outputs differ'
 finally:
- s.shutdown();s.server_close();(PROOF/'benchmark.json').write_text(json.dumps({'results':results,'errors':errors},indent=2)+'\n')
+ s.shutdown();s.server_close();(PROOF/'benchmark.json').write_text(json.dumps({'results':results,'errors':errors,'hostPressureStart':startedPressure,'hostPressureEnd':pressure()},indent=2)+'\n')

@@ -4,11 +4,11 @@
   (if (< start 1024)
     (let [size (min 16 (- 1024 start))
           before (.now js/performance)
-          rows (browser/score-chunk start size)]
+          rows (browser/score-slice start size (.-pelagicPrepareBudget js/self))]
       (.postMessage js/self #js {:op "chunk" :id id :start start :rows rows
                                 :workMs (- (.now js/performance) before)})
       (receive
-        [:credit] (prepare-score id (+ start 16))))
+        [:credit] (prepare-score id (+ start (.-length rows)))))
     (.postMessage js/self #js {:op "done" :id id})))
 (defn main []
   (rt-register-input!)

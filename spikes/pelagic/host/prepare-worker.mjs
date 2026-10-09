@@ -1,11 +1,12 @@
 // Realm adapter. Both schedulers invoke the SAME compiled BL score kernel.
-let prepareChunk,prebuilt;
+let prepareChunk,prepareSlice,prebuilt;
 let actor=null,job=0,start=0,closed=false,mode='worker';
 function chunk(id,offset,count){
- const before=performance.now(),rows=prebuilt?prebuilt.slice(offset,offset+count):prepareChunk(offset,count);
+ const before=performance.now(),rows=prebuilt?prebuilt.slice(offset,offset+count):mode==='worker-slice'?prepareSlice(offset,count,4):prepareChunk(offset,count);
  self.postMessage({op:'chunk',id,start:offset,rows,workMs:performance.now()-before});
+ return rows.length;
 }
-function advance(){if(start>=1024){self.postMessage({op:'done',id:job});return;}chunk(job,start,Math.min(16,1024-start));start+=16;}
+function advance(){if(start>=1024){self.postMessage({op:'done',id:job});return;}start+=chunk(job,start,Math.min(16,1024-start));}
 function input(topic,id){actor.enqueueData(topic,id);}
 self.addEventListener('message',({data})=>{
  if(closed)return;
@@ -23,13 +24,13 @@ self.addEventListener('message',({data})=>{
     prebuilt=value.steps;self.postMessage({op:'ready'});
    }).catch(fail);
    else import('./values.mjs').then(B=>{
-    prepareChunk=B.prepareChunk;
-    if(mode==='actor'||mode==='actor-bridge')return import('./actor/host.mjs').then(H=>{
+    prepareChunk=B.prepareChunk;prepareSlice=B.prepareSlice;self.pelagicPrepareBudget=mode==='actor-fixed'?0:4;
+    if(mode==='actor'||mode==='actor-fixed'||mode==='actor-bridge')return import('./actor/host.mjs').then(H=>{
      actor=H;if(mode==='actor-bridge')H.setEmitter((op,value)=>{
       if(op==='chunk'){const [id,offset,count]=H.vecItems(value);chunk(id,offset,count);}
       else self.postMessage({op,id:value});
      });
-     import(mode==='actor'?'./actor/out/prepare.mjs':'./actor/out/prepare-bridge.mjs').catch(fail);
+     import(mode==='actor-bridge'?'./actor/out/prepare-bridge.mjs':'./actor/out/prepare.mjs').catch(fail);
     });
     self.postMessage({op:'ready'});
    }).catch(fail);
