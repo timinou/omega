@@ -25,3 +25,8 @@
 (deftest hard-deadline-bounds-even-a-stalled-provider
  (let [step (g/step {:timeout-ms 20} (fn [p msgs] (Process/sleep 5000) {:ok "{\"answer\":\"late\"}"}))]
   (is (= :gen-transport (get-in (step {:tools tools}) [:error :kind])))))
+(deftest preserves-bounded-provider-error-diagnostics
+ (let [step (g/step {} (fn [p msgs] {:error {:truncated {:completion_tokens 4500}}}))]
+  (is (= 4500 (get-in (step {:tools tools}) [:error :detail :truncated :completion_tokens])))))
+(deftest rejects-an-ambiguous-batch-envelope
+ (is (= :invalid-gen-plan (get-in (g/response "{\"tool\":\"shell\",\"calls\":[{\"tool\":\"read\",\"input\":{}}]}" tools) [:error :kind]))))

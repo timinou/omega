@@ -19,7 +19,7 @@
 (defn response [text tools]
  (try
   (let [d (plan text) calls (or (get d "calls") (when (get d "tool") [d])) answer (get d "answer")]
-   (cond calls (if (and (sequential? calls) (> (count calls) 0) (<= (count calls) 3) (nil? answer)
+   (cond calls (if (and (not (and (get d "calls") (get d "tool"))) (sequential? calls) (> (count calls) 0) (<= (count calls) 3) (nil? answer)
                         (every? (fn [c] (valid-call? c tools)) calls))
                 {:stop :tool-use :content (mapv (fn [c] {:type :tool-use :id (str "gen-" (erlang/unique_integer (list :positive))) :name (get c "tool") :input (get c "input")}) calls)}
                 {:error {:kind :invalid-gen-plan :message "Unregistered tool, invalid batch, non-object input, or ambiguous plan"}})
@@ -40,4 +40,4 @@
    (let [r (chat-bounded provider chat (list {:role "system" :content (str (:system req) "\n" protocol)}
                                {:role "user" :content (encode {:tools (:tools req) :transcript (:messages req)})}))]
     (if (:ok r) (response (:ok r) (:tools req))
-     {:error {:kind :gen-transport :message "Gen request failed; no result was fabricated"}})))))
+     {:error {:kind :gen-transport :message "Gen request failed; no result was fabricated" :detail (if (map? (:error r)) (select-keys (:error r) [:status :truncated :transport]) (:error r))}})))))
