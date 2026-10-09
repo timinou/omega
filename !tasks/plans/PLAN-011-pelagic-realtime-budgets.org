@@ -1,0 +1,35 @@
+#+TITLE: PELAGIC audio/video deadline architecture
+#+DATE: 2026-10-09
+#+STATUS: implementing
+
+* Objective
+Target a 16 ms p95 work/submission budget and smooth display-paced frames while
+protecting audio deadlines during editing, scene transitions and recording.
+Measure frame interval separately: a 60 Hz display supplies 16.67 ms periods.
+Retain strict measured values and report misses; never hide stalls by resetting
+histograms, excluding stressed intervals or substituting CPU time for pacing.
+
+* Optimization candidates, in implementation order
+1. Remove the explicit 30 Hz visual throttle. Keep DOM telemetry at a lower rate.
+2. Profile playback, transitions, editor input, compilation and recording on the
+   current static bundle; measure CPU service time, cadence, audio probes and AV.
+3. Sample audio analysis once per frame; reuse typed buffers, uniform locations
+   and texture storage; avoid redundant feedback copies and unused scene passes.
+4. Render WebGL in an owned OffscreenCanvas worker where supported. Keep one
+   latest frame in flight, bounded queues, transactional shader preparation,
+   context recovery, capture and deterministic disposal. Preserve a fallback.
+5. Drive visual phase from audio output timestamps, with explicit freshness and
+   clock-origin mapping across realms. Distinguish submission from physical AV.
+6. Isolate score preparation from UI stalls using compiled BL policies and an
+   audio-clock scheduling buffer. Preserve quantization and atomic revisions.
+7. Use native/JS lowering and typed/system logic for proven hot functions;
+   specialize stable shapes and keep optimization decisions behind existing APIs.
+8. Pressure-test continuous performance, transitions, recording, large live edits,
+   stale/reordered messages, worker failure and unload. Commit each validated slice.
+
+* Scope and ownership
+PELAGIC remains a real bl-ed package. Audio/DOM resources stay host-owned;
+workers have explicit lifetimes and bounded messages. No writes to the user's
+world on port 8790. Use isolated static or offline-memory test servers only.
+Preserve unrelated dirty files. Upstream generic compiler/runtime improvements
+are committed independently; source pins remain reproducible.
