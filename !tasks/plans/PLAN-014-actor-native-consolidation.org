@@ -118,3 +118,18 @@ same 1024-row digest: chunk p95 5.63 ms, CPU 1521 ms, startup 192 ms. Full build
 contract output and measured JSON are under proof/actor-consolidation/linking.
 Production preparation default and ordinary editor lowering are not yet migrated;
 this checkpoint does not claim the full architecture or five experiences done.
+
+* Checkpoint: canonical numeric/literal lowering and suspension analysis
+Upstream 30bbaadf shares ordinary/actor literal lowering and numeric leaves,
+including exact decimals, boxed float identity and BigInt/float equality. The
+shared system.ir walker keeps literal structs and annotations opaque; its arity
+predicate fixes native variadic import emission. Opaque mutable-table keys no
+longer acquire properties on foreign objects. Fresh actor numeric fixture passes;
+42 Node semantic/interop tests, 37 exact numeric checks, 96 BEAM ordering answers,
+and the full 457-check actor suite pass. Focused BL logic tests: 18 tests, 87
+assertions, no failures/errors. Broader IR/linearity checks found only a missing
+worktree Z3 binary; after binding the bundled binary the exact failed lemma passes.
+
+system.suspension now provides conservative checked-ANF non-suspension proofs,
+including all arity arms and call-graph propagation. This is foundation work;
+compiler/runtime callback integration is underway, and stages 2–8 remain open.
