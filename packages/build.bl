@@ -1,2 +1,2 @@
-(ns package-build (:require [omega.packages :as packages]))
-(packages/build! (packages/registry (System/get_env "OMEGA_HOME") (File/cwd!) {}))
+(ns package-build (:require [pelagic.build :as frontend]))
+(println (frontend/frontend!))

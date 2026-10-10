@@ -3,7 +3,7 @@
 (defn build!
   "Build preparation against the frontend's checked modules and shared values."
   [here modules out]
-  (let [scratch (str (System/tmp_dir!) "/pelagic-actors-"
+  (let [scratch (str (System/tmp_dir!) "/pelagic-actors-" (System/pid) "-"
                      (System/unique_integer (list :positive)))
         here (Path/expand here)]
     (File/mkdir_p! scratch)
