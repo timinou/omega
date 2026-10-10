@@ -1,0 +1,227 @@
+(ns guidelines.pkg
+ (:require [ed.core :as c] [ed.docs :as docs] [ed.pkg :as pkg]))
+;; The guideline explorer, a bl-ed package. Pure: events in, state + effects out.
+;;
+;; Screen (a LAYOUT, ed/frame.bl): the guidelines .bl.org you are reading, beside
+;; the explorer view drawn by the host (web/pkg/guidelines/explorer.mjs):
+;;
+;;   ┌ file ───────────────────┬ explorer ──────────────────────────────────────┐
+;;   │ guidelines.bl.org       │ [Guidelines | Inbox | Try]                      │
+;;   │ (editable: the source   │  list ─────────── │ detail of the selected one  │
+;;   │  of truth)              │  ● ON · weight=use│ rule · when · examples ·    │
+;;   │                         │                   │ uses (task links)           │
+;;   └─────────────────────────┴─────────────────────────────────────────────────┘
+;;
+;; The explorer follows the cursor: moving onto a guideline heading in the file
+;; selects it; selecting in the explorer moves the file's cursor there. Keys
+;; work in the file pane (where focus lives); every action is also a button.
+;;
+;; Data comes from the BEAM through intents (guidelines/model, /try, /toggle,
+;; /promote, /reject), never from package IO.
+;;
+;; State under (:pkg-state ed) "guidelines":
+;;   {:tab "guidelines"|"inbox"|"try" :selected gid :inbox-sel subject
+;;    :model data :try {:text s :rows [...]} :help? b :error s :busy kw}
+
+(def NAME "guidelines")
+(defn st [ed] (get-in ed [:pkg-state NAME] {}))
+(defn- put [ed k v] (assoc-in ed [:pkg-state NAME k] v))
+
+(defn guidelines-doc?
+  "A guidelines file: a .bl.org whose first lines say #+GUIDELINES or whose name ends guidelines.bl.org."
+  [ed]
+  (let [p (str (:path ed))]
+    (or (ends-with? p "guidelines.bl.org")
+        (some (fn [l] (starts-with? l "#+GUIDELINES")) (take 12 (:lines (:text ed)))))))
+
+(defn layout []
+ {:name "guidelines" :doc "A guidelines file beside the guideline explorer."
+  :panes [{:id :file :doc :linked :width [:fr 2]}
+          {:id :explorer :view [:guidelines/explorer :file] :width [:fr 3]}]
+  :focus :file})
+
+;; ── intents ────────────────────────────────────────────────────────────
+
+(defn- intent [ed nm args then]
+ (c/effect ed {:kind :intent :intent (str "guidelines/" nm) :args args :then then}))
+
+(defn refresh [ed]
+ (-> (intent ed "model" {:path (:path ed)} :guidelines/model) (put :busy :model)))
+
+;; ── the file: which guideline is the cursor on? ─────────────────────────
+
+(defn- heading-row? [l] (and (starts-with? l "* ") (not (starts-with? l "** "))))
+
+(defn gid-at
+  "The :ID: of the top-level guideline whose section holds the cursor, or nil."
+  [ed]
+  (let [ls (:lines (:text ed)) r (first (c/cursor ed))
+        h (last (filter (fn [i] (heading-row? (nth ls i))) (range 0 (inc (min r (dec (count ls)))))))]
+    (when (some? h)
+      (let [end (or (first (filter (fn [i] (heading-row? (nth ls i))) (range (inc h) (count ls)))) (count ls))]
+        (some (fn [i] (let [l (trim (nth ls i))]
+                        (when (starts-with? l ":ID:") (trim (subs l 4)))))
+              (range h end))))))
+
+(defn row-of
+  "The heading row of guideline `gid` in the file, or nil."
+  [ed gid]
+  (let [ls (:lines (:text ed))
+        drawer (first (filter (fn [i] (= (str ":ID: " gid) (join " " (filter (fn [w] (not (blank? w))) (split (trim (nth ls i)) " "))))) (range (count ls))))]
+    (when (some? drawer) (last (filter (fn [i] (heading-row? (nth ls i))) (range 0 drawer))))))
+
+(defn- goto-row [ed r]
+ (if (some? r)
+  (c/scroll-to-cursor (assoc ed :sels [{:anchor [r 0] :head [r 0]}] :primary 0))
+  ed))
+
+(defn select
+  "Select guideline `gid`: the explorer shows it and the file's cursor goes to it."
+  [ed gid]
+  (-> ed (put :selected gid) (put :tab "guidelines") (goto-row (row-of ed gid))))
+
+(defn- ids [ed] (vec (map :id (get-in (st ed) [:model :guidelines]))))
+
+(defn- step-sel [ed d]
+  (let [xs (ids ed) cur (or (:selected (st ed)) (gid-at ed))
+        i (or (first (filter (fn [i] (= (nth xs i) cur)) (range (count xs)))) -1)
+        j (max 0 (min (dec (count xs)) (+ i d)))]
+    (if (empty? xs) ed (select ed (nth xs j)))))
+
+(defn- inbox-items [ed] (vec (get-in (st ed) [:model :inbox])))
+(defn- inbox-current [ed]
+  (let [xs (inbox-items ed) s (:inbox-sel (st ed))]
+    (or (first (filter (fn [x] (= (:subject x) s)) xs)) (first xs))))
+(defn- step-inbox [ed d]
+  (let [xs (inbox-items ed) cur (:subject (inbox-current ed))
+        i (or (first (filter (fn [i] (= (:subject (nth xs i)) cur)) (range (count xs)))) 0)
+        j (max 0 (min (dec (count xs)) (+ i d)))]
+    (if (empty? xs) ed (put ed :inbox-sel (:subject (nth xs j))))))
+
+;; ── commands ───────────────────────────────────────────────────────────
+
+(defn open [ed]
+ (if (guidelines-doc? ed)
+  (refresh (-> ed (assoc :frame/layout (layout)) (put :tab (or (:tab (st ed)) "guidelines"))))
+  (docs/visit ed "guidelines.bl.org")))
+
+(defn set-tab [tab] (fn [ed] (put ed :tab tab)))
+
+(defn toggle [ed]
+ (let [gid (or (:selected (st ed)) (gid-at ed))]
+  (cond
+   (nil? gid) (c/message ed "Put the cursor on a guideline (or select one) to switch it ON or off.")
+   (c/dirty? ed) (c/message ed "Save the file first (C-s): switching rewrites its heading.")
+   :else (-> (intent ed "toggle" {:path (:path ed) :id gid} :guidelines/changed) (put :busy :toggle)))))
+
+(defn try-text [ed text]
+ (-> ed (put :tab "try") (put :try {:text text :rows (get-in (st ed) [:try :rows])})
+     (intent "try" {:path (:path ed) :text text} :guidelines/tried) (put :busy :try)))
+
+(defn try-prompt [ed]
+ (docs/prompt ed "try a situation ▸ " (fn [e s] (try-text e s))))
+
+(defn try-here
+  "Try the line under the cursor, or the selection: 'what would fire for this?'"
+  [ed]
+  (let [p (c/primary ed) [a b] (c/sel-range ed p)
+        ls (:lines (:text ed))
+        text (if (= a b) (nth ls (first a))
+               (join "\n" (map (fn [r] (nth ls r)) (range (first a) (inc (first b))))))]
+    (if (blank? text) (c/message ed "Nothing to try on this line.") (try-text ed (trim text)))))
+
+(defn- decide [verb]
+ (fn [ed]
+  (let [it (inbox-current ed)]
+   (cond
+    (nil? it) (c/message ed "The inbox is empty.")
+    (and (= verb "promote") (not= :ready (keyword (:kind it))))
+    (c/message ed (str "Only a ready example can be accepted; this is " (name (:kind it)) "."))
+    (and (= verb "promote") (c/dirty? ed)) (c/message ed "Save the file first (C-s): accepting appends an example to it.")
+    :else (-> (intent ed verb {:path (:path ed) :task (:task it) :subject (:subject it) :base (get-in (st ed) [:model :rev])}
+                      :guidelines/changed)
+              (put :busy (keyword verb)))))))
+
+(defn help [ed] (put ed :help? (not (:help? (st ed)))))
+
+(defn close [ed]
+  (-> ed (assoc :frame/layout nil) (assoc-in [:pkg-state NAME] {})))
+
+(def bl-package-commands
+ {:guidelines/open {:doc "Open the guideline explorer beside a guidelines file." :run open}
+  :guidelines/refresh {:doc "Re-read guidelines and their uses." :run refresh}
+  :guidelines/next {:doc "Next guideline (or next inbox item)." :run (fn [ed] (if (= "inbox" (:tab (st ed))) (step-inbox ed 1) (step-sel ed 1)))}
+  :guidelines/prev {:doc "Previous guideline (or previous inbox item)." :run (fn [ed] (if (= "inbox" (:tab (st ed))) (step-inbox ed -1) (step-sel ed -1)))}
+  :guidelines/toggle {:doc "Switch the guideline under the cursor ON or off (rewrites its heading)." :run toggle}
+  :guidelines/list {:doc "Explorer: the guidelines." :run (set-tab "guidelines")}
+  :guidelines/inbox {:doc "Explorer: the inbox — examples to accept, proposals, misfires." :run (set-tab "inbox")}
+  :guidelines/try {:doc "Try a situation: which guidelines would fire, and why." :run try-prompt}
+  :guidelines/try-line {:doc "Try the line (or selection) under the cursor." :run try-here}
+  :guidelines/accept {:doc "Inbox: accept the ready example (appends it to the file)." :run (decide "promote")}
+  :guidelines/reject {:doc "Inbox: reject the item." :run (decide "reject")}
+  :guidelines/help {:doc "Show or hide the explorer's key guide." :run help}
+  :guidelines/close {:doc "Close the explorer (back to one pane)." :run close}})
+
+;; ── events ─────────────────────────────────────────────────────────────
+
+(defn intercept [ed ev]
+ (let [t (:type ev)]
+  (cond
+   (= t :guidelines/select) (select ed (:id ev))
+   (= t :guidelines/tab) (put ed :tab (:tab ev))
+   (= t :guidelines/inbox-select) (put (put ed :tab "inbox") :inbox-sel (:subject ev))
+   (= t :guidelines/try) (try-text ed (:text ev))
+   (and (= :intent-result t) (= :guidelines/model (:then ev)))
+   (if (:ok? ev)
+     (let [ed (-> ed (put :model (:data ev)) (put :busy nil) (put :error nil))]
+       (if (:selected (st ed)) ed (put ed :selected (or (gid-at ed) (:id (first (get-in ev [:data :guidelines])))))))
+     (-> ed (put :busy nil) (put :error (:message ev))))
+   (and (= :intent-result t) (= :guidelines/tried (:then ev)))
+   (if (:ok? ev) (-> ed (put :busy nil) (put :try (:data ev)))
+     (-> ed (put :busy nil) (put :error (:message ev))))
+   (and (= :intent-result t) (= :guidelines/changed (:then ev)))
+   (if (:ok? ev)
+     ;; the BEAM rewrote the file: reload it (keeps the cursor via :goto) and refresh the model
+     (-> ed (put :busy nil) (c/message (or (get-in ev [:data :message]) (:message ev) "done"))
+         (c/effect {:kind :visit :path (:path ed) :goto {:pos (c/cursor ed)}})
+         refresh)
+     (-> ed (put :busy nil) (c/message (str "guidelines: " (:message ev)))))
+   :else nil)))
+
+(defn on-event
+  "Follow the cursor: on a guideline heading's section, select it."
+  [old new ev]
+  (if (and (get-in (st new) [:model]) (not= (c/cursor old) (c/cursor new)))
+    (let [gid (gid-at new)]
+      (if (and gid (not= gid (:selected (st new)))) (put new :selected gid) new))
+    new))
+
+(defn adopt [ed]
+ (if (and (guidelines-doc? ed) (not (:opened? (st ed))))
+  (refresh (-> ed (assoc :frame/layout (layout)) (put :opened? true) (put :tab "guidelines")))
+  ed))
+
+;; ── the view model the host draws ──────────────────────────────────────
+
+(defn model [ed]
+ (let [s (st ed)]
+  {:package NAME :role "explorer"
+   :tab (or (:tab s) "guidelines")
+   :selected (or (:selected s) (gid-at ed))
+   :inbox-sel (:subject (inbox-current ed))
+   :data (:model s) :try (:try s) :help? (boolean (:help? s)) :busy (:busy s) :error (:error s)
+   :dirty? (c/dirty? ed) :path (:path ed)}))
+
+;; ── the package ────────────────────────────────────────────────────────
+
+(def bl-package
+ {:name NAME :doc "Guideline explorer: read, switch on, try and teach the guidelines the harness injects."
+  :commands bl-package-commands
+  :keys {:normal {"space g g" :guidelines/open "space g r" :guidelines/refresh
+                  "space g j" :guidelines/next "space g k" :guidelines/prev
+                  "space g t" :guidelines/toggle "space g l" :guidelines/list "space g i" :guidelines/inbox
+                  "space g /" :guidelines/try "space g ." :guidelines/try-line
+                  "space g a" :guidelines/accept "space g x" :guidelines/reject
+                  "space g ?" :guidelines/help "space g q" :guidelines/close}}
+  :intercept intercept :on-event on-event :adopt adopt :owns [:frame/layout]
+  :provides {:layouts {"guidelines" (layout)} :views {:guidelines/explorer model}}})

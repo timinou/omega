@@ -1,0 +1,43 @@
+; spikes/guidelines/world.bl — an isolated bl-ed + omega world with the guideline
+; extension, the dialect helper and the explorer's intents. Never the live world.
+;
+;   GX_WORLD=/tmp/gx-world GX_PORT=8792 bin/bl run -p spikes/guidelines spikes/guidelines/world.bl
+;   (spikes/guidelines/run.sh does this, with a fresh world and the seeds copied in)
+;
+; Guideline sources are EXPLICIT: the world's own guidelines.bl.org (project) and,
+; if GX_USER is set, a user file. Nothing is ON until you switch it on.
+
+(ns guidelines.world
+  (:require [omega.ed.main :as editor]
+            [omega.loop :as loop]
+            [guidelines.ext :as gx]
+            [guidelines.dialect :as dialect]
+            [guidelines.intents :as gi]))
+
+(def root (System/get_env "GX_WORLD"))
+(def home (System/get_env "OMEGA_HOME"))
+(when (or (nil? root) (= root home)) (throw (ex-info "the guideline world needs its own root (GX_WORLD)" {})))
+(def port (erlang/binary_to_integer (or (System/get_env "GX_PORT") "8792")))
+(when (= port 8790) (throw (ex-info "refusing the live world port 8790" {})))
+
+(def sources
+  (vec (concat (when-let [u (System/get_env "GX_USER")] [{:path u :scope :user}])
+               [{:path (str root "/guidelines.bl.org") :scope :project}])))
+
+(def scripted
+  (loop/scripted
+   [(loop/call-tool "eval" {:code "(take-last 2 [:a :b :c])"} "tu-1")
+    (fn [req] (loop/call-tool "eval" {:code "(subvec [:a :b :c] 1)"} "tu-2"))
+    (loop/call-tool "guideline" {:op "applied" :id "visual-not-verbal"
+                                 :note "blocked rows get a warning-hue left rule; no BLOCKED word"} "tu-3")
+    (loop/call-tool "eval" {:code "(done \"styled the blocked rows\")"} "tu-4")]))
+
+(def world
+  (editor/start! {:root root :port port :memory? true :offline? true
+                  :step scripted :dev? true
+                  :extensions [(gx/extension {:sources sources}) (dialect/extension)]
+                  :intent-factory (fn [sys] (gi/intents sys {:root root :sources sources}))}))
+
+(println (str "guidelines world: " (:url world) "?file=guidelines.bl.org&use=guidelines"))
+(println (str "  root " root " · port " port " · sources " (pr-str (map :path sources))))
+(receive :never nil)

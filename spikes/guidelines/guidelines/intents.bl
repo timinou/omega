@@ -1,0 +1,78 @@
+; guidelines/intents.bl — the BEAM side of the explorer, as bl-ed intents.
+;
+;   (intents sys {:root r :sources [{:path :scope}]}) →
+;     {"guidelines/model"   {:path}              → explorer/model + :rev of path
+;      "guidelines/try"     {:path :text}        → {:text :rows [...]}
+;      "guidelines/toggle"  {:path :id}          → flips `* ON` in the file
+;      "guidelines/promote" {:path :task :subject :base} → appends the example (rev-checked)
+;      "guidelines/reject"  {:task :subject}     → marks it dropped}
+;
+; The explorer is opened ON a file: that file is always a source (as :project),
+; on top of the configured ones. Paths from the page are resolved under :root
+; and must stay inside it. The index for /try is cached per file rev.
+
+(ns guidelines.intents
+  (:require [guidelines.core :as g]
+            [guidelines.explorer :as x]
+            [guidelines.lifecycle :as life]
+            [clojure.string :as str]))
+
+(defn- abs-path [root p]
+  (let [p (str p)]
+    (when (or (str/blank? p) (str/includes? p "..")) (throw (ex-info (str "bad path " p) {})))
+    (if (str/starts-with? p "/")
+      (if (str/starts-with? p (str root "/")) p (throw (ex-info (str "outside the world: " p) {})))
+      (str root "/" p))))
+
+(defn- sources-for [opts path]
+  (let [a (abs-path (:root opts) path)]
+    (vec (concat (remove (fn [s] (= (:path s) a)) (:sources opts)) [{:path a :scope :project}]))))
+
+(defn intents [sys opts]
+  (let [cache (atom {})
+        index-of (fn [srcs]
+                   (let [k (pr-str (map (fn [s] [(:path s) (when (File/regular? (:path s)) (life/rev (File/read! (:path s))))]) srcs))]
+                     (or (get @cache k)
+                         (let [gs (apply g/layer (map (fn [s] (if (File/regular? (:path s)) (g/parse (File/read! (:path s)) (:scope s) (:path s)) [])) srcs))
+                               v {:gs gs :idx (g/index gs)}]
+                           (reset! cache {k v}) v))))]
+    {"guidelines/model"
+     (fn [args]
+       (let [srcs (sources-for opts (:path args)) a (:path (last srcs))
+             m (x/model {:sources srcs :env (:env sys)})
+             on (set (keep (fn [gl] (when (:on? gl) (:id gl))) (:gs (index-of srcs))))]
+         (-> m
+                    (assoc :rev (when (File/regular? a) (life/rev (File/read! a))))
+                    (update :guidelines (fn [gs] (mapv (fn [gl] (assoc gl :on? (contains? on (keyword (:id gl))))) gs))))))
+     "guidelines/try"
+     (fn [args]
+       (let [{:keys [gs idx]} (index-of (sources-for opts (:path args)))
+             ;; :picked? = the pipeline would choose it on this text; :on? = it is switched ON.
+             ;; picked and off is the explorer's cue: "this would fire, but it is off"
+             on (filterv :on? gs)
+             rows (x/try-text idx gs (str (:text args)) [])
+             fire (set (map (fn [h] (name (:id h)))
+                            (guidelines.recall/select guidelines.recall/default-pipeline {:gs on :idx idx} {:text (str (:text args)) :paths []})))]
+         {:text (:text args)
+          :rows (mapv (fn [r] (assoc r :picked? (contains? fire (:id r))
+                                     :on? (boolean (some (fn [gl] (= (:id r) (name (:id gl)))) on))))
+                      rows)}))
+     "guidelines/toggle"
+     (fn [args]
+       (let [a (abs-path (:root opts) (:path args))
+             t (File/read! a)
+             gl (first (filter (fn [gl] (= (name (:id gl)) (str (:id args)))) (g/parse t :project a)))]
+         (when (nil? gl) (throw (ex-info (str "no guideline " (:id args) " in " (:path args)) {})))
+         (File/write! a (g/set-on t (:id gl) (not (:on? gl))))
+         {:message (str (:name gl) (if (:on? gl) " is off: it will not be shown to the agent." " is ON: tasks will see it when it matches."))}))
+     "guidelines/promote"
+     (fn [args]
+       (let [a (abs-path (:root opts) (:path args))
+             r (life/promote! (:env sys) (:task args) (:subject args) a (:base args))]
+         (cond (:conflict r) (throw (ex-info "the file changed since the explorer read it — refresh (space g r) and accept again" {}))
+               (:error r) (throw (ex-info (:error r) {}))
+               :else {:message "Accepted: the example is in the file, and the matcher learns from it now."})))
+     "guidelines/reject"
+     (fn [args]
+       (life/reject! (:env sys) (:task args) (:subject args) "rejected in the explorer")
+       {:message "Rejected."})}))
