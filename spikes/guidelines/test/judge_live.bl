@@ -1,0 +1,12 @@
+; test/judge_live.bl — LIVE: does the Jev judge tell followed from violated? Uses the recorded A/B outputs.
+; Run: bin/bl run -p spikes/guidelines spikes/guidelines/test/judge_live.bl  (needs TYPESAFE_API_KEY)
+(ns guidelines.judge-live (:require [guidelines.core :as g] [guidelines.lifecycle :as life] [omega.jev :as jev] [clojure.edn :as edn]))
+(def gs (g/parse (File/read! "spikes/guidelines/guidelines.bl.org") :project "p"))
+(def by (into {} (map (fn [x] [(:id x) x]) gs)))
+(def runs (edn/read-string (File/read! "spikes/guidelines/proof/ab-rail-x4.edn")))
+(def judge (life/jev-judge (partial jev/ask (jev/http (jev/key-from-env (File/cwd!))))))
+(def ab (edn/read-string (File/read! "spikes/guidelines/proof/ab.edn")))
+(doseq [r (concat runs ab)]
+  (let [gid (if (= :rail (:prompt r)) :visual-not-verbal :observed-vs-inferred)
+        v (judge {:guideline (get by gid) :goal (name (:prompt r)) :work (:out r)})]
+    (println (name (:prompt r)) (name (:cond r)) (name gid) "→" (:verdict v) (:p v) (when (:error v) (:error v)))))

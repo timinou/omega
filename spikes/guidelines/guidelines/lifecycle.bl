@@ -1,0 +1,184 @@
+; guidelines/lifecycle.bl — how a use becomes an example (or doesn't).
+;
+; Every state is a trace {:kind :guideline} on the task, subject
+; "<gid>#use/<n>", whose :data :op moves through:
+;
+;   :candidate ──(task :done, gates pass)──▶ :ready ──(human accepts in the explorer)──▶ :promoted
+;       │                                      │
+;       └──(task failed/cancelled, duplicate,  └──(rev conflict: the file changed) → stays :ready, re-diffed
+;           judge said violated)──▶ :dropped {:reason …}
+;
+; WHO MAKES CANDIDATES
+;   - the agent, optionally: the `guideline` tool with op=applied
+;   - the JUDGE, always: on :turn/end, every guideline shown in the task that
+;     the agent did not report on is judged against what the agent did. The
+;     judge is a fn (see `jev-judge`, or a scripted one in tests):
+;       (judge {:guideline g :goal s :work s}) → {:verdict :followed|:violated|:n/a :p x}
+;
+; WHAT AN EXAMPLE IS
+;   "<date> <note> (while: <goal>)". The goal is the part that teaches the
+;   matcher (a real situation in which the guideline applied); the note is the
+;   part that teaches the reader.
+;
+; GATES at task end (pure: `consider`):
+;   - the task ended :done (a failed task's "uses" are not exemplary)
+;   - not a near-duplicate of an existing anchor (cosine ≥ 0.9) → :dropped :duplicate
+;   - judge verdict not :violated
+;
+; WRITING is never automatic. `promote` is pure text → text with a cap (the
+; oldest example goes when a guideline has MAX-EXAMPLES); `promote!` writes only
+; if the file's rev is still the one the human looked at — the same contract
+; as bl-ed's save (409 on conflict).
+
+(ns guidelines.lifecycle
+  (:require [clojure.re]
+            [guidelines.core :as g]
+            [code.embed :as e]
+            [datom.vector :as v]
+            [omega.trace :as tr]
+            [omega.loop :as loop]
+            [clojure.string :as str]))
+
+(def MAX-EXAMPLES 8)
+(def DUP 0.9)
+
+(defn date []
+  (let [[[y m d] _] (calendar/system_time_to_universal_time (erlang/system_time :second) :second)]
+    (str y "-" (if (< m 10) "0" "") m "-" (if (< d 10) "0" "") d)))
+
+(defn uses
+  "Guideline traces of task `task` (or all tasks when nil), as views."
+  [env task]
+  (tr/all env (cond-> {:kind :guideline} task (assoc :task task))))
+
+(defn- op [t] (get-in t [:data :op]))
+(defn- gid-of [t] (first (str/split (str (:subject t)) #"#")))
+
+(defn candidate!
+  "Record a candidate use of guideline `gid` by task `task`."
+  [env task gid {:keys [note goal source p]}]
+  (let [n (count (filter (fn [t] (str/starts-with? (str (:subject t)) (str gid "#use/"))) (uses env task)))]
+    (tr/leave! env task {:kind :guideline :subject (str gid "#use/" (inc n)) :text note
+                         :data {:op :candidate :gid gid :note note :goal goal :source source :p p}})))
+
+(defn example-line [d] (str (date) " " (:note d) (when (seq (:goal d)) (str " (while: " (:goal d) ")"))))
+
+(defn consider
+  "Pure gate for one candidate trace's data `d`, given the task's final
+   `status` and the guideline's current index entry. → {:op :ready} | {:op :dropped :reason}."
+  [d status near]
+  (cond
+    (not= :done status) {:op :dropped :reason (str "task ended " (name (or status :unknown)))}
+    (= :violated (:verdict d)) {:op :dropped :reason "judge: violated"}
+    (and near (>= near DUP)) {:op :dropped :reason (str "duplicate of an existing example (" (/ (erlang/round (* 100 near)) 100.0) ")")}
+    :else {:op :ready}))
+
+(defn- nearest-anchor
+  "Highest cosine between `text` and guideline `gid`'s positive anchors."
+  [idx gid text]
+  (let [cands (filterv (fn [[i _]] (let [[id pol] (nth (:rows idx) i)] (and (= (keyword gid) id) (= :pos pol)))) (:cands idx))]
+    (when (seq cands) (second (first (v/search (e/embed text) cands 1 0))))))
+
+(defn settle!
+  "Task `task` ended with `status`: gate each of its candidates."
+  [env idx task status]
+  (doseq [t (filter (fn [t] (= :candidate (op t))) (uses env task))]
+    (let [d (:data t)
+          r (consider d status (nearest-anchor idx (:gid d) (example-line d)))]
+      (tr/leave! env task {:kind :guideline :subject (:subject t) :text (:text t)
+                           :data (merge d r {:line (example-line d)})}))))
+
+;; ── the judge ───────────────────────────────────────────────────────────
+
+(defn- gist [b]
+  (case (:type b)
+    :text (:text b)
+    :tool-use (str (:name b) " " (pr-str (:input b)))
+    ""))
+
+(defn work-of
+  "What the agent produced in task `id`: its assistant text and tool inputs,
+   the last `n` chars (the judge does not need the whole history)."
+  ([sys id] (work-of sys id 6000))
+  ([sys id n]
+   (let [s (str/join "\n" (map gist (mapcat :content (filter (fn [t] (= :assistant (:role t))) (loop/turns sys id)))))]
+     (if (> (count s) n) (subs s (- (count s) n)) s))))
+
+(defn jev-judge
+  "A judge over Jev: `ask` is (partial omega.jev/ask transport). Two calibrated
+   yes/no questions per guideline: did it apply, and was it followed."
+  [ask]
+  (fn [{:keys [guideline goal work]}]
+    (let [r (ask (str "Goal: " goal "\n\nWhat the agent did:\n" work)
+                 {:applies {:type :noul :instructions (str "Was this guideline relevant to the work? " (:name guideline) ": " (:rule guideline))}
+                  :followed {:type :noul :instructions (str "Does the work follow this guideline? " (:name guideline) ": " (:rule guideline))}})]
+      (if (contains? r :error)
+        {:verdict :n/a :error (:error r)}
+        (let [a (get-in r [:ok :applies :value]) f (get-in r [:ok :followed :value])]
+          (cond (and (number? a) (< a 0.5)) {:verdict :n/a :p a}
+                (and (number? f) (>= f 0.7)) {:verdict :followed :p f}
+                (and (number? f) (<= f 0.3)) {:verdict :violated :p f}
+                :else {:verdict :n/a :p f}))))))
+
+(defn judge-turn!
+  "After a turn: judge every guideline shown in `task` that has no report yet.
+   :followed → a candidate (source :judge); :violated → a :violated trace the
+   explorer shows (a guideline that was shown and not followed is the most
+   interesting row there is)."
+  [sys idx judge task]
+  (let [env (:env sys)
+        us (uses env task)
+        shown (distinct (keep (fn [t] (when (= :shown (op t)) (gid-of t))) us))
+        reported (set (keep (fn [t] (when (contains? #{:candidate :misfire :ready :dropped :violated :promoted} (op t))
+                                      (or (get-in t [:data :gid]) (gid-of t)))) us))
+        goal (:task/goal (omega.env/pull env [:task/goal] (omega.env/eid env :task/id task)))
+        todo (remove (fn [gid] (contains? reported gid)) shown)]
+    (when (seq todo)
+      (let [work (work-of sys task)]
+        (doseq [gid todo]
+          (let [gl (get-in idx [:by-id (keyword gid)])
+                v (judge {:guideline gl :goal goal :work work})]
+            (case (:verdict v)
+              :followed (candidate! env task gid {:note (str "followed: " (:name gl)) :goal goal :source :judge :p (:p v)})
+              :violated (tr/leave! env task {:kind :guideline :subject (str gid "#violated") :text (str "not followed: " (:name gl))
+                                             :data {:op :violated :gid gid :goal goal :p (:p v)}})
+              nil)))))))
+
+;; ── promotion: pure, then rev-checked ───────────────────────────────────
+
+(defn promote
+  "The guidelines text with `line` added under `gid`'s Examples, keeping at most
+   MAX-EXAMPLES (the oldest goes)."
+  [text gid line]
+  (let [t (g/add-example text (keyword gid) line)
+        gs (g/parse t :project nil)
+        ex (:examples (first (filter (fn [x] (= (keyword gid) (:id x))) gs)))]
+    (if (> (count ex) MAX-EXAMPLES)
+      (let [drop-line (str "- " (first ex))
+            ls (str/split-lines t)
+            i (first (keep-indexed (fn [i l] (when (= (str/trim l) drop-line) i)) ls))]
+        (str (str/join "\n" (concat (take i ls) (drop (inc i) ls))) "\n"))
+      t)))
+
+(defn rev [text] (str (erlang/phash2 text 4294967296)))
+
+(defn promote!
+  "Write the promotion iff the file is still at `base` (the rev the human saw).
+   Marks the trace :promoted. → {:ok rev} | {:conflict rev}."
+  [env task subject path base]
+  (let [cur (File/read! path)
+        t (first (filter (fn [x] (= subject (:subject x))) (uses env task)))
+        d (:data t)]
+    (cond
+      (not= :ready (:op d)) {:error (str "not ready: " (:op d))}
+      (not= base (rev cur)) {:conflict (rev cur)}
+      :else (let [nt (promote cur (:gid d) (:line d))]
+              (File/write! path nt)
+              (tr/leave! env task {:kind :guideline :subject subject :text (:text t) :data (assoc d :op :promoted)})
+              {:ok (rev nt)}))))
+
+(defn reject!
+  [env task subject reason]
+  (let [t (first (filter (fn [x] (= subject (:subject x))) (uses env task)))]
+    (tr/leave! env task {:kind :guideline :subject subject :text (:text t)
+                         :data (assoc (:data t) :op :dropped :reason (or reason "rejected by human"))})))

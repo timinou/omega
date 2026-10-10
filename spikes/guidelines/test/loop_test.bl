@@ -10,68 +10,106 @@
             [omega.ext :as ext]
             [guidelines.core :as g]
             [guidelines.ext :as gx]
+            [guidelines.lifecycle :as life]
             [clojure.string :as str]))
+
+(def SEED "spikes/guidelines/guidelines.bl.org")
 
 (defn- fresh-org []
   (let [p (str "/tmp/gx-test-" (erlang/unique_integer) ".bl.org")]
-    (File/write! p (File/read! "spikes/guidelines/guidelines.bl.org"))
+    (File/write! p (File/read! SEED))
     p))
 
 (defn- system [step x]
-  (ext/install (task/start-system (env/open) {:step step :tools cm/tools :root "/tmp"}) [x]))
+  (ext/install (task/start-system (env/open) {:step step :tools cm/tools :root "/tmp" :dev? true}) [x]))
 
-(defn- last-user-text [req]
-  (str/join "\n" (keep :text (:content (last (:messages req))))))
+(defn- texts [m] (str/join "\n" (keep :text (:content m))))
+(defn- ops [sys] (frequencies (map (fn [t] (get-in t [:data :op])) (life/uses (:env sys) nil))))
+(defn- wait-for [f] (loop [i 0] (cond (f) true (> i 50) false :else (do (Process/sleep 40) (recur (inc i))))))
+
+(deftest nothing-is-loaded-without-explicit-sources
+  (let [seen (atom nil)
+        sys (system (loop/scripted [(fn [r] (reset! seen r) (loop/say "ok"))]) (gx/extension {}))
+        id (task/open! sys {:goal "make the blocked task row stand out in the rail"})]
+    (task/await sys id 5000)
+    (is (not (str/includes? (texts (last (:messages @seen))) "[guidelines]")))
+    (task/stop-system! sys)))
 
 (deftest a-matching-guideline-rides-the-tail-and-is-not-recorded
-  (let [p (fresh-org)
-        seen (atom [])
-        x (gx/extension {:sources [{:path p :scope :project}]})
-        sys (system (loop/scripted [(fn [req] (swap! seen conj req) (loop/call-tool "eval" {:code "1"}))
-                                    (fn [req] (swap! seen conj req) (loop/say "ok"))])
-                    x)
+  (let [seen (atom [])
+        sys (system (loop/scripted [(fn [r] (swap! seen conj r) (loop/call-tool "eval" {:code "1"}))
+                                    (fn [r] (swap! seen conj r) (loop/say "ok"))])
+                    (gx/extension {:sources [{:path (fresh-org) :scope :project}]}))
         id (task/open! sys {:goal "make the blocked task row stand out in the rail"})]
     (task/await sys id 5000)
     (let [[r1 r2] @seen]
-      (is (str/includes? (last-user-text r1) "[guidelines]"))
-      (is (str/includes? (last-user-text r1) "visual-not-verbal"))
-      ;; step 2's request is rebuilt from stored turns: the step-1 injection is gone
-      ;; from the first message (it was never a turn) — the prefix is byte-stable
-      (is (not (str/includes? (str/join " " (keep :text (:content (first (:messages r2))))) "[guidelines]"))))
-    ;; shown once → one trace, not one per step
-    (is (= ["visual-not-verbal#shown"] (map :subject (tr/all (:env sys) {:kind :guideline}))))
+      (is (str/includes? (texts (first (:messages r1))) "visual-not-verbal"))
+      (is (not (str/includes? (texts (first (:messages r2))) "[guidelines]"))))
+    (is (every? (fn [t] (not (str/includes? (pr-str (:content t)) "[guidelines]"))) (loop/turns sys id)))
+    (let [s (first (filter (fn [t] (= :shown (get-in t [:data :op]))) (life/uses (:env sys) id)))]
+      (is (= "visual-not-verbal" (get-in s [:data :gid])))
+      (is (= :semantic (get-in s [:data :via]))))
     (task/stop-system! sys)))
 
-(deftest nothing-matches-nothing-is-injected
-  (let [p (fresh-org) seen (atom nil)
-        sys (system (loop/scripted [(fn [req] (reset! seen req) (loop/say "ok"))])
-                    (gx/extension {:sources [{:path p :scope :project}]}))
-        id (task/open! sys {:goal "rename the variable foo to bar"})]
+(deftest the-enabled-set-limits-what-can-be-shown
+  (let [seen (atom nil)
+        sys (system (loop/scripted [(fn [r] (reset! seen r) (loop/say "ok"))])
+                    (gx/extension {:sources [{:path (fresh-org) :scope :project}] :enabled #{"test-first"}}))
+        id (task/open! sys {:goal "make the blocked task row stand out in the rail"})]
     (task/await sys id 5000)
-    (is (not (str/includes? (last-user-text @seen) "[guidelines]")))
+    (is (not (str/includes? (texts (last (:messages @seen))) "visual-not-verbal")))
     (task/stop-system! sys)))
 
-(deftest applied-writes-an-example-back-and-the-next-task-matches-better
-  (let [p (fresh-org)
-        probe "highlight the current guideline in the explorer list"
-        before (g/score-all (g/index (g/parse (File/read! p) :project p)) probe)
-        x (gx/extension {:sources [{:path p :scope :project}] :write-back? true})
+(deftest applied-is-a-candidate-that-becomes-ready-when-the-task-is-done
+  (let [p (fresh-org) before (File/read! p)
         sys (system (loop/scripted
                      [(loop/call-tool "guideline" {:op "applied" :id "visual-not-verbal"
-                                                   :note "selected item in a list shown by heavier weight and a rule, no > prefix"})
-                      (fn [req] (loop/say (get-in (last (:messages req)) [:content 0 :content])))])
-                    x)
-        id (task/open! sys {:goal "make the blocked task row stand out in the rail"})
-        res (task/await sys id 5000)
-        text (File/read! p)
-        after (g/score-all (g/index (g/parse text :project p)) probe)]
-    (is (str/includes? (pr-str (:result res)) "example") (str "result: " (:result res)))
-    (is (str/includes? text "no > prefix"))
-    (is (> (get-in after [:visual-not-verbal :score]) (get-in before [:visual-not-verbal :score])))
-    (println (str "  learning: '" probe "' visual-not-verbal "
-                  (get-in before [:visual-not-verbal :score]) " → " (get-in after [:visual-not-verbal :score])))
-    (is (= #{:shown :applied} (set (map (fn [t] (get-in t [:data :op])) (tr/all (:env sys) {:kind :guideline})))))
+                                                   :note "selected item shown by weight and a rule, no > prefix"} "a")
+                      (loop/call-tool "eval" {:code "(done \"styled\")"} "b")])
+                    (gx/extension {:sources [{:path p :scope :project}]}))
+        id (task/open! sys {:goal "highlight the current guideline in the explorer list"})]
+    (is (= :done (:status (task/await sys id 5000))))
+    (is (wait-for (fn [] (= 1 (get (ops sys) :ready)))))
+    (is (= before (File/read! p)) "nothing is written until a human promotes")
+    (let [t (first (filter (fn [t] (= :ready (get-in t [:data :op]))) (life/uses (:env sys) id)))]
+      (is (str/includes? (get-in t [:data :line]) "(while: highlight the current guideline"))
+      ;; promotion: a stale rev is refused; the current rev writes and marks :promoted
+      (is (contains? (life/promote! (:env sys) id (:subject t) p "stale") :conflict))
+      (is (contains? (life/promote! (:env sys) id (:subject t) p (life/rev before)) :ok))
+      (is (str/includes? (File/read! p) "no > prefix (while: highlight"))
+      (is (= 1 (get (ops sys) :promoted)))
+      ;; and the guideline now matches the situation better than before
+      (let [probe "highlight the current guideline in the explorer list"
+            s0 (get-in (g/score-all (g/index (g/parse before :project p)) probe) [:visual-not-verbal :score])
+            s1 (get-in (g/score-all (g/index (g/parse (File/read! p) :project p)) probe) [:visual-not-verbal :score])]
+        (println (str "  learning: '" probe "' " s0 " → " s1))
+        (is (> s1 s0))))
     (task/stop-system! sys)))
+
+(deftest a-failed-task-drops-its-candidates
+  (let [sys (system (loop/scripted
+                     [(loop/call-tool "guideline" {:op "applied" :id "test-first" :note "pinned it"} "a")
+                      {:error {:kind :client :reason "boom"}}])
+                    (gx/extension {:sources [{:path (fresh-org) :scope :project}]}))
+        id (task/open! sys {:goal "fix a bug"})]
+    (task/await sys id 5000)
+    (is (wait-for (fn [] (= 1 (get (ops sys) :dropped)))))
+    (is (str/includes? (get-in (first (filter (fn [t] (= :dropped (get-in t [:data :op]))) (life/uses (:env sys) id))) [:data :reason])
+                       "task ended failed"))
+    (task/stop-system! sys)))
+
+(deftest the-judge-turns-shown-guidelines-into-candidates-or-violations
+  (let [judge (fn [{:keys [guideline work]}]
+                (if (str/includes? work "BLOCKED") {:verdict :violated :p 0.1} {:verdict :followed :p 0.9}))
+        run (fn [code]
+              (let [sys (system (loop/scripted [(loop/call-tool "eval" {:code code} "a") (loop/say "done")])
+                                (gx/extension {:sources [{:path (fresh-org) :scope :project}] :judge judge}))
+                    id (task/open! sys {:goal "make the blocked task row stand out in the rail"})]
+                (task/await sys id 5000)
+                (wait-for (fn [] (some #{:candidate :violated} (keys (ops sys)))))
+                (let [o (ops sys)] (task/stop-system! sys) o)))]
+    (is (= 1 (get (run "[:div {:class \"blocked\"} title]") :candidate)))
+    (is (= 1 (get (run "[:div title \" BLOCKED\"]") :violated)))))
 
 (deftest misfire-and-propose-are-traces-never-file-writes
   (let [p (fresh-org) before (File/read! p)
@@ -80,17 +118,24 @@
                       (loop/call-tool "guideline" {:op "propose" :id "no-silent-fallback"
                                                    :note "fail loudly instead of a silent default | when: parse config, missing key"} "t2")
                       (loop/say "done")])
-                    (gx/extension {:sources [{:path p :scope :project}] :write-back? true}))
+                    (gx/extension {:sources [{:path p :scope :project}]}))
         id (task/open! sys {:goal "fix the typo in the README"})]
     (task/await sys id 5000)
     (is (= before (File/read! p)))
-    (is (= #{:misfire :proposed}
-           (set (keep (fn [t] (#{:misfire :proposed} (get-in t [:data :op]))) (tr/all (:env sys) {:kind :guideline})))))
+    (let [pr (first (filter (fn [t] (= :proposed (get-in t [:data :op]))) (life/uses (:env sys) id)))]
+      (is (= ["parse config" "missing key"] (get-in pr [:data :draft :when]))))
     (task/stop-system! sys)))
+
+(deftest promotion-caps-examples
+  (let [t (reduce (fn [t i] (life/promote t "visual-not-verbal" (str "2026-10-10 example " i)))
+                  (File/read! SEED) (range 10))
+        ex (:examples (first (filter (fn [x] (= :visual-not-verbal (:id x))) (g/parse t :project nil))))]
+    (is (= life/MAX-EXAMPLES (count ex)))
+    (is (str/includes? (last ex) "example 9"))))
 
 (deftest project-replaces-user-by-id
   (let [u (g/parse "* Mine\n:PROPERTIES:\n:ID: test-first\n:END:\nuser version\n** When\n- x\n" :user "u")
-        p (g/parse (File/read! "spikes/guidelines/guidelines.bl.org") :project "p")
+        p (g/parse (File/read! SEED) :project "p")
         gs (g/layer u p)]
     (is (= :project (:scope (first (filter (fn [x] (= :test-first (:id x))) gs)))))
     (is (= 7 (count gs)))))
