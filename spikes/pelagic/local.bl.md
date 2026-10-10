@@ -17,7 +17,7 @@ The normal server-backed session is `bl pelagic.dev`; local is the optional demo
 adapter. Both reuse the same checked BL JavaScript graph. Only `pelagic.bundle`
 creates the ZIP. [Build and session architecture](session-launch.bl.md).
 
-From `spikes/pelagic`, `bl bundle` still exports the demo. The compatibility
+The root task `bl pelagic.bundle` exports the demo from any project subdirectory. The compatibility
 command `spikes/pelagic/build.sh --local` does the same. The first use resolves
 the pinned compiler once; it can take several minutes. Later launches reuse it
 and unchanged frontend output.
@@ -73,7 +73,7 @@ patch syntax. The page evaluator starts on demand for editor commands such as
 
 ## Artifact identity and updates
 
-`bl artifact-check` verifies the BL inventory, byte counts, SHA256 hashes,
+`bl pelagic.check` verifies the BL inventory, byte counts, SHA256 hashes,
 repeatable manifest generation and generated worker syntax. The bundle contains
 `assets.json`; its identity covers every shipped asset and the builder/template.
 Generated manifest/worker files are excluded from their own inventory.
@@ -119,14 +119,14 @@ responsiveness tradeoff rather than a uniform latency improvement. GPU compilati
 [browser report](proof/local/report.json), [real editor with PELAGIC](proof/local/01-used.png),
 [after unuse](proof/local/02-unused.png), [presentation equivalence](proof/local/equivalence.log).
 
-Reproduce the checks after building:
+Reproduce the current contract and editor checks:
 
 ```sh
-PELAGIC_OUT=$PWD/spikes/pelagic/dist/local/out node --test spikes/pelagic/test/*.test.mjs
-BLED_ROOT=/path/to/beam-lisp BLED_OUT=$PWD/spikes/pelagic/dist/local/out \
-  BLED_WEB=$PWD/spikes/pelagic/dist/local node --test vendor/bl-ed/test/*.test.mjs
-python3 spikes/pelagic/test/local-browser.py
-bin/bl run spikes/pelagic/test/legacy-build.bl
+frontend=$(spikes/pelagic/build.sh | awk '/^[/].*[/]dist[/]frontend[/]/ {p=$0} END {print p}')
+PELAGIC_OUT="$frontend/out" node --test spikes/pelagic/test/*.test.mjs
+BLED_ROOT=/path/to/beam-lisp BLED_OUT="$frontend/out" \
+  BLED_WEB="$frontend" node --test vendor/bl-ed/test/*.test.mjs
+bl pelagic.check
 ```
 
 The browser proof and `test/startup.py` start temporary static servers and need Python

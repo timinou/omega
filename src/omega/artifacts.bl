@@ -1,5 +1,5 @@
 ; Cross-process build ownership. The OS descriptor releases on process death.
-(ns omega.artifacts (:require [os.lease :as lease]))
+(ns omega.artifacts (:require [os.lease :as lease] [proc.admission :as admission]))
 (defn staging [output]
  (str output ".stage-" (System/pid) "-" (System/unique_integer (list :positive))))
 (defn coordinated
@@ -9,6 +9,7 @@
  (File/mkdir_p! (Path/dirname path))
  (let [deadline (+ (System/monotonic_time :millisecond) 1800000)]
   (loop [announced? false]
+   (admission/check!)
    (let [r (lease/acquire! path)]
     (if-let [held (:ok r)]
      (try (action) (finally (lease/release! held)))
@@ -16,3 +17,91 @@
       (do (when-not announced? (println "Frontend build in progress; waiting for its publication"))
           (Process/sleep 100) (recur true))
       (throw (ex-info "Cannot acquire frontend build lease" {:path path :reason (:error r)}))))))))
+
+(defn- generation-lock [directory] (str (Path/dirname directory) "/.generations.lock"))
+(defn pin!
+ "Keep a managed generation until the host stops or its process dies. Older
+  unmarked generations are never collected. Returns an OS-owned lease or nil."
+ [directory]
+ (let [directory (Path/expand directory)]
+  (coordinated (generation-lock directory)
+   (fn []
+    (when-not (File/dir? directory) (throw (ex-info "Frontend retired before host startup; retry launch" {:path directory})))
+    (when (File/regular? (str directory "/.omega-managed"))
+     (let [pins (str (Path/dirname directory) "/.pins/" (Path/basename directory))
+           path (str pins "/" (System/pid) "-" (System/unique_integer (list :positive)) ".lock")]
+      (File/mkdir_p! pins)
+      (let [result (lease/acquire! path)]
+       (or (:ok result) (throw (ex-info "Cannot pin frontend generation" result))))))))))
+(defn unpin! [pin] (when pin (lease/release! pin)) :ok)
+(defn reading
+ "Read a generation under an owner pin; concurrent collection cannot retire it."
+ [directory action]
+ (let [pin (pin! directory)]
+  (try (action directory) (finally (unpin! pin)))))
+(defn- pinned? [pins]
+ (and (File/dir? pins)
+  (some (fn [name]
+   (let [result (lease/acquire! (str pins "/" name))]
+    (if-let [held (:ok result)] (do (lease/release! held) false)
+     ;; Unsupported or failed probes conservatively retain the generation.
+     true))) (File/ls! pins))))
+(defn collect!
+ "Remove only managed, unpinned generations beyond retention. Call under the
+  category's publisher lease. Active descriptor pins always win over age."
+ ([parent marker retain] (collect! parent marker retain #{}))
+ ([parent marker retain protected]
+ (when-not (and (erlang/is_integer retain) (>= retain 1))
+  (throw (ex-info "Generation retention must be positive" {:retain retain})))
+ (File/mkdir_p! parent)
+ (coordinated (str parent "/.generations.lock")
+  (fn []
+   (let [candidates (sort-by (fn [path] (- (:mtime (File/stat! path (list (tuple :time :posix))))))
+                     (keep (fn [name]
+                       (let [path (str parent "/" name)]
+                        (when (and (not (String/contains? name ".stage-"))
+                                   (File/regular? (str path "/.omega-managed"))
+                                   (File/regular? (str path "/" marker))) path))) (File/ls! parent)))
+         removable (filter (fn [path] (and (not (contains? protected path)) (not (pinned? (str parent "/.pins/" (Path/basename path)))))) candidates)
+         retired (vec (drop retain removable))]
+    (doseq [path retired]
+      (File/rm_rf! path)
+      ;; All pin creation holds this generation lock. The generation is gone
+      ;; and probes proved no active reader, so its private pin directory can
+      ;; retire too. Shared publisher/generation lock inodes are never removed.
+      (File/rm_rf! (str parent "/.pins/" (Path/basename path))))
+    retired)))))
+
+(defn publish!
+ "Publish a marked generation under the same lock as readers and collection.
+  Repair refuses to replace a generation still pinned by a running host."
+ [stage output marker]
+ (coordinated (generation-lock output)
+  (fn []
+   (admission/check!)
+   (when (File/exists? output)
+    (when-not (File/regular? (str output "/" marker))
+     (throw (ex-info "Refusing to replace unmarked build output" {:path output})))
+    (when (pinned? (str (Path/dirname output) "/.pins/" (Path/basename output)))
+     (throw (ex-info "Active host pins this damaged generation; stop it before repair" {:path output})))
+    (File/rm_rf! output))
+   (File/rename! stage output))))
+(defn stage!
+ "Create an explicitly owned stage. Call only inside its category publisher lease."
+ [output]
+ (let [stage (staging output)]
+  (File/mkdir_p! stage)
+  (File/write! (str stage "/.omega-stage") "Omega build stage v1\n")
+  stage))
+(defn clean-stages!
+ "Recover marked abandoned stages after acquiring the category publisher lease.
+  Unmarked paths and published generations are preserved."
+ [parent]
+ (when (File/dir? parent)
+  (doseq [name (File/ls! parent)]
+   (let [path (str parent "/" name)]
+    (when (and (String/contains? name ".stage-")
+               (or (File/regular? (str path "/.omega-stage"))
+                   (File/regular? (str path "/.omega-managed"))))
+     (File/rm_rf! path)))))
+ :ok)

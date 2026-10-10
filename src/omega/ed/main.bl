@@ -20,6 +20,7 @@
             [omega.ed.providers :as pv]
             [omega.packages :as packages]
             [omega.ext :as ext]
+            [omega.artifacts :as artifacts]
             [bl-ed.serve :as serve]
             [bl-ed.image :as image]))
 
@@ -44,7 +45,7 @@
         home (or (System/get_env "OMEGA_HOME") (File/cwd!))
         db (when-not (or (:memory? opts) (and (:offline? opts) (nil? (:db opts)))) (env/db-path root (:db opts)))
         e (if db (env/open-durable! db) (env/open))
-        acquired (atom nil)]
+        acquired (atom nil) pinned (atom nil) generations (atom {})]
     (try
       (let [step (or (:step opts) (if (:offline? opts) (offline-model) (llm/step (llm/from-env home))))
         sys (task/start-system e (merge (select-keys opts [:max-steps :token-budget :dev?])
@@ -59,21 +60,23 @@
         web (or (:web opts) (str home "/vendor/bl-ed/web"))
         ;; bl: shows THIS VM's image — omega itself, live (a project's target
         ;; VM forwards the same provider later)
+        _ (reset! pinned (artifacts/pin! web))
         img (image/provider)
         r (serve/start! {:port (or (:port opts) 8790) :root root :web web
+                         :landing-pages (:landing-pages opts) :generations generations
                          :providers (merge (:providers opts)
                                            (assoc (pv/providers sys) "bl" (:provider img) "package" (packages/provider registry)))
                          :intents (merge (pv/intents sys) (:intents img)
                                    (when-let [factory (:intent-factory opts)] (factory sys))
                                    (packages/intents registry sys))})]
     (when db (println (str "omega: tasks are kept in " db (when (seq interrupted) (str " · interrupted: " (clojure.string/join " " interrupted))))))
-    (assoc r :sys sys :env e :db db :packages registry))
+    (assoc r :sys sys :env e :db db :packages registry :frontend-pin @pinned :generations generations))
       (catch error
         ;; Readiness is transactional: a failed listener must not leave a task
         ;; supervisor or storage owner behind when the service is retried.
         (try
           (when @acquired (task/stop-system! @acquired))
-          (finally (env/close! e)))
+          (finally (try (env/close! e) (finally (artifacts/unpin! @pinned)))))
         (throw error)))))
 
 (defn stop!
@@ -83,8 +86,26 @@
   (try (serve/stop! host)
     (finally
       (try (task/stop-system! (:sys host))
-        (finally (env/close! (:env host))))))
+        (finally (try (env/close! (:env host))
+                   (finally
+                     (doseq [[_ generation] @(:generations host)] (artifacts/unpin! (:pin generation)))
+                     (artifacts/unpin! (:frontend-pin host))))))))
   :ok)
+
+(defn admit-frontend!
+ "Called by the host owner after artifact validation. Keep admitted generations
+  pinned for existing tabs; bounded retention requires an explicit host restart."
+ [host id web]
+ (when-not (re-matches #"[a-f0-9]{64}" id) (throw (ex-info "Invalid generation identity" {})))
+ (when-not (= id (File/read! (str web "/.inputs")))
+  (throw (ex-info "Frontend identity does not match its admitted path" {})))
+ (when-not (get @(:generations host) id)
+  (when (>= (count @(:generations host)) 8)
+   (throw (ex-info "Eight frontend generations are retained; restart the host to continue" {})))
+  (let [pin (artifacts/pin! web)]
+   (when-not pin (throw (ex-info "Only managed immutable frontends can be admitted" {:path web})))
+   (swap! (:generations host) assoc id {:web web :pin pin})))
+ {:generation id :path (str "/generations/" id "/") :url (str (:url host) "generations/" id "/")})
 
 (defn main
   "bin/bl-ed: serve until killed; callers may supply already-built host options."

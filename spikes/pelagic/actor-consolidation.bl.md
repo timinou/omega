@@ -238,8 +238,8 @@ The service worker owns browser cache IO. It waits for old clients to retire
 before activating an update, so a live page cannot load half of a new module
 graph. Cache cleanup belongs to one hosting path, preserving other performances
 on the same origin. The server frontend excludes this local manifest/worker,
-because its index and transport differ. `bl artifact-check` exercises the BL
-contract through the same env.bl task surface as `bl bundle`.
+because its index and transport differ. `bl pelagic.check` exercises the BL
+contract through the same env.bl task surface as `bl pelagic.bundle`.
 
 The final artifact build pins upstream `797dc039`: 50 modules, 159 inventoried
 assets. It passes 63 package checks, the BL artifact contract, independent asset

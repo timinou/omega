@@ -1,6 +1,6 @@
 # Native actor namespace prototype
 
-PELAGIC's optional actor preparation now uses one annotated Beam Lisp namespace:
+PELAGIC's canonical actor preparation uses one annotated Beam Lisp namespace:
 
 ```clojure
 (ns ^:js pelagic.prepare (:require [pelagic.browser :as browser]))
@@ -25,14 +25,13 @@ users write normal annotated BL and requires. `actor/prepare-bridge.bl` remains 
 measurement baseline; it is excluded from shipped optional actor assets.
 
 ```
-cd spikes/pelagic
-bl actors
-PELAGIC_ACTORS=1 bl bundle
+bl pelagic.build
+bl pelagic.bundle
 ```
 
-The default remains the build-time BL score cache. `?prepare=actor` exercises the
-native actor namespace; `?prepare=worker` uses the native Worker comparison.
-The benchmark also supports `actor-bridge` without shipping it in the package.
+The shipped runtime uses the canonical actor profile. The comparisons below
+record the earlier prototype and retained measurement harnesses; worker and
+actor-bridge comparisons are not parallel shipped preparation implementations.
 
 The compiler now prunes checked, reachable definitions (including function values
 and hidden receive helpers). Dynamic `host/ref` lookup conservatively retains the
@@ -150,7 +149,7 @@ Real editor with the actor package:
 After unloading the same package:
 ![Restored editor](proof/native-actors/final/realtime-actor/unused.jpg)
 
-The shared source changes apply to both `bl frontend` and `bl bundle`.
+The shared source changes apply to both `bl pelagic.build` and `bl pelagic.bundle`.
 The staged local/server graph has 128 byte-identical shared assets; the default
 ZIP contains no actor runtime, and optional actor assets exclude the bridge.
 [Artifact checks](proof/native-actors/final/artifacts.json).

@@ -68,9 +68,9 @@ try:
     b.worker.terminate();await wait(()=>P.preparationWorkers().resetting===0);
     const pooled=P.preparationWorkers();if(pooled.created!==1||pooled.forced!==0)throw new Error('Pool did not reuse cleanly '+JSON.stringify(pooled));
     await new Promise(r=>setTimeout(r,100));P.closeIdlePreparationWorkers();
-    const sorted=xs=>[...xs].sort((a,b)=>a-b),p95=xs=>sorted(xs)[Math.floor((xs.length-1)*.95)];
+    const sorted=xs=>[...xs].sort((a,b)=>a-b),percentile=(xs,q)=>sorted(xs)[Math.floor((xs.length-1)*q)];
     const data=new TextEncoder().encode(full),digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),x=>x.toString(16).padStart(2,'0')).join('');
-    return {cycles:100,completeScores:2,scoreRows:1024,pooled,final:P.preparationWorkers(),cancelP95Ms:p95(cancel),cancelMaxMs:Math.max(...cancel),heartbeatP95Ms:p95(gaps),heartbeatMaxMs:Math.max(...gaps),digest,independentSessions:true};
+    return {cycles:100,completeScores:2,scoreRows:1024,pooled,final:P.preparationWorkers(),cancelP50Ms:percentile(cancel,.5),cancelP95Ms:percentile(cancel,.95),cancelP99Ms:percentile(cancel,.99),cancelMaxMs:Math.max(...cancel),heartbeatP50Ms:percentile(gaps,.5),heartbeatP95Ms:percentile(gaps,.95),heartbeatP99Ms:percentile(gaps,.99),heartbeatMaxMs:Math.max(...gaps),digest,independentSessions:true};
    }finally{clearInterval(heartbeat);P.closeIdlePreparationWorkers();}
   }''')
   assert not errors,errors

@@ -31,7 +31,7 @@ frontend builder.
 ## One compilation, separate launch and export
 
 Root `env.bl` declares task names and their BL entry files. It also selects the
-same compiler pin as PELAGIC, `797dc039`. There is no compiler build per package:
+single compiler pin for every package, currently `d5363326`. There is no compiler build per package:
 the launcher resolves the pinned compiler once and reuses its cached image.
 A first uncached compiler setup can take tens of minutes.
 
@@ -109,3 +109,11 @@ not latency guarantees. Warm CLI task dispatch is a useful next optimization.
 [after unuse](proof/session-launch/unused.png),
 [package catalog](proof/session-launch/catalog.png),
 [after catalog unuse](proof/session-launch/catalog-unused.png).
+
+
+`bl omega.watch` builds validated immutable candidates and prints a generation
+URL for explicit session navigation. Asset edits reuse both checked modules and
+preparation actors. `bl omega.watch.stop` preserves the host and admitted tabs.
+Backend, root manifest or build-tool edits require restarting the project realm;
+the watcher preserves the working frontend rather than claiming those sources
+are already running. See [ownership, routes and artifact lifetime](../../research/shared-development.bl.org).

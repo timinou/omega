@@ -1,0 +1,23 @@
+(ns pelagic.watch-task
+ (:require [pelagic.build :as build] [pelagic.launch :as launch] [omega.dev :as dev] [omega.frontend-watch :as watch]
+           [vm.service :as service] [vm.scope :as scope] [bl.json :as json]))
+(let [realm (scope/current) slot [:omega-frontend-watch (build/root)]]
+ (when-not realm (throw (ex-info "Frontend watch requires the shared project VM" {})))
+ (if (some (fn [arg] (= "--stop" arg)) (BeamLisp/argv))
+  (when-let [running (service/lookup realm slot)] (service/stop! (:pid running)))
+  (let [_ (launch/check-host!)
+        owner (dev/frontend-owner (build/root))
+        running (service/acquire realm slot {:host (build/host-fingerprint)}
+         (fn []
+          (watch/start!
+           {:paths (vec (distinct (concat (:paths (build/assembly))
+                      [(str (build/root) "/packages") (str (build/root) "/src") (str (build/root) "/vendor/bl-ed/src") (str (build/root) "/vendor/bl-ed/web")])))
+            :build build/frontend! :fingerprint build/fingerprint :authority build/host-fingerprint
+            :accept (fn [output]
+              (let [id (File/read! (str output "/.inputs"))]
+               (when-not (build/artifact-valid? output id) (throw (ex-info "Candidate failed artifact admission" {})))
+               (let [candidate (dev/offer-frontend! owner id output)]
+                (println (str "Frontend candidate ready; explicitly reload a session at " (:url candidate)))
+                candidate)))}))
+         watch/stop!)]
+   (println (str "Frontend watch: " (json/encode @(:status (:value running))))))))

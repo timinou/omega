@@ -1,7 +1,14 @@
 ; Launch policy belongs to Omega's development task, not the editor package.
 (ns pelagic.launch
-  (:require [pelagic.build :as build] [omega.dev :as dev]
-            [bl-ed.serve :as serve] [bl.json :as json]))
+  (:require [pelagic.build :as build] [omega.dev :as dev] [omega.artifacts :as artifacts]
+            [bl-ed.serve :as serve] [bl.json :as json] [bl.env :as project] [vm.gateway :as gateway]))
+(def ^:private LOADED-HOST (build/host-fingerprint))
+(defn check-host!
+ "The shared realm must not start new host services with obsolete backend code."
+ []
+ (when-not (= LOADED-HOST (build/host-fingerprint))
+  (throw (ex-info "Backend or root env.bl changed; close and reopen the project realm" {:kind :host-authority})))
+ :ok)
 (defn options [args default-port]
   (loop [xs args result {:port default-port :live? false}]
     (if (empty? xs) result
@@ -27,7 +34,7 @@
   ; The dynamic provider proves the host mode and document root, not just assets.
   (json/encode {:schema "omega.dev-session" :version 1 :root (build/root)
                 :host (build/host-fingerprint)
-                :frontend (File/read! (str web "/.inputs")) :live (:live? opts) :port (:port opts)}))
+                :frontend (File/read! (str web "/.inputs")) :live (:live? opts) :port (:port opts) :routes (:routes opts)}))
 (defn- http-get [port path]
   (Application/ensure_all_started :inets)
   (try
@@ -54,17 +61,27 @@
   (cond (= expected (remote-identity port)) :reuse
         (occupied? port) :conflict
         :else :start))
+(defn route-config []
+  (let [env (project/project (build/root))]
+    (when (seq (:errors env)) (throw (ex-info "Invalid root env.bl" {:errors (:errors env)})))
+    (get-in env [:ports "omega"] {:port 8812})))
 (defn dev! [args]
-  (let [opts (options args 8812) web (build/frontend!) expected (identity web opts)
+  (check-host!)
+  (let [config (route-config)
+        opts (assoc (options args (or (:port config) 8812)) :routes (or (:routes config) {})) web (build/frontend!) expected (identity web opts)
         port (:port opts) url (preset-url port (:preset opts)) state (host-state port expected)]
     (case state
-      :reuse (println (str "Omega host already running; open a PELAGIC session: " url))
+      :reuse (println (str "Omega host already running; open a session: " url))
       :conflict (throw (ex-info (str "Port " port " belongs to an incompatible host. Use bl pelagic.dev -- --port N; no changes were sent to it.") {:port port}))
       :start (do
-               (dev/acquire! expected {:root (build/root) :web web :port port :dev? true
+               (let [host (dev/acquire! expected {:root (build/root) :web web :port port :dev? true
+                              :hosts (vec (keys (:routes opts))) :landing-pages (:routes opts)
                               :offline? (not (:live? opts)) :memory? (not (:live? opts))
-                              :providers {"launch" {:read (fn [_ _] {:text expected :rev expected :read-only? true})}}})
-               (println (str "Omega + PELAGIC" (if (:live? opts) " (live)" " (offline development)") ": " url))
+                              :providers {"launch" {:read (fn [_ _] {:text expected :rev expected :read-only? true})}}})]
+               (println (str "Omega development host" (if (:live? opts) " (live)" " (offline development)") ": " (preset-url (:port host) (:preset opts)))))
+               (when (seq (:routes opts))
+                 (gateway/ensure-for-claim (vec (keys (:routes opts))))
+                 (println (str "Host presets registered: " (join ", " (sort (keys (:routes opts)))))))
                (println "Each browser session owns its package state and audio.")
                (if (dev/persistent?)
                  (println "Host is realm-owned. bl omega.stop stops this world; other realms keep running.")
@@ -78,6 +95,10 @@
       (cond
         (= expected (local-identity port)) (println (str "PELAGIC demo already running: " url))
         (occupied? port) (throw (ex-info "Demo port is occupied; use bl pelagic.local -- --port N" {:port port}))
-        :else (do (serve/start! {:root web :web web :port port})
-                  (println (str "PELAGIC standalone demo: " url))
-                  (receive :never nil))))))
+        :else (artifacts/reading web
+                (fn [directory]
+                 (let [host (serve/start! {:root directory :web directory :port port})]
+                  (try
+                   (println (str "PELAGIC standalone demo: " url))
+                   (receive :never nil)
+                   (finally (serve/stop! host))))))))))

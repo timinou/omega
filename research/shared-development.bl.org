@@ -1,5 +1,5 @@
 #+title: One Omega host, package sessions, owned work
-#+status: Implementation notes; see PLAN-016 for remaining integration gates
+#+status: Implemented and release-verified; follow-ups recorded in PLAN-016
 
 * The four lifetimes
 A release VM can contain several project realms. A project realm owns its
@@ -20,7 +20,7 @@ returns an error instead of running a persistent service in a temporary VM.
 Finite tasks retain their existing opportunistic policy. =--cold= selects a
 foreground VM; its task must remain running. =--warm-required= selects the
 strict transport explicitly. These options require the updated launcher,
-not just new language sources. Omega now pins the validated 7d8d5c4e release.
+not just new language sources. Omega pins the consolidated d5363326 release; PLAN-016 records its release gates.
 
 * Application acquisition
 =omega.dev/acquire!= delegates ownership and concurrency to =vm.service=.
@@ -100,8 +100,8 @@ initializer failure releases that generation and closes task/storage resources.
 Successful hosts carry the claim generation; graceful stop releases it after
 HTTP/tasks/storage close. Owner death also drops the descriptor, so stale route
 files cannot keep a dead host routable while its shared OS VM remains alive.
-Host aliases can be supplied to =omega.dev/acquire!= through =:hosts=; browser
-DNS/TLS and preset redirects still require their separate integration gate.
+Host aliases can be supplied to =omega.dev/acquire!= through =:hosts=. Root
+preset redirects are tested separately from machine DNS and browser TLS trust.
 
 * Foreground compatibility and package activation
 =bin/bl-ed= builds or reuses the shared frontend generation and serves it in
@@ -111,8 +111,8 @@ Package activation validates that its loader is already admitted; it never
 runs an installer or mutates the frontend of a live host. Rebuild and restart
 to change the package set. Backend activation remains an explicit world action.
 
-* Validated release and timings
-The exact pinned release passed 107 source assertions, 67 PELAGIC Node checks,
+* Earlier validated baseline: 7d8d5c4e
+That release passed 107 source assertions, 67 PELAGIC Node checks,
 all 75 editor checks, the unchanged presentation check, ZIP integrity, and real
 Chromium playback/export/use/unuse checks. Two audible sessions share one host;
 unusing one leaves the other playing. The catalog does not activate a world.
@@ -139,8 +139,163 @@ Use the localhost URL printed by the task. =bl omega.stop= closes this world's
 host. =bin/bl-ed --offline --memory --port 8792 --root /tmp/my-omega= runs an
 isolated foreground editor. =bl pelagic.bundle= exports the standalone demo.
 
-* Still being integrated
-Verified content sharing is under source-level admission tests; it is not in
-this pinned release. Friendly hostnames, dependency-driven incremental rebuilds,
-transactional package adoption, and generation garbage collection still need
-their integration gates. A browser-clock measurement is not physical A/V proof.
+* Remaining boundaries
+The finite shared-source profile is verified; Omega application AOT remains
+source-only because its aliases/body macros exceed that profile. The experimental
+namespace ANF disk cache regresses and remains opt-in. Asset-only graph reuse,
+immutable watch candidates and managed generation retention have release gates
+recorded in PLAN-016. Friendly hostname DNS/TLS setup and physical A/V timing
+remain separate machine and hardware work.
+
+* Root host presets
+The root env.bl declares one named port and several host-to-session routes:
+
+#+begin_src beam-lisp
+:ports {"omega" {:port 8812
+                 :routes {"pelagic.dev" "/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org"
+                          "spikes.pelagic.dev" "/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org"
+                          "omega.localhost" "/?use=packages&file=package:catalog"}}}
+#+end_src
+
+These are declarations for the existing gateway. The editor redirects only a
+configured host's bare root; an explicit query keeps the session you requested.
+The launcher also prints a directly usable localhost URL. Custom DNS/proxy and
+TLS trust remain the gateway's machine setup; registering a name does not install
+DNS or a browser trust root. In particular, .dev requires a working TLS setup.
+
+* Watching without interrupting playback
+The candidate workflow is =bl pelagic.dev=, then =bl omega.watch=. The watch task
+uses the existing file-event watcher. An actor debounces changes, keeps one build
+in flight and cancels an obsolete build through its admission token. Compiler
+checkpoints unwind private staging, isolated environments and publisher leases.
+
+A successful build passes the complete artifact inventory before the host admits
+it. The printed =/generations/<digest>/= URL starts a new frontend session when
+you explicitly open or reload it. Existing tabs keep their module graph, package
+state and audio. Arbitrary code replacement does not pretend to migrate live
+resources. Musical edits still use PELAGIC's existing safe audition path.
+
+=bl omega.watch.stop= stops speculative builds while keeping the host and admitted
+tabs. =bl omega.stop= stops watch first, then the host. Eight candidate generations
+may be retained by one host; continuing beyond that asks for an explicit restart.
+This bounds server retention. A full session navigation lets the browser release
+the old ES module realm instead of accumulating cache-busted imports in one page.
+
+* Artifact lifetime and recovery
+Managed frontend, graph and local demo generations have process-owned OS descriptor pins. Each publisher
+keeps three unpinned generations plus its newest output. Build copies, ZIP exports
+and running local demo servers hold reader pins too. Pinned generations survive
+collection regardless of age. Repair refuses to replace a damaged generation that
+an active host pins. Legacy unmarked outputs remain untouched because older hosts
+do not hold these new pins. Only marked abandoned stages are recovered, after
+acquiring their category's publisher lease.
+
+* Conservative compiler reuse
+The candidate upstream compiler writes =out/dependencies.json=: consumed source
+hashes, declared and linked namespace edges, target contracts and cache decisions.
+With experimental =BL_JS_CACHE=on=, certified finite lexical code can reuse checked, serializable ANF; namespace
+staging and complete linking still run. Macros, custom checks and ambient bindings
+retain normal compilation. Source keys bind bytes actually read, rather than a
+later file version. The compiler certificate checks installed executable evidence
+and scoped generations; empty live forks may reuse the same checked projection.
+
+This is a deliberately limited first incremental profile. The report does not
+claim to trace arbitrary macro IO or certify every namespace for reuse. The wider
+profile needs dependency evidence before admission can be expanded safely.
+
+
+The checked-ANF disk cache is off by default. In this machine's experiments,
+validation and admission cost more than compiling both a two-function namespace
+and a hundred-function namespace. Keeping normal compilation is the measured
+choice. The dependency report remains available without enabling the cache.
+A broader incremental profile must show an actual crossover before becoming the
+default; a cache hit alone is not evidence of faster compilation.
+
+
+* One compiler and one actor build
+The nested PELAGIC env.bl and its mutable standalone actor build are removed.
+The root manifest owns the compiler pin, build, demo, export and artifact check.
+=spikes/pelagic/build.sh= delegates to those root tasks. Preparation actors are
+compiled and linked as part of the immutable BL graph, so asset-only edits copy
+that checked graph without compiling actors again.
+
+* Application package experiment
+The offline prototype now admits the package protocol and starts/stops both
+hosts correctly. It selected zero compiled artifacts and 146 source fallbacks:
+Omega's aliases and body macros are outside the finite AOT profile. The source
+realm took 13,086 ms and the later package-backed realm 6,352 ms within the same
+warm VM. This order-dependent difference is not an AOT gain. Omega therefore
+continues using ordinary source loading in its shared realm. Expanding admission
+requires macro and resolution evidence rather than relaxing the safety checks.
+
+
+Build-tool sources and compiler sources are fixed for a loaded project realm.
+The builder checks its load-time tool snapshot before compiling: editing build
+tools asks for a realm restart rather than labeling old executable behavior with
+new source hashes. Ordinary package source and asset edits remain watch inputs.
+Backend changes likewise require a project realm restart; frontend navigation does not
+pretend to reload the server application.
+
+
+Use =bl realm restart= after backend, root manifest or build-tool edits, then
+=bl pelagic.dev= (or =bl omega.dev=). This restarts the project realm while
+preserving the shared VM and other projects. =bl omega.stop= is the narrower
+operation: stop this world's host and watcher without reopening its realm.
+
+
+Speculative workers carry the native host actor PID captured when watch starts.
+They do not need the caller's routing scope, and cannot resolve a different host
+later. Native service operations retain callback code while queued and transfer
+ownership on acceptance. A stopped reservation is absent to =vm.service/lookup=;
+repeated watch/host stops remain harmless without changing acquisition failure
+reporting.
+
+
+* Restarting a server after actual traffic
+The route bind probe uses =reuseaddr=, matching the HTTP listener, without
+=reuseport=. TCP connections in TIME_WAIT no longer make a stopped server look
+like an active listener. A genuinely listening socket still refuses admission.
+The regression opens a connection, closes the server first, then reclaims its
+pinned port. The full lifecycle test additionally restarts the project realm
+after browser playback and checks that the same shared OS VM survives.
+
+
+* Final consolidated release: d5363326
+The root pin builds runtime =6e5954ab=. The exact release passes 104 Omega
+source assertions, 67 package checks, 75 editor checks, unchanged presentation,
+ZIP integrity, and actual shared/foreground browser playback and unuse.
+Watch candidates reuse the checked actor graph on asset-only edits. Stopping
+watch preserves their pages. Host stop and same-port project realm restart after
+browser traffic pass while preserving the shared OS VM.
+
+| Measurement | Result |
+|-------------+--------|
+| Clean compiler plus frontend | 10m56s; 2.1 GiB peak |
+| Warm root task, 30 samples | median 368 ms; P95 510 ms; P99 526 ms; max 582 ms |
+| Cached foreground host | 11.4 s |
+| Realm restart plus host | 14.5 s |
+| Actor cancellation, 100 cycles | P50 4.1; P95 4.2; P99 4.3; max 8.4 ms |
+| Browser heartbeat during actor work | P50 5.0; P95/P99 5.1; max 5.3 ms |
+
+Warm task dispatch is slower in this run than the earlier baseline. This is a
+correctness consolidation, not a measured CLI speedup. The reusable worker
+produces two identical full 1,024-step scores with no forced replacement and
+zero workers after cleanup. Safe audition passes all seven checks and has a
+recording with digital monitor audio. These clocks do not prove physical A/V
+latency. Startup, broader incremental compilation, closed AOT admission and the
+remaining canonical core migration remain explicit follow-ups.
+
+Results: =spikes/pelagic/proof/consolidated-release/summary.json=.
+Recording: =spikes/pelagic/proof/consolidated-release/audition/safe-audition.webm=.
+
+From the root:
+#+begin_src sh
+bin/bl pelagic.dev
+bin/bl omega.watch
+# Open the printed candidate URL when you want the new frontend.
+bin/bl omega.watch.stop
+bin/bl omega.stop
+# Optional demo/export, using the same checked graph:
+bin/bl pelagic.local
+bin/bl pelagic.bundle
+#+end_src

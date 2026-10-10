@@ -1,0 +1,113 @@
+; Source events and speculative compilation are actors. No live frontend is
+; mutated: an accepted immutable candidate is offered for explicit session reload.
+(ns omega.frontend-watch
+ (:require [proc.tick :as tick] [proc.admission :as admission]))
+(defn relevant? [path]
+ (and (string? path)
+      (not (some (fn [part] (String/contains? path part))
+             ["/dist/" "/out/" "/proof/" "/test/" "/.git/" "/node_modules/"]))
+      (some (fn [suffix] (ends-with? path suffix))
+        [".bl" ".bl.md" ".bl.org" ".clj" ".cljc" ".mjs" ".css" ".html" ".glsl" ".org" ".in" ".json" ".edn"])))
+(defn- cancel! [job] (when job (erlang/send (:ticket job) :cancel)) :ok)
+(defn- check-authority! [options]
+ (when-let [authority (:authority options)]
+  (when-not (= (:initial-authority options) (authority))
+   (throw (ex-info "Build authority changed; restart the project realm" {:kind :build-authority}))))
+ :ok)
+(defn- launch [options attempt]
+ (let [controller (erlang/self)
+       ticket (spawn (fn []
+                (let [ref (erlang/monitor :process controller)]
+                 (receive :cancel :ok [:DOWN seen :process _ _] :when (= ref seen) :ok))))
+       pid (spawn (fn []
+             (let [result
+               (try
+                (admission/with-request (admission/token ticket 1800000)
+                 (fn []
+                  (let [_ (check-authority! options) before ((:fingerprint options)) output ((:build options))]
+                   (admission/check!)
+                   (check-authority! options)
+                   (when-not (= before ((:fingerprint options)))
+                    (throw (ex-info "Frontend inputs changed during build" {:kind :cancelled})))
+                   {:output output :fingerprint before})))
+                (catch error {:error (ex-message error)}))]
+              (erlang/send controller [:candidate attempt result]))))]
+  {:pid pid :ref (erlang/monitor :process pid) :ticket ticket :attempt attempt}))
+(defn- settle! [job]
+ (when job
+  (cancel! job)
+  (let [ref (:ref job)]
+   (receive [:DOWN seen :process _ _] :when (= seen ref) :ok
+            (after 300000 (throw (ex-info "Compiler did not acknowledge watch cancellation" {})))))))
+(defn- current? [options candidate]
+ (try (check-authority! options) (= (:fingerprint candidate) ((:fingerprint options))) (catch _ false)))
+(defn- run [options state owner]
+ (Process/flag :trap_exit true)
+ (let [controller (erlang/self) owner-ref (erlang/monitor :process owner)
+       watcher (BeamLisp.ReloadWatcher/start_link
+                 (list (tuple :name nil) (tuple :dirs (to-list (:paths options)))
+                       (tuple :on_change (fn [path] (when (relevant? path) (erlang/send controller [:changed path]))))))]
+  (when-not (= :ok (elem watcher 0)) (throw (ex-info "Cannot watch frontend sources" {:reason (elem watcher 1)})))
+  (erlang/send owner [:watch-ready controller])
+  (try
+   (tick/tick-reset (or (:quiet-ms options) 150))
+   (loop [job nil pending? true attempt 0]
+    (receive
+     [:changed path]
+      (do (cancel! job) (tick/tick-reset (or (:quiet-ms options) 150))
+          (swap! state assoc :status :pending :path path)
+          (recur job true attempt))
+     [:bl/tick generation]
+      (if (and (tick/tick-current? :tick generation) pending? (nil? job))
+       (do (swap! state assoc :status :building :attempt (inc attempt))
+           (recur (launch options (inc attempt)) false (inc attempt)))
+       (recur job pending? attempt))
+     [:candidate seen candidate]
+      (if (= seen (:attempt job))
+       (do
+        (cancel! job) (erlang/demonitor (:ref job) (list :flush))
+        (if (and (not pending?) (not (:error candidate))
+                 (current? options candidate))
+         (try
+          (let [accepted ((:accept options) (:output candidate))]
+           (swap! state assoc :status :ready :candidate accepted :error nil))
+          (catch error (swap! state assoc :status :held :error (ex-message error))))
+         (when-not pending? (swap! state assoc :status :held :error (or (:error candidate) "Inputs or build authority changed before admission"))))
+        (when pending? (tick/tick-reset (or (:quiet-ms options) 150)))
+        (recur nil pending? attempt))
+       (recur job pending? attempt))
+     [:DOWN ref :process _ reason]
+      (cond
+       (= ref owner-ref) (settle! job)
+       (= ref (:ref job))
+        (do (cancel! job) (swap! state assoc :status :held :error (str reason))
+            (when pending? (tick/tick-reset (or (:quiet-ms options) 150)))
+            (recur nil pending? attempt))
+       :else (recur job pending? attempt))
+     [:EXIT pid reason]
+      (if (= pid (elem watcher 1))
+       (do (settle! job) (throw (ex-info "Frontend watcher stopped" {:reason reason})))
+       (recur job pending? attempt))
+     :stop (settle! job)
+     _ (recur job pending? attempt)))
+   (finally
+    (tick/tick-cancel :tick)
+    (try (GenServer/stop (elem watcher 1)) (catch _ nil))
+    (swap! state assoc :status :stopped)))))
+(defn start! [options]
+ (Application/ensure_all_started :file_system)
+ (let [options (assoc options :initial-authority (when-let [authority (:authority options)] (authority)))
+       owner (erlang/self) state (atom {:status :starting})
+       pid (spawn-link (fn [] (run options state owner)))]
+  (let [ref (erlang/monitor :process pid)]
+   (receive
+    [:watch-ready ready] :when (= ready pid)
+      (do (erlang/demonitor ref (list :flush)) {:pid pid :status state})
+    [:DOWN seen :process _ reason] :when (= ref seen)
+      (throw (ex-info "Frontend watcher failed to start" {:reason reason}))
+    (after 30000 (do (erlang/send pid :stop) (throw (ex-info "Frontend watcher readiness timed out" {}))))))))
+(defn stop! [watch]
+ (let [ref (erlang/monitor :process (:pid watch))]
+  (erlang/send (:pid watch) :stop)
+  (receive [:DOWN seen :process _ _] :when (= ref seen) :ok
+           (after 300000 (throw (ex-info "Frontend watcher did not stop" {}))))))

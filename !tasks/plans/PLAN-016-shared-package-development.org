@@ -7,8 +7,8 @@ One Omega application host serves editor sessions that load packages. PELAGIC
 is a package/preset; standalone demos export the same frontend with a local
 adapter. Package loading must not create a project realm or backend world.
 Generic runtime/compiler improvements go upstream and are committed there.
-Omega's existing production compiler pin stays unchanged until integration tests
-verify the newer BEAM host AND the newly compiled JS graph.
+Omega pins the committed upstream release only after integration tests verify
+the BEAM host and the newly compiled JS graph; evidence below records each gate.
 
 This replaces the source-inspection-only ordering in the first version of this
 plan. Detailed experiments and raw evidence: research/realm-prototype/README.md.
@@ -16,7 +16,8 @@ Coordinate compiler/actor consolidation with PLAN-014; do not introduce another
 scheduler, value representation, namespace reader or package lifecycle.
 
 * What the prototypes established
-Current upstream base: 48db743504ad40b56cd1458c03b7554c9383203a.
+Initial prototype base: 48db743504ad40b56cd1458c03b7554c9383203a.
+Current integrated pin: d5363326 (final release validation below).
 Actual clean release tested: 04805c33. Origin was fetched; the local checkout was
 already ahead of origin/main. Tests exercised source and release separately.
 
@@ -264,14 +265,15 @@ limits with concise executable examples and an actual PELAGIC demo.
 - [X] Exercise real offline Omega service persistence and independent teardown
 - [X] Reproduce routing/shared-source gaps; commit narrow pinned-claim repair
 - [X] Reproduce first-ever service task lifetime under default shared auto-start
-- [ ] Persistent service-task semantics, crash/disconnect reservations and graceful stop
-- [ ] Service-owned route leases, hostname conflicts and preset aliases
-- [ ] Cold application package/AOT prototype and verified shared-source admission
-- [ ] Declarative frontend assembly and cross-process artifact coordination
-- [ ] Incremental compiler dependency/correctness gate
-- [ ] Transactional watcher and safe audition adoption
-- [ ] Actor compute pool leases, cancellation/fairness and measured pressure tests
-- [ ] Full new-pin integration, consolidation audit and browser/physical evidence
+- [X] Persistent service-task semantics, crash/disconnect reservations and graceful stop
+- [X] Service-owned route leases, hostname conflicts and preset aliases
+- [X] Cold application package/AOT prototype and verified shared-source admission
+- [X] Declarative frontend assembly and cross-process artifact coordination
+- [X] Incremental compiler dependency/correctness gate
+- [X] Transactional watcher and safe audition adoption
+- [X] Actor compute pool leases, cancellation/fairness and measured pressure tests
+- [X] Full new-pin integration, consolidation audit and browser evidence
+- [ ] Physical <=16 ms A/V evidence (external capture; separate follow-up)
 
 * Implementation log
 - Started upstream strict persistent transport (:warm "require" /
@@ -382,3 +384,137 @@ limits with concise executable examples and an actual PELAGIC demo.
   error and an ambient-symbol capture gap. Tightening positive lexical admission
   before publishing it; new source gates are running. This draft is not shipped
   by the validated root pin. Remaining roadmap boxes stay open until their gates.
+- Upstream 27dc63dc verifies transitive shared-source hashes and explicit paths;
+  regenerated Loader floor passes fresh child-VM replay. Together with root port
+  route normalization (60109c4c), 298 upstream assertions pass.
+- Root host-preset redirects, generation pins/retention, complete cache inventory
+  and serialized publication pass focused source gates. Cross-process hostname
+  admission passes; extending that harness to artifact publication and crash
+  recovery before checking off the artifact coordination gate.
+- Incremental prototype reuses only certified finite lexical checked ANF and
+  records declared/linked dependencies. Initial two-function benchmark regressed:
+  cached median 36.47 ms vs uncached 8.02 ms. Tightening certificate reuse across
+  empty forks before enabling; no speed win claimed from that initial version.
+- Compiler package prototype refuses an unsupported support closure after Omega
+  loads clojure.core-ext/conj. Added that canonical support namespace and a refusal
+  report, with source gates pending. No admitted-app startup gain is claimed yet.
+- Watch prototype reuses ReloadWatcher raw events, proc.tick debounce and
+  proc.admission cancellation. Candidate generations require artifact admission
+  and explicit session reload, remain host-owned/pinned after watch stop, and are
+  bounded to eight per host. First source gate: eight files / 256 assertions pass;
+  watcher caught a guard lookup error, fixed before re-running the combined gate.
+
+
+* Consolidated implementation checkpoint — 2026-10-10
+Upstream commits: 448e0e21 (owned service operations, cancellation checkpoints,
+raw events, dependency report and experimental finite checked-ANF reuse),
+0c8dd913 (canonical dotted support closure and regenerated bootstrap),
+ca05aacb (current-shim initializer ownership; stale companions cannot reenter seed).
+Origin was refreshed; concurrent upstream native/generation fixes were integrated.
+No pushes were issued by this work.
+
+- Combined source gate: 12 files green, including 101 realm-package assertions,
+  41 application-package assertions, 33 service assertions, 20 shared-source
+  assertions, 22 admission assertions, 35 watcher assertions, 9 frontend-watch,
+  22 host, 16 artifact and 34 launch assertions. Frontend metadata separately
+  passes 14 assertions from the Omega cwd; an initial harness cwd mismatch was
+  corrected. Later seed/retention/launch gate: 9 + 16 + 34 assertions green.
+- Actual cross-process race: one hostname owner, one refusal; one artifact build,
+  one reuse; killed publisher releases ownership and marked abandoned staging is
+  recovered without deleting the published generation.
+- Application package experiment completes safely but admits ZERO compiled
+  Omega artifacts and 146 source fallbacks. Cold realm in warm VM, source first:
+  13,086 ms source, 8,629 ms package build, 6,352 ms later package-backed host.
+  Do not attribute the later warm time to AOT. Production keeps source loading.
+- Checked-ANF cache remains opt-in (=BL_JS_CACHE=on=). After improved certificate
+  reuse: two-function hit median 19.29 ms vs direct 8.81 ms; hundred-function hit
+  median 62.79 ms vs direct 28.84 ms. Dependency reporting stays enabled. The
+  current finite disk profile does not justify becoming a default optimization.
+- Actor compilation now belongs to the immutable compiled graph; asset-only
+  frontend candidates reuse it. Reader pins protect graph/frontend copies,
+  exports and local servers. Each managed category retains three unpinned
+  generations; legacy outputs are preserved. Host candidates retain at most eight.
+- Removed nested PELAGIC compiler pin and mutable standalone actor builder.
+  Root env.bl owns all build/demo/export/check tasks; build.sh delegates to it.
+- Build and backend authority snapshots prevent executing cached tools while
+  labeling output with edited tool sources. Frontend edits remain watchable;
+  backend/build-tool changes require a project realm restart. Added owner-death
+  cleanup and authority-change watcher regressions; release validation pending.
+- Clean final-pin compiler release ca05aacb / runtime f178b257 rebuilt 396 tier
+  sources successfully. Unified frontend compilation and exact-release browser
+  gates are running. No final-pin frontend success claimed before those finish.
+
+* Evidence-driven follow-ups
+These are explicit boundaries, not silent alternate implementations:
+- Broader Omega AOT admission: close macro expansion and resolution evidence
+  before aliases/body macros can become artifacts; retain source correctness.
+- General namespace-level incremental compilation: the finite checked-ANF disk
+  experiment regresses. Asset-only graph reuse is shipped; broader reuse needs
+  measured benefit and complete compile-time dependency evidence.
+- Complete actor-lowered canonical core/evaluator migration remains tracked in
+  PLAN-014; shared value/callable/compiler paths are not proof that this migration
+  is finished. Test-only historical comparisons are not shipped defaults.
+- Physical <=16 ms end-to-end A/V still needs external capture. Headless audio
+  signal, cancellation and heartbeat measurements cannot establish that target.
+
+
+- Final integration found and repaired two application issues: the preset log
+  used nonexistent String.join, and speculative children correctly did not
+  inherit vm.scope routing identity. Watch now captures the native host actor
+  PID at startup and offers through that handle; it cannot silently retarget a
+  replacement owner. Actual candidate-prefix playback, two audible sessions,
+  catalog loading, and exact per-session unuse pass.
+- Stopping watch and then stopping the host exposed a generic lookup bug:
+  vm.manager intentionally retains stopped reservations, but service.lookup
+  attempted readiness on the dead PID. Upstream ae590b24 shares one readiness
+  handshake; lookup returns absence for a retired owner, while acquisition/value
+  still report initialization failure. All 35 service assertions pass, including
+  dead lookup and repeated stop. Root pin is updated; its clean release rebuild
+  is running before repeating the full shared lifetime gate.
+- ae590 integration will repeat actual root launch, asset-only candidate and
+  captured-owner admission, watch stop preserving pages, bundle generation,
+  host stop, realm restart preserving the shared OS owner, foreground playback,
+  reusable 1,024-step actor preparation and recorded safe audition.
+
+- Exact ae590 release source/package/editor/presentation/ZIP gates pass. Its
+  shared lifecycle passed watch stop and host stop but reopening the same port
+  after real browser connections exposed TIME_WAIT refusal in the generic route
+  probe. Upstream d5363326 uses reuseaddr without reuseport, matching restartable
+  servers; a live listener still refuses admission. All 32 port assertions pass.
+  Root pin consumes the committed fix; complete release gates are repeated.
+
+
+* Final integrated release gate — passed, 2026-10-10
+Root pin d5363326, runtime 6e5954ab, frontend
+23a2a8359b26084c8d1492c2dbe971890fa3b88665987614a2a51ece6a7f925d.
+Clean compiler + frontend build: 10m55.605s, 2.1 GiB peak, no swap.
+The sequential integration gate took 3m23.851s, 1.6 GiB peak, no swap.
+
+- 104 Omega source assertions; 67 package and 75 editor checks; unchanged
+  11/12-variant presentation check; local artifact and ZIP integrity all pass.
+- Actual root launch, thirty warm tasks, presets and catalog reuse one OS VM
+  and world. Asset-only watch edit preserves byte-identical JS dependency report
+  and actor graph; both immutable generations remain available. Two audible
+  sessions and exact unuse restoration pass through the candidate prefix.
+- Watch stop preserves candidate pages; bundle attaches to the same VM; host
+  stop closes its listener. Project realm restart reopens the SAME port after
+  browser traffic and preserves the shared OS owner. Restart + host: 14,538 ms.
+- Foreground entry: 11,393 ms with cached frontend; playback, controls, export,
+  real editor restoration and two audible sessions pass.
+- Thirty warm task samples: median 367.9 ms; P95 509.7 ms; P99 526.0 ms;
+  maximum 581.9 ms. This run is slower than the earlier baseline, not a claimed
+  dispatch speedup; startup/authority scanning remain a focused optimization.
+- One physical worker completes 100 cancellation cycles and two identical full
+  1,024-step scores; independent session cleanup passes. Cancellation P50/P95/
+  P99/max: 4.1/4.2/4.3/8.4 ms. Heartbeat: 5.0/5.1/5.1/5.3 ms. No forced
+  replacement, zero workers after cleanup.
+- All seven safe-audition checks pass; recorded demo includes preview/cancel,
+  boundary commit, stale-preview refusal, invalid shader retention, export while
+  playing and complete editor unuse. Digital monitor audio accompanies video.
+- Evidence: spikes/pelagic/proof/consolidated-release/summary.json and its
+  browser reports/screenshots; local recording audition/safe-audition.webm.
+  All private test VMs/worlds were cleaned up. No live-world writes were used.
+
+Consolidation implementation and its browser gates are complete. The physical
+A/V box stays open; broader AOT, general incremental compilation and PLAN-014's
+remaining core migration stay in the evidence-driven follow-ups above.

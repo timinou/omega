@@ -266,13 +266,34 @@
           (w/bytes (get asset-types (last (split filename "."))) (File/read! abs)))
       (w/text conn 404 "no such image"))))
 
+(defn landing-page
+  "Resolve an explicitly configured host's root preset. Explicit queries win."
+  [cfg host query]
+  (when (and (string? host) (empty? (or query "")))
+    (get (:landing-pages cfg) (lower-case (first (split host ":"))))))
+
+(defn- generation [cfg conn path]
+  (let [parts (split (subs path (count "/generations/")) "/") id (first parts)
+        target (when (and (re-matches #"[a-f0-9]{64}" id) (:generations cfg))
+                 (get @(:generations cfg) id))]
+    (if target
+      (if (= path (str "/generations/" id))
+        (-> conn (w/resp-header "location" (str path "/")) (w/text 307 ""))
+        (static (assoc cfg :web (:web target)) conn
+          (let [relative (join "/" (rest parts))] (if (empty? relative) "index.html" relative))))
+      (w/text conn 404 "generation not admitted"))))
+
 (defn router
   "The plug for config `cfg` = {:root :web :providers :intents}."
   [cfg]
   (fn [conn]
     (let [m (upper-case (str (w/method conn))) p (w/path conn)]
       (cond
-        (and (= m "GET") (= p "/")) (static cfg conn "index.html")
+        (and (= m "GET") (= p "/"))
+         (if-let [target (landing-page cfg (w/req-header conn "host") (w/query conn))]
+           (-> conn (w/resp-header "location" target) (w/text 307 ""))
+           (static cfg conn "index.html"))
+        (and (= m "GET") (starts-with? p "/generations/")) (generation cfg conn p)
         (and (= m "GET") (= p "/api/file")) (api-file cfg conn)
         (and (= m "GET") (= p "/api/doc")) (api-doc cfg conn)
         (and (= m "GET") (= p "/api/rev")) (api-rev cfg conn)
@@ -292,7 +313,9 @@
   (let [cfg {:root (Path/expand (or (:root opts) "."))
              :web (Path/expand (:web opts))
              :providers (or (:providers opts) {})
-             :intents (or (:intents opts) {})}
+             :intents (or (:intents opts) {})
+             :landing-pages (or (:landing-pages opts) {})
+             :generations (:generations opts)}
         port (or (:port opts) 8790)
         started (w/serve {:port port :plug (router cfg) :ip (erlang/list_to_tuple (list 127 0 0 1))})]
     (when-not (= :ok (elem started 0))

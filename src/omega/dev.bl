@@ -16,7 +16,7 @@
         (BeamLisp/with_cwd root
          (fn []
           (let [route (ports/claim name (or (:port opts) 8790) {:root root :hosts hosts :service true})]
-           (when (:error route) (throw (ex-info "Omega route is unavailable" route)))
+           (when (:error route) (throw (ex-info (str "Omega route is unavailable: " (pr-str (:error route))) route)))
            (try
             (assoc (omega/start! (assoc opts :root root :port (:ok route))) :route route)
             (catch error (release {:route route}) (throw error)))))))]
@@ -31,6 +31,21 @@
  "Stop the current world's host, preserving the shared VM and other worlds."
  [root]
  (when-let [realm (scope/current)]
-  (when-let [entry (get-in (manager/get-vm realm) [:services [:omega-world (Path/expand root)]])]
-   (service/stop! (:pid entry))))
+  (do
+   (when-let [watcher (service/lookup realm [:omega-frontend-watch (Path/expand root)])]
+    (service/stop! (:pid watcher)))
+   (when-let [entry (get-in (manager/get-vm realm) [:services [:omega-world (Path/expand root)]])]
+   (service/stop! (:pid entry)))))
  :ok)
+(defn frontend-owner
+ "Resolve the native owner once while in the application realm. A speculative
+  child keeps this handle; it need not inherit the caller's routing scope."
+ [root]
+ (let [realm (scope/current)
+       host (when realm (service/lookup realm [:omega-world (Path/expand root)]))]
+  (when-not host (throw (ex-info "Start bl omega.dev or bl pelagic.dev before watching" {})))
+  (:pid host)))
+(defn offer-frontend!
+ "Offer an already validated frontend through its captured native actor owner."
+ [owner id web]
+ (service/apply! owner (fn [value] (omega/admit-frontend! value id web))))

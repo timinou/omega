@@ -348,3 +348,19 @@ No mutable package tables or host-specific package names are introduced. Contrac
 `src/bl_ed/serve.bl` now retains the HTTP listener in the returned server value,
 reports bind failure, and provides `stop!` to end admission before an application
 closes its task system and storage. Rendering/package contracts are unchanged.
+
+### Host root presets (2026-10-10)
+
+`src/bl_ed/serve.bl` accepts a generic `:landing-pages` host-to-relative-path map.
+Only GET `/` without an explicit query redirects (307); unknown hosts and explicit
+session URLs keep the ordinary editor behavior. Omega supplies normalized env.bl
+routes. No package, domain name or second router is built into the editor.
+
+### Immutable candidate routes (2026-10-10)
+
+The existing server router accepts an owner-managed `:generations` atom. Only
+explicitly admitted SHA-256 IDs serve under `/generations/<id>/`; files use the
+same contained static routing as the initial frontend. Bare generation roots
+redirect to a trailing slash so relative package/module URLs resolve correctly.
+Unknown IDs return 404. Generation admission, pinning and retirement belong to
+the application host. Existing editor sessions remain on their chosen graph.

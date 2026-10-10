@@ -13,3 +13,51 @@
     (is (= :published (receive :published :published (after 5000 :timeout))))
     (is (not= (artifacts/staging root) (artifacts/staging root))))
    (finally (File/rm_rf! root)))))
+
+(deftest collection-preserves-live-pins-and-unmanaged-generations
+ (let [root (str (System/tmp_dir!) "/omega-generation-" (System/unique_integer (list :positive)))
+       managed (fn [name] (let [path (str root "/" name)]
+                    (File/mkdir_p! path)
+                    (File/write! (str path "/.omega-managed") "managed")
+                    (File/write! (str path "/.frontend") "frontend") path))]
+  (try
+   (let [a (managed "a") b (managed "b") c (managed "c")
+         legacy (str root "/legacy") pin (artifacts/pin! a)]
+    (File/mkdir_p! legacy) (File/write! (str legacy "/.frontend") "legacy")
+    (try
+     (let [removed (artifacts/collect! root ".frontend" 1 #{c})]
+      (is (empty? removed)) (is (File/dir? a)) (is (File/dir? legacy)))
+     (artifacts/unpin! pin)
+     (let [removed (artifacts/collect! root ".frontend" 1 #{c})]
+      (is (= 1 (count removed))) (is (File/dir? c)) (is (File/dir? legacy)))
+     (finally (artifacts/unpin! pin))))
+   (finally (File/rm_rf! root)))))
+
+(deftest publication-does-not-replace-a-pinned-generation
+ (let [root (str (System/tmp_dir!) "/omega-pinned-publish-" (System/unique_integer (list :positive)))
+       output (str root "/generation") stage (str root "/candidate")]
+  (File/mkdir_p! output) (File/mkdir_p! stage)
+  (File/write! (str output "/.omega-managed") "managed")
+  (File/write! (str output "/.frontend") "original")
+  (File/write! (str stage "/.frontend") "candidate")
+  (try
+   (let [pin (artifacts/pin! output)]
+    (try
+     (is (= :refused (try (artifacts/publish! stage output ".frontend") :wrong (catch _ :refused))))
+     (is (= "original" (File/read! (str output "/.frontend"))))
+     (finally (artifacts/unpin! pin))))
+   (artifacts/publish! stage output ".frontend")
+   (is (= "candidate" (File/read! (str output "/.frontend"))))
+   (finally (File/rm_rf! root)))))
+
+(deftest stage-recovery-preserves-unmarked-work-and-published-generations
+ (let [root (str (System/tmp_dir!) "/omega-stage-recovery-" (System/unique_integer (list :positive)))
+       stage (artifacts/stage! (str root "/generation"))
+       unknown (str root "/unknown.stage-other") published (str root "/published")]
+  (File/mkdir_p! unknown) (File/mkdir_p! published)
+  (File/write! (str published "/.omega-managed") "managed")
+  (try
+   (artifacts/clean-stages! root)
+   (is (not (File/exists? stage)))
+   (is (File/dir? unknown)) (is (File/dir? published))
+   (finally (File/rm_rf! root)))))

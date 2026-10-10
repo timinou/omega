@@ -1,6 +1,6 @@
 (ns omega.dev-host-test
  (:require [omega.ed.main :as omega] [omega.dev :as dev] [vm.manager :as manager]
-           [vm.scope :as scope] [vm.ports :as ports]))
+           [vm.scope :as scope] [vm.ports :as ports] [bl-ed.serve :as serve]))
 (deftest an-owned-offline-host-reuses-and-stops-its-resources
  (let [root (str (System/tmp_dir!) "/omega-host-" (System/unique_integer (list :positive)))
        id (str "omega-host-test-" (System/unique_integer (list :positive)))
@@ -49,3 +49,42 @@
     (is (= :stopped (receive [:DOWN seen :process _ _] :when (= ref seen) :stopped
                             (after 5000 :timeout)))))
    (finally (gen_tcp/close socket) (File/rm_rf! root)))))
+
+(deftest host-presets-redirect-only-the-unqualified-root
+ (let [root (str (System/tmp_dir!) "/omega-preset-" (System/unique_integer (list :positive)))
+       previous (Application/get_env :plug :validate_header_keys_during_test :absent)
+       cfg {:root root :web root :landing-pages {"pelagic.dev" "/?use=pelagic"}}
+       handle (serve/router cfg)
+       request (fn [path host] (maps/put :req_headers (list (tuple "host" host)) (Plug.Test/conn :get path)))]
+  (File/mkdir_p! root) (File/write! (str root "/index.html") "ordinary editor")
+  (Application/put_env :plug :validate_header_keys_during_test true)
+  (try
+   (let [redirect (handle (request "/" "PELAGIC.DEV:8812"))]
+    (is (= 307 (:status redirect)))
+    (is (= (list "/?use=pelagic") (Plug.Conn/get_resp_header redirect "location"))))
+   (let [explicit (handle (request "/?use=packages" "pelagic.dev"))
+         unknown (handle (request "/" "unknown.localhost"))]
+    (is (= 200 (:status explicit))) (is (= "ordinary editor" (:resp_body explicit)))
+    (is (= 200 (:status unknown))) (is (= "ordinary editor" (:resp_body unknown))))
+   (finally
+    (if (= :absent previous) (Application/delete_env :plug :validate_header_keys_during_test)
+      (Application/put_env :plug :validate_header_keys_during_test previous))
+    (File/rm_rf! root)))))
+
+(deftest generation-routes-serve-only-explicitly-admitted-frontends
+ (let [root (str (System/tmp_dir!) "/omega-generation-route-" (System/unique_integer (list :positive)))
+       id (String/duplicate "a" 64)
+       previous (Application/get_env :plug :validate_header_keys_during_test :absent)
+       handle (serve/router {:web root :generations (atom {id {:web root}})})]
+  (File/mkdir_p! root) (File/write! (str root "/index.html") "admitted editor")
+  (Application/put_env :plug :validate_header_keys_during_test true)
+  (try
+   (let [bare (handle (Plug.Test/conn :get (str "/generations/" id)))
+         page (handle (Plug.Test/conn :get (str "/generations/" id "/")))
+         absent (handle (Plug.Test/conn :get (str "/generations/" (String/duplicate "b" 64) "/")))]
+    (is (= 307 (:status bare))) (is (= 200 (:status page)))
+    (is (= "admitted editor" (:resp_body page))) (is (= 404 (:status absent))))
+   (finally
+    (if (= :absent previous) (Application/delete_env :plug :validate_header_keys_during_test)
+      (Application/put_env :plug :validate_header_keys_during_test previous))
+    (File/rm_rf! root)))))

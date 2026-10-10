@@ -1,0 +1,74 @@
+{
+  "upstreamCommit": "d5363326",
+  "runtimeRelease": "6e5954ab",
+  "cleanCompilerAndFrontendBuild": {
+    "seconds": 655.605,
+    "memoryPeakGiB": 2.1
+  },
+  "frontend": "/home/user/code/undefine/omega/spikes/pelagic/dist/frontend/23a2a8359b26084c8d1492c2dbe971890fa3b88665987614a2a51ece6a7f925d",
+  "checks": {
+    "omegaSourceAssertions": 104,
+    "packageChecks": 67,
+    "editorChecks": 75,
+    "presentationVariants": [
+      11,
+      12
+    ],
+    "zipIntegrity": true
+  },
+  "warmTask": {
+    "samples": 30,
+    "medianMs": 367.86512499747914,
+    "p95Ms": 509.69721100409515,
+    "p99Ms": 526.0142059996724,
+    "maxMs": 581.928602005064
+  },
+  "realmRestartAndHostMs": 14537.885037003434,
+  "foreground": {
+    "foreground": true,
+    "startupMs": 11393.010117993981,
+    "world": "/tmp/omega-foreground-fhjloh86/world",
+    "port": 56793,
+    "realEditor": true,
+    "twoAudibleSessions": true
+  },
+  "pool": {
+    "cycles": 100,
+    "completeScores": 2,
+    "scoreRows": 1024,
+    "pooled": {
+      "workers": 1,
+      "active": 0,
+      "resetting": 0,
+      "created": 1,
+      "forced": 0
+    },
+    "final": {
+      "workers": 0,
+      "active": 0,
+      "resetting": 0,
+      "created": 1,
+      "forced": 0
+    },
+    "cancelP50Ms": 4.100000001490116,
+    "cancelP95Ms": 4.200000002980232,
+    "cancelP99Ms": 4.299999997019768,
+    "cancelMaxMs": 8.400000005960464,
+    "heartbeatP50Ms": 5,
+    "heartbeatP95Ms": 5.100000001490116,
+    "heartbeatP99Ms": 5.100000001490116,
+    "heartbeatMaxMs": 5.300000004470348,
+    "digest": "d77e635fea215911aed99b5304c885febfbdbc4542b6f3d0f8d064db90c3ed8b",
+    "independentSessions": true
+  },
+  "auditionChecks": [
+    "audition keeps active revision and history unchanged",
+    "cancel disposes the preview bus and leaves active sound unchanged",
+    "commit activates atomically on a future musical boundary",
+    "an intervening edit makes the old audition uncommittable",
+    "invalid shader retains the active revision and sound",
+    "bounded offline export completes while playback continues",
+    "real editor unload closes all owned resources and preserves source"
+  ],
+  "physical16msEstablished": false
+}

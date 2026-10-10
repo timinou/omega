@@ -184,7 +184,7 @@ the full file decodes without errors. [Media metadata](proof/club/media.json),
 
 ## Optional local compilation
 
-Run `spikes/pelagic/build.sh --local` to invoke PELAGIC's `env.bl` bundle task.
+Run `spikes/pelagic/build.sh --local` to invoke the root `env.bl` bundle task.
 It packages this same editor/package with the browser compiler and local document
 storage, for static hosting and offline reload. See [local compilation](local.bl.md)
 for setup, native BL browser interop and the static-browser proof.

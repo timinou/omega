@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # bin/bl — run beam-lisp for omega: the build env.bl pins (`:bl "commit:…"`),
 # resolved by the `bl` launcher, with omega's sources on the search path.
 # OMEGA_BL=<path to a bl> runs that one instead (e.g. the live main checkout).
@@ -17,12 +17,21 @@ fi
 # always starts in omega's root. Callers pass the project as --root, and file
 # arguments are resolved first, so relative paths keep meaning "from here".
 abs() { case "$1" in /*|-*) printf '%s' "$1" ;; *) [ -e "$1" ] && printf '%s/%s' "$PWD" "$1" || printf '%s' "$1" ;; esac; }
-cmd=$1; shift
-for a; do shift; set -- "$@" "$(abs "$a")"; done
+# Preserve launch policy flags before resolving the command's file arguments.
+# In particular, `test` names both a command and a real directory here.
+policy=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --cold|--warm-required) policy+=("$1"); shift ;;
+    *) break ;;
+  esac
+done
+cmd=${1:---help}
+[ "$#" -eq 0 ] || shift
+resolved=()
+for arg in "$@"; do resolved+=("$(abs "$arg")"); done
 cd "$ROOT" || exit 2
 case "$cmd" in
-  # vendor/bl-ed/src: the editor's BEAM half (bl-ed.serve, bl-ed.image), which
-  # omega.ed.main starts in omega's own VM (vendor/bl-ed/VENDOR.md)
-  run|test|eval|check) exec "$BL" "$cmd" -p "$ROOT/src" -p "$ROOT/vendor/bl-ed/src" "$@" ;;
-  *) exec "$BL" "$cmd" "$@" ;;
+  run|test|eval|check) exec "$BL" "${policy[@]}" "$cmd" -p "$ROOT/src" -p "$ROOT/vendor/bl-ed/src" "${resolved[@]}" ;;
+  *) exec "$BL" "${policy[@]}" "$cmd" "${resolved[@]}" ;;
 esac

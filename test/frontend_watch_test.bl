@@ -1,0 +1,67 @@
+(ns omega.frontend-watch-test
+ (:require [omega.frontend-watch :as watch] [proc.admission :as admission]))
+(defn- await [predicate]
+ (loop [n 1000]
+  (cond (predicate) true (zero? n) false :else (do (Process/sleep 10) (recur (dec n))))))
+(deftest actual-file-events-cancel-obsolete-work-and-preserve-an-admitted-candidate
+ (let [root (str (System/tmp_dir!) "/omega-watch-" (System/unique_integer (list :positive)))
+       path (str root "/theme.css") started (atom 0) cleaned (atom 0) accepted (atom []) authority (atom 0)]
+  (File/mkdir_p! root) (File/write! path "first")
+  (try
+   (let [watcher (watch/start!
+     {:paths [root] :quiet-ms 20 :authority (fn [] @authority) :fingerprint (fn [] (File/read! path))
+      :build (fn []
+       (swap! started inc)
+       (try
+        (doseq [_ (range 30)] (admission/check!) (Process/sleep 10))
+        (File/read! path)
+        (finally (swap! cleaned inc))))
+      :accept (fn [candidate]
+       (when (= candidate "bad") (throw (ex-info "invalid candidate" {})))
+       (swap! accepted conj candidate) candidate)})]
+    (try
+     (is (await (fn [] (= 1 @started))))
+     (File/write! path "middle") (File/write! path "latest")
+     (is (await (fn [] (= :ready (:status @(:status watcher))))) (pr-str @(:status watcher)))
+     (is (= ["latest"] @accepted))
+     (is (>= @started 2))
+     (File/write! path "bad")
+     (is (await (fn [] (= :held (:status @(:status watcher))))))
+     (is (= "latest" (:candidate @(:status watcher))))
+     (is (= ["latest"] @accepted))
+     (swap! authority inc) (File/write! path "new tool context")
+     (is (await (fn [] (and (= :held (:status @(:status watcher)))
+                           (String/contains? (or (:error @(:status watcher)) "") "Build authority changed")))))
+     (is (= "latest" (:candidate @(:status watcher))))
+     (is (= ["latest"] @accepted))
+     (finally (watch/stop! watcher)))
+    (is (not (Process/alive? (:pid watcher))))
+    (is (= @started @cleaned)))
+   (finally (File/rm_rf! root)))))
+
+(deftest owner-death-cancels-private-compilation-through-finally
+ (let [root (str (System/tmp_dir!) "/omega-watch-owner-" (System/unique_integer (list :positive)))
+       parent (erlang/self)]
+  (File/mkdir_p! root)
+  (let [owner (spawn (fn []
+                (let [running (watch/start!
+                   {:paths [root] :quiet-ms 10 :fingerprint (fn [] "stable")
+                    :build (fn []
+                      (erlang/send parent :owner-build-started)
+                      (try (loop [] (admission/check!) (Process/sleep 10) (recur))
+                       (finally (erlang/send parent :owner-build-cleaned))))
+                    :accept (fn [_] (erlang/send parent :owner-wrongly-accepted))})]
+                 (erlang/send parent [:owned-watch running])
+                 (receive :never nil))))]
+   (try
+    (let [running (receive [:owned-watch value] value (after 10000 nil))]
+     (is (some? running))
+     (is (= :started (receive :owner-build-started :started (after 10000 :timeout))))
+     (erlang/exit owner :kill)
+     (is (= :cleaned (receive :owner-build-cleaned :cleaned (after 10000 :timeout))))
+     (is (await (fn [] (not (Process/alive? (:pid running))))))
+     (is (= :stopped (:status @(:status running))))
+     (is (= :not-accepted (receive :owner-wrongly-accepted :wrong (after 20 :not-accepted)))))
+    (finally
+     (when (Process/alive? owner) (erlang/exit owner :kill))
+     (File/rm_rf! root))))))

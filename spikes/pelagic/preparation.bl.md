@@ -12,10 +12,11 @@ bin/bl-ed
 # Open ?file=spikes/pelagic/live-set.bl.org&use=pelagic&layout=pelagic
 ```
 
-`bl frontend` from `spikes/pelagic` stages a server frontend under `dist/server`
-alongside `dist/local`. `build.sh` installs its editor/runtime graph and PELAGIC
-loader in the real editor's web directory, preserving unrelated package files.
-Omega's server compiler pin is unchanged. The current frontend pin is `c9e95080`; the historical measurements below used `a5f51eae`.
+`bl pelagic.build` reuses the root-pinned immutable frontend generation.
+`build.sh` calls that same task; `bin/bl-ed` serves its result directly.
+No package files are installed into the vendored editor. The root `env.bl` owns
+the compiler pin. See [the selected actor architecture](actor-consolidation.bl.md).
+Measurements below describe the earlier bridged comparison at its recorded pin.
 
 ## CPU placement and actors — original bridged prototype
 
@@ -80,23 +81,17 @@ policy fills one second promptly, then yields between score steps after a 4 ms
 turn budget while building the existing four-second reserve. Individual graph
 creation may exceed that budget; diagnostics record complete turn p95 and maximum.
 
-## Reproducing the prototype
+## Current build and historical comparison
 
-The default bundle needs no actor runtime. To include the actor comparison:
+The current build includes canonical actor preparation:
 
 ```sh
-cd spikes/pelagic
-bl actors
-PELAGIC_ACTORS=1 bl bundle
+bl pelagic.build
+bl pelagic.bundle
 ```
 
-`PELAGIC_ACTOR_ROOT=/path/to/beam-lisp` selects a compiler source checkout if the
-launcher installation does not contain `research/js-actors`. The build reuses that
-checkout's checked actor emitter/runtime; use the package's pinned revision.
-
-The measurement harnesses can serve `dist/actor` directly after `bl actors`;
-rebundling with `PELAGIC_ACTORS=1` is needed only to select actors in the real
-package frontend.
+The profile selectors and comparison measurements below describe the historical
+prototype; they are not separate shipped preparation implementations.
 
 Query `?prepare=prebuilt`, `worker`, `actor` or `none` selects the preparation
 variant for measurements. Patch authors need no changes. Run from Omega's root:
