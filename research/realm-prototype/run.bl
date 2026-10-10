@@ -1,0 +1,134 @@
+; Exercise real shared-session socket dispatch in one source VM.
+; The synthetic build ID selects the release endpoint shape, not release code.
+(ns realm-prototype.run
+ (:require [vm.session :as session] [vm.paths :as paths] [vm.realm :as realm]
+           [vm.manager :as manager] [vm.owner :as owner] [vm.index :as index]
+           [bl.json :as json] [clojure.string :as strings]))
+
+(def results (atom []))
+(defn check [label value]
+ (swap! results conj {:check label :pass (boolean value)})
+ (println (str (if value "PASS " "FAIL ") label))
+ (when-not value (throw (ex-info label {}))))
+(defn connect []
+ (let [ep (:ok (paths/endpoints nil (paths/build-id) true))
+       c (gen_tcp/connect (tuple :local (String/to_charlist (:sock ep))) 0
+          (list (tuple :inet_backend :inet) :local :binary (tuple :packet 4) (tuple :active false)))]
+  (when-not (= :ok (elem c 0)) (throw (ex-info "connect" {:result c})))
+  (let [socket (elem c 1)]
+   (gen_tcp/send socket (erlang/term_to_binary
+    (tuple :bl 1 :hello {:tree (paths/hello-fingerprint nil (paths/build-id) true)
+                        :token (File/read! (:token ep))})))
+   (gen_tcp/recv socket 0 5000)
+   socket)))
+(defn send-request [socket root argv]
+ (gen_tcp/send socket (erlang/term_to_binary
+  (tuple :bl 1 :request (crypto/strong_rand_bytes 16)
+   {:argv (to-list argv) :cwd root :env {"PROBE_CLIENT" root}}))))
+(defn request [root argv]
+ (let [start (System/monotonic_time :microsecond) socket (connect)]
+  (try
+   (send-request socket root argv)
+   (loop [out ""]
+    (let [r (gen_tcp/recv socket 0 120000)]
+     (when-not (= :ok (elem r 0)) (throw (ex-info "receive" {:response r :out out})))
+     (let [f (erlang/binary_to_term (elem r 1)) tag (elem f 2)]
+      (cond
+       (= :stdout tag) (recur (str out (unicode/characters_to_binary (elem f 5))))
+       (= :exit tag) {:out out :code (elem f 4)
+                     :ms (/ (- (System/monotonic_time :microsecond) start) 1000.0)}
+       :else (recur out)))))
+   (finally (gen_tcp/close socket)))))
+(defn decoded [response]
+ (check "task exits successfully" (= 0 (:code response)))
+ (let [line (first (filter (fn [x] (starts-with? x "PROBE ")) (strings/split (:out response) #"\n")))]
+  (when-not line (throw (ex-info "no probe result" response)))
+  (json/decode (subs line 6) {:keys :keyword})))
+(defn project! [root marker]
+ (File/mkdir_p! (str root "/src/studio"))
+ (File/write! (str root "/env.bl")
+  (str "{:name \"realm-probe-" marker "\" :vm \"shared\" :paths [\"src\"]"
+       " :tasks {\"probe\" {:run \"probe.bl\"} \"block\" {:run \"block.bl\"}}}"))
+ (File/write! (str root "/src/studio/fixture.bl")
+  (str "(ns studio.fixture (:require [vm.osenv :as osenv]))\n"
+       "(def counter (atom 0))\n"
+       "(defn snapshot [] {:marker \"" marker "\" :counter (swap! counter inc)"
+       " :cwd (BeamLisp/cwd) :client (osenv/get \"PROBE_CLIENT\") :os (System/pid)})\n"))
+ (File/write! (str root "/probe.bl")
+  "(ns user (:require [studio.fixture :as f] [bl.json :as json])) (println (str \"PROBE \" (json/encode (f/snapshot))))")
+ (File/write! (str root "/block.bl")
+  "(File/write! (str (BeamLisp/cwd) \"/blocked.pid\") (erlang/term_to_binary (erlang/self))) (Process/sleep 60000)"))
+(defn await-file [path attempts]
+ (cond (File/regular? path) true
+       (zero? attempts) false
+       :else (do (Process/sleep 20) (await-file path (dec attempts)))))
+(defn idle-child [] (receive :stop nil))
+(defn start-member [vm adopt-child?]
+ (let [parent (erlang/self)
+       pid (manager/serve (:id vm) :prototype-service
+        (fn []
+         (let [child (core/spawn idle-child)]
+          (when adopt-child? (owner/adopt (:id vm) :prototype-child child))
+          (erlang/send parent [:ready (erlang/self) child])
+          (loop []
+           (receive [:ping reply] (do (erlang/send reply [:pong (erlang/self)]) (recur))
+                    :stop (erlang/exit child :kill))))))]
+  (receive [:ready p child] {:pid p :child child}
+   (after 10000 (throw (ex-info "service readiness timeout" {:pid pid}))))))
+
+(defn main []
+ (let [base (str (System/tmp_dir!) "/omega-realm-probe-" (System/unique_integer (list :positive)))
+       a (str base "/alpha") b (str base "/beta")
+       old-build (System/get_env "BL_BUILD_ID") old-runtime (System/get_env "XDG_RUNTIME_DIR")
+       old-state (System/get_env "XDG_STATE_HOME") listener (atom nil) loose (atom [])]
+  (File/mkdir_p! (str base "/runtime"))
+  (System/put_env "XDG_RUNTIME_DIR" (str base "/runtime"))
+  (System/put_env "XDG_STATE_HOME" (str base "/state"))
+  (System/put_env "BL_BUILD_ID" "probe48db7435")
+  (try
+   (project! a "alpha") (project! b "beta")
+   (let [started (session/start nil {:shared true})]
+    (check "shared session starts on a private endpoint" (some? (:ok started)))
+    (reset! listener (:ok started)))
+   (let [first-a (request a ["probe"]) first-b (request b ["probe"])
+         av (decoded first-a) bv (decoded first-b)
+         warm (vec (map (fn [_] (request a ["probe"])) (range 10)))
+         last-a (decoded (last warm))
+         va (realm/open a) vb (realm/open b)
+         a-service (start-member va false) b-service (start-member vb true)]
+    (swap! loose conj (:child a-service))
+    (check "two project tasks share the OS VM" (= (:os av) (:os bv)))
+    (check "same namespace has different project implementations" (= ["alpha" "beta"] [(:marker av) (:marker bv)]))
+    (check "warm requests retain only their own namespace atom" (= [1 1 11] [(:counter av) (:counter bv) (:counter last-a)]))
+    (check "request cwd and environment overlay match project" (= [a a b b] [(:cwd av) (:client av) (:cwd bv) (:client bv)]))
+    (check "project index owners differ" (not= (index/owner-pid a) (index/owner-pid b)))
+    (let [socket (connect)]
+     (send-request socket a ["block"])
+     (check "long task actually starts" (await-file (str a "/blocked.pid") 1000))
+     (let [pid (erlang/binary_to_term (File/read! (str a "/blocked.pid")))]
+      (gen_tcp/close socket)
+      (Process/sleep 200)
+      (check "client disconnect cancels long command" (not (erlang/is_process_alive pid)))))
+    (erlang/send (:pid b-service) [:ping (erlang/self)])
+    (check "owned service remains responsive after commands return"
+     (receive [:pong p] (= p (:pid b-service)) (after 2000 false)))
+    (let [closed (realm/close a)]
+     (Process/sleep 100)
+     (check "closing A kills its registered service" (not (erlang/is_process_alive (:pid a-service))))
+     (check "unadopted spawned child survives realm close" (erlang/is_process_alive (:child a-service)))
+     (check "B service survives A close" (erlang/is_process_alive (:pid b-service)))
+     (check "B still dispatches tasks" (= "beta" (:marker (decoded (request b ["probe"])))))
+     (check "A reopens with fresh namespace state" (= 1 (:counter (decoded (request a ["probe"])))))
+     (realm/close b)
+     (Process/sleep 100)
+     (check "explicitly adopted child dies with B" (not (erlang/is_process_alive (:child b-service))))
+     (println (str "RESULT " (json/encode {:checks @results :first-a-ms (:ms first-a) :first-b-ms (:ms first-b)
+      :warm-ms (mapv :ms warm) :close-a closed :os (:os av)})))))
+   (finally
+    (doseq [root [a b]] (try (realm/close root) (catch _ nil)))
+    (doseq [pid @loose] (when (erlang/is_process_alive pid) (erlang/exit pid :kill)))
+    (when @listener (session/stop @listener))
+    (doseq [[key value] [["BL_BUILD_ID" old-build] ["XDG_RUNTIME_DIR" old-runtime] ["XDG_STATE_HOME" old-state]]]
+     (if value (System/put_env key value) (System/delete_env key)))
+    (File/rm_rf! base)))))
+(when-not (System/get_env "REALM_PROBE_LIBRARY") (main))

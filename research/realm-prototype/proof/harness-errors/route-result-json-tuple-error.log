@@ -1,0 +1,21 @@
+Running as unit: omega-realm-route-fixed-prototype.service
+bl-stage-hosts: 67 pinned host beams staged into /home/user/code/undefine/beam-lisp/build (app resource beam_lisp.app)
+bl: this image's library beams are a previous toolchain's generation (first seen: vm.native).
+bl: stale libraries are compiled once and cached on first use; run `bl build` to rebuild the whole image.
+PASS pinned A claim succeeds
+PASS ephemeral per-root claims choose different ports
+PASS current implementation accepts duplicate hostnames
+error: bl.json: cannot encode a tuple — no JSON representation (at "/pinned-b/error")
+  at BeamLisp.ExInfo/raise_payload
+  at bl.json/-emit-object/4-anonymous-2-  priv/std/bl/json.bl:242
+  at rt/-lazy-map/2-anonymous-2-
+  at BeamLisp.LazySeq/evaluate_attempt  /home/user/code/undefine/beam-lisp--engineering-followups/priv/host/lazy_seq.bl:517
+  at BeamLisp.LazySeq/force_state
+  at BeamLisp.LazySeq/realize_step  /home/user/code/undefine/beam-lisp--engineering-followups/priv/host/lazy_seq.bl:832
+  at rt/k-seq
+  at rt/coll-sort  priv/boot/rt.bl:2352
+          Finished with result: exit-code
+Main processes terminated with: code=exited, status=1/FAILURE
+               Service runtime: 56.082s
+             CPU time consumed: 1min 1.337s
+                   Memory peak: 253M (swap: 0B)

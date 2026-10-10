@@ -1,0 +1,67 @@
+(ns realm-prototype.host
+ (:require [realm-prototype.run :as probe] [vm.session :as session]
+           [vm.realm :as realm] [vm.owner :as owner] [bl.json :as json]))
+(defn http [port path]
+ (try
+  (let [r (httpc/request :get
+           (tuple (String/to_charlist (str "http://127.0.0.1:" port path)) (list))
+           (list (tuple :timeout 2000) (tuple :connect_timeout 500))
+           (list (tuple :body_format :binary)))]
+   (when (= :ok (elem r 0))
+    {:status (elem (elem (elem r 1) 0) 1) :body (elem (elem r 1) 2)}))
+  (catch _ nil)))
+(defn make-project! [root marker web]
+ (probe/project! root marker)
+ (File/write! (str root "/env.bl")
+  (str "{:name \"omega-host-" marker "\" :vm \"shared\" :paths [\"src\""
+       " \"/home/user/code/undefine/omega/src\" \"/home/user/code/undefine/omega/vendor/bl-ed/src\"]"
+       " :tasks {\"host\" {:run \"host.bl\"}}}"))
+ (File/write! (str root "/src/studio/server.bl")
+  (-> (File/read! "/home/user/code/undefine/omega/research/realm-prototype/service.bl.in")
+      (replace-str "@MARKER@" marker) (replace-str "@WEB@" web)))
+ (File/write! (str root "/host.bl")
+  "(ns user (:require [studio.server :as server] [bl.json :as json])) (println (str \"PROBE \" (json/encode (server/snapshot))))"))
+(defn main []
+ (let [base (str (System/tmp_dir!) "/omega-host-probe-" (System/unique_integer (list :positive)))
+       a (str base "/alpha") b (str base "/beta")
+       web "/home/user/code/undefine/omega/spikes/pelagic/dist/frontend/291f4831e5346989fa3b2126739efa0a5a8cb39dbca698c17c7f379ea68d2c3c"
+       old-build (System/get_env "BL_BUILD_ID") old-runtime (System/get_env "XDG_RUNTIME_DIR")
+       old-state (System/get_env "XDG_STATE_HOME") listener (atom nil)]
+  (File/mkdir_p! (str base "/runtime"))
+  (System/put_env "XDG_RUNTIME_DIR" (str base "/runtime"))
+  (System/put_env "XDG_STATE_HOME" (str base "/state"))
+  (System/put_env "BL_BUILD_ID" "host48db7435")
+  (Application/ensure_all_started :inets)
+  (try
+   (make-project! a "alpha" web) (make-project! b "beta" web)
+   (reset! listener (:ok (session/start nil {:shared true})))
+   (probe/check "private shared socket started" (some? @listener))
+   (let [ra (probe/request a ["host"]) av (probe/decoded ra)
+         rb (probe/request b ["host"]) bv (probe/decoded rb)
+         reused (probe/decoded (probe/request a ["host"]))
+         va (realm/open a) vb (realm/open b)
+         a-service (first (filter (fn [m] (= :omega-host (:role m))) (owner/members (:id va))))]
+    (probe/check "real Omega hosts share one OS VM" (= (:os av) (:os bv)))
+    (probe/check "repeat host task reuses exact service and port" (= av reused))
+    (probe/check "A HTTP provider serves A" (includes? (:body (http (:port av) "/api/doc?path=probe:identity")) "alpha"))
+    (probe/check "B HTTP provider serves B" (includes? (:body (http (:port bv) "/api/doc?path=probe:identity")) "beta"))
+    (probe/check "real editor frontend serves successfully" (= 200 (:status (http (:port av) "/"))))
+    (probe/check "task command returned but A service is alive" (Process/alive? (:pid a-service)))
+    (let [resources (erlang/binary_to_term (File/read! (str a "/resources.term")))]
+     (probe/check "Omega supervisor is live before close" (Process/alive? (:supervisor resources))))
+    (let [started (System/monotonic_time :millisecond) closed (realm/close a)]
+     (Process/sleep 500)
+     (probe/check "A listener closes with realm" (nil? (http (:port av) "/")))
+     (let [resources (erlang/binary_to_term (File/read! (str a "/resources.term")))]
+      (probe/check "Omega task supervisor closes with realm" (not (Process/alive? (:supervisor resources)))))
+     (probe/check "B listener survives A close" (= 200 (:status (http (:port bv) "/"))))
+     (println (str "HOST-RESULT " (json/encode {:a av :b bv :first-a-ms (:ms ra) :first-b-ms (:ms rb)
+        :close-a closed :close-wall-ms (- (System/monotonic_time :millisecond) started)
+        :checks @probe/results})))))
+   (finally
+    (doseq [root [a b]] (try (realm/close root) (catch _ nil)))
+    (when @listener (session/stop @listener))
+    (doseq [[key value] [["BL_BUILD_ID" old-build] ["XDG_RUNTIME_DIR" old-runtime] ["XDG_STATE_HOME" old-state]]]
+     (if value (System/put_env key value) (System/delete_env key)))
+    (File/rm_rf! base)))))
+(main)

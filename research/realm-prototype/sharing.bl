@@ -1,0 +1,38 @@
+(ns realm-prototype.sharing
+ (:require [realm-prototype.run :as probe] [vm.session :as session]
+           [vm.realm :as realm] [bl.json :as json]))
+(defn main []
+ (let [base (str (System/tmp_dir!) "/omega-sharing-probe-" (System/unique_integer (list :positive)))
+       a (str base "/a") b (str base "/b") common (str base "/common")
+       old-build (System/get_env "BL_BUILD_ID") old-runtime (System/get_env "XDG_RUNTIME_DIR")
+       old-state (System/get_env "XDG_STATE_HOME") listener (atom nil)]
+  (System/put_env "XDG_RUNTIME_DIR" (str base "/runtime"))
+  (System/put_env "XDG_STATE_HOME" (str base "/state"))
+  (System/put_env "BL_BUILD_ID" "uses48db7435")
+  (File/mkdir_p! (str common "/lib"))
+  (File/write! (str common "/lib/common.bl") "(ns lib.common) (defn answer [] 42)")
+  (try
+   (doseq [root [a b]]
+    (File/mkdir_p! root)
+    (File/write! (str root "/env.bl")
+     (str "{:name \"sharing-" (Path/basename root) "\" :vm \"shared\""
+          " :paths [" (if (= root a) (pr-str common) "") "]"
+          " :uses {\"lib.common\" {:path " (pr-str common)
+          " :hash \"sha256:0000000000000000000000000000000000000000000000000000000000000000\"}}"
+          " :tasks {\"common\" {:run \"common.bl\"}}}"))
+    (File/write! (str root "/common.bl")
+     "(ns user (:require [lib.common :as c])) (println (str \"COMMON \" (c/answer)))"))
+   (reset! listener (:ok (session/start nil {:shared true})))
+   (probe/check "private shared socket started" (some? @listener))
+   (let [with-path (probe/request a ["common"]) uses-only (probe/request b ["common"])]
+    (println (str "SHARING-RESULT " (json/encode
+     {:incorrect-hash-with-path-accepted (= 0 (:code with-path))
+      :uses-path-alone-resolves (= 0 (:code uses-only))
+      :with-path with-path :uses-only uses-only}))))
+   (finally
+    (doseq [root [a b]] (try (realm/close root) (catch _ nil)))
+    (when @listener (session/stop @listener))
+    (doseq [[key value] [["BL_BUILD_ID" old-build] ["XDG_RUNTIME_DIR" old-runtime] ["XDG_STATE_HOME" old-state]]]
+     (if value (System/put_env key value) (System/delete_env key)))
+    (File/rm_rf! base)))))
+(main)

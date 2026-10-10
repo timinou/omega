@@ -1,0 +1,642 @@
+{
+  "build": "04805c33",
+  "upstream": "48db743504ad40b56cd1458c03b7554c9383203a",
+  "checks": [
+    {
+      "check": "release clients attach to the explicitly owned VM",
+      "pass": true
+    },
+    {
+      "check": "same namespace retains different project implementations",
+      "pass": true
+    },
+    {
+      "check": "project :env is read through standard System/get_env",
+      "pass": true
+    },
+    {
+      "check": "concurrent clients keep their own standard environment view",
+      "pass": true
+    },
+    {
+      "check": "all concurrent requests stay in the same VM",
+      "pass": true
+    },
+    {
+      "check": "warm task namespace state persists",
+      "pass": true
+    },
+    {
+      "check": "realm stop succeeds",
+      "pass": true
+    },
+    {
+      "check": "stopping A leaves B's code and state intact",
+      "pass": true
+    },
+    {
+      "check": "A reopens with fresh state in the same VM",
+      "pass": true
+    }
+  ],
+  "first_a": {
+    "ms": 25273.001473000477,
+    "code": 0,
+    "out": "PROBE {\"client-env\":\"normal\",\"counter\":1,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+    "err": "",
+    "value": {
+      "client-env": "normal",
+      "counter": 1,
+      "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+      "marker": "alpha",
+      "os": "186446",
+      "project-env": "alpha"
+    }
+  },
+  "first_b": {
+    "ms": 366.3709280008334,
+    "code": 0,
+    "out": "PROBE {\"client-env\":\"normal\",\"counter\":1,\"cwd\":\"/tmp/omega-real-release-iigtcibn/beta\",\"marker\":\"beta\",\"os\":\"186446\",\"project-env\":\"beta\"}\n:ok\n",
+    "err": "",
+    "value": {
+      "client-env": "normal",
+      "counter": 1,
+      "cwd": "/tmp/omega-real-release-iigtcibn/beta",
+      "marker": "beta",
+      "os": "186446",
+      "project-env": "beta"
+    }
+  },
+  "warm": [
+    {
+      "ms": 114.84432500219555,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":2,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 2,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 180.8489360009844,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":3,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 3,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 248.70635600018431,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":4,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 4,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 199.74346900198725,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":5,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 5,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 906.4035279989184,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":6,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 6,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 77.30166599867516,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":7,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 7,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 74.34493099935935,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":8,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 8,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 112.15209100191714,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":9,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 9,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 108.6834199995792,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":10,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 10,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 142.6341170008527,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":11,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 11,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 124.73789000068791,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":12,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 12,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 145.7032230027835,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":13,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 13,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 156.74980399853666,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":14,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 14,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 143.62795399938477,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":15,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 15,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 120.85225199916749,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":16,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 16,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 133.16654699883657,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":17,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 17,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 103.18664999795146,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":18,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 18,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 97.26380400024937,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":19,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 19,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 119.21794500085525,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":20,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 20,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 115.26586200125166,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":21,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 21,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 108.04919300062465,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":22,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 22,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 105.4951890000666,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":23,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 23,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 81.029775999923,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":24,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 24,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 108.99679199792445,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":25,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 25,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 96.26259400101844,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":26,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 26,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 106.26296900227317,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":27,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 27,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 149.62314600052196,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":28,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 28,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 153.88926200103015,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":29,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 29,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 132.15047800258617,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":30,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 30,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 80.1556160004111,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"normal\",\"counter\":31,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "normal",
+        "counter": 31,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    }
+  ],
+  "warm_median_ms": 117.24190350105346,
+  "warm_p95_ms": 199.74346900198725,
+  "parallel": [
+    {
+      "ms": 296.6168050006672,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"client-0\",\"counter\":32,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "client-0",
+        "counter": 32,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 312.8004290010722,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"client-1\",\"counter\":2,\"cwd\":\"/tmp/omega-real-release-iigtcibn/beta\",\"marker\":\"beta\",\"os\":\"186446\",\"project-env\":\"beta\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "client-1",
+        "counter": 2,
+        "cwd": "/tmp/omega-real-release-iigtcibn/beta",
+        "marker": "beta",
+        "os": "186446",
+        "project-env": "beta"
+      }
+    },
+    {
+      "ms": 329.00107400200795,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"client-2\",\"counter\":33,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "client-2",
+        "counter": 33,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 367.8359340010502,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"client-3\",\"counter\":5,\"cwd\":\"/tmp/omega-real-release-iigtcibn/beta\",\"marker\":\"beta\",\"os\":\"186446\",\"project-env\":\"beta\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "client-3",
+        "counter": 5,
+        "cwd": "/tmp/omega-real-release-iigtcibn/beta",
+        "marker": "beta",
+        "os": "186446",
+        "project-env": "beta"
+      }
+    },
+    {
+      "ms": 404.7898520002491,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"client-4\",\"counter\":35,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "client-4",
+        "counter": 35,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 328.1325639982242,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"client-5\",\"counter\":4,\"cwd\":\"/tmp/omega-real-release-iigtcibn/beta\",\"marker\":\"beta\",\"os\":\"186446\",\"project-env\":\"beta\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "client-5",
+        "counter": 4,
+        "cwd": "/tmp/omega-real-release-iigtcibn/beta",
+        "marker": "beta",
+        "os": "186446",
+        "project-env": "beta"
+      }
+    },
+    {
+      "ms": 344.7110619999876,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"client-6\",\"counter\":34,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "client-6",
+        "counter": 34,
+        "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+        "marker": "alpha",
+        "os": "186446",
+        "project-env": "alpha"
+      }
+    },
+    {
+      "ms": 306.48145499799284,
+      "code": 0,
+      "out": "PROBE {\"client-env\":\"client-7\",\"counter\":3,\"cwd\":\"/tmp/omega-real-release-iigtcibn/beta\",\"marker\":\"beta\",\"os\":\"186446\",\"project-env\":\"beta\"}\n:ok\n",
+      "err": "",
+      "value": {
+        "client-env": "client-7",
+        "counter": 3,
+        "cwd": "/tmp/omega-real-release-iigtcibn/beta",
+        "marker": "beta",
+        "os": "186446",
+        "project-env": "beta"
+      }
+    }
+  ],
+  "closed": {
+    "ms": 7398.496664001868,
+    "code": 0,
+    "out": "bl realm: closed /tmp/omega-real-release-iigtcibn/alpha\n",
+    "err": ""
+  },
+  "remaining_b": {
+    "ms": 195.1312279998092,
+    "code": 0,
+    "out": "PROBE {\"client-env\":\"normal\",\"counter\":6,\"cwd\":\"/tmp/omega-real-release-iigtcibn/beta\",\"marker\":\"beta\",\"os\":\"186446\",\"project-env\":\"beta\"}\n:ok\n",
+    "err": "",
+    "value": {
+      "client-env": "normal",
+      "counter": 6,
+      "cwd": "/tmp/omega-real-release-iigtcibn/beta",
+      "marker": "beta",
+      "os": "186446",
+      "project-env": "beta"
+    }
+  },
+  "reopened_a": {
+    "ms": 511.310648998915,
+    "code": 0,
+    "out": "PROBE {\"client-env\":\"normal\",\"counter\":1,\"cwd\":\"/tmp/omega-real-release-iigtcibn/alpha\",\"marker\":\"alpha\",\"os\":\"186446\",\"project-env\":\"alpha\"}\n:ok\n",
+    "err": "",
+    "value": {
+      "client-env": "normal",
+      "counter": 1,
+      "cwd": "/tmp/omega-real-release-iigtcibn/alpha",
+      "marker": "alpha",
+      "os": "186446",
+      "project-env": "alpha"
+    }
+  }
+}

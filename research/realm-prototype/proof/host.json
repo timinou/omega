@@ -1,0 +1,77 @@
+{
+  "a": {
+    "os": "145718",
+    "port": 57817,
+    "service": "#PID<0.2191.0>"
+  },
+  "b": {
+    "os": "145718",
+    "port": 44177,
+    "service": "#PID<0.3546.0>"
+  },
+  "checks": [
+    {
+      "check": "private shared socket started",
+      "pass": true
+    },
+    {
+      "check": "task exits successfully",
+      "pass": true
+    },
+    {
+      "check": "task exits successfully",
+      "pass": true
+    },
+    {
+      "check": "task exits successfully",
+      "pass": true
+    },
+    {
+      "check": "real Omega hosts share one OS VM",
+      "pass": true
+    },
+    {
+      "check": "repeat host task reuses exact service and port",
+      "pass": true
+    },
+    {
+      "check": "A HTTP provider serves A",
+      "pass": true
+    },
+    {
+      "check": "B HTTP provider serves B",
+      "pass": true
+    },
+    {
+      "check": "real editor frontend serves successfully",
+      "pass": true
+    },
+    {
+      "check": "task command returned but A service is alive",
+      "pass": true
+    },
+    {
+      "check": "Omega supervisor is live before close",
+      "pass": true
+    },
+    {
+      "check": "A listener closes with realm",
+      "pass": true
+    },
+    {
+      "check": "Omega task supervisor closes with realm",
+      "pass": true
+    },
+    {
+      "check": "B listener survives A close",
+      "pass": true
+    }
+  ],
+  "close-a": {
+    "halted": 1,
+    "purged": 264
+  },
+  "close-wall-ms": 14365,
+  "first-a-ms": 80455.003,
+  "first-b-ms": 29875.909
+}

@@ -1,0 +1,40 @@
+; Prototype only: idempotent acquisition through an existing realm member.
+(ns studio.server
+ (:require [omega.ed.main :as omega] [vm.manager :as manager]
+           [vm.realm :as realm] [vm.owner :as owner]))
+(def host (atom nil))
+(defn acquire! []
+ (let [vm (realm/open (BeamLisp/cwd))]
+  (global/trans (tuple (tuple :prototype-omega-host (:id vm)) (erlang/self))
+   (fn []
+    (if (and @host (Process/alive? (:pid @host)))
+     (dissoc @host :sys :env)
+     (let [parent (erlang/self) root (BeamLisp/cwd)
+           ref (erlang/make_ref)
+           pid (manager/serve (:id vm) :omega-host
+            (fn []
+             ; manager/serve conveys Env but cwd needs explicit binding here.
+             (BeamLisp/with_cwd root
+              (fn []
+               (try
+                (let [probe (gen_tcp/listen 0 (list :binary (tuple :active false) (tuple :ip (tuple 127 0 0 1))))
+                      socket (elem probe 1) port (elem (elem (inet/sockname socket) 1) 1)]
+                 (gen_tcp/close socket)
+                 (let [started (omega/start! {:root root :web "@WEB@" :port port
+                                              :offline? true :memory? true :dev? true
+                                              :providers {"probe" {:read (fn [_ _] {:text "@MARKER@" :rev "1"})}}})
+                       value {:pid (erlang/self) :port port :sys (:sys started) :env (:env started)}]
+                  (File/write! (str root "/resources.term")
+                   (erlang/term_to_binary {:service (erlang/self) :supervisor (:sup (:sys started))}))
+                  (reset! host value)
+                  (erlang/send parent [:host-ready ref value])
+                  (receive :stop nil)))
+                (catch error
+                 (erlang/send parent [:host-failed ref (ex-message error)])))))))]
+      (receive
+       [:host-ready r value] :when (= r ref) (dissoc value :sys :env)
+       [:host-failed r error] :when (= r ref) (throw (ex-info error {}))
+       (after 120000 (do (erlang/exit pid :kill) (throw (ex-info "host startup timeout" {})))))))))))
+(defn snapshot []
+ (let [value (acquire!)]
+  {:port (:port value) :service (str (:pid value)) :os (System/pid)}))

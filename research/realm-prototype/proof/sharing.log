@@ -1,0 +1,21 @@
+Running as unit: omega-realm-sharing-prototype.service
+bl-stage-hosts: 67 pinned host beams staged into /home/user/code/undefine/beam-lisp/build (app resource beam_lisp.app)
+bl: this image's library beams are a previous toolchain's generation (first seen: vm.native).
+bl: stale libraries are compiled once and cached on first use; run `bl build` to rebuild the whole image.
+PASS private shared socket started
+error: namespace not found: lib.common (searched: ["/tmp/omega-sharing-probe-899/b", "/home/user/code/undefine/beam-lisp", "/home/user/code/undefine/beam-lisp/examples", "/home/user/code/undefine/beam-lisp/priv/lib", "/home/user/code/undefine/omega/research", "/home/user/code/undefine/beam-lisp/.bl/lib/beam_lisp-0.1.0/priv/boot", "/home/user/code/undefine/beam-lisp/.bl/lib/beam_lisp-0.1.0/priv/std", "/home/user/code/undefine/beam-lisp/.bl/lib/beam_lisp-0.1.0/priv/lib", "/home/user/code/undefine/beam-lisp/.bl/lib/beam_lisp-0.1.0/priv/compat", "/home/user/code/undefine/beam-lisp/.bl/lib/beam_lisp-0.1.0/priv/build"])
+  at BeamLisp.Loader/do_load_miss
+  at BeamLisp.Loader/ensure_loaded_locked
+  at BeamLisp.Loader/with_declaration_snapshot  /home/user/code/undefine/beam-lisp--engineering-followups/priv/host/loader.bl:1371
+  at BeamLisp.AOT/with_source_snapshot  /home/user/code/undefine/beam-lisp--engineering-followups/priv/host/aot.bl:2084
+  at BeamLisp.Loader/-ensure_loaded_in/2-anonymous-8-
+  at BeamLisp.Env/with_registered_code_lease  /home/user/code/undefine/beam-lisp--engineering-followups/priv/host/env.bl:586
+  at BeamLisp.Env/-convey/1-anonymous-2-  /home/user/code/undefine/beam-lisp--engineering-followups/priv/host/env.bl:396
+  at BeamLisp.Loader.Server/handle_call  /home/user/code/undefine/beam-lisp--engineering-followups/priv/host/loader_server.bl:417
+SHARING-RESULT {"incorrect-hash-with-path-accepted":true,"uses-only":{"code":1,"ms":2166.127,"out":""},"uses-path-alone-resolves":false,"with-path":{"code":0,"ms":61278.883,"out":"COMMON 42\n:ok\n"}}
+:ok
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 1min 13.880s
+             CPU time consumed: 1min 19.501s
+                   Memory peak: 451.4M (swap: 0B)

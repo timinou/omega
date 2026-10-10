@@ -1,0 +1,16 @@
+Running as unit: omega-realm-release-prototype.service
+PASS release clients attach to the explicitly owned VM
+PASS same namespace retains different project implementations
+PASS project :env is read through standard System/get_env
+PASS concurrent clients keep their own standard environment view
+PASS all concurrent requests stay in the same VM
+PASS warm task namespace state persists
+PASS realm stop succeeds
+PASS stopping A leaves B's code and state intact
+PASS A reopens with fresh state in the same VM
+{"warm_median_ms": 117.24190350105346, "warm_p95_ms": 199.74346900198725}
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 57.673s
+             CPU time consumed: 2min 13.829s
+                   Memory peak: 659.7M (swap: 0B)

@@ -1,259 +1,274 @@
-#+title: Shared Omega package development: warm tasks, incremental JS and owned actors
-#+status: PLANNED
+#+title: Shared Omega package development — plan refined by runtime prototypes
+#+status: PROTOTYPED; IMPLEMENTATION PLANNED
 #+date: 2026-10-10
 
-* Outcome
-One Omega application, with packages loaded per editor session. Root BL tasks
-select a session experience, not a separate application runtime. Shared build,
-language and actor infrastructure lives upstream; Omega owns package assembly
-and worlds; PELAGIC supplies readable BL domain modules and thin browser IO.
-Standalone demos remain an export adapter over the same package graph.
+* Outcome and scope
+One Omega application host serves editor sessions that load packages. PELAGIC
+is a package/preset; standalone demos export the same frontend with a local
+adapter. Package loading must not create a project realm or backend world.
+Generic runtime/compiler improvements go upstream and are committed there.
+Omega's existing production compiler pin stays unchanged until integration tests
+verify the newer BEAM host AND the newly compiled JS graph.
 
-This plan follows PLAN-015 and coordinates with, rather than replaces,
-PLAN-014's unfinished actor/compiler consolidation. Do not create another
-actor scheduler, value representation, package reader or private editor loop.
-Upstream implementation and commits are authorized. This document is a plan,
-not a claim that its phases or performance targets have been implemented.
+This replaces the source-inspection-only ordering in the first version of this
+plan. Detailed experiments and raw evidence: research/realm-prototype/README.md.
+Coordinate compiler/actor consolidation with PLAN-014; do not introduce another
+scheduler, value representation, namespace reader or package lifecycle.
 
-* Investigation and evidence
-Inspected Omega at 34c7a5d and upstream Beam Lisp at 48db7435. Source inspection
-only in this round; measurements below are the previous recorded baseline,
-not fresh benchmark results. Upstream has advanced beyond Omega's 797dc039 pin.
+* What the prototypes established
+Current upstream base: 48db743504ad40b56cd1458c03b7554c9383203a.
+Actual clean release tested: 04805c33. Origin was fetched; the local checkout was
+already ahead of origin/main. Tests exercised source and release separately.
 
-| Area | Observed code | Consequence |
-|------+---------------+-------------|
-| Warm execution | upstream priv/std/bl/daemon.bl routes CLI through vm.realm/open and vm.manager/run; tooling/drop/src/transport.rs supports :vm "shared" and :warm "start" | Reuse and audit these mechanisms; do not implement an Omega daemon. |
-| Realm lifecycle | priv/std/vm/realm.bl fences open/close and starts owned services; vm.manager checks full spec/tree identity | Integrate Omega as an owned member, preserving project isolation. |
-| Task lifetime | pelagic.launch/dev! starts Omega then waits forever | A service task must return after acquiring a realm-owned host; merely enabling warm mode is insufficient. |
-| Build | pelagic.build fingerprints whole trees; source change restarts js/build! | Extract generic artifact mechanics and narrow dependencies, then cache compiler phases upstream. |
-| Compiler | priv/lib/js/build.bl stages discovery attempts in isolated Env forks; discovers namespace references beyond :require; emits native manifest after linking | Dependency capture must include discovered refs and compile-time macro execution. Never cache only :require edges. |
-| Watch | bl.cli/watch-task reruns a program after ReloadWatcher commits | Useful notification substrate, not a browser module replacement protocol. |
-| Packages | omega.packages has world activation/backend profiles; catalog has editor-only session loading | Keep these two lifetimes explicit; session loading must not silently persist world activation. |
-| Workers | host/prepare.mjs creates one worker, hardcodes job id 1, terminates on done; prepare-worker.mjs initializes once | Pooling requires reusable job state, reset and routing, not removal of terminate alone. |
-| Native interop | pelagic.actor-build uses native-modules.json and canonical actor runtime links | Preserve reference identity for calls in one realm. Cross-worker messages remain a real boundary. |
-| Teardown | host.mjs owns audio, jobs, views and cancellation; graphics worker owns transferred canvas | Generalize ownership carefully; graphics contexts are not interchangeable CPU jobs. |
+- [X] Real shared socket: separate project implementations of one namespace,
+      separate retained atoms, own cwd/env, command disconnect cancellation,
+      independent close and fresh-state reopen.
+- [X] Actual release launcher: 30 warm invocations, eight concurrent clients,
+      one OS VM, standard System/get_env project/client isolation.
+- [X] First-ever default shared launch: first service ran in a cold VM that
+      exited after command return; the next task used a different warm VM.
+- [X] Real offline Omega: two task systems and HTTP hosts, service persists
+      after task return, repeated acquire reuses it, closing A stops its HTTP
+      listener and supervisor while B serves the same existing frontend.
+- [X] Ownership boundary: unadopted spawn survives realm close; explicitly
+      adopted child dies. Existing Omega HTTP/supervisor links worked in probe.
+- [X] Route gaps reproduced: same-PID cross-root pinned reuse, duplicate hosts,
+      and claims outliving a closed realm in a live shared VM.
+- [X] Narrow pinned-reuse bug repaired and committed upstream e8ffb744;
+      6 port cases / 19 assertions pass. Broader lease problems remain.
+- [X] :uses gap reproduced: incorrect content hash accepted with explicit
+      source path; its declared path alone does not resolve the namespace.
+- [X] Four upstream realm test files pass, including namespace ownership,
+      readiness and generated identity histories.
 
-Relevant source: spikes/pelagic/pelagic/{build,launch,actor-build,work}.bl;
-spikes/pelagic/host/{prepare,prepare-worker,render-stage,host}.mjs;
-src/omega/{packages,ed/main}.bl; upstream priv/lib/js/build.bl;
-priv/std/vm/{manager,realm,owner,ports,gateway}.bl.
+Measured, one shared-machine run, not guarantees:
+| Work | Observation |
+|------+-------------|
+| Warm release task, 30 samples | median 117 ms; P95 200 ms |
+| First release task A / B | 25.27 s / 366 ms |
+| Reopen A | 511 ms, state reset |
+| Release realm stop | 7.40 s |
+| First source-mode Omega host A / B | 80.46 s / 29.88 s |
+| Omega A close-and-verify | 14.37 s; 264 modules retired |
 
-Recorded baseline in spikes/pelagic/proof/session-launch/:
-- Same-VM unchanged frontend validation: 305 ms, single sample.
-- Asset-only frontend staging: 2.10 s, single sample; compiled graph reused.
-- CLI reuse of running compatible host: 6.98 s, single sample including startup.
-- Existing browser proof: two audible sessions and isolated unload.
-- Existing timings do not establish physical audio/video P95 <=16 ms.
+The first-task times include deferred common runtime/application loading.
+Close-and-verify includes checks and a 500 ms wait; it is not a pure purge
+microbenchmark. No new browser playback or physical A/V latency proof is claimed.
 
-* Architecture and invariants
-- Build identity includes compiler/runtime ABI, canonical inputs, options,
-  resolution precedence and generated native/actor manifests.
-- One build's warm VM can contain multiple project realms; a realm can own
-  Omega services; a world owns durable task state; an editor owns its packages.
-  These are distinct identities, not one global mutable application.
-- Browser realm shares immutable modules and eligible compute workers. Each
-  session owns editor state, audio, audition, revision and cancellable leases.
-- Cross-tab sharing is a separate opt-in experiment. Do not claim ordinary
-  Worker reuse crosses tab realms or requires no serialization.
-- Ordinary BL and annotated JS interop use the canonical actor/value ABI.
-  Native same-realm calls must not acquire a fabricated transport envelope.
-- No test writes to the user's world on 8790. Use owned offline memory worlds.
-- Follow the real bl-package contract, pkg-state ownership, layered bindings,
-  provided layouts, effect-based IO and exact unuse. Document vendor changes.
-- Last valid frontend generation remains usable after a failed build/reload.
-  Audio keeps playing during build failures and speculative preparation.
+* The architecture we should actually integrate
+- OS VM: one release build, optionally shared by multiple project realms.
+- Project realm: source/declaration identity, Env, index, owned service members.
+  Reuse existing vm.realm/vm.manager/vm.owner; these mechanisms work.
+- Omega world: its document root, durable/memory store and task system. World
+  identity need not equal the source project's realm identity. Multiple worlds
+  may be owned services under one Omega application realm when appropriate.
+- Editor session: package state, keys/layout layers, audio and browser jobs.
+  Unuse closes its resources; it does not retire backend application modules.
+- Browser realm: immutable module instances and eligible CPU workers. Different
+  tabs are different realms. Worker crossings require real messages/transfers;
+  same-realm native calls use the existing canonical actor/value ABI directly.
 
-* Phase 0 — compatibility and reproducible measurements
-Owner: upstream integration + Omega. First implementation commit.
-- Compare pinned APIs against current upstream: bl.js facade, actor native
-  ABI, numeric contracts, reader, task CLI, shared VM and realm ownership.
-- Run targeted upstream tests before proposing a new immutable Omega pin;
-  build the actual release launcher too. A source checkout deliberately has
-  a different endpoint policy and cannot prove release-wide VM sharing.
-- Instrument CLI resolution, attach/boot, realm open, input scan, artifact
-  verification, compile, link, staging and host acquire as separate timings.
-- Run 30 warm repetitions and a small explicitly cold sample set, recording
-  machine load, compiler identity, RSS+swap, graph bytes and peak resources.
-- Prepare fixtures: unchanged; asset edit; private function edit; exported
-  arity edit; macro/helper edit; host allowlist edit; namespace resolution
-  change; corrupt cache; concurrent build; failed build.
-Accept: baseline JSON and a compatibility matrix, with pin upgrade gated by
-Omega/Pelagic/editor regressions. No indiscriminate latest-pin switch.
+Prefer one warm Omega application realm and host for ordinary package sessions.
+The prototype's two project realms tested isolation; duplicating Omega's source
+load for every package/tab would reproduce its expensive first-load costs.
+Do not use :uses as verified code sharing until its admission is implemented.
 
-* Phase 1 — warm task and realm-owned Omega service
-Owner: upstream vm/CLI where missing; Omega launch policy.
-- Use existing shared VM declaration (:vm "shared", :warm "start") only after
-  Phase 0 proves the selected release supports it. Keep --cold available.
-- Implement host acquire/release through the existing manager/service owner:
-  stable key from root, world configuration and frontend compatibility.
-  Register server, task system, watchers and storage as owned resources.
-- Return the URL from a warm task instead of parking its command process.
-  Preserve a foreground cold form with explicit Ctrl+C lifecycle semantics.
-- Concurrent acquire must yield exactly one host/world; creator death must
-  clean up or allow takeover. Realm close drains its members, not other roots.
-- Reuse vm.ports/vm.gateway claims where supported. Publish session routes to
-  one host rather than opening a host per package. Keep localhost URLs usable.
-- pelagic.dev and optional spikes.pelagic.dev are task aliases selecting
-  package/layout/document. Friendly hostnames are route names, not task names.
-  pelagic.dev as a hostname needs local resolution and browser-compatible TLS;
-  do not promise that a task declaration alone configures either. Start with
-  the gateway's established naming and expose a tested custom-domain option.
-- Report status and stop through existing bl realm/bl vm tooling; avoid a
-  second Omega process registry. Diagnose existing HTTP date-cache warnings
-  through correct dependency application startup, not logger suppression.
-Accept: warm compatible-host task P95 target <500 ms after initial attachment
-and cache warmup, measured end to end; service persists after command return;
-two roots remain isolated; conflicts, disconnect, startup races and shutdown
-leave no orphan world, port or storage handle. Target is provisional, not SLA.
+* Step 1 — persistent service task semantics, before changing env.bl defaults
+Owners: upstream task/VM integration, then Omega launcher.
 
-* Phase 2 — one declarative package frontend
-Owner: Omega; generic cache/publication support upstream where appropriate.
-- Extend existing package metadata with a versioned :frontend declaration;
-  don't establish a parallel package format. Resolve paths relative to its
-  manifest, validate escapes, duplicate namespace/asset names and ABI conflicts.
-- Declaration covers namespace roots/entry, explicit preload/host references,
-  actor entries, copied assets/documents, exported loader and optional demo
-  adapter. Layout remains in bl-package :provides, not duplicated in metadata.
-- First migrate PELAGIC and catalog, then one representative existing package
-  with a backend. Backend activation remains independent from editor loading.
-- Build one union graph for the configured package set and one shared runtime.
-  Load modules per session; do not silently eagerly initialize every package.
-- Extract Pelagic's fingerprint, inventory and immutable generation logic;
-  retain cryptographic integrity, compiler identity and source-race detection.
-- Add cross-process build coordination keyed by graph identity: unique staging
-  paths, crash-recoverable ownership, waiting readers and atomic publication.
-  A BEAM global lock alone cannot coordinate independent cold OS processes.
-- Keep pinned generations alive while hosts/exports reference them; prune only
-  unreferenced generations with clear retention limits. Local ZIP consumes the
-  exact assembled generation, adding only its document/offline adapters.
-Accept: manifest-only package addition works without another shell installer;
-two simultaneous cold builds publish one valid artifact; failed/corrupt builds
-recover; direct server and demo use identical package/runtime modules; no writes
-to vendor output; catalog still loads/unloads per editor without activation.
+The retained-service warm path is proven with an explicitly started daemon.
+The first-ever launch prototype separately demonstrated that current shared
+Start policy launches a daemon in the background while THIS first command runs
+cold. Its service disappeared when the task returned and the launcher halted
+that VM. Introduce or reuse a generic service-task path that ensures the owner VM
+is ready and attaches before starting the service. Do not equate :warm "start"
+with a persistent service guarantee. Ordinary finite tasks keep their current
+fast cold fallback behavior; --cold service behavior must be explicit.
 
-* Phase 3 — sound incremental bl.js compilation
-Owner: upstream js.build, shared compiler stages and canonical actor linker.
-- Expose a dependency/build report before caching: source bytes, resolver
-  inputs, discovered module-name refs, macro/helper dependencies, preloads,
-  host declarations, core/seed links and exported native ABI metadata.
-- Separate read/prepare, expansion/ANF, link context, JS emission and artifact
-  assembly. Cache serializable compiler products, never live Env closures or
-  process-local references. Restore staging in isolated Env forks.
-- Begin conservative: namespace edit invalidates its transitive dependents;
-  macro/helper and core/runtime changes invalidate every affected consumer.
-  Introduce ABI-sensitive narrower invalidation only with evidence and tests.
-- Include actor suspension/callback/export facts in invalidation. A private
-  implementation change may still change optimization facts used by callers.
-- Whole-graph linking, unresolved-name audit and native-manifest validation
-  still run; a cache hit must not hide a removed export or forbidden JS access.
-- Runtime/target/options changes invalidate the appropriate caches. Asset-only
-  edits never enter the compiler. Exclude launcher/build helpers unless the
-  compiler actually reads them as inputs.
-Accept: clean and incremental builds behave identically for all Phase 0
-fixtures, including negative diagnostics; report cache hit/miss explanations
-and compiled namespace counts. Initial performance aim: >=5x reduction for a
-small leaf edit on the same hardware; report achieved values without relaxing
-correctness for the target. No cache optimization that forks the actor backend.
+Implement acquisition around existing manager/owner primitives, not an Omega
+process registry. manager/serve alone spawns each time; it does not deduplicate.
+Identity covers application realm, world root, storage/model mode, backend
+revision and frontend compatibility. Store a STARTING reservation before the
+request can die, then publish READY only after successful initialization.
 
-* Phase 4 — transactional watch and safe package replacement
-Owner: Omega watcher/package lifecycle; PELAGIC audition integration.
-- Reuse upstream watch notifications; debounce and coalesce edits, cancel
-  obsolete speculative builds and fence results with input/generation IDs.
-- Publish an immutable new frontend only after successful validation. Existing
-  sessions stay pinned until they explicitly adopt an eligible generation.
-- Classify changes: CSS/document refresh; shader validate then swap; code or
-  ABI change requires package replacement or a session reload. Don't pretend
-  every module can safely patch arbitrary closures.
-- Use versioned module URLs consistently for the graph, including shared
-  dependencies. ES module imports cannot unload cached old versions; bound
-  replacement count and offer an explicit reload when retention grows.
-- Prepare a candidate package, validate resource/schema compatibility and use
-  existing safe audition for performance changes. Commit at an approved beat
-  boundary; retain original on compile, shader, state or migration failure.
-- Cancel candidate work on source change, unuse or lost session. Never migrate
-  editor state via arbitrary map merge; package owns explicit migrations.
-Accept: rapid edits publish only latest valid candidate; bad code preserves
-audible playback; commit/cancel/stale audition and unuse release all candidate
-resources; no key/render layering drift after repeated replacement.
+Test caller disconnect during startup, competing acquire, startup failure,
+service crash/reacquire and acquire against realm close. Decide whether a lost
+caller cancels startup or leaves an owned startup to finish; enforce it once.
+No abandoned service and no two writers to the same durable world.
 
-* Phase 5 — reusable actor compute workers
-Owner: upstream JS actors; PELAGIC first exercising client.
-- Add actor-owned lease/job lifecycle to the existing runtime: owner, job ID,
-  generation, cancellation, credit, priority, bounded inbox and result routing.
-  Compiler-visible effects/ABI facts should supply defaults so package authors
-  don't manually implement scheduling at every call site.
-- First pool preparation/compile/analysis within one browser realm. Bound
-  pool capacity from measured CPU contention; keep a fallback for no workers.
-- Refactor preparation from one initialization/job id 1 to isolated reusable
-  jobs. Clear per-job actor state/caches/callbacks and prove that job B cannot
-  observe job A. Return a healthy worker only after reset acknowledgement.
-- Use cooperative bounded actor turns for cancellation; terminate and replace
-  a worker that fails to yield. Distinguish requested cancellation, rejected
-  stale results and actual cessation of CPU use in measurements.
-- Move reserve/admission/fairness policy into BL modules using canonical JS
-  lowering. Preserve playback's reserve across compile/export/analysis bursts;
-  prevent starvation among sessions and cap speculative queue bytes/jobs.
-- Keep AudioWorklet and canvas/GL ownership dedicated initially. Transferred
-  canvases, GPU state and audio device timelines are not generic pool leases.
-- Cross-tab SharedWorker is an optional later prototype, gated on browser
-  support, isolation and transfer costs; not required for this phase.
-Accept: two sessions and repeated jobs reuse workers without cross-talk;
-unuse cancels only the owning jobs; crashes recover; worker and retained-byte
-counts plateau over 100 cycles; preparation outputs match existing digests.
+Use a stable service IO/log owner instead of assuming a command's wire group
+leader lasts forever. Preserve cwd, source-resolution and environment bindings.
+Keep full foreground launch with Ctrl+C and a documented warm-service stop verb.
+Avoid kill-only production shutdown: stop admission, finish/cancel work, flush
+storage, stop HTTP/task resources, release leases, then retire realm code.
 
-* Phase 6 — pressure tests, audio/video and code consolidation
-Owner: all three layers; final integration commits and documentation.
-- Measure cold/warm startup, edit-to-candidate, audition-to-commit, CPU, memory,
-  queue delay, worker startup, cancellation latency and audio reserve minima.
-- Stress playback with competing exports, compiler jobs, analysis and repeated
-  two-session load/unload. Run graphics worker and main-thread fallback paths.
-- Separate scheduling CPU time, AudioContext output timing, displayed-frame
-  acknowledgements and physical sound/display latency. Browser clocks alone
-  cannot establish physical A/V P95. Specify physical capture equipment and
-  repeatable stimulus before reporting the desired <=16 ms result.
-- Record P50/P95/P99/max and dropout counts on declared hardware/workloads.
-  Use 16 ms as the desired physical latency budget, not an excuse to remove
-  buffering blindly. Document device/browser floors and unresolved tails.
-- Profile FFT allocation/trigonometry and compile/prep bursts; add reusable
-  plans/buffers in BL-generated JS where profiles justify them. Keep browser
-  WebAudio/WebGL/file APIs as thin annotated interop adapters.
-- Remove superseded package installers, worker schedulers and local compiler
-  paths only after consumers migrate. Audit remaining ordinary/actor pipeline
-  duplication against PLAN-014; don't call consolidation complete prematurely.
-- Documentation: concise root quickstart, package author example, actor-owned
-  job example, ownership diagram, cache invalidation rules, reload limitations,
-  benchmark reproduction and live-world safety instructions.
-Accept: Omega tests, package/editor drive tests, unchanged presentation check,
-real used/unuse screenshots, audible two-session proof, demo export integrity
-and comparable performance report. Record honest follow-ups for unmet latency.
+Accept: first-ever and subsequent root launch both leave exactly one live host;
+commands return links; realm/service tools can inspect and stop it; no orphan
+listeners, task processes or durable handles. Hot launch P95 goal <500 ms on
+recorded hardware; report misses honestly. Fast browser unuse is independent
+from the measured slow backend realm retirement.
 
-* Delivery order and commit policy
-0 -> 1 -> 2 -> 3 -> 4; phase 5 can follow 2 after actor ABI audit, with phase 6
-closing every branch. Prioritize warm dispatch and declarative assembly before
-the expensive incremental compiler and worker sharing work.
+* Step 2 — service-owned routes and root tasks
+Owners: upstream vm.ports/vm.gateway lifecycle; Omega session preset policy.
 
-Each phase ships reviewable upstream commits for generic infrastructure,
-followed by Omega integration commits and pin changes to committed revisions.
-Update this plan's checkboxes and proof links with each completed slice. Keep
-unrelated dirty work untouched; no automatic upstream push implied by commit.
-For upstream execution follow AGENTS.md: inspect scripts/bl-mem, one owned BL
-VM job at a time, memory-cap long jobs and stop owned services after checks.
+Retain e8ffb744's root check. Add explicit claim generations/owner leases so a
+service or realm ending retracts its claim while the shared OS PID stays alive.
+Do not use OS PID liveness as sole service liveness. Make release conditional
+on the current lease; a late old service cannot erase its replacement's route.
 
-- [ ] 0. Compatibility matrix and repeatable baseline
-- [ ] 1. Warm task, realm-owned host, routes and lifecycle
-- [ ] 2. Declarative frontend and coordinated immutable artifacts
-- [ ] 3. Upstream dependency report and incremental compilation
-- [ ] 4. Watch, transactional replacement and safe audition
-- [ ] 5. Actor compute leases, reuse, cancellation and fairness
-- [ ] 6. Stress proof, physical latency protocol and consolidation audit
+Serialize hostname admission across cold OS processes, not just a BEAM global
+lock. Duplicate host claims must conflict with an actionable explanation.
+Port claiming is currently a bind probe followed by close; coordinate claiming
+and actual listener readiness and recover cleanly from bind races.
 
-* Decisions intentionally deferred until evidence
-- Whether measured warm scans need a process-local digest index; retain full
-  verification at trust boundaries and don't substitute timestamps for hashes.
-- Whether hot code replacement is worth its state/module retention costs;
-  explicit session reload remains correct for unsupported changes.
-- Whether cross-tab pooling saves more than transfer/reset overhead.
-- Which changes need native lowering: profile first; native cannot eliminate
-  browser device/GPU latency and must preserve the same actor/interop contracts.
-- Exact friendly-domain/TLS setup and worker count depend on the existing
-  gateway and target browsers; prove these before making them defaults.
+Use existing gateway claims, not a second proxy. Root tasks select session
+presets on one Omega host. A hostname maps to a port, not to a layout/query:
+explicitly implement preset selection (for example a root-page redirect) when
+several friendly names point at the same host. Keep direct localhost URLs.
+
+Existing, tested declaration vocabulary is :vm "shared", :warm "start"/"attach"
+and :tasks {name {:run "file.bl"}}. Add new service-task metadata only with
+upstream parser, launcher and lifecycle support. Do not publish unsupported
+:service syntax as if it already worked.
+
+pelagic.dev and spikes.pelagic.dev can be root task names selecting package,
+layout and document. Friendly domains are a separate route declaration. .dev
+hostnames need browser-compatible local TLS/resolution; prove the gateway/CA
+setup first and provide the established local naming fallback.
+
+Accept: two roots cannot steal claims; close/restart never leaves stale or
+misdirected names; duplicate hosts and unrelated listeners are rejected; aliases
+open different session presets on the SAME host, without world activation.
+
+* Step 3 — cold application loading and verified shared code
+Owners: upstream application.package/AOT, realm declaration and loader.
+
+Profile the 25 s first runtime task and 80/30 s Omega host startup by phase.
+Do not attribute all of it to realm creation. Separate index initialization,
+source/ANF compilation, application initializers, dependency startup and IO.
+
+First evaluate the existing application.package and realm-aware artifact path
+against Omega, using current upstream realm package tests as contracts. Ship
+closed, admitted code with the application instead of compiling it on every
+fresh realm. Initialization still runs under the target world's environment;
+never capture live sockets, mutable world state or secrets in artifacts.
+
+For :uses, wire declared resolution paths, verify actual transitive source/
+macro/compiler closure hashes before publication, enforce tier/shared-only
+references and define initializer/var ownership. Reject false hashes, modified
+sources and same-prefix/different-full-hash conflicts. Test two roots with one
+shared pure library, then a stateful initializer and a forbidden realm reference.
+Do not share merely because namespace strings match or attach an unverified
+content label to globally published code. This gate is required for cross-
+project code sharing, not for many sessions using one existing Omega realm.
+
+Accept: admitted Omega libraries reuse compatible code without reusing mutable
+world state; incompatible revisions refuse or isolate. Report cold load,
+compiled-unit counts, memory and initialization parity with source mode.
+Keep a correct source fallback for non-admitted dynamic code.
+
+* Step 4 — declarative frontend assembly and coordinated artifacts
+Owner: Omega package metadata; generic artifact support upstream as useful.
+
+Extend the EXISTING package manifest with a versioned frontend declaration:
+entry/roots, preload/host contracts, actor entries, assets/documents and loader.
+Layout stays in bl-package :provides; backend activation remains independent.
+Migrate PELAGIC/catalog first and one representative backend package second.
+
+Build a union namespace graph and canonical actor/native runtime once for the
+configured package set. Modules load by session; package loading does not run
+a shell installer or imply new backend realms. Standalone export adds only its
+storage/offline adapter and ZIP around the same generated package graph.
+
+Extract current content fingerprints, SHA inventory and immutable generations.
+Coordinate concurrent cold builds across OS processes, use unique staging and
+atomic publication, recover abandoned stages and preserve hosts' pinned
+artifacts. Prune only unreferenced generations with a bounded retention policy.
+
+Accept: metadata-only package assembly, no vendor output mutation, matching
+server/demo modules, corrupt-cache recovery, one publication under concurrent
+builds and exact per-editor use/unuse behavior.
+
+* Step 5 — incremental compiler, then transactional watch
+Owners: upstream bl.js/compiler and actor linker; Omega adoption protocol.
+
+Record actual dependencies before caching: source resolution, discovered module
+references, macros/helpers, core/seed ABI, host contracts, typed/system facts,
+actor suspension/callback exports, preloads and runtime identity. The current
+compiler discovers edges beyond :require and uses isolated Env forks.
+
+Cache serializable read/prepare/ANF/emission products, never live Env references.
+Start with conservative transitive invalidation; narrow by ABI only after tests
+prove callers' optimization facts remain valid. Re-run complete linking and
+native manifest audits. Exclude launch/build helper files not actually read by
+the graph. Clean and incremental builds must have identical behavior/errors.
+
+Reuse existing watcher notifications but do not equate watch-task rerun with
+browser HMR. Debounce, cancel obsolete speculative builds and publish immutable
+validated generations. Sessions keep their working generation until adoption.
+CSS/docs can refresh; shaders validate before swap; arbitrary code changes need
+explicit migration/replacement or a session reload. Bound retained ES module
+generations, which imports cannot unload.
+
+Use PELAGIC safe audition to prepare/validate a candidate, commit on an approved
+beat boundary or cancel/stale it. Bad code must preserve active playback.
+Accept: smaller edits rebuild fewer namespaces with recorded cache explanations;
+rapid edits publish only latest valid candidates; repeated replace/unuse does
+not drift keys, layouts, resource counts or active audio.
+
+* Step 6 — actor CPU leases and playback pressure tests
+Owners: upstream canonical JS actors; PELAGIC first client.
+
+Preparation currently initializes once, uses job ID 1 and terminates on done.
+Make jobs reusable with owner/generation IDs, bounded inbox/credit, reset
+acknowledgement, cancellation and stale-result fencing. Pool within a browser
+realm first; keep AudioWorklet and canvas/GL resources dedicated initially.
+
+Use BL modules lowered through the canonical JS/actor ABI for admission,
+priorities, fairness and audio reserve. Defaults should remove per-namespace
+scheduling boilerplate. Same-realm calls retain native identity; worker leases
+do not pretend to eliminate transfer/serialization. Cooperative bounded turns
+cancel CPU work; terminate/replace a worker that cannot yield. Measure actual
+CPU cessation separately from merely ignoring a cancelled result.
+
+Accept: two sessions cannot observe each other's jobs; unloading A leaves B
+playing; crashes recover; worker/retained-byte counts plateau over 100 cycles;
+preparation digests match. Measure competing compilation/export/analysis bursts,
+reserve minima, CPU, queue delay and cancellation tails before picking pool size.
+Cross-tab SharedWorker remains optional and needs its own browser/transfer proof.
+
+* Final integration and evidence
+For each step: commit generic fixes upstream, integrate Omega against committed
+revisions, update this file and link reproducible evidence. Do not push unless
+separately requested. Preserve unrelated work; one owned BL VM job at a time,
+inspect scripts/bl-mem, cap long jobs and stop owned test services.
+
+Required integration gates: new-pin JS compile and actor/native ABI checks;
+Omega/package/editor tests; unchanged presentation equivalence; used/unuse
+screenshots in the real editor; two audible sessions; safe audition commit/
+cancel/stale tests; export integrity; repeated lifecycle and startup races.
+
+Report P50/P95/P99/max, dropouts, startup, memory and resource counts. Separate
+backend CLI/retirement time, browser scheduling, output audio clock and displayed
+frame acknowledgement. Physical A/V <=16 ms remains a desired target that needs
+repeatable external capture; browser clocks alone do not prove it. Profile FFT
+allocation/plans and other CPU work before changing native/JS lowering.
+
+Delete superseded installers, scheduler/control paths and duplicated pipelines
+after their consumers migrate, then audit PLAN-014's remaining consolidation.
+Explain new task syntax, service/session ownership, cache invalidation and reload
+limits with concise executable examples and an actual PELAGIC demo.
+
+* Implementation checklist
+- [X] Exercise current source realms and exact-release shared VM dispatch
+- [X] Exercise real offline Omega service persistence and independent teardown
+- [X] Reproduce routing/shared-source gaps; commit narrow pinned-claim repair
+- [X] Reproduce first-ever service task lifetime under default shared auto-start
+- [ ] Persistent service-task semantics, crash/disconnect reservations and graceful stop
+- [ ] Service-owned route leases, hostname conflicts and preset aliases
+- [ ] Cold application package/AOT prototype and verified shared-source admission
+- [ ] Declarative frontend assembly and cross-process artifact coordination
+- [ ] Incremental compiler dependency/correctness gate
+- [ ] Transactional watcher and safe audition adoption
+- [ ] Actor compute pool leases, cancellation/fairness and measured pressure tests
+- [ ] Full new-pin integration, consolidation audit and browser/physical evidence

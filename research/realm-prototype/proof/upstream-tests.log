@@ -1,0 +1,29 @@
+Running as unit: omega-realm-targeted-tests.service
+bl-stage-hosts: 67 pinned host beams staged into /home/user/code/undefine/beam-lisp/build (app resource beam_lisp.app)
+bl: this image's library beams are a previous toolchain's generation (first seen: vm.native).
+bl: stale libraries are compiled once and cached on first use; run `bl build` to rebuild the whole image.
+
+Testing vm.realm-shared-test
+bl realm: closed /tmp/bl-realm-shared-alpha-4098
+bl realm: not running for /tmp/bl-realm-shared-alpha-6034
+
+Testing realm-namespace-test
+
+Testing vm.realm-readiness-test
+
+Testing vm.realm-identity-test
+realm-identity-histories {:modality :witnessed}
+── ward: warm isolated test run ──
+
+  ✓ vm.realm-shared-test  111 passed
+  ✓ realm-namespace-test  15 passed
+  ✓ vm.realm-readiness-test  4 passed
+  ✓ vm.realm-identity-test  16 passed
+
+  4 file(s) passed, 0 failed, 0 incoherent
+  ✓ all green
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 3min 42.900s
+             CPU time consumed: 6min 53.513s
+                   Memory peak: 959.9M (swap: 0B)

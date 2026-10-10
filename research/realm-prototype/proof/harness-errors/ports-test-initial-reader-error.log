@@ -1,0 +1,15 @@
+Running as unit: omega-realm-port-regression.service
+bl-stage-hosts: 67 pinned host beams staged into /home/user/code/undefine/beam-lisp/build (app resource beam_lisp.app)
+bl: this image's library beams are a previous toolchain's generation (first seen: vm.native).
+bl: stale libraries are compiled once and cached on first use; run `bl build` to rebuild the whole image.
+── ward: warm isolated test run ──
+
+  ⊘ /home/user/code/undefine/beam-lisp/test/bl/vm/ports_test.bl  INCOHERENT — 68:1: unterminated collection, expected ) — the ( opened here is never closed
+
+  0 file(s) passed, 0 failed, 1 incoherent
+  ✗ not green
+          Finished with result: exit-code
+Main processes terminated with: code=exited, status=1/FAILURE
+               Service runtime: 39.968s
+             CPU time consumed: 42.144s
+                   Memory peak: 232.6M (swap: 0B)

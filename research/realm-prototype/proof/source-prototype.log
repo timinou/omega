@@ -1,0 +1,31 @@
+Running as unit: omega-realm-source-prototype.service
+bl-stage-hosts: 67 pinned host beams staged into /home/user/code/undefine/beam-lisp/build (app resource beam_lisp.app)
+bl: this image's library beams are a previous toolchain's generation (first seen: vm.native).
+bl: stale libraries are compiled once and cached on first use; run `bl build` to rebuild the whole image.
+PASS shared session starts on a private endpoint
+PASS task exits successfully
+PASS task exits successfully
+PASS task exits successfully
+PASS two project tasks share the OS VM
+PASS same namespace has different project implementations
+PASS warm requests retain only their own namespace atom
+PASS request cwd and environment overlay match project
+PASS project index owners differ
+PASS long task actually starts
+PASS client disconnect cancels long command
+PASS owned service remains responsive after commands return
+PASS closing A kills its registered service
+PASS unadopted spawned child survives realm close
+PASS B service survives A close
+PASS task exits successfully
+PASS B still dispatches tasks
+PASS task exits successfully
+PASS A reopens with fresh namespace state
+PASS explicitly adopted child dies with B
+RESULT {"checks":[{"check":"shared session starts on a private endpoint","pass":true},{"check":"task exits successfully","pass":true},{"check":"task exits successfully","pass":true},{"check":"task exits successfully","pass":true},{"check":"two project tasks share the OS VM","pass":true},{"check":"same namespace has different project implementations","pass":true},{"check":"warm requests retain only their own namespace atom","pass":true},{"check":"request cwd and environment overlay match project","pass":true},{"check":"project index owners differ","pass":true},{"check":"long task actually starts","pass":true},{"check":"client disconnect cancels long command","pass":true},{"check":"owned service remains responsive after commands return","pass":true},{"check":"closing A kills its registered service","pass":true},{"check":"unadopted spawned child survives realm close","pass":true},{"check":"B service survives A close","pass":true},{"check":"task exits successfully","pass":true},{"check":"B still dispatches tasks","pass":true},{"check":"task exits successfully","pass":true},{"check":"A reopens with fresh namespace state","pass":true},{"check":"explicitly adopted child dies with B","pass":true}],"close-a":{"halted":2,"purged":2},"first-a-ms":32513.819,"first-b-ms":341.401,"os":"74468","warm-ms":[40.639,40.002,44.64,70.486,76.3,81.116,406.874,65.827,75.872,66.671]}
+:ok
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 53.903s
+             CPU time consumed: 1min 7.314s
+                   Memory peak: 526M (swap: 0B)

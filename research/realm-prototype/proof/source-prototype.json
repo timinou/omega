@@ -1,0 +1,103 @@
+{
+  "checks": [
+    {
+      "check": "shared session starts on a private endpoint",
+      "pass": true
+    },
+    {
+      "check": "task exits successfully",
+      "pass": true
+    },
+    {
+      "check": "task exits successfully",
+      "pass": true
+    },
+    {
+      "check": "task exits successfully",
+      "pass": true
+    },
+    {
+      "check": "two project tasks share the OS VM",
+      "pass": true
+    },
+    {
+      "check": "same namespace has different project implementations",
+      "pass": true
+    },
+    {
+      "check": "warm requests retain only their own namespace atom",
+      "pass": true
+    },
+    {
+      "check": "request cwd and environment overlay match project",
+      "pass": true
+    },
+    {
+      "check": "project index owners differ",
+      "pass": true
+    },
+    {
+      "check": "long task actually starts",
+      "pass": true
+    },
+    {
+      "check": "client disconnect cancels long command",
+      "pass": true
+    },
+    {
+      "check": "owned service remains responsive after commands return",
+      "pass": true
+    },
+    {
+      "check": "closing A kills its registered service",
+      "pass": true
+    },
+    {
+      "check": "unadopted spawned child survives realm close",
+      "pass": true
+    },
+    {
+      "check": "B service survives A close",
+      "pass": true
+    },
+    {
+      "check": "task exits successfully",
+      "pass": true
+    },
+    {
+      "check": "B still dispatches tasks",
+      "pass": true
+    },
+    {
+      "check": "task exits successfully",
+      "pass": true
+    },
+    {
+      "check": "A reopens with fresh namespace state",
+      "pass": true
+    },
+    {
+      "check": "explicitly adopted child dies with B",
+      "pass": true
+    }
+  ],
+  "close-a": {
+    "halted": 2,
+    "purged": 2
+  },
+  "first-a-ms": 32513.819,
+  "first-b-ms": 341.401,
+  "os": "74468",
+  "warm-ms": [
+    40.639,
+    40.002,
+    44.64,
+    70.486,
+    76.3,
+    81.116,
+    406.874,
+    65.827,
+    75.872,
+    66.671
+  ]
+}

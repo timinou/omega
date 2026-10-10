@@ -1,0 +1,43 @@
+Running as unit: omega-realm-host-prototype.service
+bl-stage-hosts: 67 pinned host beams staged into /home/user/code/undefine/beam-lisp/build (app resource beam_lisp.app)
+bl: this image's library beams are a previous toolchain's generation (first seen: vm.native).
+bl: stale libraries are compiled once and cached on first use; run `bl build` to rebuild the whole image.
+PASS private shared socket started
+
+17:30:17.349 [info] Running #Function<3.126288609/2 in BeamLisp.Ns.Fn.M5380.serve/1> with Bandit 1.12.4 at 127.0.0.1:57817 (http)
+PASS task exits successfully
+
+17:30:47.228 [info] Running #Function<3.126288609/2 in BeamLisp.Ns.Fn.M5380.serve/1> with Bandit 1.12.4 at 127.0.0.1:44177 (http)
+PASS task exits successfully
+PASS task exits successfully
+PASS real Omega hosts share one OS VM
+PASS repeat host task reuses exact service and port
+{:at 1791653448507 :method "get" :path "/api/doc" :status 200 :ms 34.4}
+PASS A HTTP provider serves A
+{:at 1791653448623 :method "get" :path "/api/doc" :status 200 :ms 2.4}
+PASS B HTTP provider serves B
+{:at 1791653448626 :method "get" :path "/" :status 200 :ms 1.6}
+PASS real editor frontend serves successfully
+PASS task command returned but A service is alive
+PASS Omega supervisor is live before close
+
+17:30:48.716 [error] GenServer #PID<0.2663.0> terminating
+** (stop) killed
+Last message: {:EXIT, #PID<0.2191.0>, :killed}
+State: %DynamicSupervisor{args: {:ok, %{intensity: 3, period: 5, strategy: :one_for_one, max_children: :infinity, extra_arguments: []}}, extra_arguments: [], mod: Supervisor.Default, name: {#PID<0.2663.0>, Supervisor.Default}, strategy: :one_for_one, max_children: :infinity, max_restarts: 3, max_seconds: 5, children: %{}, restarts: []}
+PASS A listener closes with realm
+PASS Omega task supervisor closes with realm
+PASS B listener survives A close
+{:at 1791653462989 :method "get" :path "/" :status 200 :ms 6.0}
+HOST-RESULT {"a":{"os":"145718","port":57817,"service":"#PID<0.2191.0>"},"b":{"os":"145718","port":44177,"service":"#PID<0.3546.0>"},"checks":[{"check":"private shared socket started","pass":true},{"check":"task exits successfully","pass":true},{"check":"task exits successfully","pass":true},{"check":"task exits successfully","pass":true},{"check":"real Omega hosts share one OS VM","pass":true},{"check":"repeat host task reuses exact service and port","pass":true},{"check":"A HTTP provider serves A","pass":true},{"check":"B HTTP provider serves B","pass":true},{"check":"real editor frontend serves successfully","pass":true},{"check":"task command returned but A service is alive","pass":true},{"check":"Omega supervisor is live before close","pass":true},{"check":"A listener closes with realm","pass":true},{"check":"Omega task supervisor closes with realm","pass":true},{"check":"B listener survives A close","pass":true}],"close-a":{"halted":1,"purged":264},"close-wall-ms":14365,"first-a-ms":80455.003,"first-b-ms":29875.909}
+
+17:31:03.059 [error] GenServer #PID<0.3948.0> terminating
+** (stop) killed
+Last message: {:EXIT, #PID<0.3546.0>, :killed}
+State: %DynamicSupervisor{args: {:ok, %{intensity: 3, period: 5, strategy: :one_for_one, max_children: :infinity, extra_arguments: []}}, extra_arguments: [], mod: Supervisor.Default, name: {#PID<0.3948.0>, Supervisor.Default}, strategy: :one_for_one, max_children: :infinity, max_restarts: 3, max_seconds: 5, children: %{}, restarts: []}
+:ok
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 2min 36.494s
+             CPU time consumed: 7min 32.171s
+                   Memory peak: 816.5M (swap: 0B)

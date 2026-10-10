@@ -1,0 +1,14 @@
+Running as unit: omega-realm-route-final-prototype.service
+bl-stage-hosts: 67 pinned host beams staged into /home/user/code/undefine/beam-lisp/build (app resource beam_lisp.app)
+bl: this image's library beams are a previous toolchain's generation (first seen: vm.native).
+bl: stale libraries are compiled once and cached on first use; run `bl build` to rebuild the whole image.
+PASS pinned A claim succeeds
+PASS ephemeral per-root claims choose different ports
+PASS current implementation accepts duplicate hostnames
+ROUTE-RESULT {"closed-realm-claim-still-live":true,"duplicate-host-count":2,"pinned-a":{"ok":60875},"pinned-b":{"error":"taken","ok":null},"same-pid-cross-root-pinned-reuse":false}
+:ok
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 1min 5.356s
+             CPU time consumed: 1min 3.649s
+                   Memory peak: 247.9M (swap: 0B)

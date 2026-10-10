@@ -1,0 +1,45 @@
+; Observe claim ownership without starting or contacting a gateway.
+(ns realm-prototype.routes
+ (:require [vm.ports :as ports] [vm.realm :as realm] [vm.manager :as manager]
+           [bl.json :as json]))
+(defn need [label condition]
+ (println (str (if condition "PASS " "FAIL ") label))
+ (when-not condition (throw (ex-info label {}))))
+(defn free-port []
+ (let [s (elem (gen_tcp/listen 0 (list :binary (tuple :active false) (tuple :ip (tuple 127 0 0 1)))) 1)
+       port (elem (elem (inet/sockname s) 1) 1)]
+  (gen_tcp/close s) port))
+(defn main []
+ (let [base (str (System/tmp_dir!) "/omega-route-probe-" (System/unique_integer (list :positive)))
+       a (str base "/a") b (str base "/b")
+       old-runtime (System/get_env "XDG_RUNTIME_DIR")]
+  (System/put_env "XDG_RUNTIME_DIR" (str base "/runtime"))
+  (try
+   (doseq [root [a b]]
+    (File/mkdir_p! root)
+    (File/write! (str root "/env.bl") (str "{:name \"route-" (Path/basename root) "\"}")))
+   (manager/start) (realm/open a) (realm/open b)
+   (let [port (free-port)
+         pinned-a (ports/claim "studio" port {:root a})
+         pinned-b (ports/claim "studio" port {:root b})
+         route-a (ports/claim "preview" 0 {:root a :hosts ["pelagic.test"]})
+         route-b (ports/claim "preview" 0 {:root b :hosts ["pelagic.test"]})
+         duplicates (filter (fn [c] (some (fn [host] (= host "pelagic.test")) (:hosts c))) (ports/list-claims))]
+    (need "pinned A claim succeeds" (= port (:ok pinned-a)))
+    (need "ephemeral per-root claims choose different ports" (not= (:ok route-a) (:ok route-b)))
+    (need "current implementation accepts duplicate hostnames" (= 2 (count duplicates)))
+    (realm/close a)
+    (let [after (ports/holder (:ok route-a))]
+     (println (str "ROUTE-RESULT " (json/encode
+      {:pinned-a pinned-a :pinned-b {:ok (:ok pinned-b)
+                                    :error (when (:error pinned-b) (elem (:error pinned-b) 0))}
+       :same-pid-cross-root-pinned-reuse (= pinned-a pinned-b)
+       :duplicate-host-count (count duplicates)
+       :closed-realm-claim-still-live (some? after)})))))
+   (finally
+    (doseq [root [a b]]
+     (doseq [name ["studio" "preview"]] (ports/release name {:root root}))
+     (try (realm/close root) (catch _ nil)))
+    (if old-runtime (System/put_env "XDG_RUNTIME_DIR" old-runtime) (System/delete_env "XDG_RUNTIME_DIR"))
+    (File/rm_rf! base)))))
+(main)
