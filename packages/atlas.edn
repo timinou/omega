@@ -1,7 +1,11 @@
 {:name "atlas"
  :doc "Strategic research desk: public evidence, market events, cited reports and independent Omega tasks."
- :build "spikes/atlas/build.sh"
  :editor "atlas" :entry "spikes/atlas/desk.bl.org"
+ :frontend {:version 1 :entry "atlas.main"
+  :roots ["vendor/bl-ed" "spikes/present" "spikes/atlas"]
+  :host ["eval-ed" "eval-cells"] :loader {:host "atlas/desk.mjs"}
+  :assets [{:from "spikes/atlas/host/desk.mjs" :to "pkg/atlas/desk.mjs"}
+           {:from "spikes/atlas/models.mjs" :to "pkg/atlas/models.mjs"}]}
  :backend {:path "spikes/atlas" :ns "atlas.extension" :factory "create"}
  :seeds ["spikes/atlas/desk.bl.org" "spikes/atlas/data/movement.json"
          "spikes/atlas/data/news-sentiment.json" "spikes/atlas/data/scan.json"

@@ -10,3 +10,11 @@
   (is (String/contains? (frontend/loader (first packages)) "d_bl_package as package"))
   (doseq [path ["../bad" "/bad" "a/../bad" "a\\bad"]]
    (is (try (frontend/relative! path) false (catch _ true))))))
+
+(deftest backend-packages-use-the-same-frontend-contract
+ (let [root (File/cwd!) m (first (frontend/manifests root ["atlas"]))
+       a (frontend/assembly root [m])]
+  (is (some? (:backend m)))
+  (is (= ["ed.frame" "js.eval" "atlas.main"] (:namespaces a)))
+  (is (= "eval-ed,eval-cells" (:host a)))
+  (is (String/contains? (frontend/loader m) "./atlas/desk.mjs"))))

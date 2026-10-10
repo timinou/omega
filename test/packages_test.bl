@@ -60,21 +60,24 @@
   (is (empty? (:active @(:state r))))
   (is (not (includes? (File/read! "src/omega/packages.bl") "atlas")))
   (File/rm_rf! (:root r))))
-(deftest missing-editor-bundles-build-once-and-failed-builds-do-not-enable
+(deftest package-use-requires-an-admitted-frontend-and-never-runs-an-installer
  (let [home (dir!) root (dir!) r (p/registry home root {})
        bundle (str home "/vendor/bl-ed/web/pkg/example.mjs")]
-  (File/mkdir_p! (str home "/packages"))
-  (File/write! (str home "/packages/example.edn")
-   (pr-str {:name "example" :editor "example" :build "build.sh"}))
-  (File/write! (str home "/build.sh")
-   "set -e\ncd \"$(dirname \"$0\")\"\nmkdir -p vendor/bl-ed/web/pkg\necho built >> builds.txt\necho 'export const package = {};' > vendor/bl-ed/web/pkg/example.mjs\n")
-  (p/use! r "example") (is (File/regular? bundle))
-  (p/use! r "example") (is (= "built\n" (File/read! (str home "/builds.txt"))))
-  (p/unuse! r "example") (File/rm! bundle)
-  (File/write! (str home "/build.sh") "exit 1\n")
-  (is (try (p/use! r "example") false (catch _ true)))
-  (is (not (p/active? r "example")))
-  (File/rm_rf! home) (File/rm_rf! root)))
+  (try
+   (File/mkdir_p! (str home "/packages"))
+   (File/write! (str home "/packages/example.edn")
+    (pr-str {:name "example" :editor "example" :build "build.sh"}))
+   (File/write! (str home "/build.sh") "touch should-not-exist\n")
+   (is (try (p/use! r "example") false (catch _ true)))
+   (is (not (p/active? r "example")))
+   (is (not (File/exists? (str home "/should-not-exist"))))
+   (is (= false (:available (first (:packages (p/catalog r))))))
+   (File/mkdir_p! (Path/dirname bundle))
+   (File/write! bundle "export const package = {};\n")
+   (is (= "example" (:name (p/use! r "example"))))
+   (is (:available (first (:packages (p/catalog r)))))
+   (is (not (File/exists? (str home "/should-not-exist"))))
+   (finally (File/rm_rf! home) (File/rm_rf! root)))))
 
 (deftest an-explicit-frontend-defines-the-editor-package-catalog
  (let [home (dir!) root (dir!) web (str home "/frontend")

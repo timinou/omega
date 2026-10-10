@@ -1,19 +1,31 @@
 ; One application host, many package sessions. Persistent ownership is upstream.
 (ns omega.dev
  (:require [omega.ed.main :as omega] [vm.service :as service] [vm.scope :as scope]
-           [vm.manager :as manager]))
+           [vm.manager :as manager] [vm.ports :as ports] [vm.paths :as paths]))
 (defn acquire!
  "Acquire a compatible host for this world in the current application realm.
   In a cold invocation, start in the foreground instead. identity includes the
   backend and frontend revision; opts carries the actual host configuration."
  [identity opts]
  (let [root (Path/expand (:root opts))
-       init (fn [] (BeamLisp/with_cwd root (fn [] (omega/start! (assoc opts :root root)))))]
+       name (str "omega-" (paths/tree-id root))
+       hosts (vec (or (:hosts opts) []))
+       release (fn [host] (ports/release name {:root root :generation (get-in host [:route :generation])}))
+       stop (fn [host] (try (omega/stop! host) (finally (release host))))
+       init (fn []
+        (BeamLisp/with_cwd root
+         (fn []
+          (let [route (ports/claim name (or (:port opts) 8790) {:root root :hosts hosts :service true})]
+           (when (:error route) (throw (ex-info "Omega route is unavailable" route)))
+           (try
+            (assoc (omega/start! (assoc opts :root root :port (:ok route))) :route route)
+            (catch error (release {:route route}) (throw error)))))))]
   (if-let [realm (scope/current)]
-   (:value (service/acquire realm [:omega-world root] identity init omega/stop!))
+   (:value (service/acquire realm [:omega-world root] {:application identity :hosts hosts} init stop))
    (let [host (init)]
     (println (str "Omega foreground host: " (:url host) " — Ctrl+C stops this VM"))
     host))))
+
 (defn persistent? [] (some? (scope/current)))
 (defn stop!
  "Stop the current world's host, preserving the shared VM and other worlds."

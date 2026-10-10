@@ -56,24 +56,16 @@
     (let [m (manifest r nm) b (:backend m)
           p (if b (load-factory r b) {})]
      (swap! (:cache r) assoc nm p) p))))))
-(defn- build-one! [r m]
- (when-let [script (:build m)]
-  (let [result (System/cmd "bash" (list (safe-path (:home r) script)) (list (tuple :stderr_to_stdout true)))]
-   (println (elem result 0))
-   (when-not (= 0 (elem result 1)) (throw (ex-info "Package build failed" {:package (:name m)}))))))
-(defn build! [r] (doseq [m (manifests r)] (build-one! r m)))
 (defn- ensure-editor! [r m]
- (when (:build m)
-  (global/trans (tuple (tuple :omega/package-build (:home r)) (erlang/self))
-   (fn []
-    (when-not (File/regular? (str (editor-dir r) "/" (or (:editor m) (:name m)) ".mjs"))
-     (if (:web (:opts r))
-      (throw (ex-info "Package is not in this frontend generation; rebuild the package graph before loading it."
-                     {:package (:name m) :web (:web (:opts r))}))
-      (build-one! r m)))))))
+ ;; Package activation cannot publish a different frontend into a running host.
+ ;; Every editor package must already belong to the selected immutable graph.
+ (when (and (or (:editor m) (:frontend m) (:build m))
+            (not (File/regular? (str (editor-dir r) "/" (or (:editor m) (:name m)) ".mjs"))))
+  (throw (ex-info "Package is not in this frontend generation; run bl omega.build and restart the host."
+                 {:package (:name m) :web (:web (:opts r))}))))
 (defn use! [r nm]
  (let [m (manifest r nm)]
-  (profile r nm) (ensure-editor! r m) (seed! r m)
+  (ensure-editor! r m) (profile r nm) (seed! r m)
   (save! r (fn [s] (update s :active conj nm)))
   {:name nm :entry (:entry m) :editor (or (:editor m) nm) :active true}))
 (defn unuse! [r nm]
@@ -98,8 +90,7 @@
   {:root (:root r) :offline? (boolean (:offline? (:opts r))) :packages
    (vec (sort-by :name
     (concat (map (fn [m] (assoc (select-keys m [:name :doc :entry :editor :editor-only :layout])
-                          :available (boolean (or (and (not (:web (:opts r))) (:build m))
-                            (File/regular? (str (editor-dir r) "/" (or (:editor m) (:name m)) ".mjs")))) :backend (boolean (:backend m))
+                          :available (boolean (File/regular? (str (editor-dir r) "/" (or (:editor m) (:name m)) ".mjs"))) :backend (boolean (:backend m))
                           :active (active? r (:name m)))) known)
      (map (fn [nm] {:name nm :editor nm :doc "Shared editor package. Any external service must be configured separately."
                     :backend false :active (active? r nm) :editor-only true})
