@@ -1,0 +1,37 @@
+; Package metadata describes assembly; the compiler and package lifecycle stay shared.
+(ns omega.frontend (:require [clojure.edn :as edn]))
+(defn relative! [path]
+ ; Use the same portable path rule for source and output, before touching disk.
+ (when (or (not (string? path)) (empty? path) (starts-with? path "/")
+           (String/contains? path "\\")
+           (some (fn [part] (= part "..")) (String/split path "/")))
+  (throw (ex-info "Frontend paths must stay inside their root" {:path path})))
+ path)
+(defn declaration! [manifest]
+ (let [f (:frontend manifest)]
+  (when-not (and (= 1 (:version f)) (string? (:entry f))
+                (vector? (:roots f)) (every? string? (:roots f))
+                (map? (:loader f)) (string? (get-in f [:loader :host])))
+   (throw (ex-info "Unsupported frontend declaration" {:package (:name manifest)})))
+  (doseq [path (:roots f)] (relative! path))
+  (relative! (get-in f [:loader :host]))
+  (doseq [asset (:assets f)] (relative! (:from asset)) (relative! (:to asset)))
+  f))
+(defn manifests [root names]
+ (mapv (fn [name]
+         (when-not (re-matches #"[A-Za-z0-9_-]+" name)
+          (throw (ex-info "Invalid frontend package name" {:name name})))
+         (let [m (edn/read-string (File/read! (str root "/packages/" name ".edn")))]
+          (when-not (= name (:name m)) (throw (ex-info "Package identity mismatch" {:name name})))
+          (declaration! m) m)) names))
+(defn assembly [root packages]
+ (let [fs (mapv declaration! packages)]
+  {:namespaces (vec (distinct (concat ["ed.frame" "js.eval"]
+                        (mapcat (fn [f] (cons (:entry f) (:includes f))) fs))))
+   :paths (mapv (fn [p] (str root "/" p)) (distinct (mapcat :roots fs)))
+   :host (join "," (distinct (mapcat :host fs)))
+   :preload (vec (distinct (mapcat :preload fs)))}))
+(defn loader [manifest]
+ (let [f (declaration! manifest)]
+  (str "export {d_bl_package as package} from '../out/" (:entry f) ".mjs';\n"
+       "export {createHost} from './" (get-in f [:loader :host]) "';\n")))

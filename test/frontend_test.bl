@@ -1,0 +1,12 @@
+(ns omega.frontend-test (:require [omega.frontend :as frontend]))
+(deftest package-frontend-assembly-is-declarative
+ (let [root (File/cwd!) packages (frontend/manifests root ["pelagic" "packages"])
+       a (frontend/assembly root packages)]
+  (is (some (fn [n] (= "pelagic.main" n)) (:namespaces a)))
+  (is (some (fn [n] (= "catalog.main" n)) (:namespaces a)))
+  (is (= 3 (count (:paths a))))
+  (is (= ["pelagic.overtone"] (:preload a)))
+  (is (= "run,eval-ed,eval-cells" (:host a)))
+  (is (String/contains? (frontend/loader (first packages)) "d_bl_package as package"))
+  (doseq [path ["../bad" "/bad" "a/../bad" "a\\bad"]]
+   (is (try (frontend/relative! path) false (catch _ true))))))

@@ -1,0 +1,7 @@
+{:name "packages" :editor "packages" :editor-only true
+ :doc "Load packages into this editor session."
+ :entry "package:catalog"
+ :frontend {:version 1 :entry "catalog.main"
+  :roots ["vendor/bl-ed" "spikes/packages"]
+  :host ["eval-ed" "eval-cells"] :loader {:host "packages/catalog.mjs"}
+  :assets [{:from "spikes/packages/host/catalog.mjs" :to "pkg/packages/catalog.mjs"}]}}

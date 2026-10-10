@@ -1,4 +1,17 @@
 {:name "pelagic"
  :doc "Beam Lisp audiovisual studio; loaded per editor session."
  :editor "pelagic" :editor-only true :layout "pelagic"
- :entry "spikes/pelagic/live-set.bl.org"}
+ :entry "spikes/pelagic/live-set.bl.org"
+ :frontend {:version 1 :entry "pelagic.main"
+  :roots ["vendor/bl-ed" "spikes/pelagic"]
+  :includes ["pelagic.performance" "pelagic.live" "pelagic.audition"
+             "pelagic.graph-js" "pelagic.playback-js" "pelagic.shadertone"
+             "pelagic.bridge" "pelagic.browser" "pelagic.worker" "pelagic.overtone"]
+  :preload ["pelagic.overtone"] :host ["run" "eval-ed" "eval-cells"]
+  :loader {:host "pelagic/host.mjs"}
+  :assets [{:from "spikes/pelagic/host" :to "pkg/pelagic" :suffixes [".mjs" ".css"]}
+           {:from "spikes/pelagic/shaders" :to "pkg/pelagic" :suffixes [".glsl"]}
+           {:from "spikes/pelagic/pelagic/overtone.bl" :to "pkg/pelagic/overtone.bl"}
+           {:from "spikes/pelagic/live-set.bl.org" :to "live-set.bl.org"}
+           {:from "spikes/pelagic/demo.bl.org" :to "demo.bl.org"}
+           {:from "spikes/pelagic/tutorials" :to "tutorials" :suffixes [".org" ".json"]}]}}
