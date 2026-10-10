@@ -103,10 +103,18 @@
                  (first (filter (fn [p] (= :linked (:doc p))) eds))
                  (first eds))
         others (filter (fn [p] (not= (:id p) (:id here))) eds)]
+    ;; a world request (:intent) the kept editor already emitted — e.g. a
+    ;; package's :adopt asking for its data while it arranges the window —
+    ;; survives the re-arrangement, retagged to the pane the editor now lives
+    ;; in, so its answer finds it. Everything else pending is dropped as
+    ;; before: arranging re-requests every pane's document itself.
     (open-docs {:layout layout
                 :editors (into {(:id here) keep-ed} (map (fn [p] [(:id p) (blank-editor keep-ed)]) others))
                 :focus (or (:focus layout) (:id here))
-                :effects []}
+                :effects (vec (keep (fn [e] (when (and (= :intent (:kind e))
+                                                       (or (nil? (:pane e)) (= (:pane e) (:focus fr))))
+                                              (assoc e :pane (:id here))))
+                                    (:effects fr)))}
                (map :id others))))
 
 (defn unarrange

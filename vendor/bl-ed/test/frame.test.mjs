@@ -243,3 +243,22 @@ test('visit and focus candidates choose the existing pane and protect its file a
  next=F.d_handle(two.assoc(K('editors'),get(two,'editors').assoc(K('main'),dirty)),ev(K('type'),K('command'),K('command'),K('jump')));
  assert.strictEqual(get(F.d_editor(next,K('main')),'text'),get(dirty,'text'));assert.equal(F.d_take_effects(next).toArray()[1].toArray().length,0);
 });
+
+test("a package that arranges the window on :use keeps the effects its :adopt emitted, tagged to the kept pane", () => {
+  // an :adopt that both asks the world for data and arranges a layout: before the fix,
+  // arrange dropped every pending effect, so the data request never left and the view waited forever
+  const layout = ev(K("name"), "side", K("panes"), R.vec(ev(K("id"), K("left"), K("doc"), K("linked"), K("width"), K("fill")),
+    ev(K("id"), K("right"), K("view"), R.vec(K("outline"), K("left")), K("width"), K("fill"))), K("focus"), K("left"));
+  const asker = R.hashMap(K("name"), "asker", K("owns"), R.vec(K("frame/layout")),
+    K("adopt"), (ed) => get(get(ed, "pkg-state"), "asker") ? ed
+      : M.d_handle(ed, ev(K("type"), K("noop"))).assoc(K("frame/layout"), layout)
+          .assoc(K("pkg-state"), (get(ed, "pkg-state") || R.EMPTY_MAP).assoc("asker", true))
+          .assoc(K("effects"), (get(ed, "effects") || R.vec()).conj(ev(K("kind"), K("intent"), K("intent"), "data/read"))),
+    K("provides"), R.hashMap(K("layouts"), R.hashMap("side", layout), K("views"), R.hashMap(K("outline"), (ed) => R.hashMap(K("path"), get(ed, "path")))));
+  let fr = F.d_handle(F.d_single(M.d_boot("x\n", "x.bl.org")), ev(K("type"), K("use"), K("package"), asker));
+  assert.equal(get(get(fr, "layout"), "name"), "side");
+  const fx = F.d_take_effects(fr).toArray()[1].toArray();
+  const ask = fx.find((x) => get(x, "intent") === "data/read");
+  assert.ok(ask, "the adopt's intent survives the arrangement");
+  assert.equal(get(ask, "pane"), K("left"), "tagged to the pane the editor now lives in");
+});

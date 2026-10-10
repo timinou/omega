@@ -307,3 +307,17 @@ and observer callbacks share one animation-frame callback; unchanged pane
 sizes do not dispatch redundant editor resizes. Embeddings may set
 `BL_DOCUMENTS.eagerLanguage` to `false` to start the page evaluator on demand.
 PELAGIC's optional bundle uses that setting with its own BL worker evaluator.
+
+### 2026-10-10 — arranging a layout keeps the kept editor's pending world requests
+
+`ed/frame.bl` `arrange` used to start the new frame with no effects, dropping
+everything the focused editor had just emitted. A package whose `:adopt` both
+asks the world for its data (an `:intent`) and sets `:frame/layout` lost the
+request, so its view waited forever. Pending `:intent` effects of the kept
+editor now survive, retagged to the pane it lands in; other pending effects
+(document loads, places) are still dropped, because arranging re-requests every
+pane's document. Pinned by `test/frame.test.mjs` ("a package that arranges the
+window on :use keeps the effects its :adopt emitted"). Found by the guideline
+explorer (`spikes/guidelines`). Vendor drive tests 74/74 (frame 15, pkg 3,
+drive 24, omega 12, host 17, document-packages 2, serve-cold 1); presentation
+equivalence unchanged (0 bad on welcome, packages, frames and both guideline files).
