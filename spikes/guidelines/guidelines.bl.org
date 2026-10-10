@@ -1,0 +1,104 @@
+#+TITLE: guidelines — omega (project scope)
+#+SCOPE: project
+
+# One top-level heading = one guideline. The heading is its name; :ID: is its
+# stable handle. The first paragraph is the RULE (what the agent is told).
+# `** When` lists situations it applies to: the matcher's anchors. `** Not when`
+# lists near-misses: negative anchors. `** Examples` are recorded uses: the
+# harness appends to them (via the `guideline` tool) and they become anchors too,
+# so a guideline sharpens with use. Nothing else is required.
+
+* Show, don't label                                                  :ui:
+:PROPERTIES:
+:ID:       visual-not-verbal
+:END:
+Distinguish states, kinds and emphasis through thoughtful style, layout,
+typography and placement rather than extra text ("DONE", "WARNING:", "(selected)").
+** When
+- render a task or row status
+- make the blocked row stand out
+- a badge or label that says what state something is in
+- css class for selected, done, failed
+- the rail or inbox should show which tasks need attention
+** Not when
+- error message text the user must read
+- accessibility label or aria text
+** Examples
+- 2026-10-04 pp.rail: blocked tasks drawn with a left rule in the warning hue, no "BLOCKED" word.
+
+* Observed vs inferred                                               :report:
+:PROPERTIES:
+:ID:       observed-vs-inferred
+:END:
+When reporting, separate what you ran and saw from what you conclude.
+Mark inference as inference; give numbers with how they were measured.
+** When
+- summarise what the benchmark showed
+- final answer after running tests
+- report the results of a spike
+- explain why something failed
+** Examples
+- 2026-10-04 prompt-cache spike: "OBSERVED:" prefixes on measured findings.
+
+* Packages are pure                                                  :bl-ed:
+:PROPERTIES:
+:ID:       pure-packages
+:END:
+A bl-ed package is functions of `ed` and events. File writes, fetches and
+timers leave as effects for the host; never perform IO in :on-event or :render.
+** When
+- the package writes a file when the user presses a key
+- io inside on-event or render
+- bl-ed package side effect
+** Examples
+
+* Pin it before you change it                                        :test:
+:PROPERTIES:
+:ID:       test-first
+:END:
+Before changing behaviour, write or find the test that pins the current or
+desired behaviour, and run it red before making it green.
+** When
+- fix a bug
+- add a unit test
+- change what a function returns
+** Not when
+- rename a variable
+- edit prose or docs
+** Examples
+
+* Offline worlds only                                                :safety:
+:PROPERTIES:
+:ID:       offline-world
+:END:
+Never write to the user's running world (port 8790) to test. Start an offline
+one: `bin/bl-ed --offline --memory --port 8792 --root /tmp/x`.
+** When
+- test against the running editor
+- start bl-ed to check a change
+- curl localhost 8790
+** Examples
+
+* Measure before you optimise                                        :perf:
+:PROPERTIES:
+:ID:       measure-first
+:END:
+Put a number on the cost (median of several runs, after warm-up) before
+changing code for speed; report before/after with the same harness.
+** When
+- make this faster
+- this is slow
+- add a cache
+** Examples
+
+* Ask with options                                                   :dialogue:
+:PROPERTIES:
+:ID:       ask-with-options
+:END:
+When you must ask the human, ask one self-contained question with 2–4 concrete
+options and your recommendation, so they can answer with one keystroke (y/n/a).
+** When
+- need a decision from the user
+- unclear requirement
+- ambiguous which approach
+** Examples

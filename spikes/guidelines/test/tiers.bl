@@ -1,0 +1,46 @@
+; test/tiers.bl — semantic vs lexical vs hybrid recall on the same 24 cases.
+(ns guidelines.tier (:require [guidelines.core :as g] [clojure.string :as str]))
+(def cases
+  [["show which tasks in the inbox are waiting on me" #{:visual-not-verbal}]
+   ["the failed cards should look different from done ones" #{:visual-not-verbal}]
+   ["add a 'stale' marker to rows older than a day" #{:visual-not-verbal}]
+   ["highlight the current guideline in the explorer list" #{:visual-not-verbal}]
+   ["put a (needs review) suffix after the task title" #{:visual-not-verbal}]
+   ["the tests pass now, write up what changed" #{:observed-vs-inferred}]
+   ["explain why the headless run timed out" #{:observed-vs-inferred}]
+   ["tell me what you found in the profiler output" #{:observed-vs-inferred :measure-first}]
+   ["let the package save the draft to disk on C-s" #{:pure-packages}]
+   ["fetch the url from inside the render function" #{:pure-packages}]
+   ["start a timer in on-event to poll the server" #{:pure-packages}]
+   ["the parser drops trailing whitespace, fix it" #{:test-first}]
+   ["make sum return 0 for an empty list" #{:test-first}]
+   ["check the change in the live editor" #{:offline-world}]
+   ["open bl-ed and try the new keybinding" #{:offline-world}]
+   ["the rail takes 400ms to render, speed it up" #{:measure-first}]
+   ["memoise the layout so scrolling is smoother" #{:measure-first}]
+   ["not sure whether to use datoms or org for this, need the user's call" #{:ask-with-options}]
+   ["which of the two layouts does the human prefer" #{:ask-with-options}]
+   ;; near-misses and nothing-applies
+   ["rename the variable foo to bar" #{}]
+   ["fix the typo in the README" #{}]
+   ["write the aria-label for the close button" #{}]
+   ["list the files in src" #{}]
+   ["bump the pinned beam-lisp commit in env.bl" #{}]])
+(def gs (g/parse (File/read! "spikes/guidelines/guidelines.bl.org") :project "x"))
+(def idx (g/index gs))
+(def STOP #{"the" "a" "an" "to" "of" "in" "on" "for" "it" "is" "and" "or" "with" "this" "that" "be" "by" "from" "what" "which" "my" "me" "i" "you" "your" "so" "not" "into" "out" "up" "now"})
+(defn toks [s] (set (remove (fn [w] (or (STOP w) (< (count w) 3))) (re-seq #"[a-z0-9]+" (str/lower-case s)))))
+(def lex (into {} (map (fn [x] [(:id x) (toks (str (:name x) " " (:rule x) " " (str/join " " (:when x)) " " (str/join " " (:examples x))))]) gs)))
+(defn lex-hits [s] (let [t (toks s)] (set (keep (fn [[id ws]] (when (>= (count (filter ws t)) 2) id)) lex))))
+(defn ev [f]
+  (let [rs (map (fn [[s w]] [w (f s)]) cases)
+        tp (reduce + (map (fn [[w got]] (count (filter w got))) rs))
+        fp (reduce + (map (fn [[w got]] (count (remove w got))) rs))
+        fnn (reduce + (map (fn [[w got]] (count (remove got w))) rs))]
+    (str "P " (/ (erlang/round (* 100 (/ tp (max 1 (+ tp fp))))) 100.0) " R " (/ (erlang/round (* 100 (/ tp (+ tp fnn)))) 100.0) " fp " fp " | shown/case " (/ (erlang/round (* 10 (/ (+ tp fp) (count cases)))) 10.0))))
+(println "semantic >=0.42           " (ev (fn [s] (set (map :id (g/match idx s))))))
+(doseq [t [0.2 0.25 0.3]]
+ (println (str "semantic top-2 >=" t "      ") (ev (fn [s] (set (map :id (g/match idx s {:threshold t :k 2})))))))
+(println "lexical >=2 shared words  " (ev lex-hits))
+(println "hybrid sem>=.42 + lex     " (ev (fn [s] (into (set (map :id (g/match idx s))) (lex-hits s)))))
+(println "hybrid sem top2>=.25 + lex" (ev (fn [s] (into (set (map :id (g/match idx s {:threshold 0.25 :k 2}))) (lex-hits s)))))

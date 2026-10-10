@@ -1,0 +1,50 @@
+index: 7 guidelines, 30 anchors, 295 ms (incl. model load), model potion-code-16M-v2@75cf7a6c
+
+== default threshold 0.42: precision 0.88 recall 0.35 (tp 7 fp 1 fn 13)
+  ✗ add a 'stale' marker to rows older than a day
+      want [:visual-not-verbal] got []  scores {:visual-not-verbal 0.2, :measure-first 0.26, :test-first 0.13}
+  ✗ highlight the current guideline in the explorer list
+      want [:visual-not-verbal] got []  scores {:observed-vs-inferred 0.15, :pure-packages 0.15, :offline-world 0.18}
+  ✗ put a (needs review) suffix after the task title
+      want [:visual-not-verbal] got []  scores {:visual-not-verbal 0.28, :observed-vs-inferred 0.26, :ask-with-options 0.19}
+  ✗ the tests pass now, write up what changed
+      want [:observed-vs-inferred] got []  scores {:observed-vs-inferred 0.41, :test-first 0.36, :offline-world 0.41}
+  ✗ tell me what you found in the profiler output
+      want [:observed-vs-inferred :measure-first] got []  scores {:visual-not-verbal 0.24, :observed-vs-inferred 0.27, :test-first 0.17}
+  ✗ start a timer in on-event to poll the server
+      want [:pure-packages] got []  scores {:observed-vs-inferred 0.26, :pure-packages 0.25, :offline-world 0.24}
+  ✗ the parser drops trailing whitespace, fix it
+      want [:test-first] got []  scores {:observed-vs-inferred 0.16, :test-first 0.3, :offline-world 0.16}
+  ✗ make sum return 0 for an empty list
+      want [:test-first] got []  scores {:visual-not-verbal 0.18, :observed-vs-inferred 0.25, :measure-first 0.19}
+  ✗ the rail takes 400ms to render, speed it up
+      want [:measure-first] got []  scores {:visual-not-verbal 0.27, :measure-first 0.23, :pure-packages 0.31}
+  ✗ memoise the layout so scrolling is smoother
+      want [:measure-first] got []  scores {:visual-not-verbal 0.11, :observed-vs-inferred 0.12, :measure-first 0.28}
+  ✗ not sure whether to use datoms or org for this, need the user's call
+      want [:ask-with-options] got []  scores {:visual-not-verbal 0.12, :pure-packages 0.15, :ask-with-options 0.16}
+  ✗ which of the two layouts does the human prefer
+      want [:ask-with-options] got []  scores {:visual-not-verbal 0.08, :observed-vs-inferred 0.11, :ask-with-options 0.13}
+  ✗ fix the typo in the README
+      want [] got [:test-first]  scores {:observed-vs-inferred 0.13, :test-first 0.44, :ask-with-options 0.09}
+
+== threshold sweep
+  0.3  P 0.47  R 0.4
+  0.35  P 0.62  R 0.4
+  0.4  P 0.8  R 0.4
+  0.42  P 0.88  R 0.35
+  0.45  P 1.0  R 0.3
+  0.5  P 1.0  R 0.15
+  0.55  P 1.0  R 0.1
+
+match latency: 802 µs/query (warm, 30 anchors, exact scan)
+
+== after recording 13 example(s) (paraphrases, not the test text): precision 0.93 recall 0.7 (tp 14 fp 1 fn 6)
+  ✗ highlight the current guideline in the explorer list  want [:visual-not-verbal] got []
+  ✗ put a (needs review) suffix after the task title  want [:visual-not-verbal] got []
+  ✗ the tests pass now, write up what changed  want [:observed-vs-inferred] got []
+  ✗ the parser drops trailing whitespace, fix it  want [:test-first] got []
+  ✗ make sum return 0 for an empty list  want [:test-first] got []
+  ✗ memoise the layout so scrolling is smoother  want [:measure-first] got []
+  ✗ fix the typo in the README  want [] got [:test-first]
+nil

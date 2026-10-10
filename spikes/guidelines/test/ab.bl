@@ -1,0 +1,50 @@
+; test/ab.bl — do injected guidelines change the model's output? (LIVE, 2 prompts × 2 conditions)
+; Run: OMEGA_SPIKE_LIVE=1 bin/bl run -p spikes/guidelines spikes/guidelines/test/ab.bl
+; Writes spikes/guidelines/proof/ab.edn. Same request, the only difference is the
+; tail block the :context hook would add. Scored by simple, inspectable rules.
+
+(ns guidelines.ab
+  (:require [guidelines.core :as g] [omega.llm :as llm] [clojure.string :as str]))
+
+(def prompts
+  [{:id :rail
+    :goal (str "Write a small Beam Lisp function `task-line` that renders one task row for a sidebar as hiccup "
+               "([:div {:class …} …]). A task has :title, :status (one of :running :blocked :done :failed) and "
+               ":needs-you (bool). Answer with the code only, under 25 lines.")
+    ;; scoring: does the status become TEXT in the row, or style/placement?
+    :score (fn [out]
+             (let [o (str/lower-case out)
+                   words (filter (fn [w] (str/includes? o w)) ["\"blocked\"" "\"done\"" "\"failed\"" "\"running\"" "\"needs you\"" "needs-you!" "[blocked]" "(blocked)"])
+                   ;; status words only inside a class string are fine: strip class attrs first
+                   no-class (str/replace o #":class\s+(\"[^\"]*\"|\[[^\]]*\]|\(str[^)]*\))" "")
+                   visible (filter (fn [w] (str/includes? no-class w)) ["\"blocked\"" "\"done\"" "\"failed\"" "\"running\"" "\"needs you\"" "blocked:" "done:" "status:"])]
+               {:status-as-visible-text (count visible) :mentions (count words)}))}
+   {:id :report
+    :goal (str "You just ran a benchmark of two JSON parsers: A took 41ms, 39ms, 44ms; B took 30ms, 52ms, 29ms "
+               "(3 runs each, cold cache on the first run). Our guess is B uses SIMD. Write the 4-6 line summary for the PR.")
+    :score (fn [out]
+             (let [o (str/lower-case out)]
+               {:marks-inference (boolean (some (fn [w] (str/includes? o w)) ["infer" "guess" "hypothes" "unverified" "not measured" "likely" "suspect" "unconfirmed"]))
+                :says-how-measured (boolean (some (fn [w] (str/includes? o w)) ["3 runs" "three runs" "cold" "median" "first run"]))
+                :separates (boolean (some (fn [w] (str/includes? o w)) ["observed" "measured" "inferred" "inference"]))}))}])
+
+(def gs (g/parse (File/read! "spikes/guidelines/guidelines.bl.org") :project "p"))
+(def idx (g/index gs))
+(def step (llm/step (llm/from-env (File/cwd!))))
+(defn text-of [resp] (str/join "\n" (keep (fn [b] (when (= :text (:type b)) (:text b))) (:content resp))))
+
+(def results
+  (vec (for [p prompts cond* [:without :with]]
+         (let [req {:system "You are omega, a coding agent."
+                    :messages [{:role :user :content [{:type :text :text (:goal p)}]}]
+                    :tools []}
+               hits (g/match idx (g/situation req))
+               req (if (= cond* :with) (g/inject req hits (:by-id idx)) req)
+               out (text-of (step req))]
+           {:prompt (:id p) :cond cond* :injected (mapv :id hits) :score ((:score p) out) :out out}))))
+
+(when-not (File/dir? "spikes/guidelines/proof") (File/mkdir_p! "spikes/guidelines/proof"))
+(File/write! "spikes/guidelines/proof/ab.edn" (pr-str results))
+(doseq [r results]
+  (println (str "\n== " (name (:prompt r)) " / " (name (:cond r)) "  injected " (:injected r) "  score " (pr-str (:score r))))
+  (println (:out r)))

@@ -1,0 +1,182 @@
+; guidelines/core.bl — guidelines as values: read from .bl.org, matched by meaning.
+;
+;   (parse text scope)        → [guideline …]   ; one per top-level heading
+;   (index gs)                → idx             ; anchors embedded once (code.embed)
+;   (match idx situation opts)→ [{:id :score :anchor} …] best first, over threshold
+;   (inject req hits gs)      → req             ; request-time only: never recorded
+;
+; A guideline: {:id :name :rule :tags :when [s] :not [s] :examples [s] :scope :path}
+; Anchors = :when ∪ :examples (positive) and :not (negative). The score of a
+; guideline is its best positive anchor minus a penalty when a negative anchor
+; is closer than that positive one. Rule text is NOT an anchor: measured, the
+; abstract rule matches concrete situations poorly (0.02–0.12) while concrete
+; "when" phrases match at 0.5–0.9 (see ../guidelines.bl.md §2).
+
+(ns guidelines.core
+  (:require [code.embed :as e]
+            [datom.vector :as v]
+            [clojure.string :as str]))
+
+;; ── reading ─────────────────────────────────────────────────────────────
+
+(defn- heading [line]
+  (when-let [[_ stars title] (re-find #"^(\*+)\s+(.*)$" line)]
+    (let [[_ t tags] (or (re-find #"^(.*?)\s+(:[\w:-]+:)\s*$" title) [nil title nil])]
+      {:level (count stars) :title (str/trim t)
+       :tags (if tags (vec (remove empty? (str/split tags #":"))) [])})))
+
+(defn- item [line] (when-let [[_ s] (re-find #"^\s*-\s+(.*)$" line)] (str/trim s)))
+
+(defn- section-key [title]
+  (case (str/lower-case title) "when" :when "not when" :not "examples" :examples nil))
+
+(defn parse
+  "Guidelines from the text of a guidelines .bl.org. `scope` is :user or
+   :project; `path` is where they came from (write-back goes there)."
+  ([text scope] (parse text scope nil))
+  ([text scope path]
+   (let [finish (fn [acc g] (if g (conj acc (update g :rule (fn [r] (str/trim (str/join " " r))))) acc))]
+     (loop [lines (str/split-lines text) acc [] g nil sec nil]
+       (if (empty? lines)
+         (finish acc g)
+         (let [l (first lines) more (rest lines) h (heading l)]
+           (cond
+             (and h (= 1 (:level h)))
+             (recur more (finish acc g)
+                    {:id nil :name (:title h) :tags (:tags h) :rule [] :when [] :not [] :examples []
+                     :scope scope :path path}
+                    :rule)
+             (nil? g) (recur more acc g sec)
+             h (recur more acc g (section-key (:title h)))
+             :else
+             (if-let [[_ id] (re-find #"^\s*:ID:\s+(\S+)" l)]
+               (recur more acc (assoc g :id (keyword id)) sec)
+               (cond
+                 (re-find #"^\s*:\w+:" l) (recur more acc g sec)  ; drawer lines
+                 (and (= sec :rule) (not (str/blank? l)) (not (str/starts-with? (str/trim l) "#")))
+                 (recur more acc (update g :rule conj (str/trim l)) sec)
+                 (and (keyword? sec) (not= sec :rule) (item l))
+                 (recur more acc (update g sec conj (item l)) sec)
+                 :else (recur more acc g sec))))))))))
+
+(defn layer
+  "User guidelines under project ones: a project guideline with the same :id
+   REPLACES the user's (layers, never merges — as bl-ed packages)."
+  [& sets]
+  (let [all (apply concat sets)
+        last-by-id (reduce (fn [m g] (assoc m (:id g) g)) {} all)]
+    ;; keep first-seen order, take the latest layer's value
+    (vec (keep (fn [id] (get last-by-id id)) (distinct (map :id all))))))
+
+;; ── indexing: one embed batch for every anchor ──────────────────────────
+
+(defn- strip-date [s] (str/replace s #"^\d{4}-\d{2}-\d{2}\s+" ""))
+
+(defn anchors [g]
+  (concat (map (fn [s] [:pos s]) (:when g))
+          (map (fn [s] [:pos (strip-date s)]) (:examples g))
+          (map (fn [s] [:neg s]) (:not g))))
+
+(defn index
+  "Embed every anchor of `gs` once. Returns {:rows [[id polarity text] …] :cands [[i dvec] …] :by-id}."
+  [gs]
+  (let [rows (vec (mapcat (fn [g] (map (fn [[p s]] [(:id g) p s]) (anchors g))) gs))
+        vs (if (seq rows) (e/embed-batch (map (fn [r] (nth r 2)) rows)) [])]
+    {:rows rows
+     :cands (mapv (fn [i] [i (nth vs i)]) (range (count rows)))
+     :by-id (into {} (map (fn [g] [(:id g) g]) gs))
+     :model (e/model-id)}))
+
+(def DEFAULTS {:threshold 0.42 :k 3 :neg-margin 0.05 :penalty 0.25})
+
+(defn score-all
+  "Every guideline's score for situation text `s`: {id {:score :anchor :neg}}."
+  [idx s]
+  (if (empty? (:cands idx))
+    {}
+    (let [hits (v/search (e/embed s) (:cands idx) (count (:cands idx)) 0)]
+      (reduce (fn [m [i sc]]
+                (let [[id pol text] (nth (:rows idx) i)
+                      k (if (= pol :pos) :score :neg)]
+                  (if (get-in m [id k]) m
+                      (cond-> (assoc-in m [id k] sc)
+                        (= pol :pos) (assoc-in [id :anchor] text)))))
+              {} hits))))
+
+(defn match
+  "Guidelines that apply to situation `s`, best first. A negative anchor that
+   is at least as close (within :neg-margin) as the best positive one costs
+   :penalty — 'rename a variable' must not pull in test-first."
+  ([idx s] (match idx s {}))
+  ([idx s opts]
+   (let [{:keys [threshold k neg-margin penalty]} (merge DEFAULTS opts)]
+     (->> (score-all idx s)
+          (keep (fn [[id {:keys [score neg anchor]}]]
+                  (when score
+                    (let [sc (if (and neg (>= (+ neg neg-margin) score)) (- score penalty) score)]
+                      (when (>= sc threshold) {:id id :score sc :anchor anchor})))))
+          (sort-by (fn [h] (- (:score h))))
+          (take k)
+          vec))))
+
+;; ── the situation: what the agent is about to do ────────────────────────
+
+(defn- block-text [b]
+  (case (:type b)
+    :text (:text b)
+    :tool-use (str (:name b) " " (pr-str (:input b)))
+    :tool-result (let [c (:content b)] (if (string? c) (subs c 0 (min 300 (count c))) ""))
+    ""))
+
+(defn situation
+  "Text describing the moment: the goal, plus the latest exchange. The goal
+   alone misses guidelines that become relevant mid-task (a report at the end)."
+  [req]
+  (let [ms (:messages req)
+        goal (str/join " " (map block-text (:content (first ms))))
+        recent (str/join " " (map block-text (mapcat :content (let [r (vec (rest ms))] (subvec r (max 0 (- (count r) 2)))))))]
+    (str goal "\n" recent)))
+
+;; ── injection: request-time, at the tail (spikes/prompt-cache.bl.md §6) ─
+
+(defn render-hits [hits by-id]
+  (str "[guidelines] These project guidelines match what you are doing. Follow them; "
+       "when one shapes your work, call the `guideline` tool with {op: \"applied\", id, note}. "
+       "If one does not fit, call it with {op: \"misfire\", id, note}.\n"
+       (str/join "\n" (map (fn [h] (let [g (get by-id (:id h))]
+                                     (str "- " (name (:id h)) " — " (:name g) ": " (:rule g)
+                                          (when-let [x (last (:examples g))] (str " (e.g. " (strip-date x) ")")))))
+                           hits))))
+
+(defn inject
+  "Append the hits as a text block to the LAST user message of the request.
+   The loop builds a fresh request per step from the stored turns, so this
+   block is never recorded: the cacheable prefix is unchanged (the :tail
+   contract, done from a :context hook until the loop has a :tail field)."
+  [req hits by-id]
+  (if (empty? hits)
+    req
+    (let [ms (:messages req) i (dec (count ms))]
+      (if (and (>= i 0) (= :user (:role (nth ms i))))
+        (assoc req :messages
+               (assoc (vec ms) i (update (nth ms i) :content
+                                         (fn [c] (conj (vec c) {:type :text :text (render-hits hits by-id)})))))
+        req))))
+
+;; ── write-back: a recorded use becomes an example (and an anchor) ───────
+
+(defn add-example
+  "The guidelines .bl.org text with `line` appended under guideline `id`'s
+   `** Examples` (created if absent). Pure: text in, text out."
+  [text id line]
+  (let [ls (vec (str/split-lines text))
+        start (first (keep-indexed (fn [i l] (when (re-find (re-pattern (str "^\\s*:ID:\\s+" (name id) "\\s*$")) l) i)) ls))]
+    (if (nil? start)
+      text
+      (let [end (or (first (keep-indexed (fn [i l] (when (and (> i start) (re-find #"^\*\s" l)) i)) ls)) (count ls))
+            ex (first (keep-indexed (fn [i l] (when (and (> i start) (< i end) (re-find #"^\*\*\s+Examples\s*$" l)) i)) ls))
+            ;; insert after the last non-blank line of the section
+            last-nonblank (fn [from to] (or (last (filter (fn [i] (not (str/blank? (nth ls i)))) (range from to))) from))
+            [at prefix] (if ex [(inc (last-nonblank ex end)) []] [(inc (last-nonblank start end)) ["** Examples"]])
+            new (concat prefix [(str "- " line)])]
+        (str (str/join "\n" (concat (subvec ls 0 at) new (subvec ls at))) "\n")))))

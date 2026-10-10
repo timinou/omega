@@ -1,0 +1,95 @@
+; guidelines/ext.bl — the omega extension: inject matching guidelines, let the
+; agent report on them, and let reports sharpen the guidelines.
+;
+;   (extension {:sources [{:path p :scope :user|:project} …] :write-back? bool})
+;     → an omega extension value (omega.ext): {:name :hooks {:context} :tools [guideline]}
+;
+; Per step: the :context hook builds the SITUATION (goal + latest exchange),
+; matches it, and appends the hits at the tail of the last user message
+; (request-time only; prompt-cache contract). Each injection is also recorded
+; as a trace {:kind :guideline :subject "<id>" :data {:op :shown …}} so the
+; explorer can show "where did this fire" without parsing transcripts.
+;
+; The `guideline` tool: {op: applied|misfire|propose, id, note}
+;   applied  → trace :applied; with :write-back? the note becomes an `** Examples`
+;              line in the .bl.org it came from, and the index is rebuilt.
+;   misfire  → trace :misfire (a candidate `** Not when` line — reviewed by a human
+;              in the explorer, never auto-written: negatives are cheap to get wrong).
+;   propose  → trace :proposed with a draft guideline, shown in the explorer inbox.
+
+(ns guidelines.ext
+  (:require [guidelines.core :as g]
+            [omega.trace :as tr]
+            [clojure.string :as str]))
+
+(defn load-all
+  "Read every source; project layered over user."
+  [sources]
+  (apply g/layer (map (fn [{:keys [path scope]}]
+                        (if (File/regular? path) (g/parse (File/read! path) scope path) []))
+                      sources)))
+
+(defn- date []
+  (let [[[y m d] _] (calendar/system_time_to_universal_time (erlang/system_time :second) :second)]
+    (str y "-" (if (< m 10) "0" "") m "-" (if (< d 10) "0" "") d)))
+
+(defn extension
+  ([] (extension {}))
+  ([opts]
+   (let [sources (or (:sources opts) [])
+         state (atom nil)
+         reload! (fn [] (let [gs (load-all sources)] (reset! state {:gs gs :idx (g/index gs)})))
+         ;; one injection set per (task, step): don't repeat what's already shown in this task
+         shown (atom {})]
+     {:name :guidelines
+      :doc "Semantically matched guidelines, injected at the request tail; uses recorded."
+      :start (fn [_] (reload!) {})
+      :hooks
+      {:context
+       (fn [req ctx]
+         (when (nil? @state) (reload!))
+         (let [{:keys [idx]} @state
+               task (:task ctx)
+               hits (g/match idx (g/situation req) (:match opts))
+               ;; already-shown guidelines stay in the transcript? No: injection is not
+               ;; recorded, so re-show while they still match; but trace only the first time.
+               fresh (remove (fn [h] (contains? (get @shown task #{}) (:id h))) hits)]
+           (when (and task (seq fresh))
+             (swap! shown update task (fn [s] (into (or s #{}) (map :id fresh))))
+             (doseq [h fresh]
+               (tr/leave! (get-in ctx [:sys :env]) task
+                          {:kind :guideline :subject (str (name (:id h)) "#shown")
+                           :text (str "shown (" (/ (erlang/round (* 100 (:score h))) 100.0) ") for: " (:anchor h))
+                           :data {:op :shown :score (:score h) :anchor (:anchor h)}})))
+           (g/inject req hits (:by-id idx))))}
+      :tools
+      [{:name "guideline"
+        :description (str "Report on a project guideline. op=applied when a shown guideline shaped your work "
+                          "(note: one line, what you did, concrete — it becomes an example others learn from). "
+                          "op=misfire when a shown guideline did not fit (note: why). "
+                          "op=propose to suggest a new guideline (id: short-kebab, note: the rule, then ' | when: ' situations).")
+        :input-schema {:type "object"
+                       :properties {:op {:type "string" :enum ["applied" "misfire" "propose"]}
+                                    :id {:type "string"} :note {:type "string"}}
+                       :required ["op" "id" "note"]}
+        :run (fn [ctx input]
+               (let [op (keyword (str (or (:op input) (get input "op"))))
+                     id (str (or (:id input) (get input "id")))
+                     note (str/trim (str (or (:note input) (get input "note"))))
+                     e (get-in ctx [:sys :env])
+                     g* (get-in @state [:idx :by-id (keyword id)])]
+                 (cond
+                   (and (not= op :propose) (nil? g*)) {:error (str "no guideline " id)}
+                   (str/blank? note) {:error "note is required"}
+                   :else
+                   (do
+                     (tr/leave! e (:task ctx) {:kind :guideline :subject (str id "#" (name op) "/" (get-in ctx [:block :id])) :text note
+                                               :data {:op (case op :applied :applied :misfire :misfire :proposed)}})
+                     (when (and (= op :applied) (:write-back? opts) (:path g*))
+                       (File/write! (:path g*) (g/add-example (File/read! (:path g*)) (keyword id) (str (date) " " note)))
+                       (reload!))
+                     {:ok (case op
+                            :applied (str "recorded" (when (:write-back? opts) (str " as an example of " id)))
+                            :misfire "recorded; a human will review whether to add a 'not when'"
+                            "proposal recorded for review")}))))}]
+      :state state})))

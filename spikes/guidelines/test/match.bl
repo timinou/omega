@@ -1,0 +1,109 @@
+; test/match.bl — does semantic matching pick the right guidelines?
+; Run: bin/bl run -p spikes/guidelines spikes/guidelines/test/match.bl
+;
+; 24 held-out situations (none is an anchor verbatim), each labelled with the
+; guideline ids that SHOULD fire. Reports precision/recall at the default
+; threshold and a threshold sweep, then the "learning" effect: recall after
+; recording ONE example for each missed guideline.
+
+(ns guidelines.match-check (:require [guidelines.core :as g] [clojure.string :as str]))
+
+(def PATH "spikes/guidelines/guidelines.bl.org")
+(def text (File/read! PATH))
+
+(def cases
+  [["show which tasks in the inbox are waiting on me" #{:visual-not-verbal}]
+   ["the failed cards should look different from done ones" #{:visual-not-verbal}]
+   ["add a 'stale' marker to rows older than a day" #{:visual-not-verbal}]
+   ["highlight the current guideline in the explorer list" #{:visual-not-verbal}]
+   ["put a (needs review) suffix after the task title" #{:visual-not-verbal}]
+   ["the tests pass now, write up what changed" #{:observed-vs-inferred}]
+   ["explain why the headless run timed out" #{:observed-vs-inferred}]
+   ["tell me what you found in the profiler output" #{:observed-vs-inferred :measure-first}]
+   ["let the package save the draft to disk on C-s" #{:pure-packages}]
+   ["fetch the url from inside the render function" #{:pure-packages}]
+   ["start a timer in on-event to poll the server" #{:pure-packages}]
+   ["the parser drops trailing whitespace, fix it" #{:test-first}]
+   ["make sum return 0 for an empty list" #{:test-first}]
+   ["check the change in the live editor" #{:offline-world}]
+   ["open bl-ed and try the new keybinding" #{:offline-world}]
+   ["the rail takes 400ms to render, speed it up" #{:measure-first}]
+   ["memoise the layout so scrolling is smoother" #{:measure-first}]
+   ["not sure whether to use datoms or org for this, need the user's call" #{:ask-with-options}]
+   ["which of the two layouts does the human prefer" #{:ask-with-options}]
+   ;; near-misses and nothing-applies
+   ["rename the variable foo to bar" #{}]
+   ["fix the typo in the README" #{}]
+   ["write the aria-label for the close button" #{}]
+   ["list the files in src" #{}]
+   ["bump the pinned beam-lisp commit in env.bl" #{}]])
+
+(defn evaluate [idx opts]
+  (let [rs (map (fn [[s want]] (let [got (set (map :id (g/match idx s opts)))] {:s s :want want :got got})) cases)
+        tp (reduce + (map (fn [r] (count (filter (:want r) (:got r)))) rs))
+        fp (reduce + (map (fn [r] (count (remove (:want r) (:got r)))) rs))
+        fn* (reduce + (map (fn [r] (count (remove (:got r) (:want r)))) rs))]
+    {:tp tp :fp fp :fn fn* :rs rs
+     :precision (if (pos? (+ tp fp)) (/ (erlang/round (* 100 (/ tp (+ tp fp)))) 100.0) 1.0)
+     :recall (/ (erlang/round (* 100 (/ tp (+ tp fn*)))) 100.0)}))
+
+(defn- r2 [x] (/ (erlang/round (* 100 x)) 100.0))
+
+(def t0 (erlang/monotonic_time :millisecond))
+(def gs (g/parse text :project PATH))
+(def idx (g/index gs))
+(def t1 (erlang/monotonic_time :millisecond))
+(println (str "index: " (count gs) " guidelines, " (count (:rows idx)) " anchors, " (- t1 t0) " ms (incl. model load), model " (:model idx)))
+
+(def base (evaluate idx {}))
+(println (str "\n== default threshold " (:threshold g/DEFAULTS) ": precision " (:precision base) " recall " (:recall base)
+              " (tp " (:tp base) " fp " (:fp base) " fn " (:fn base) ")"))
+(doseq [r (:rs base)]
+  (when (not= (:want r) (:got r))
+    (let [sc (g/score-all idx (:s r))]
+      (println (str "  ✗ " (:s r) "\n      want " (vec (:want r)) " got " (vec (:got r))
+                    "  scores " (pr-str (into {} (map (fn [[k v]] [k (r2 (or (:score v) 0))])
+                                                     (take 3 (sort-by (fn [[_ v]] (- (or (:score v) 0))) sc))))))))))
+
+(println "\n== threshold sweep")
+(doseq [t [0.30 0.35 0.40 0.42 0.45 0.50 0.55]]
+  (let [r (evaluate idx {:threshold t})]
+    (println (str "  " t "  P " (:precision r) "  R " (:recall r)))))
+
+;; per-query latency, model warm
+(def tq0 (erlang/monotonic_time :microsecond))
+(doseq [[s _] cases] (g/match idx s))
+(println (str "\nmatch latency: " (erlang/div (- (erlang/monotonic_time :microsecond) tq0) (count cases)) " µs/query (warm, "
+              (count (:rows idx)) " anchors, exact scan)"))
+
+;; ── learning: record one example per missed guideline, re-index, re-score
+(def misses (distinct (mapcat (fn [r] (map (fn [id] [id (:s r)]) (remove (:got r) (:want r)))) (:rs base))))
+;; we must not learn from the very case we test on: learn from a PARAPHRASE
+(def paraphrase
+  {"add a 'stale' marker to rows older than a day" "mark old rows by fading them instead of writing 'old'"
+   "highlight the current guideline in the explorer list" "the selected item in a list gets a stronger weight, not a > prefix"
+   "put a (needs review) suffix after the task title" "dropped the '(waiting)' suffix; waiting rows sit in their own group"
+   "the tests pass now, write up what changed" "final summary listed test output separately from my guess about cause"
+   "explain why the headless run timed out" "said which timing I measured and which cause I suspected"
+   "tell me what you found in the profiler output" "reported profiler numbers with how they were taken"
+   "let the package save the draft to disk on C-s" "save on keypress became a :write effect for the host"
+   "fetch the url from inside the render function" "network call moved out of render into a :fetch effect"
+   "start a timer in on-event to poll the server" "polling became a host :timer effect, not a process in the package"
+   "the parser drops trailing whitespace, fix it" "wrote the failing case for the reader bug first"
+   "make sum return 0 for an empty list" "pinned the empty-input result in a test, then changed it"
+   "check the change in the live editor" "tried the new command in bl-ed on port 8792 with --memory"
+   "open bl-ed and try the new keybinding" "tried the new command in bl-ed on port 8792 with --memory"
+   "the rail takes 400ms to render, speed it up" "timed rail render 5x before touching it"
+   "memoise the layout so scrolling is smoother" "measured scroll frame time before adding a memo"
+   "not sure whether to use datoms or org for this, need the user's call" "asked: org file or datoms? with a recommendation"
+   "which of the two layouts does the human prefer" "asked the human to pick between two layouts, y/n"})
+
+(def learned-text
+  (reduce (fn [t [id s]] (if-let [p (get paraphrase s)] (g/add-example t id (str "2026-10-10 " p)) t)) text misses))
+(def idx2 (g/index (g/parse learned-text :project PATH)))
+(def after (evaluate idx2 {}))
+(println (str "\n== after recording " (count misses) " example(s) (paraphrases, not the test text): precision "
+              (:precision after) " recall " (:recall after) " (tp " (:tp after) " fp " (:fp after) " fn " (:fn after) ")"))
+(doseq [r (:rs after)]
+  (when (not= (:want r) (:got r))
+    (println (str "  ✗ " (:s r) "  want " (vec (:want r)) " got " (vec (:got r))))))
