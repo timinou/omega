@@ -1,0 +1,12 @@
+; Realm-local job identities and admission. Browser files only own Worker IO.
+(ns ^:js pelagic.compute)
+(def next-job (atom 0))
+(def max-preparations 8)
+(def idle-milliseconds 5000)
+(defn lease-id []
+ (let [id (swap! next-job inc)]
+  (when (> id 9007199254740991) (throw "Preparation identity space exhausted"))
+  id))
+(defn admit? [jobs id]
+ (and (not (contains? jobs id)) (< (count jobs) max-preparations)))
+(defn lease-room? [active resetting] (< (+ active resetting) max-preparations))

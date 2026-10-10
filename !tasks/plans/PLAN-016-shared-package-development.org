@@ -306,3 +306,44 @@ limits with concise executable examples and an actual PELAGIC demo.
 - Actor preparation now supports independent bounded jobs in the canonical
   actor engine. Browser worker-sharing adapter awaits compiled/browser proof;
   no new scheduler or async CPU pipeline was added.
+- Upstream a2a83def: literal task :args defaults precede invocation arguments;
+  reusable preset aliases require no additional runner. Task/schema checks pass
+  (23 + 120 assertions) in the actual upstream cwd. The older shadowing test was
+  updated in 78b7ead0 to observe scoped project state inside its command.
+- Cold native evidence regression passes (3 assertions; 4m35s, 1.1 GB peak).
+- While constructing application-package profiling, found that conveying a
+  global caller's Env could override the service's realm Env. Fixed upstream
+  86770773: request scopes are conveyed, but the manager supplies the current
+  authoritative realm Env and vm.scope. Regression added; validation pending.
+- Clean-current-source service gate (fe907508): service 25 + realm identity 16
+  assertions pass, including global caller/target realm Env isolation.
+- Upstream fe907508 supplies UTF-8 binary leaves as an annotated BL namespace;
+  the cold CLI/native-checker regression passes all 3 assertions (2m29s, 1.1 GB
+  peak). Negative lengths and byte offsets are preserved; split UTF-8 codepoints
+  are refused because the JS value model represents text, not arbitrary bytes.
+- Added transactional Omega startup cleanup on listener failure. Preparation
+  pool now queues pre-readiness cancellation and retires owners on native
+  message failures; extended lifecycle tests await the new compiled graph.
+- Focused consolidation gate passes: frontend 14, owned-host/route/rollback 12,
+  package activation 40, launch/cache/presets 24, compute admission 6 assertions.
+  Package activation no longer runs legacy shell installers, including when an
+  immutable host is missing a package. Atlas now uses the same frontend contract.
+- First complete JS graph compilation succeeded, but actor linking correctly
+  refused ordinary pelagic.compute/admit? outside its checked native ABI. Marked
+  that policy namespace ^:js, split successful graph publication from later actor
+  linking, and added Atlas to the union. First attempt: 10m19s, 1.1 GB peak;
+  no frontend was published. Rebuild and browser gates are still pending.
+
+- The complete declarative union (PELAGIC, catalog, Atlas) and canonical actor
+  link now build successfully: 6m03s, 1.2 GB peak. Immutable local export
+  reused that frontend in 24.22s, without modifying existing demo generations.
+- Union evaluator tests exposed bootstrap assumptions: the base must load before
+  a library evaluator, core must seed before runtime, and macro-cache capture
+  must refuse missing macros. Corrected private graph passes all 67 PELAGIC Node
+  checks; fresh upstream regression is still running. Production pin is gated.
+- Actual Chromium actor-pool proof: 100 leases, one physical worker, zero forced
+  replacements, independent session jobs, zero final workers. Cancellation P95
+  4.4 ms / max 8.7 ms; heartbeat P95 5.1 ms / max 5.6 ms. Score prefixes match
+  across variable chunk boundaries. Reproduce with compute-pool-browser.py;
+  evidence: spikes/pelagic/proof/shared-compute/pool.json. These are scheduling
+  observations, not physical A/V latency measurements.

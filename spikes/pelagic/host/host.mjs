@@ -8,6 +8,7 @@ import {performanceControls} from './controls.mjs';
 import {SceneStage} from './scenes.mjs';
 import {createStage} from './render-stage.mjs';
 import {prepareScore} from './prepare.mjs';
+import {createPreparationWorker} from './compute-worker.mjs';
 import {freezeGraph} from './score-wire.mjs';
 import * as Bridge from '../../out/pelagic.bridge.mjs';
 import {conversions,download,setText,audioContext,readText,createEvaluator,afterPaint,createScoreSource,audibleTime,createGraphicsWorker,continuePreparation,admitWork,exportWindow,playbackVoices} from './values.mjs';
@@ -22,7 +23,7 @@ function blocks(source){const result=[];const re=/^#\+begin_src\s+(\S+)[^\n]*\n(
   if(!result.length && source.trim())result.push({language:'beam-lisp',code:source});return result;}
 export function createHost(api) {
   const prepareEnabled=new URLSearchParams(globalThis.location?.search||'').get('prepare')!=='none';
-  const scoreVoices=prepareScore(createScoreSource(Score.d_step,Score.d_defaults),()=>createGraphicsWorker(moduleURL('prepare-worker.mjs')),{enabled:prepareEnabled,admit:()=>admitWork('prepare',playing,playing?nextTime-ctx.currentTime:Infinity)});
+  const scoreVoices=prepareScore(createScoreSource(Score.d_step,Score.d_defaults),()=>createPreparationWorker(moduleURL('prepare-worker.mjs'),()=>createGraphicsWorker(moduleURL('prepare-worker.mjs'))),{enabled:prepareEnabled,admit:()=>admitWork('prepare',playing,playing?nextTime-ctx.currentTime:Infinity)});
   afterPaint(()=>scoreVoices.start());
   let config={...defaults},ctx=null,ctxWall=0,audio=null,timer=null,playing=false,nextStep=0,nextTime=0,origin=0,beatOrigin=0,disposed=false;
   const store=new LocalStore();let lastTake=null,restoreGeneration=0,recordPreparing=false,lastEvaluation=null,evalCount=0;

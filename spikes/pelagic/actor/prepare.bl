@@ -1,6 +1,6 @@
 ; One annotated namespace: actors control demand; native BL runs directly.
-(ns ^:js pelagic.prepare (:require [pelagic.browser :as browser]))
-(defn prepare-score [context id start]
+(ns ^:js pelagic.prepare (:require [pelagic.browser :as browser] [pelagic.compute :as compute]))
+(defn prepare-score [context id start owner]
   (if (< start 1024)
     (let [size (min 16 (- 1024 start))
           before (.now js/performance)
@@ -8,23 +8,26 @@
       (.postMessage js/self #js {:op "chunk" :id id :start start :rows (.-rows packet) :graphs (.-graphs packet)
                                 :workMs (- (.now js/performance) before)})
       (receive
-        [:credit] (prepare-score context id (+ start (.-length (.-rows packet))))))
-    (.postMessage js/self #js {:op "done" :id id})))
+        [:credit] (prepare-score context id (+ start (.-length (.-rows packet))) owner)))
+    (do (.postMessage js/self #js {:op "done" :id id})
+        (rt-send owner [:finished id]))))
 (defn main []
   (rt-register-input!)
   (.postMessage js/self #js {:op "ready"})
-  (loop [worker nil generation nil]
+  (let [owner (rt-self)]
+   (loop [jobs {}]
     (receive
       [:browser :prepare id]
-        (do (when worker (rt-exit worker :kill))
-            (recur (rt-spawn prepare-score [(browser/preparation-context) id 0]) id))
+        (if (compute/admit? jobs id)
+          (recur (assoc jobs id (rt-spawn prepare-score [(browser/preparation-context) id 0 owner])))
+          (do (.postMessage js/self #js {:op "error" :id id :error "Preparation capacity exhausted"})
+              (recur jobs)))
       [:browser :credit id]
-        (do (when (and worker (= id generation)) (rt-send worker [:credit])) (recur worker generation))
+        (do (when-let [worker (get jobs id)] (rt-send worker [:credit])) (recur jobs))
       [:browser :ping id]
-        (do (.postMessage js/self #js {:op "pong" :id id}) (recur worker generation))
+        (do (.postMessage js/self #js {:op "pong" :id id}) (recur jobs))
       [:browser :cancel id]
-        (if (= id generation)
-          (do (when worker (rt-exit worker :kill))
-              (.postMessage js/self #js {:op "cancelled" :id id}) (recur nil nil))
-          (do (.postMessage js/self #js {:op "cancelled" :id id :stale true})
-              (recur worker generation))))))
+        (do (when-let [worker (get jobs id)] (rt-exit worker :kill))
+            (.postMessage js/self #js {:op "cancelled" :id id :stale (not (contains? jobs id))})
+            (recur (dissoc jobs id)))
+      [:finished id] (recur (dissoc jobs id))))))

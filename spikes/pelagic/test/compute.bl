@@ -1,0 +1,9 @@
+(ns pelagic-compute-test (:require [pelagic.compute :as compute]))
+(deftest lease-identities-and-bounded-admission
+ (let [a (compute/lease-id) b (compute/lease-id)]
+  (is (< a b))
+  (is (compute/lease-room? 1 1))
+  (is (not (compute/lease-room? 4 4)))
+  (is (compute/admit? {} a))
+  (is (not (compute/admit? {a :running} a)))
+  (is (not (compute/admit? (into {} (map (fn [i] [i :running]) (range 8))) b)))))
