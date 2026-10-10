@@ -1,0 +1,3 @@
+(ns omega.stop-dev-task (:require [omega.dev :as dev]))
+(dev/stop! (File/cwd!))
+(println "Omega development world stopped; the shared VM and other worlds remain available.")

@@ -40,3 +40,20 @@
       (File/rm! (str root "/module.mjs"))
       (is (not (build/artifact-valid? root "identity")))
       (finally (File/rm_rf! root)))))
+(deftest host-task-edits-do-not-invalidate-the-javascript-graph
+ (is (not (build/graph-input? (str (build/home) "/pelagic/launch.bl"))))
+ (is (not (build/graph-input? (str (build/home) "/dev.bl"))))
+ (is (not (build/graph-input? (str (build/home) "/actor/prepare.bl"))))
+ (is (not (build/graph-input? (str (build/home) "/pelagic/actor-build.bl")))))
+(deftest session-presets-select-views-on-one-host
+ (is (= "packages" (:preset (launch/options ["--preset" "packages"] 8812))))
+ (is (String/contains? (launch/preset-url 8812 "packages") "file=package:catalog"))
+ (is (String/contains? (launch/preset-url 8812 "spikes") "00-start.bl.org"))
+ (is (= (launch/studio-url 8812) (launch/preset-url 8812 "pelagic")))
+ (is (try (launch/options ["--preset" "unknown"] 8812) false (catch _ true))))
+
+(deftest literate-and-compatible-sources-participate-in-cache-invalidation
+ (doseq [path ["one.bl" "one.bl.md" "one.bl.org" "one.clj" "one.cljc"]]
+  (is (build/bl-source? path)))
+ (is (not (build/bl-source? "notes.md")))
+ (is (not (build/bl-source? "view.mjs"))))

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Root task integration, with an owned offline host and a read-only conflict fixture."""
-import functools,http.server,json,os,signal,socket,subprocess,sys,threading,time
+import functools,http.server,json,os,signal,socket,subprocess,sys,threading,time,urllib.request
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[3];PROOF=ROOT/'spikes/pelagic/proof/session-launch'
 PROOF.mkdir(parents=True,exist_ok=True)
@@ -40,7 +40,11 @@ try:
   assert r.returncode!=0 and 'incompatible host' in r.stdout+r.stderr,(r.stdout,r.stderr)
   report['checks'].append({'unrelatedListenerRejected':True})
  finally:fixture.shutdown();fixture.server_close()
- fixture=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Handler,directory=str(ROOT/'spikes/pelagic/dist/local')))
+ exported,_=task(name='pelagic.bundle')
+ assert exported.returncode==0,(exported.stdout,exported.stderr)
+ identity=json.loads(json.loads(urllib.request.urlopen(f'http://127.0.0.1:{port}/api/doc?path=launch:identity').read())['text'])
+ local_root=ROOT/'spikes/pelagic/dist/local-generations'/identity['frontend']
+ fixture=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Handler,directory=str(local_root)))
  threading.Thread(target=fixture.serve_forever,daemon=True).start()
  try:
   r,_=task('--port',str(fixture.server_port),name='pelagic.local')

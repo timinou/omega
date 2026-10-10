@@ -87,16 +87,17 @@
   :ok)
 
 (defn main
-  "bin/bl-ed: serve until killed."
-  []
+  "bin/bl-ed: serve until killed; callers may supply already-built host options."
+  ([] (main {}))
+  ([overrides]
   (env/exit-on-user-error
     (fn []
       (let [args (vec (BeamLisp/argv))
             flag? (fn [f] (some (fn [a] (= a f)) args))
             opt (fn [f] (second (drop-while (fn [a] (not= a f)) args)))
-            r (start! {:root (opt "--root") :offline? (flag? "--offline") :memory? (flag? "--memory") :db (opt "--db")
-                       :port (when-let [p (opt "--port")] (erlang/binary_to_integer p))})]
+            r (start! (merge {:root (opt "--root") :offline? (flag? "--offline") :memory? (flag? "--memory") :db (opt "--db")
+                       :port (when-let [p (opt "--port")] (erlang/binary_to_integer p))} overrides))]
         (println (str "bl-ed + omega: " (:url r) "?file=omega:overview   (documents under " (:root r) ")"))
         (println (str "  packages: " (:url r) "?file=package:catalog&use=packages"))
         (println "  space a o  overview · space a s  scratch · space a n  new task · C-Enter on a #+begin_task block")
-        (receive :never nil)))))
+        (receive :never nil))))))

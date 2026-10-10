@@ -314,7 +314,7 @@
     (doseq [pid (vals @(:executors sys))]
       (when (Process/alive? pid) (DynamicSupervisor/terminate_child (:sup sys) pid)))
     (erlang/unlink (:sup sys))
-    (erlang/exit (:sup sys) :shutdown)
+    (Supervisor/stop (:sup sys) :shutdown 30000)
     (reap/reap-system! (:nonce sys)))
   :ok)
 

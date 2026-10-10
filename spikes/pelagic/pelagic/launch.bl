@@ -1,6 +1,6 @@
 ; Launch policy belongs to Omega's development task, not the editor package.
 (ns pelagic.launch
-  (:require [pelagic.build :as build] [omega.ed.main :as omega]
+  (:require [pelagic.build :as build] [omega.dev :as dev]
             [bl-ed.serve :as serve] [bl.json :as json]))
 (defn options [args default-port]
   (loop [xs args result {:port default-port :live? false}]
@@ -10,15 +10,24 @@
                    (when-not (and port (<= 1024 port 65535))
                      (throw (ex-info "--port requires an integer from 1024 to 65535" {})))
                    (recur (drop 2 xs) (assoc result :port port)))
+        "--preset" (let [preset (second xs)]
+                     (when-not (contains? #{"pelagic" "spikes" "packages"} preset)
+                       (throw (ex-info "--preset requires pelagic, spikes or packages" {})))
+                     (recur (drop 2 xs) (assoc result :preset preset)))
         "--live" (recur (rest xs) (assoc result :live? true))
         (throw (ex-info (str "Unknown launch option: " (first xs)) {}))))))
 (defn studio-url [port]
   (str "http://localhost:" port "/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org"))
+(defn preset-url [port preset]
+  (case preset
+    "packages" (str "http://localhost:" port "/?use=packages&file=package:catalog")
+    "spikes" (str "http://localhost:" port "/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org")
+    (studio-url port)))
 (defn identity [web opts]
   ; The dynamic provider proves the host mode and document root, not just assets.
   (json/encode {:schema "omega.dev-session" :version 1 :root (build/root)
                 :host (build/host-fingerprint)
-                :frontend (File/read! (str web "/.inputs")) :live (:live? opts)}))
+                :frontend (File/read! (str web "/.inputs")) :live (:live? opts) :port (:port opts)}))
 (defn- http-get [port path]
   (Application/ensure_all_started :inets)
   (try
@@ -47,17 +56,19 @@
         :else :start))
 (defn dev! [args]
   (let [opts (options args 8812) web (build/frontend!) expected (identity web opts)
-        port (:port opts) state (host-state port expected)]
+        port (:port opts) url (preset-url port (:preset opts)) state (host-state port expected)]
     (case state
-      :reuse (println (str "Omega host already running; open a PELAGIC session: " (studio-url port)))
+      :reuse (println (str "Omega host already running; open a PELAGIC session: " url))
       :conflict (throw (ex-info (str "Port " port " belongs to an incompatible host. Use bl pelagic.dev -- --port N; no changes were sent to it.") {:port port}))
       :start (do
-               (omega/start! {:root (build/root) :web web :port port :dev? true
+               (dev/acquire! expected {:root (build/root) :web web :port port :dev? true
                               :offline? (not (:live? opts)) :memory? (not (:live? opts))
                               :providers {"launch" {:read (fn [_ _] {:text expected :rev expected :read-only? true})}}})
-               (println (str "Omega + PELAGIC" (if (:live? opts) " (live)" " (offline development)") ": " (studio-url port)))
-               (println "Each browser session owns its package state and audio. Ctrl+C stops this host.")
-               (receive :never nil)))))
+               (println (str "Omega + PELAGIC" (if (:live? opts) " (live)" " (offline development)") ": " url))
+               (println "Each browser session owns its package state and audio.")
+               (if (dev/persistent?)
+                 (println "Host is realm-owned. bl omega.stop stops this world; other realms keep running.")
+                 (do (println "Foreground host. Ctrl+C stops this VM.") (receive :never nil)))))))
 (defn local! [args]
   (let [opts (options args 8818)]
     (when (:live? opts) (throw (ex-info "--live belongs to pelagic.dev; local is a standalone demo" {})))

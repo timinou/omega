@@ -1,0 +1,146 @@
+#+title: One Omega host, package sessions, owned work
+#+status: Implementation notes; see PLAN-016 for remaining integration gates
+
+* The four lifetimes
+A release VM can contain several project realms. A project realm owns its
+application services. An Omega host owns a world and serves many editor
+sessions. Each editor session owns its package state, audio and job leases.
+Opening PELAGIC in another pane does not open a new backend world or realm.
+
+* Persistent tasks
+The upstream launcher recognizes this literal task declaration:
+
+#+begin_src clojure
+{:name "studio" :vm "shared"
+ :tasks {"studio.dev" {:run "dev.bl" :service true}}}
+#+end_src
+
+It starts the warm owner, awaits readiness, then attaches. A failed startup
+returns an error instead of running a persistent service in a temporary VM.
+Finite tasks retain their existing opportunistic policy. =--cold= selects a
+foreground VM; its task must remain running. =--warm-required= selects the
+strict transport explicitly. These options require the updated launcher,
+not just new language sources. Omega now pins the validated 7d8d5c4e release.
+
+* Application acquisition
+=omega.dev/acquire!= delegates ownership and concurrency to =vm.service=.
+The realm manager reserves a slot before acknowledging it. Two callers await
+the same initialization. A disconnected caller leaves initialization owned
+by the realm. A failed service can be acquired again; a different identity
+cannot reuse the same world slot.
+
+Identity includes the world root, storage mode and backend/frontend revision.
+The initialization callback runs with the original source paths and environment,
+under a stable service owner. Its result becomes visible only after readiness.
+
+=omega.dev/stop!= stops the listener, task system and storage in that order.
+Realm drain asks service owners to clean up within a shared five-second limit,
+then forcibly ends remaining members. Cleanup must not call the manager while
+it is draining. An explicit service stop waits for its cleanup callback.
+
+* Routes are leases
+=vm.ports/claim= with =:service true= binds a claim to the service process through
+an OS descriptor. Killing that service invalidates its route while other worlds
+in the same OS VM continue. Pass the returned =:generation= to release; old
+cleanup cannot erase a replacement. Hostnames are exclusive across participating
+OS processes. Listener startup must still handle bind failure: a port probe is
+not an open listening socket.
+
+* One frontend assembly
+=packages/*.edn= now supports a versioned =:frontend= declaration: namespace
+entry, source roots, extra graph entries, evaluator preloads, host contracts,
+loader and asset mappings. =omega.frontend= validates those declarations.
+The existing JS compiler builds their union and the canonical actor runtime.
+Package loaders export the same =bl-package= values used by the real editor.
+Backend activation stays separate from frontend assembly and session loading.
+
+=omega.artifacts= coordinates graph, frontend and standalone publishers with
+OS descriptor leases. Staging names include the OS PID. Competing cold VMs wait,
+then check the cache under ownership; a crashed publisher cannot hold a lock
+forever. Immutable server generations remain pinned by existing hosts.
+
+* Reusable CPU work
+PELAGIC preparation is actor work. Each job has its own identity, context and
+credits. The canonical actor scheduler supplies bounded turns; BL owns admission
+and the audio reserve policy. The browser adapter shares a worker within one
+browser realm and routes results by lease ID. It does not schedule CPU jobs.
+Unusing one editor cancels its job, leaving other sessions alone. A cancellation
+that does not acknowledge within one second retires the worker and lets active
+clients fall back to their working score. Idle workers expire after five seconds.
+
+Worker boundaries still use actual messages. Native calls inside the same JS
+realm retain the shared BL/actor value representation. AudioWorklets and canvas
+workers remain dedicated because their resources have different lifetimes.
+
+* What the measurements mean
+Backend dispatch, service startup, browser scheduling and physical audio/video
+latency are different measurements. A short JS turn does not prove sound reached
+the speakers within 16 ms. PLAN-016 records measured results and remaining gates;
+external capture is still needed for the physical target.
+
+* Presets in env.bl
+Task =:args= are defaults placed before your invocation arguments. Omega uses
+one script for =omega.dev=, =pelagic.dev= and =spikes.pelagic.dev=. They open
+the catalog, live set or first showcase notebook on the same host. These are
+task names; friendly DNS/TLS names are a separate routing integration.
+
+#+begin_src clojure
+{"spikes.pelagic.dev" {:run "spikes/pelagic/dev.bl"
+                       :service true :args ["--preset" "spikes"]}}
+#+end_src
+
+=bl pelagic.dev -- --port 8820= overrides the default port. =bl omega.stop=
+gracefully stops this world's application host. =bl --cold pelagic.dev=
+keeps the foreground workflow. A different storage mode or port for the same
+active world is rejected; stop its host before changing that identity.
+
+* Startup rollback and route publication
+The service owner claims its route before binding HTTP. A listener race or
+initializer failure releases that generation and closes task/storage resources.
+Successful hosts carry the claim generation; graceful stop releases it after
+HTTP/tasks/storage close. Owner death also drops the descriptor, so stale route
+files cannot keep a dead host routable while its shared OS VM remains alive.
+Host aliases can be supplied to =omega.dev/acquire!= through =:hosts=; browser
+DNS/TLS and preset redirects still require their separate integration gate.
+
+* Foreground compatibility and package activation
+=bin/bl-ed= builds or reuses the shared frontend generation and serves it in
+one foreground VM. =bin/bl-ed build=, =bl omega.build=,
+and the old Atlas/catalog build entrypoints all reach the same publisher.
+Package activation validates that its loader is already admitted; it never
+runs an installer or mutates the frontend of a live host. Rebuild and restart
+to change the package set. Backend activation remains an explicit world action.
+
+* Validated release and timings
+The exact pinned release passed 107 source assertions, 67 PELAGIC Node checks,
+all 75 editor checks, the unchanged presentation check, ZIP integrity, and real
+Chromium playback/export/use/unuse checks. Two audible sessions share one host;
+unusing one leaves the other playing. The catalog does not activate a world.
+
+Thirty warm task invocations: median 264 ms, P95 388 ms. Starting a new shared
+VM with cached frontend took 63.8 s; the foreground entry took 10.9 s. The first
+compiler plus frontend build took 25m44s. These costs need separate optimization.
+
+One worker completed 100 cancellation cycles and two identical full 1,024-step
+scores: cancellation P95 4.2 ms, heartbeat P95 5.1 ms, no forced replacement,
+and no workers left after cleanup. Safe audition passed all seven browser
+checks, including preview cancellation, boundary commit, stale preview refusal,
+failed shader preservation, export during playback and complete unuse cleanup.
+
+Evidence lives in =spikes/pelagic/proof/shared-launch/=,
+=spikes/pelagic/proof/foreground-session/=, and
+=spikes/pelagic/proof/shared-release/=. The latter contains the local recording
+=safe-audition.webm= under =audition/=; large recordings are not checked into Git.
+
+* Run it
+From the repository root, run =bl pelagic.dev= for the live set,
+=bl spikes.pelagic.dev= for the showcases, or =bl omega.dev= for the catalog.
+Use the localhost URL printed by the task. =bl omega.stop= closes this world's
+host. =bin/bl-ed --offline --memory --port 8792 --root /tmp/my-omega= runs an
+isolated foreground editor. =bl pelagic.bundle= exports the standalone demo.
+
+* Still being integrated
+Verified content sharing is under source-level admission tests; it is not in
+this pinned release. Friendly hostnames, dependency-driven incremental rebuilds,
+transactional package adoption, and generation garbage collection still need
+their integration gates. A browser-clock measurement is not physical A/V proof.

@@ -4,7 +4,7 @@
             [pelagic.actor-build :as actors] [pelagic.artifact :as artifact]
             [omega.frontend :as frontend] [omega.artifacts :as artifacts]))
 
-(def compiler "fe907508")
+(def compiler "7d8d5c4e")
 (defn home []
   (Path/expand ".." (Path/dirname (BeamLisp.Loader/source_path "pelagic.build"))))
 (defn root [] (Path/expand "../.." (home)))
@@ -28,21 +28,16 @@
                 (contains? #{"dist" "out" "proof" "test" ".git" "node_modules" "__pycache__"} name) []
                 (File/dir? path) (sources path)
                 (and (File/regular? path)
-                     (some (fn [suffix] (ends-with? name suffix)) [".bl" ".mjs" ".css" ".html" ".glsl" ".org" ".in" ".json" ".edn"]))
+                     (some (fn [suffix] (ends-with? name suffix)) [".bl" ".bl.md" ".clj" ".cljc" ".mjs" ".css" ".html" ".glsl" ".org" ".in" ".json" ".edn"]))
                   [[path (artifact/sha256 (File/read! path))]]
                 :else [])))
           (sort (File/ls! directory))))
-(def compiler-context (atom nil))
 (defn compiler-identity []
-  ; Include the actual compiler sources too: explicit checkout overrides must
-  ; not reuse a graph emitted by the pinned image or an earlier checkout edit.
-  (or @compiler-context
-      (let [entry (BeamLisp.Loader/source_path "bl.js")
-            identity [compiler [entry (artifact/sha256 (File/read! entry))]
-                      (sources (Path/dirname (BeamLisp.Loader/source_path "js.build")))
-                      (sources (Path/dirname (BeamLisp.Loader/source_path "core")))]]
-        (reset! compiler-context identity)
-        identity)))
+  ; Include every compiler/logic/host source, including literate BL. Re-read on
+  ; each admission so a warm development VM cannot hide checkout changes.
+  (let [entry (BeamLisp.Loader/source_path "bl.js")]
+    [compiler [entry (artifact/sha256 (File/read! entry))]
+     (sources (Path/dirname (Path/dirname (BeamLisp.Loader/source_path "core"))))]))
 (defn fingerprint
   "Conservative content cache: compiler identity and all frontend inputs."
   []
@@ -75,10 +70,12 @@
                        (and (File/regular? path)
                             (= (:sha256 file) (artifact/sha256 (File/read! path)))))) files)))
     (catch _ false)))
+(defn bl-source? [path]
+  (some (fn [suffix] (ends-with? path suffix)) [".bl" ".bl.md" ".bl.org" ".clj" ".cljc"]))
 (defn source-fingerprint [directories bl-only?]
   (let [entries (mapcat sources directories)]
     (artifact/sha256 (json/encode
-      [(compiler-identity) (if bl-only? (filter (fn [entry] (ends-with? (first entry) ".bl")) entries) entries)]))))
+      [(compiler-identity) (if bl-only? (filter (fn [entry] (bl-source? (first entry))) entries) entries)]))))
 (defn graph-input? [path]
   ; Launch programs cannot affect the browser graph. Compiler/build/actor
   ; helpers remain conservative inputs until upstream reports all dependencies.
@@ -87,7 +84,7 @@
 (defn graph-fingerprint []
   (let [entries (mapcat sources (:paths (assembly)))]
     (artifact/sha256 (json/encode [(compiler-identity) (manifest-inputs)
-      (filter (fn [entry] (and (ends-with? (first entry) ".bl") (graph-input? (first entry)))) entries)]))))
+      (filter (fn [entry] (and (bl-source? (first entry)) (graph-input? (first entry)))) entries)]))))
 (defn- seal! [stage identity]
   (File/write! (str stage "/.inputs") identity)
   (File/write! (str stage "/pelagic-build.json")

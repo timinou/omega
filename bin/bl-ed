@@ -1,26 +1,17 @@
 #!/bin/bash
-# bin/bl-ed — omega inside bl-ed: the task world and the editor in ONE VM.
-#   bin/bl-ed                 live model; documents under the current directory
-#   bin/bl-ed --offline       a scripted model (no network)
-#   bin/bl-ed build           (re)compile the page (vendor/bl-ed/build.sh)
-#   flags: --root DIR  --port N (8790)  --db DIR | --memory
-# Then open the printed URL. The page needs vendor/bl-ed/web/out; a missing
-# build is made first (~3 min cold).
+# One shared package frontend; this compatibility command serves it in the foreground.
+# bin/bl-ed build compiles/reuses the same generation as bl omega.build.
+# Flags: --root DIR --port N (8790) --offline --memory --db DIR.
+set -euo pipefail
 ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
-V="$ROOT/vendor/bl-ed"
 if [ "${1:-}" = build ]; then
-  "$V/build.sh" && "$ROOT/spikes/packages/build.sh" && OMEGA_HOME="$ROOT" "$ROOT/bin/bl" run "$ROOT/packages/build.bl"
-  exit $?
+  exec "$ROOT/bin/bl" omega.build
 fi
-[ -f "$V/web/out/ed.main.mjs" ] || "$ROOT/bin/bl-ed" build || exit 2
-[ -f "$V/web/pkg/packages.mjs" ] || "$ROOT/spikes/packages/build.sh" || exit 2
 ENTRY=$(mktemp --suffix=.bl)
 trap 'rm -f "$ENTRY"' EXIT
-printf '(ns omega.ed.entry (:require [omega.ed.main :as m]))\n(m/main)\n' > "$ENTRY"
-# Preserve an explicit world root; the launcher's cwd is always the repo.
+printf '(ns omega.ed.entry (:require [omega.ed.main :as m] [pelagic.build :as frontend]))\n(m/main {:web (frontend/frontend!)})\n' > "$ENTRY"
 root_args=(--root "$PWD")
 for arg in "$@"; do
   if [ "$arg" = --root ]; then root_args=(); break; fi
 done
-set -o pipefail
-OMEGA_HOME="$ROOT" "$ROOT/bin/bl" run "$ENTRY" -- "${root_args[@]}" "$@" 2>&1 | grep --line-buffered -v -e '^bl-stage-hosts:' -e '^:ok$'
+OMEGA_HOME="$ROOT" "$ROOT/bin/bl" --cold run "$ENTRY" -- "${root_args[@]}" "$@"

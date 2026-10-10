@@ -362,3 +362,23 @@ limits with concise executable examples and an actual PELAGIC demo.
 - Cache audit: literate BL/compatible source suffixes and the complete compiler
   source/logic tree now participate; compiler identity is re-read rather than
   held indefinitely in a warm namespace atom. Focused validation is running.
+
+- Exact production release 7d8d5c4e / runtime 88736f6d built and validated.
+  Root tasks now reuse one realm-owned host; all three presets share one world.
+  Thirty warm invocations: median 264.26 ms, P95 387.55 ms, max 408.40 ms.
+  Cached-frontend fresh shared VM: 63,772 ms; first toolchain/frontend build:
+  1,544,834 ms. Stop preserves the shared VM. Private proof VMs were cleaned up.
+- Foreground bin/bl-ed now builds/reuses and serves the same frontend in one VM;
+  startup 10,887 ms. Actual Chromium playback, live eval, controls, export and
+  unuse pass. Two audible sessions isolate cancellation. Catalog activation is
+  editor-only. Source gate 107 assertions; PELAGIC Node 67; editor 75; unchanged
+  presentation check and ZIP integrity all green.
+- Exact-release reusable worker: 100 cancellation cycles, two full matching
+  1,024-step scores, one physical worker, no forced replacement, zero final
+  workers. Cancellation P95 4.2 ms; heartbeat P95 5.1 ms. Safe audition's seven
+  checks pass and its recording is available locally in proof/shared-release/.
+  These observations do not establish physical 16 ms end-to-end A/V latency.
+- Shared source admission prototype found an Env.fetch tuple/value integration
+  error and an ambient-symbol capture gap. Tightening positive lexical admission
+  before publishing it; new source gates are running. This draft is not shipped
+  by the validated root pin. Remaining roadmap boxes stay open until their gates.

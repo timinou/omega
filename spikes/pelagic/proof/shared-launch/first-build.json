@@ -1,0 +1,27 @@
+{
+  "oneSharedOwner": true,
+  "presetsReuseWorld": true,
+  "gracefulStop": true,
+  "samples": [
+    {
+      "task": "pelagic.dev",
+      "ms": 1544833.571796,
+      "stdout": "PELAGIC: compiling shared editor, language and package graph\nPELAGIC: linking preparation actors against the checked shared graph\njs-actors: compiling /home/user/.local/share/drop/88736f6d/lib/beam_lisp-0.1.0/priv/lib/js/actor/runtime.bl\njs-actors: compiling /tmp/pelagic-actors-2451751-4093/prepare.bl\njs-actors: retained 85/353 definitions\njs-actors: compiled 85 definitions from 2 sources -> /tmp/pelagic-actors-2451751-4093/out/prepare.mjs\njs-actors: 897 host references audited (761 remote, 136 global) against the allowlist\njs-actors: numeric gate \u2014 0 raw-Number site(s) with witness, 5 checked H.arith site(s) -> /tmp/pelagic-actors-2451751-4093/out/numeric-gate.prepare.mjs.json\nPELAGIC: staging session frontend assets\nOmega + PELAGIC (offline development): http://localhost:41389/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org\nEach browser session owns its package state and audio.\nHost is realm-owned. bl omega.stop stops this world; other realms keep running.\n:ok\n"
+    },
+    {
+      "task": "spikes.pelagic.dev",
+      "ms": 231.79831499874126,
+      "stdout": "PELAGIC: reusing compiled frontend\nOmega host already running; open a PELAGIC session: http://localhost:41389/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org\n:ok\n"
+    },
+    {
+      "task": "omega.dev",
+      "ms": 206.0748349977075,
+      "stdout": "PELAGIC: reusing compiled frontend\nOmega host already running; open a PELAGIC session: http://localhost:41389/?use=packages&file=package:catalog\n:ok\n"
+    },
+    {
+      "task": "omega.stop",
+      "ms": 179.62246000388404,
+      "stdout": "Omega development world stopped; the shared VM and other worlds remain available.\n:ok\n"
+    }
+  ]
+}
