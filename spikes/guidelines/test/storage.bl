@@ -1,0 +1,41 @@
+; test/storage.bl — why the injected block is not stored (and what storing would cost).
+; Run: bin/bl run -p spikes/guidelines spikes/guidelines/test/storage.bl
+; A 12-step task; a guideline block (~420 bytes) shown from step 3 on. Three ways:
+;   :tail      request-time block on the last user message (built): never a turn
+;   :persist   recorded INTO the user/tool turn it was shown on (in the transcript forever) —
+;              what omega.loop :record does (guidelines.ext :inject :record, the default)
+;   :sys       appended to the system prompt while it matches
+; Metric per step k+1 (as spikes/prompt-cache.bl.md §6): bytes of its Anthropic body that are
+; not a common prefix of step k's body (re-processed at full price), and the stored transcript size.
+(ns guidelines.storage (:require [omega.llm :as llm] [omega.loop :as loop] [clojure.string :as str]))
+(def p (llm/provider {:kind :anthropic}))
+(def block {:type :text :text (str "[guidelines] These project guidelines match what you are doing. Follow them.\n"
+                                   "- visual-not-verbal — Show, don't label: Distinguish states, kinds and emphasis through thoughtful "
+                                   "style, layout, typography and placement rather than extra text (\"DONE\", \"WARNING:\", \"(selected)\"). "
+                                   "(e.g. blocked rows get a warning-hue left rule; no BLOCKED word)")})
+(defn step-turns [n]
+  (vec (concat [{:role :user :content [{:type :text :text "make the blocked task row stand out in the rail"}]}]
+               (mapcat (fn [i] [{:role :assistant :content [{:type :tool-use :id (str "t" i) :name "eval" :input {:code (str "(edit \"rail.bl\" " i ")")}}]}
+                                {:role :user :content [{:type :tool-result :id (str "t" i) :content (apply str (repeat 30 (str "line " i " ")))}]}])
+                       (range 1 n)))))
+(defn shown? [k] (>= k 3))
+;; the provider caches the prefix in the order tools → system → messages (prompt-cache §1)
+(defn cache-order [b] (str (pr-str (llm/jsonable (:tools b))) (pr-str (llm/jsonable (:system b)))
+                           (str/join "" (map (fn [m] (pr-str (llm/jsonable m))) (:messages b)))))
+(defn body [kind k]
+  (let [ms (step-turns k)
+        ms (if (= kind :persist)
+             ;; recorded on every user-side turn from the step it was first shown
+             (vec (map-indexed (fn [i m] (if (and (= :user (:role m)) (shown? (inc (quot i 2))) (= i (* 2 (- 3 1))))
+                                           (update m :content conj block) m)) ms))
+             ms)
+        req {:system "You are omega, a coding agent." :messages ms :tools [] :tail (if (and (= kind :tail) (shown? k)) [block] [])}
+        req (if (and (= kind :sys) (shown? k)) (update req :system str "\n" (:text block)) req)]
+    (cache-order (llm/anthropic-body p (loop/with-tail req)))))
+(defn common [a b] (binary/longest_common_prefix (list a b)))
+(doseq [kind [:none :tail :persist :sys]]  ; :persist ≡ :record
+  (let [bs (mapv (fn [k] (body (if (= kind :none) :tail kind) k)) (range 1 13))
+        bs (if (= kind :none) (mapv (fn [k] (cache-order (llm/anthropic-body p {:system "You are omega, a coding agent." :messages (step-turns k) :tools []}))) (range 1 13)) bs)
+        un (mapv (fn [i] (- (erlang/byte_size (nth bs (inc i))) (common (nth bs i) (nth bs (inc i))))) (range 11))]
+    (println (str (name kind) "\tuncached bytes/step mean " (erlang/div (reduce + un) 11) "\tsum " (reduce + un)
+                  "\tsteps " (str/join " " un) "\tstored +" (if (= kind :persist) (count (:text block)) 0) "B"))))

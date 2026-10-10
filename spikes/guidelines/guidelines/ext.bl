@@ -4,7 +4,8 @@
 ;                                                               ; and only `* ON …` headings are used
 ;               :pipeline  guidelines.recall pipeline           ; default: triggers + semantic + gate
 ;               :judge     (fn [{:guideline :goal :work}] → {:verdict …})  ; optional, see lifecycle
-;               :enabled   #{gid …}})                           ; optional allow-list (the explorer's "on" set)
+;               :enabled   #{gid …}                             ; optional allow-list (default: `* ON` headings)
+;               :inject    :record | :tail})                    ; default :record (see below)
 ;
 ; Per step (:context hook): select with the pipeline over ctx :situation, add
 ; the hits to the request :tail, trace each first showing per task (op :shown,
@@ -69,7 +70,11 @@
                            :text (str "shown via " (name (:via h)) " (" (/ (erlang/round (* 100 (or (:p h) (:score h)))) 100.0) "): " (:anchor h))
                            :data {:op :shown :gid (name (:id h)) :via (:via h) :score (:score h) :p (:p h)
                                   :anchor (:anchor h) :step (:step sit)}})))
-           (g/inject req hits (:by-id idx))))}
+           ;; :record (default): only NEW guidelines are added, once, and stay in the
+           ;; transcript; :tail re-sends every match each step and stores nothing
+           (if (= :tail (:inject opts))
+             (g/inject req hits (:by-id idx) :tail)
+             (g/inject req (vec fresh) (:by-id idx) :record))))}
       :on
       ;; ONE handler, so judging and settling are sequential (the judge may take
       ;; seconds on the network; settling must see its candidates). Every turn

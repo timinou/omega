@@ -301,11 +301,20 @@
 ; `with-tail` folds it in at the wire boundary (llm/step), so every adapter
 ; and the cassette digest see the same thing.
 
+;; :record is the sticky sibling of :tail: blocks a hook wants IN the
+;; transcript (a guideline the agent should keep seeing, a note the human
+;; should be able to audit). They are sent now at the tail, then written into
+;; the next user-side turn, so every later request carries them at the same
+;; position: one uncached step, then a stable prefix (spikes/guidelines
+;; storage.bl: :tail costs the block every step; :record once).
+
 (defn with-tail
-  "`req` with its :tail folded into the last user message (or as a new user
-   message when the last one is the assistant's), and :tail removed."
+  "`req` with its :tail and :record folded into the last user message (or as a
+   new user message when the last one is the assistant's); both keys removed."
   [req]
-  (let [t (vec (:tail req)) req (dissoc req :tail)]
+  ;; :record first: the stored turn becomes exactly what was sent minus the
+  ;; volatile :tail, so the next request's prefix matches this one's
+  (let [t (vec (concat (:record req) (:tail req))) req (dissoc req :tail :record)]
     (if (empty? t)
       req
       (let [ms (vec (:messages req)) i (dec (count ms))]
@@ -313,6 +322,20 @@
                (if (and (>= i 0) (= :user (:role (nth ms i))))
                  (assoc ms i (update (nth ms i) :content (fn [c] (into (vec c) t))))
                  (conj ms {:role :user :content t})))))))
+
+(defn- record-into-last!
+  "Append `blocks` to the last user-side turn of `ts` in the store (the turn the
+   model just saw them on); returns ts updated. Only a running turn calls this:
+   it is the one writer of its task's turns (C8)."
+  [sys id ts blocks]
+  (let [i (last (keep-indexed (fn [k t] (when (not= :assistant (:role t)) k)) ts))]
+    (if (nil? i)
+      ts
+      (let [t (nth ts i)
+            content (into (vec (:content t)) blocks)
+            e (:env sys)]
+        (env/tx! e [[:db/add (env/eid e :turn/id (str id "/" (:n t))) :turn/content content]])
+        (assoc (vec ts) i (assoc t :content content))))))
 
 (defn request
   "The model request for task `id` over its turns `ts` (read from the store
@@ -325,7 +348,7 @@
                           (when cwd (str "\nTask working directory: " cwd ". Relative file paths and shell commands resolve here.")))
              :messages (messages ts)
              :tools (vec (map (fn [t] (select-keys t [:name :description :input-schema])) (tool-table sys)))
-             :tail []}]
+             :tail [] :record []}]
     (hook sys :context req {:sys sys :task id :situation (situation sys id ts)}))))
 
 (defn- add-cost!
@@ -377,9 +400,16 @@
               req (if-let [note (budget-notice sys cost)]
                     (update req :tail (fn [t] (conj (vec t) {:type :text :text (clojure.string/trim note)})))
                     req)
+              rec (vec (:record req))
               resp (step (assoc (with-tail req) :on-delta
                                 (fn [d] (stream/delta! world id (assoc d :turn turn-n)))))
-              _ (stream/turn-done! world id)]
+              _ (stream/turn-done! world id)
+              ;; :record blocks join the transcript where the model saw them: at the
+              ;; end of the last user-side turn (rewriting it in place keeps every
+              ;; later request's prefix identical to what this one sent)
+              ts (if (and (seq rec) (map? resp) (not (contains? resp :error)))
+                   (record-into-last! sys id ts rec)
+                   ts)]
           (cond
             (not (map? resp))
             {:status :failed :error (str "the model step returned " (pr-str resp) ", not a response map")}

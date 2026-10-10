@@ -66,3 +66,24 @@
       (is (= [".css"] (:exts s)))
       (is (includes? (:text s) "files: /tmp/p/theme.css")))
     (task/stop-system! sys)))
+
+(deftest a-record-block-is-sent-once-then-lives-in-the-transcript-at-the-same-place
+  (let [seen (atom [])
+        once (atom false)
+        x {:name :rec :hooks {:context (fn [req _] (if (compare-and-set! once false true)
+                                                     (update req :record conj {:type :text :text "[kept] remember this"})
+                                                     req))}}
+        sys (ext/install (task/start-system (env/open)
+                                            {:root "/tmp" :tools cm/tools
+                                             :step (loop/scripted [(fn [r] (swap! seen conj r) (loop/call-tool "eval" {:code "1"}))
+                                                                   (fn [r] (swap! seen conj r) (loop/say "ok"))])})
+                         [x])
+        id (task/open! sys {:goal "g"})]
+    (task/await sys id 5000)
+    (let [[r1 r2] @seen]
+      (is (= ["g" "[kept] remember this"] (texts (first (:messages r1)))))
+      ;; step 2: the block is still there, in the same message, at the same place
+      (is (= ["g" "[kept] remember this"] (texts (first (:messages r2)))))
+      (is (= (first (:messages r1)) (first (:messages r2))) "the prefix is byte-identical"))
+    (is (= ["g" "[kept] remember this"] (vec (keep :text (:content (first (loop/turns sys id)))))))
+    (task/stop-system! sys)))

@@ -159,10 +159,13 @@
   (when (seq hits) {:type :text :text (render-hits hits by-id)}))
 
 (defn inject
-  "Add the hits to the request's :tail (omega.loop folds it into the last user
-   message at the wire; it is never a turn, so the cached prefix holds)."
-  [req hits by-id]
-  (if-let [b (tail-block hits by-id)] (update req :tail (fn [t] (conj (vec t) b))) req))
+  "Add the hits to the request. mode :record (default): the block joins the
+   transcript where the model first saw it (omega.loop :record) — one uncached
+   step, then a stable prefix, and an audit trail in the task's own turns.
+   mode :tail: request-time only, re-sent every step it still matches."
+  ([req hits by-id] (inject req hits by-id :record))
+  ([req hits by-id mode]
+   (if-let [b (tail-block hits by-id)] (update req mode (fn [t] (conj (vec t) b))) req)))
 
 ;; ── write-back: a recorded use becomes an example (and an anchor) ───────
 

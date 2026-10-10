@@ -69,7 +69,7 @@
     (is (not (str/includes? (texts (last (:messages @seen))) "[guidelines]")))
     (task/stop-system! sys)))
 
-(deftest a-matching-guideline-rides-the-tail-and-is-not-recorded
+(deftest a-matching-guideline-is-recorded-once-where-the-model-first-saw-it
   (let [seen (atom [])
         sys (system (loop/scripted [(fn [r] (swap! seen conj r) (loop/call-tool "eval" {:code "1"}))
                                     (fn [r] (swap! seen conj r) (loop/say "ok"))])
@@ -78,11 +78,25 @@
     (task/await sys id 5000)
     (let [[r1 r2] @seen]
       (is (str/includes? (texts (first (:messages r1))) "visual-not-verbal"))
-      (is (not (str/includes? (texts (first (:messages r2))) "[guidelines]"))))
-    (is (every? (fn [t] (not (str/includes? (pr-str (:content t)) "[guidelines]"))) (loop/turns sys id)))
+      (is (= (first (:messages r1)) (first (:messages r2))) "step 2 carries it in the same place: a stable prefix")
+      (is (= 1 (count (re-seq #"\[guidelines\]" (pr-str (:messages r2))))) "and only once"))
+    (is (str/includes? (pr-str (:content (first (loop/turns sys id)))) "[guidelines]") "it is in the transcript")
     (let [s (first (filter (fn [t] (= :shown (get-in t [:data :op]))) (life/uses (:env sys) id)))]
       (is (= "visual-not-verbal" (get-in s [:data :gid])))
       (is (= :semantic (get-in s [:data :via]))))
+    (task/stop-system! sys)))
+
+(deftest in-tail-mode-it-rides-the-tail-and-is-not-recorded
+  (let [seen (atom [])
+        sys (system (loop/scripted [(fn [r] (swap! seen conj r) (loop/call-tool "eval" {:code "1"}))
+                                    (fn [r] (swap! seen conj r) (loop/say "ok"))])
+                    (gx/extension {:sources [{:path (fresh-org) :scope :project}] :inject :tail}))
+        id (task/open! sys {:goal "make the blocked task row stand out in the rail"})]
+    (task/await sys id 5000)
+    (let [[r1 r2] @seen]
+      (is (str/includes? (texts (first (:messages r1))) "visual-not-verbal"))
+      (is (not (str/includes? (texts (first (:messages r2))) "[guidelines]"))))
+    (is (every? (fn [t] (not (str/includes? (pr-str (:content t)) "[guidelines]"))) (loop/turns sys id)))
     (task/stop-system! sys)))
 
 (deftest the-enabled-set-limits-what-can-be-shown
