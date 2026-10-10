@@ -1,0 +1,3 @@
+(ns pocket.app (:require [android.app :as app] [pocket.home]))
+(defn navigation [_platform] (app/stack :home 'pocket.home "Omega Pocket"))
+(defn on-start [] (app/start-root! 'pocket.home))

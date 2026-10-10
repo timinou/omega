@@ -114,7 +114,7 @@ const server=http.createServer(async(req,res)=>{
       manager.get(u.pathname.split('/').at(-1));
       res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-frame-options':'SAMEORIGIN',
         'referrer-policy':'strict-origin-when-cross-origin',
-        'content-security-policy':"default-src 'self'; frame-src 'self' https://*.onkernel.com https://*.kernel.sh https://*.kernel.com; object-src 'none'; base-uri 'none'; frame-ancestors 'self'"});
+        'content-security-policy':"default-src 'self'; frame-src 'self' https://*.onkernel.com https://*.onkernel.com:8443 https://*.kernel.sh https://*.kernel.sh:8443 https://*.kernel.com https://*.kernel.com:8443; object-src 'none'; base-uri 'none'; frame-ancestors 'self'"});
       return res.end(await fs.readFile(path.join(here,'view.html')));
     }
     if(['/browser/view.mjs','/browser/view.css','/browser/native-view.mjs'].includes(u.pathname)) {

@@ -1,0 +1,113 @@
+; dwim/main.bl — navigation policy over the editor's shared visible topology.
+(ns dwim.main
+  (:require [ed.core :as c]
+            [ed.text :as t]
+            [ed.motion :as motion]
+            [ed.view :as view]))
+
+(defn- heads [ed] (mapv :head (:sels ed)))
+
+(defn- remembered-goals [ed]
+  (let [st (get-in ed [:pkg-state "dwim"])]
+    (if (and (contains? #{:dwim/up :dwim/down} (:last-command ed))
+             (= (:heads st) (heads ed)) (= (:path st) (:path ed))
+             (identical? (:text st) (:text ed)))
+      (:goals st)
+      (mapv (fn [[_ col]] col) (heads ed)))))
+
+(defn- vertical-step [ed dir goals]
+  (let [rows (view/rows ed)
+        tx (:text ed)
+        extend? (= :select (:mode ed))]
+    (if (empty? rows) ed
+      (assoc ed :sels
+        (mapv (fn [i s]
+                (let [[r col] (:head s)
+                      at (view/row-index rows r)
+                      next (if (and (neg? dir) (>= at 0) (not= r (nth rows at))) at (+ at dir))
+                      j (max 0 (min next (dec (count rows))))
+                      row (nth rows j)
+                      p [row (min (nth goals i col) (max 0 (dec (t/line-len tx row))))]]
+                  {:anchor (if extend? (:anchor s) p) :head p}))
+              (range (count (:sels ed))) (:sels ed))))))
+
+(defn vertical [ed dir]
+  (let [goals (remembered-goals ed)
+        moved (loop [e ed n (max 1 (or (:count ed) 1))]
+                (if (zero? n) e
+                  (let [after (vertical-step e dir goals)]
+                    (if (= (:sels after) (:sels e)) after
+                      (recur after (dec n))))))]
+    (assoc-in moved [:pkg-state "dwim"]
+      {:goals goals :heads (heads moved) :path (:path moved) :text (:text moved)})))
+
+(defn- heading-on [ed r]
+  (some (fn [h] (when (= (:row h) r) h)) (:outline (:struct ed))))
+
+(defn- horizontal-target [ed s dir rows]
+  (let [[source-row col :as source-pos] (:head s)
+        r (if (seq rows) (nth rows (max 0 (view/row-index rows source-row))) source-row)
+        p (if (= r source-row) source-pos
+            [r (min col (max 0 (dec (t/line-len (:text ed) r))))])
+        h (when (some? rows) (heading-on ed r))
+        folded? (contains? (or (:folds ed) #{}) r)]
+    (cond
+      (nil? h) {:pos ((if (neg? dir) motion/left motion/right) (:text ed) p)}
+      (and (neg? dir) (not folded?)) {:pos p :close r}
+      (neg? dir) {:pos (or (motion/heading-parent (:struct ed) p) p)}
+      folded? {:pos p :open r}
+      :else {:pos (if-let [row (some (fn [q] (when (and (> q r) (< q (:end h))) q)) (view/rows ed))]
+                    [row 0] p)})))
+
+(defn- horizontal-step [ed dir]
+  ; Resolve every head against the same snapshot: duplicate cursors must not
+  ; collapse and immediately reopen a shared section in one command.
+  (let [outline-rows (when (and (= :normal (:mode ed)) (view/outline? ed)) (view/rows ed))
+        targets (mapv (fn [s] (horizontal-target ed s dir outline-rows)) (:sels ed))
+        folding? (some (fn [x] (or (some? (:close x)) (some? (:open x)))) targets)
+        ed2 (if-not folding? ed
+              (assoc ed :folds
+                (reduce (fn [fs x]
+                          (cond (some? (:close x)) (conj fs (:close x))
+                                (some? (:open x)) (disj fs (:open x))
+                                :else fs)) (or (:folds ed) #{}) targets)))
+        rows (when folding? (view/rows ed2))
+        extend? (= :select (:mode ed))]
+    (assoc ed2 :sels
+      (mapv (fn [s x]
+              (let [[r col :as p] (:pos x)
+                    ; A simultaneous collapse may hide another selection.
+                    p (if (and folding? (seq rows))
+                        (let [row (nth rows (max 0 (view/row-index rows r)))]
+                          [row (min col (max 0 (dec (t/line-len (:text ed2) row))))]) p)]
+                {:anchor (if extend? (:anchor s) p) :head p}))
+            (:sels ed) targets))))
+
+(defn horizontal [ed dir]
+  (loop [e (update ed :pkg-state dissoc "dwim") n (max 1 (or (:count ed) 1))]
+    (if (zero? n) e
+      (let [after (horizontal-step e dir)]
+        (if (and (= (:sels after) (:sels e)) (= (:folds after) (:folds e))) after
+          (recur after (dec n)))))))
+
+(def commands
+  {:dwim/down {:doc "Move to the next visible source row or presented object."
+               :run (fn [ed] (vertical ed 1))}
+   :dwim/up {:doc "Move to the previous visible source row or presented object."
+             :run (fn [ed] (vertical ed -1))}
+   :dwim/left {:doc "On a heading: collapse, else parent. In text: left."
+               :run (fn [ed] (horizontal ed -1))}
+   :dwim/right {:doc "On a heading: expand, else enter visible contents. In text: right."
+                :run (fn [ed] (horizontal ed 1))}})
+
+(def bl-package
+  {:name "dwim"
+   :doc "Navigate what is visible: folded outlines and presented objects."
+   :commands commands
+   :provides {:navigation-policy true}
+   :on-event (fn [_old new ev]
+               (if (and (contains? #{:click :doc :text :load} (:type ev))
+                        (some? (get-in new [:pkg-state "dwim"])))
+                 (update new :pkg-state dissoc "dwim") new))
+   :keys {:normal {"j" :dwim/down "k" :dwim/up "h" :dwim/left "l" :dwim/right}
+          :select {"j" :dwim/down "k" :dwim/up "h" :dwim/left "l" :dwim/right}}})

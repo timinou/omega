@@ -27,7 +27,8 @@
             [ed.keymap :as km]
             [ed.docs :as docs]
             [ed.omega :as omega]
-            [ed.pkg :as pkg]))
+            [ed.pkg :as pkg]
+            [ed.view :as view]))
 
 ; ─── packages ───
 ; What omega adds goes in through the same tables a user's `ed/defcmd` and
@@ -51,6 +52,10 @@
 
 (declare handle)
 
+(defn- command-name [k]
+  ; `name` drops the namespace: package commands must remain distinguishable.
+  (str k))
+
 (defn- api
   "The `ed` namespace the `:` command line sees — name → fn, interned by the
    host as `ed/<name>` — closed over a cell holding the live editor so
@@ -59,7 +64,7 @@
   {"state" (fn [] @cell)
    "text" (fn [] (t/to-string (:text @cell)))
    "cmd" (fn [cmd-name] (swap! cell km/run-command (keyword cmd-name)) nil)
-   "commands" (fn [] (vec (sort (map name (keys (merge cmds/table (:user-commands @cell)))))))
+   "commands" (fn [] (vec (sort (map command-name (keys (merge cmds/table (pkg/commands @cell) (:user-commands @cell)))))))
    "doc" (fn [cmd-name] (:doc (cmds/lookup @cell (keyword cmd-name))))
    "bind" (fn [mode seq-str cmd] (swap! cell assoc-in [:user-keys (keyword mode) seq-str] (keyword cmd)) (str seq-str " → " (name cmd)))
    "defcmd" (fn [cmd-name doc f]
@@ -117,12 +122,12 @@
         (km/run-command (assoc ed :awaiting nil) :eval-cell)
       :else (assoc ed :awaiting nil))))
 
-
 (defn eval-command
   "Evaluate the command-line text as REAL Beam Lisp — the self-hosted
    reader, compiler and macros, running in this page (priv/lib/js/eval.bl) —
    with the `ed` namespace bound to the live editor API. Returns the editor
    with the value (or error) in the echo area.
+
    Evaluation is a host capability (`js/eval-ed`): the editor stays a pure
    function of its events, and a host without an evaluator answers with an
    error message instead of a crash."
@@ -155,11 +160,11 @@
   (let [q (:text (:minibuf ed))
         km (get (km/keymap-of ed) :normal {})
         keys-of (fn [n] (vec (sort (keep (fn [[k v]] (if (= v n) k nil)) km))))]
-    (vec (take 12 (sort-by (fn [m] (name (:name m)))
+    (vec (take 12 (sort-by (fn [m] (command-name (:name m)))
                            (keep (fn [[n cmd]]
-                                   (if (or (blank? q) (fuzzy? q (name n)) (fuzzy? q (:doc cmd)))
+                                   (if (or (blank? q) (fuzzy? q (command-name n)) (fuzzy? q (:doc cmd)))
                                      {:name n :doc (:doc cmd) :keys (keys-of n)} nil))
-                                 (merge cmds/table (:user-commands ed))))))))
+                                 (merge cmds/table (pkg/commands ed) (:user-commands ed))))))))
 
 (defn- minibuf-key [ed k]
   (let [mb (:minibuf ed)]
@@ -394,18 +399,6 @@
               out (if (< f to) (conj out {:text (subs l f to) :kind (:kind m)}) out)]
           (recur (rest ms) (max at to) out))))))
 
-(defn- visible-rows
-  "The rows to draw: from :top, skipping folded section bodies, :height of them."
-  [ed]
-  (let [n (t/line-count (:text ed))
-        folds (or (:folds ed) #{})
-        ol (:outline (:struct ed))
-        hidden? (fn [r] (some (fn [h] (and (contains? folds (:row h)) (> r (:row h)) (< r (:end h)))) ol))
-        {:keys [top height]} (:view ed)]
-    (loop [r top out []]
-      (if (or (>= r n) (>= (count out) height)) out
-        (recur (inc r) (if (hidden? r) out (conj out r)))))))
-
 (defn line-context
   "What drawing any row of `rows` needs, computed once per frame: the spans,
    the code marks of the cells intersecting `rows`, the folds, the cursor row."
@@ -490,11 +483,11 @@
      :message (:message ed)
      :minibuf (if (nil? mb) nil
                 {:prompt (:prompt mb) :text (:text mb) :kind (:kind mb)
-                 :matches (if (= :palette (:kind mb)) (mapv (fn [m] {:name (name (:name m)) :doc (:doc m) :keys (:keys m)}) (palette-matches ed)) [])
+                 :matches (if (= :palette (:kind mb)) (mapv (fn [m] {:name (command-name (:name m)) :doc (:doc m) :keys (:keys m)}) (palette-matches ed)) [])
                  :sel (or (:sel mb) 0)})
      :overlay (cond
                 (= :outline (:overlay ed)) {:kind :outline :items (mapv (fn [h] {:level (:level h) :title (:title h) :row (:row h) :todo (if (some? (:todo h)) (name (:todo h)) nil)}) (:outline (:struct ed)))}
-                (= :help (:overlay ed)) {:kind :help :items (mapv (fn [[k n]] {:keys k :name (name n) :doc (:doc (cmds/lookup ed n))})
+                (= :help (:overlay ed)) {:kind :help :items (mapv (fn [[k n]] {:keys k :name (command-name n) :doc (:doc (cmds/lookup ed n))})
                                                                   (sort-by first (get (km/keymap-of ed) (if (= :insert (:mode ed)) :insert :normal) {})))}
                 :else nil)}))
 
@@ -502,5 +495,5 @@
   "The view model the host draws: a loaded package may draw the document
    (a presentation); otherwise the text, row by row."
   [ed]
-  (let [v (or (pkg/render ed) (render-rows ed (visible-rows ed)))]
+  (let [v (or (pkg/render ed) (render-rows ed (view/visible-rows ed)))]
     (assoc v :packages (pkg/names ed))))

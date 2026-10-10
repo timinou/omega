@@ -1,0 +1,27 @@
+#+TITLE: DWIM · navigate what you see
+
+* Read the shape, not the hidden source
+This section is a navigation unit when folded.
+The text remains intact; only its presentation changes.
+
+** Nested detail
+A child fold survives opening its parent.
+Hidden source lines must never consume j/k steps.
+
+* One shared visibility model
+Rendering and movement consult the same outline spans.
+No second parser. No DOM navigation. No server round trip.
+
+* A removable interaction policy
+h collapses an open heading; h again goes to its parent.
+l opens a folded heading; l again enters visible content.
+j and k move through visible source rows.
+In prose, h and l still move character by character.
+
+* The leverage
+Navigation, selection, reveal, inspection and actions
+can share one answer to: what is the thing here?
+
+* Unload restores the key policy
+:(ed/unuse "dwim") removes its keys, commands and goal state.
+The document, your deliberate folds and your edits remain.

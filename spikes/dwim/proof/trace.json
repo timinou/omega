@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-05",
+  "blPin": "b4861edf",
+  "url": "http://127.0.0.1:8792/?file=outline.bl.org&use=dwim",
+  "world": {"offline": true, "memory": true, "root": "/tmp/omega-dwim-proof"},
+  "input": "Native browser key presses and typed editor API forms; page evaluation only inspected and asserted state",
+  "boot": {"head": [0, 0], "packages": ["dwim"], "navigationPolicy": true, "sourceRows": 28},
+  "used": {
+    "keys": ["2", "j", "h", "j"],
+    "head": [10, 0],
+    "folds": [2],
+    "packages": ["dwim"],
+    "drawnSourceRows": [0, 1, 2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27],
+    "screenshot": "01-used-folded-j.png"
+  },
+  "unused": {
+    "keys": ["k", ":", "(ed/unuse \"dwim\")", "Enter"],
+    "head": [2, 0], "packages": [], "goalState": null, "folds": [2],
+    "echo": "\"removed dwim\"",
+    "screenshot": "02-unused-folds-preserved.png"
+  },
+  "baselineAfterUnload": {"key": "j", "head": [3, 0], "command": "move-down", "packages": []},
+  "runtimeUse": {
+    "form": "(ed/use \"dwim\")", "packages": ["dwim"], "head": [3, 0], "folds": [2], "echo": "using dwim"
+  },
+  "sourceUnchanged": true
+}

@@ -287,12 +287,24 @@
 
 (defn start!
   "Serve bl-ed on loopback. opts {:port :root :web :providers :intents}.
-   Returns {:url :port}."
+   Returns {:url :port :listener}. Call stop! before closing application state."
   [opts]
   (let [cfg {:root (Path/expand (or (:root opts) "."))
              :web (Path/expand (:web opts))
              :providers (or (:providers opts) {})
              :intents (or (:intents opts) {})}
-        port (or (:port opts) 8790)]
-    (w/serve {:port port :plug (router cfg) :ip (erlang/list_to_tuple (list 127 0 0 1))})
-    {:url (str "http://127.0.0.1:" port "/") :port port :root (:root cfg)}))
+        port (or (:port opts) 8790)
+        started (w/serve {:port port :plug (router cfg) :ip (erlang/list_to_tuple (list 127 0 0 1))})]
+    (when-not (= :ok (elem started 0))
+      (throw (ex-info "Cannot start editor listener" {:reason (elem started 1) :port port})))
+    {:url (str "http://127.0.0.1:" port "/") :port port :root (:root cfg)
+     :listener (elem started 1)}))
+
+(defn stop!
+  "Stop accepting requests and wait for the listener's supervised children."
+  [server]
+  (when-let [pid (:listener server)]
+    (when (Process/alive? pid)
+      (erlang/unlink pid)
+      (Supervisor/stop pid :normal 30000)))
+  :ok)

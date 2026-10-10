@@ -18,6 +18,6 @@ test('host serves private live capability only to its panel; metadata, documents
   const doc=await (await fetch(host.url+'/api/doc?path=browser:test')).json();assert.match(doc.text,/Kernel profile/);assert.doesNotMatch(doc.text,/private-live-token/);
   assert.equal((await fetch(host.url+'/browser/credentials/test',{method:'POST',headers:{origin:'https://evil.example','content-type':'application/json','x-omega-browser':'human'},body:'{"verb":"connect"}'})).status,403);
   assert.equal((await fetch(host.url+'/browser/artifact/test/../sessions.json')).status,400);
-  const view=await fetch(host.url+'/browser/view/test');assert.match(view.headers.get('content-security-policy'),/frame-ancestors 'self'/);assert.match(await view.text(),/Link 1Password/);
+  const view=await fetch(host.url+'/browser/view/test');assert.match(view.headers.get('content-security-policy'),/frame-ancestors 'self'/);assert.match(view.headers.get('content-security-policy'),/https:\/\/\*\.kernel\.sh:8443/);assert.match(await view.text(),/Link 1Password/);
  }finally{await host.stop();await fs.rm(root,{recursive:true,force:true});await fs.rm(root+'.private',{recursive:true,force:true});}
 });

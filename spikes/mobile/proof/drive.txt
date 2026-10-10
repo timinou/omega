@@ -1,0 +1,16 @@
+✔ mobile is a removable layer and a real frame layout, with no user table mutation (14.613757ms)
+✔ drafts stay keyed to tasks and navigation leaves the conversation editor untouched (3.265953ms)
+✔ send uses the existing task intent, blocks duplicates and preserves drafts on failure (3.18471ms)
+✔ quick answers keep a composed reply; successful text sends clear only the submitted draft (1.716159ms)
+✔ completed task follow-up carries its actual place and frozen directory (0.728966ms)
+✔ mobile file input participates in the shared-buffer draft protocol and read-only guards (1.571726ms)
+✔ dirty file navigation keeps its current tab and exposes a publication message (0.578121ms)
+✔ task creation from a place document validates against the retained place choices (0.504583ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 43.536327

@@ -78,6 +78,12 @@ Read the supplier's current notices. Retain sources; do not submit anything.
 ```
 
 Manual browsers start under human control; tasks start under Omega control.
+Native manual sessions start without a Playwright connection to their pages.
+Automation connects on demand when Omega runs a browser operation; handing
+control back to the human disconnects Playwright while Chromium stays open.
+The native viewer and human extension controls work without that connection.
+This reduces automation instrumentation during manual sign-in; it does not
+guarantee that a site's challenge will accept the browser or network.
 Human/Omega handoff keeps the same browser, profile and native viewer connection.
 The control switch updates immediately without a desktop reconnect. The host independently
 filters keyboard, pointer, clipboard and resize input during agent control,
@@ -102,12 +108,31 @@ symlink profiles are refused. Retained reports and screenshots are separate.
 
 ## 1Password
 
+Kernel hosts can supply trusted `browserOptions` to `KernelBrowser`, for example
+`{stealth:true,telemetry:{enabled:true}}`. Lifecycle ownership, headed mode and
+profile persistence still override these options. Stealth adds Kernel's managed
+proxy and challenge handling; these services do not apply to native Chromium.
+Adapters may expose `providerFor(id)` when a desk routes sessions to different
+providers; session metadata and live-view URLs follow that provider. Native
+profiles and Kernel profiles are separate and do not migrate login state.
+
 In human control, expand **Sign in**, then choose **Install 1Password** to open
 the official Chrome Web Store listing inside this Chromium profile. Approve
 installation using Chromium's UI; **Manage extensions** opens its extension
 manager. Pin and unlock the extension there, sign in to the supplier, then hand
 control back to Omega. Save and close retains the extension's profile storage.
 No account password or Secret Key is sent through an Omega credential form.
+
+Native control handoff enables an installed 1Password extension for human
+control and disables it before granting Omega control. A failed or unverified
+extension change refuses the handoff. Manual reopen enables it even if the
+profile was saved during Omega control. Installation is still required in each
+profile; an absent extension does not prevent automation. These operations use
+only a temporary Chromium extensions-settings target, without Playwright or
+supplier-page instrumentation. Disabling the extension preserves its storage
+but may require unlocking it again. Existing website sessions and previously
+filled page contents remain available to automation; this is a capability
+restriction within the host, not isolation from a hostile host process.
 
 The browser extension can be installed on supported desktop browsers; desktop
 app integration has additional browser checks. For a custom/Nix Chromium,

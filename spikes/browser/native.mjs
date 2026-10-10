@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import {chromium} from 'playwright-core';
 import {BrowserPort} from './port.mjs';
 import {browserOperation} from './operations.mjs';
+import {setOnePassword} from './extension-control.mjs';
 const missing=()=>Object.assign(Error('Native browser is no longer running'),{status:404});
 export class NativeBrowser {
   constructor({root=process.env.BROWSER_NATIVE_ROOT||path.join(os.homedir(),'.local/share/omega/browser'),env=process.env}={}){
@@ -31,10 +32,12 @@ export class NativeBrowser {
     const port=new BrowserPort(executable);let browser;
     try{
       const info=await port.request({op:'launch',profile:this.profilePath(s.profile),runtime,chromium:this.env.CHROMIUM,displayBackend,compositor:this.env.SWAY,xvfb:this.env.XVFB,vnc:displayBackend==='wayland'?this.env.WAYVNC:this.env.X11VNC,...(url?{url}:{}),width:1280,height:900});
-      browser=await chromium.connectOverCDP(info.cdp);
+      await setOnePassword(port,s.control==='human');
+      // Manual sessions start without a Playwright connection to their pages.
+      // Attach only when automation is explicitly requested.
       const id=crypto.randomUUID(),token=crypto.randomBytes(24).toString('hex');
       const h={id,session:s.id,name:s.remoteName,profile:s.profile,port,browser,info,runtime,token};this.handles.set(id,h);this.capabilities.set(token,h);
-      port.closed.then(()=>{this.capabilities.delete(token);this.handles.delete(id);browser.close().catch(()=>{});});
+      port.closed.then(()=>{this.capabilities.delete(token);this.handles.delete(id);h.browser?.close().catch(()=>{});});
       return this.descriptor(h);
     }catch(e){await browser?.close().catch(()=>{});await port.close();throw Error(`${e.message}. Private startup logs: ${runtime}`);}
   }
@@ -42,7 +45,7 @@ export class NativeBrowser {
   async retrieve(id){const h=this.handles.get(id)||[...this.handles.values()].find(h=>h.name===id);if(!h||h.port.error)throw missing();await h.port.request({op:'info'});return this.descriptor(h);}
   async close(id){const h=this.handles.get(id);if(!h)throw missing();
     const result=await h.port.request({op:'stop'});if(!result.saved)throw Error('Native profile save was not acknowledged');
-    this.capabilities.delete(h.token);this.handles.delete(id);await h.browser.close().catch(()=>{});await h.port.close();await fs.rm(h.runtime,{recursive:true,force:true});
+    this.capabilities.delete(h.token);this.handles.delete(id);await h.browser?.close().catch(()=>{});await h.port.close();await fs.rm(h.runtime,{recursive:true,force:true});
   }
   async saved(profile){const p=await this.ensureProfile(profile);if(!Date.parse(p.updated_at))throw Error('Native profile needs recovery; no clean save was acknowledged. Reopen the retained profile.');return p;}
   async forget(s){if([...this.handles.values()].some(h=>h.profile===s.profile))throw Error('Close every browser using this profile first.');
@@ -52,8 +55,24 @@ export class NativeBrowser {
     try{await port.request({op:'forget',profile:this.profilePath(s.profile)});}finally{await port.close();}
   }
   stream(id){const h=this.handles.get(id);if(!h||h.port.error)throw missing();return {token:h.token,socket:h.info.vncSocket};}
+  async connect(s){
+    const h=this.handles.get(s.kernelId);if(!h||h.port.error)throw missing();
+    if(!h.browser)h.browser=await chromium.connectOverCDP(h.info.cdp);
+    return h.browser;
+  }
+  async setControl(s,control){
+    const h=this.handles.get(s.kernelId);if(!h||h.port.error)throw missing();
+    if(control==='human'&&h.browser){const browser=h.browser;h.browser=null;await browser.close();}
+    await setOnePassword(h.port,control==='human');
+  }
+  async openHumanPage(s,url){
+    if(s.control!=='human')throw Error('Take human control before opening extension settings.');
+    const h=this.handles.get(s.kernelId);if(!h||h.port.error)throw missing();
+    // Browser-level tab creation does not attach Runtime/DOM instrumentation.
+    await h.port.request({op:'cdp',method:'Target.createTarget',params:{url}});
+  }
   async run(s,args){const h=this.handles.get(s.kernelId);if(!h||h.port.error)throw missing();
-    const context=h.browser.contexts()[0],pages=context.pages();
+    const browser=await this.connect(s),context=browser.contexts()[0],pages=context.pages();
     // The selected Chromium tab is visible; among restored pages prefer the
     // focused page, falling back to the last tab if none reports focus.
     let page;for(const p of pages)if(await p.evaluate(()=>document.hasFocus()).catch(()=>false))page=p;

@@ -1,0 +1,34 @@
+; Pure contract checks run unchanged on the BEAM and in the browser runtime.
+(ns dwim.selftest
+  (:require [ed.core :as c]
+            [ed.view :as view]
+            [ed.pkg :as pkg]
+            [ed.keymap :as km]
+            [dwim.main :as d]))
+
+(defn- key [ed k] (km/key-event ed k))
+
+(defn run []
+  (let [ed (pkg/use (c/new-editor "* A\nbody\n** Child\nmore\n* B\nend" "outline.bl.org") d/bl-package)
+        folded (assoc ed :folds #{0 2})
+        down (key folded "j")
+        up (key down "k")
+        opened (key folded "l")
+        entered (key opened "l")
+        closed (key ed "h")
+        selected (key (assoc folded :mode :select) "j")
+        raw (key (pkg/unuse down "dwim") "k")
+        checks [["shared visible rows" [0 4 5] (view/source-rows folded)]
+                ["down skips section" [4 0] (c/cursor down)]
+                ["up skips section" [0 0] (c/cursor up)]
+                ["open preserves child fold" #{2} (:folds opened)]
+                ["enter goes to body" [1 0] (c/cursor entered)]
+                ["left closes" #{0} (:folds closed)]
+                ["select keeps anchor" [0 0] (:anchor (c/primary selected))]
+                ["select head skips body" [4 0] (c/cursor selected)]
+                ["unuse restores raw motion" [3 0] (c/cursor raw)]
+                ["unuse removes goal state" nil (get-in raw [:pkg-state "dwim"])]]
+        failures (filter (fn [[_ expected actual]] (not= expected actual)) checks)]
+    {:pass (- (count checks) (count failures))
+     :fail (mapv (fn [[label expected actual]]
+                   (str label ": expected " (pr-str expected) ", got " (pr-str actual))) failures)}))

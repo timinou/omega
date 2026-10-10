@@ -10,6 +10,7 @@
 (ns pp.main
   (:require [ed.main :as m]
             [ed.pkg :as pkg]
+            [ed.memo :as memo]
             [ed.core :as c]
             [ed.text :as t]
             [pp.read :as rd]
@@ -24,9 +25,12 @@
 (defn- goto-row [ed r]
   (c/scroll-to-cursor (assoc ed :sels [{:anchor [r 0] :head [r 0]}] :primary 0)))
 
+(defn- objects-of-tree [tree ty]
+  (filter (fn [o] (= ty (:type o))) (rd/walk tree)))
+
 (defn- objects-of [ed ty]
   (let [pr (:presentation ed)]
-    (filter (fn [o] (= ty (:type o))) (rd/walk (p/tree-of (:readtable pr) ed (or (:read pr) rd/read-doc))))))
+    (objects-of-tree (p/tree-of (:readtable pr) ed (or (:read pr) rd/read-doc)) ty)))
 
 (defn block-motion [ty dir]
   (fn [ed]
@@ -122,17 +126,64 @@
    "g s" :pp/say "space t p" :pp/toggle-presentation "space t f" :pp/toggle-follow})
 
 ; In the rail, j/k move TASK to task (a task is three screen rows, one text row);
-; the frame's link then opens the selection in the pane.
+; the frame's link then opens the selection in the pane. With a navigation
+; policy loaded, contribute task rows instead of competing for its keys: counts
+; and multiple heads must not depend on package load order.
 (def rail-keys {"j" :pp/next-task "k" :pp/prev-task})
 
 (defn- keys-of
   "The package's keys for the shown document (the rail moves task to task)."
   [ed]
-  {:normal (merge keys-normal (if (= "rail" (:name (:presentation ed))) rail-keys {}))})
+  (let [policy? (some (fn [p] (get-in p [:provides :navigation-policy])) (pkg/packages ed))]
+    {:normal (merge keys-normal (if (and (= "rail" (:name (:presentation ed))) (not policy?)) rail-keys {}))}))
 
 ; ─── the host API ──────────────────────────────────────────────────────────
 
 (defn- presented? [ed] (contains? #{"omega" "conversation"} (:name (:presentation ed))))
+
+; ─── navigation: the projection's own rows and reveal (ed.view seam) ───────
+;
+; ed.view/rows and ed.view/reveal consult [:provides :navigation :rows] and
+; [... :reveal] latest package first; a callback returns nonnil to answer or
+; nil to decline. Present answers for the documents it draws (any non-text
+; presentation) and declines for text/none, so the core's fold-aware source
+; topology runs there.
+
+(defn- nav-presentation?
+  "The shown document is drawn by a presentation other than plain text."
+  [ed]
+  (let [pr (:presentation ed)] (and (some? pr) (not= "text" (:name pr)))))
+
+; Navigation is another pure derived stage: reuse the read tree for rail rows,
+; or the layout's slot identity elsewhere. Counts must not rescan a stable view.
+(def ^:private cached-navigation-rows
+  (memo/identity-pair 1
+    (fn [rail? input]
+      (vec (distinct (if rail? (map :from (objects-of-tree input :omega/task))
+                        (keep p/slot-row input)))))))
+
+(defn- navigation-rows
+  "The source rows a reader can step through in the shown presentation, in
+   screen flow order — the projection's slots (p/screen-of → p/slot-row), not
+   the viewport's :lines, deduplicated because a wrapped row is drawn as
+   several slots. The rail steps task to task: one row per task object (:from
+   via the existing objects-of), so task granularity survives even when a later
+   package (DWIM) drives the step, rather than following its ornament rows.
+   Text and absent presentations decline (nil); the core fallback runs."
+  [ed]
+  (when (nav-presentation? ed)
+    (let [pr (:presentation ed)
+          rail? (= "rail" (:name pr))
+          input (if rail?
+                  (p/tree-of (:readtable pr) ed (or (:read pr) rd/read-doc))
+                  (:slots (p/screen-of pr ed)))]
+      (cached-navigation-rows rail? input))))
+
+(defn- navigation-reveal
+  "The presentation's projection-aware reveal, or nil to let the core's plain
+   fold-aware scroll run."
+  [ed]
+  (when (nav-presentation? ed) (p/reveal (:presentation ed) ed)))
 
 
 ; ─── type-to-compose: the say block is where you write ─────────────────────
@@ -318,7 +369,10 @@
    ;; what other parts of bl-ed consume (ed/frame.bl reads :layouts :links :views)
    :provides {:layouts {"inbox" inbox/inbox}
               :links   {"omega/task" inbox/task-path}
-              :views   {:minimap (fn [ed] (when (some? (:presentation ed)) (p/minimap (:presentation ed) ed)))}}})
+              :views   {:minimap (fn [ed] (when (some? (:presentation ed)) (p/minimap (:presentation ed) ed)))}
+              :navigation {:rows navigation-rows :reveal navigation-reveal
+                           :outline? (fn [ed] (when (nav-presentation? ed)
+                                                (= "omega" (:name (:presentation ed)))))}}})
 
 ; A module exports its package as `bl-package` (`package` is a reserved word in
 ; JS, so the compiled export would be mangled).

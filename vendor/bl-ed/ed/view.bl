@@ -1,0 +1,182 @@
+; ed/view.bl — the shared visible-source topology: which source rows a reader
+; can see under the current folds, and where the viewport sits among them.
+;
+; Rendering (ed.main) and navigation (a package's commands, e.g. dwim) must
+; agree on ONE answer to "is this row visible?", so this namespace owns it.
+; The fold predicate is extracted here from the old ed.main/visible-rows copy:
+; a folded heading keeps its own row, its body (row, end) is hidden, and a
+; nested fold is just another interval in the same ordered walk. There is no
+; second interpretation of :folds anywhere.
+;
+; A viewport is in SOURCE rows — (:view ed) = {:top row :height rows …} — and
+; source positions stay authoritative: hidden rows are never moved, :folds is
+; never mutated, and reveal only scrolls. Movement is measured in VISIBLE
+; ranks, never in numeric source distance, so a folded section is one step.
+;
+; Package seam (ed/pkg.bl). A loaded package may contribute a navigation
+; topology through
+;
+;   :provides {:navigation {:rows   (fn [ed] rows-or-nil)   ; nil = decline
+;                           :reveal (fn [ed] ed-or-nil)    ; nil = decline
+;                           :outline? (fn [ed] bool-or-nil)}}
+;
+; consulted latest package first, like every other package lookup. :rows
+; replaces source-rows for DOCUMENT navigation (a presentation steps by
+; slot/object); :reveal replaces the plain fold-aware scroll-to-cursor. The
+; core renderer always draws SOURCE rows (`visible-rows`), so a provider can
+; only change how movement lands, never what is drawn. Unloading the package
+; takes its topology with it (layers, never merged).
+;
+; Every function here is pure and knows nothing about any domain.
+
+(ns ed.view
+  (:require [ed.text :as t]
+            [ed.pkg :as pkg]))
+
+; ─── folds → hidden intervals ───────────────────────────────────────────────
+
+(defn- folded-intervals
+  "Ascending [start end) source-row spans hidden by folding: for every outline
+   heading with its :row in :folds, its body (row, end). Empty bodies are
+   dropped, so a heading at the end of the document hides nothing."
+  [ed]
+  (let [folds (or (:folds ed) #{})
+        ol (get-in ed [:struct :outline] [])]
+    (vec (keep (fn [h]
+                 (when (contains? folds (:row h))
+                   (let [s (inc (:row h)) e (:end h)]
+                     (when (< s e) [s e]))))
+               ol))))
+
+(defn- merge-intervals
+  "Merge overlapping or adjacent ascending intervals. Nested folds — an inner
+   folded section inside a folded one — collapse into their outer span, so the
+   walk below covers each hidden row once."
+  [ivs]
+  (reduce (fn [acc [s e]]
+            (let [prev (peek acc)]
+              (if (and (some? prev) (<= s (second prev)))
+                (conj (pop acc) [(first prev) (max e (second prev))])
+                (conj acc [s e]))))
+          [] ivs))
+
+; ─── the visible topology ───────────────────────────────────────────────────
+
+(defn- visible-from
+  "At most `limit` visible source rows at or after `start`, ascending. The walk
+   skips a whole hidden interval at once — never a per-row outline scan."
+  [ed start limit]
+  (let [n (t/line-count (:text ed))
+        ivs (merge-intervals (folded-intervals ed))]
+    (loop [r (max 0 start) ivs ivs out []]
+      (cond
+        (or (>= r n) (>= (count out) limit)) out
+        (empty? ivs) (recur (inc r) ivs (conj out r))
+        (>= r (second (first ivs))) (recur r (rest ivs) out)
+        (>= r (first (first ivs))) (recur (second (first ivs)) ivs out)
+        :else (recur (inc r) ivs (conj out r))))))
+
+; A bounded pure memo: source visibility depends on structure, folds and row
+; count, not cursor or viewport. Counts and reveal can reuse the same topology.
+(def ^:private source-cache (atom nil))
+
+(defn source-rows
+  "Every source row a reader can see, ascending: the whole document with each
+   folded section's hidden body removed. Headings are retained; their hidden
+   descendants are not."
+  [ed]
+  (let [n (t/line-count (:text ed))
+        cached @source-cache]
+    (if (and (= n (:n cached)) (identical? (:struct ed) (:struct cached))
+             (= (:folds ed) (:folds cached)))
+      (:rows cached)
+      (let [rows (visible-from ed 0 n)]
+        (reset! source-cache {:n n :struct (:struct ed) :folds (:folds ed) :rows rows})
+        rows))))
+
+(defn- latest-provider
+  "The first non-nil result of a :provides callback, latest package first; nil
+   when every package declines (or none provides it). A callback declines by
+   returning nil."
+  [ed path]
+  (loop [ps (reverse (pkg/packages ed))]
+    (if (empty? ps) nil
+      (let [f (get-in (first ps) path)
+            v (when f (f ed))]
+        (if (some? v) v (recur (rest ps)))))))
+
+(defn rows
+  "The document's navigation rows, ascending: the latest package's
+   [:provides :navigation :rows] answer, else every visible source row."
+  [ed]
+  (or (latest-provider ed [:provides :navigation :rows])
+      (source-rows ed)))
+
+(defn outline?
+  "Whether the current presentation uses source-heading folds. A provider may
+   decline with nil; false deliberately leaves h/l as ordinary text motions."
+  [ed]
+  (let [answer (latest-provider ed [:provides :navigation :outline?])]
+    (if (nil? answer) true answer)))
+
+(defn visible-rows
+  "The rows the plain renderer draws: `source-rows` from :view :top, :height of
+   them. Deliberately the SOURCE topology — a package :rows provider changes
+   movement, never what the core draws."
+  [ed]
+  (let [view (:view ed)]
+    (visible-from ed (max 0 (or (:top view) 0)) (or (:height view) 40))))
+
+; ─── reveal ─────────────────────────────────────────────────────────────────
+
+(defn row-index
+  "Index in the ascending vector `vs` of the greatest element ≤ r, or -1 when
+   no row precedes r. A hidden cursor row therefore stands for the last visible row
+   before it — its folding heading — which is the row the reader sees."
+  [vs r]
+  (loop [lo 0 hi (dec (count vs)) ans -1]
+    (if (> lo hi) ans
+      (let [mid (quot (+ lo hi) 2)]
+        (if (<= (nth vs mid) r)
+          (recur (inc mid) hi mid)
+          (recur lo (dec mid) ans))))))
+
+(defn- rank-at
+  "How many visible rows lie strictly before `r`: the visible rank at which a
+   viewport whose top is source row `r` starts."
+  [vs r]
+  (loop [lo 0 hi (count vs)]
+    (if (>= lo hi) lo
+      (let [mid (quot (+ lo hi) 2)]
+        (if (< (nth vs mid) r) (recur (inc mid) hi) (recur lo mid))))))
+
+(defn- reveal-source
+  "The plain reveal: keep the primary head inside the visible-space viewport
+   with the existing min(3, height/4) margin, then clamp the top. Only :top
+   moves — the selection and :folds are untouched, and every other :view field
+   is preserved. A hidden head is represented by the last visible row ≤ it
+   (without mutating the selection or unfolding). Idempotent: the new top is
+   itself a visible row, so a second pass computes the same rank."
+  [ed]
+  (let [vs (source-rows ed)
+        sel (nth (:sels ed) (:primary ed) nil)
+        r (first (:head sel))]
+    (if (or (nil? r) (= 0 (count vs))) ed
+      (let [i (row-index vs r)
+            view (:view ed)
+            height (max 1 (or (:height view) 1))
+            k0 (rank-at vs (max 0 (or (:top view) 0)))
+            margin (min 3 (quot height 4))
+            k (cond
+                (< i (+ k0 margin)) (max 0 (- i margin))
+                (>= i (- (+ k0 height) margin)) (+ (- i height) margin 1)
+                :else k0)
+            k (max 0 (min k (dec (count vs))))]
+        (assoc-in ed [:view :top] (nth vs k))))))
+
+(defn reveal
+  "Scroll `ed` so the primary head is in view: the latest package's
+   [:provides :navigation :reveal] answer, else the plain fold-aware reveal."
+  [ed]
+  (or (latest-provider ed [:provides :navigation :reveal])
+      (reveal-source ed)))

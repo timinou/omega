@@ -4,7 +4,7 @@ import {browserOperation} from './operations.mjs';
 
 // Only this boundary speaks Kernel. No local Chromium, daemon or CLI subprocess.
 export class KernelBrowser {
-  constructor({client, env = process.env} = {}) { this.client = client; this.env = env; }
+  constructor({client, env = process.env, browserOptions = {}} = {}) { this.client = client; this.env = env; this.browserOptions=browserOptions; }
   api() {
     if (!this.client) {
       if (!this.env.KERNEL_API_KEY) throw Error('Set KERNEL_API_KEY in the browser host environment to connect Kernel.');
@@ -33,7 +33,7 @@ export class KernelBrowser {
     }
     const vault = await api.vaults.upsert({name:s.profile});
     s.vaultId = vault.id;
-    return api.browsers.create({name:s.remoteName, headless:false, stealth:false, kiosk_mode:false,
+    return api.browsers.create({stealth:false,...this.browserOptions,name:s.remoteName, headless:false, kiosk_mode:false,
       profile:{id:profile.id, save_changes:true}, vaults:[{id:vault.id}],
       ...(url ? {start_url:url} : {}), timeout_seconds:s.idleSeconds,
       viewport:{width:1280,height:800,refresh_rate:25},

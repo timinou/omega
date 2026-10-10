@@ -38,7 +38,7 @@ export class Sessions {
     const records=JSON.parse(await fs.readFile(path.join(this.root,'sessions.json'),'utf8').catch(e=>{if(e.code==='ENOENT')return '[]';throw e;}));
     for(const s of records){
       if(!validId(s.id)||!validProfile(s.profile)||!path.resolve(s.dir).startsWith(this.root+path.sep))continue;
-      if(this.adapter.kind==='native'){s.provider='native';s.status='closed';s.kernelId=null;s.liveURL=null;s.vaultId=null;this.event(s,'profile/recovery-available');}
+      if((this.adapter.providerFor?.(s.id)||this.adapter.kind)==='native'){s.provider='native';s.status='closed';s.kernelId=null;s.liveURL=null;s.vaultId=null;this.event(s,'profile/recovery-available');}
       else if(s.provider!=='kernel'){s.provider='kernel';s.profile=`${this.namespace}-${s.id}`;s.mode='headful';s.status='closed';s.kernelId=null;s.credentialKeys={};}
       s.credentialKeys ||= {};
       Object.assign(s,{control:'human',auth:'unknown',busy:false});this.sessions.set(s.id,s);
@@ -65,7 +65,7 @@ export class Sessions {
     if(!s){
       profile=profile||`${this.namespace}-${id}`;if(!validProfile(profile))throw Error('Invalid Kernel profile name');
       const dir=path.join(this.root,id,crypto.randomBytes(6).toString('hex'));
-      s={id,dir,task,provider:this.adapter.kind||'kernel',mode:'headful',status:'closed',control:task?'agent':'human',auth:'unknown',profile,
+      s={id,dir,task,provider:this.adapter.providerFor?.(id)||this.adapter.kind||'kernel',mode:'headful',status:'closed',control:task?'agent':'human',auth:'unknown',profile,
         url:url||'https://example.com',events:[],artifacts:[],rev:0,generation:0,idleSeconds:300,credentialKeys:{}};this.sessions.set(id,s);
     }
     return this.lock(s,async()=>{
@@ -76,7 +76,7 @@ export class Sessions {
       if(s.status==='running'){await this.persist();return s;}if(s.status==='saving')await this.finishSave(s);
       if(['starting','failed','disconnected'].includes(s.status)&&s.remoteName){
         try{const b=await this.adapter.retrieve(s.kernelId||s.remoteName);if(!b.deleted_at){this.attach(s,b);s.status='running';await this.persist();return s;}s.status='saving';await this.finishSave(s);}
-        catch(e){if(e.status!==404)throw Error(safeError(e));if(s.kernelId){if(this.adapter.kind==='native'){s.status='closed';s.kernelId=null;}else{s.status='saving';await this.finishSave(s);}}}
+        catch(e){if(e.status!==404)throw Error(safeError(e));if(s.kernelId){if(s.provider==='native'){s.status='closed';s.kernelId=null;}else{s.status='saving';await this.finishSave(s);}}}
       }
       for(const other of this.sessions.values())if(other.id!==id&&other.profile===s.profile&&!['closed','forgotten'].includes(other.status))throw Error('Profile already has a writer; use its existing browser.');
       s.status='starting';s.control=task?'agent':'human';s.generation++;s.remoteName=`${this.namespace}-${id}-${s.generation}`;
@@ -128,20 +128,23 @@ export class Sessions {
         try{b=await this.adapter.retrieve(s.kernelId||s.remoteName);}catch(e){if(e.status!==404)throw e;}
         if(!b||b.deleted_at){
           s.liveURL=null;
-          if(s.kernelId){if(this.adapter.kind==='native'){s.status='closed';s.kernelId=null;}else{s.status='saving';await this.finishSave(s);}}else s.status='closed';
-        }else{this.attach(s,b);s.status='running';s.control='human';this.event(s,'session/reattached');}
+          if(s.kernelId){if(s.provider==='native'){s.status='closed';s.kernelId=null;}else{s.status='saving';await this.finishSave(s);}}else s.status='closed';
+        }else{this.attach(s,b);await this.adapter.setControl?.(s,'human');s.status='running';s.control='human';this.event(s,'session/reattached');}
       }
     }else if(['watch','pause','resume','headful','headless'].includes(verb)){
       if(s.status!=='running')throw Error('Session is closed or disconnected; reopen or reconnect it.');
       if(verb==='headless')throw Error('The browser stays headed for live viewing and 1Password. Hide the pane to stop viewing; no browser restart is needed.');
-      if(verb==='pause'){s.control='human';s.auth='needs-human';this.event(s,'control/paused');}
-      if(verb==='resume'){s.control='agent';s.auth='unknown';this.event(s,'control/resumed');}
+      if(verb==='pause'){await this.adapter.setControl?.(s,'human');s.control='human';s.auth='needs-human';this.event(s,'control/paused');}
+      if(verb==='resume'){await this.adapter.setControl?.(s,'agent');s.control='agent';s.auth='unknown';this.event(s,'control/resumed');}
     }else throw Error('Unknown browser action');await this.persist();return s;
   });}
   async live(id){const s=this.get(id);if(s.status!=='running')return {session:publicSession(s)};
-    if(!s.liveURL){const b=await this.adapter.retrieve(s.kernelId);if(b.deleted_at){s.status='saving';await this.finishSave(s);return {session:publicSession(s)};}this.attach(s,b);}
-    const url=new URL(s.liveURL,'http://native.local');if(this.adapter.kind!=='native'&&url.protocol!=='https:')throw Error('Kernel live view must use HTTPS');url.searchParams.set('readOnly',String(s.control!=='human'));
-    return {session:publicSession(s),liveURL:this.adapter.kind==='native'?url.pathname+url.search:url.href};
+    if(!s.liveURL||s.provider==='kernel'){
+      let b;try{b=await this.adapter.retrieve(s.kernelId);}catch(e){if(e.status!==404)throw e;}
+      if(!b||b.deleted_at){s.status='saving';await this.finishSave(s);return {session:publicSession(s)};}this.attach(s,b);
+    }
+    const url=new URL(s.liveURL,'http://native.local');if(s.provider!=='native'&&url.protocol!=='https:')throw Error('Kernel live view must use HTTPS');url.searchParams.set('readOnly',String(s.control!=='human'));
+    return {session:publicSession(s),liveURL:s.provider==='native'?url.pathname+url.search:url.href};
   }
   async waitControl(s){while(s.control==='human'&&s.status==='running')await new Promise(r=>setTimeout(r,250));if(s.status!=='running')throw Error('Browser research stopped because its session closed');}
   async research(task) {

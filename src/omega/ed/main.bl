@@ -66,6 +66,16 @@
     (when db (println (str "omega: tasks are kept in " db (when (seq interrupted) (str " · interrupted: " (clojure.string/join " " interrupted))))))
     (assoc r :sys sys :env e :db db :packages registry)))
 
+(defn stop!
+  "Close a started host in dependency order: HTTP, task executors, storage.
+   A listener failure still allows task/storage cleanup; errors remain visible."
+  [host]
+  (try (serve/stop! host)
+    (finally
+      (try (task/stop-system! (:sys host))
+        (finally (env/close! (:env host))))))
+  :ok)
+
 (defn main
   "bin/bl-ed: serve until killed."
   []

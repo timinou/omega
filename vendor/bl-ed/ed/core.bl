@@ -25,7 +25,8 @@
 (ns ed.core
   (:require [ed.text :as t]
             [ed.org :as org]
-            [ed.forms :as forms]))
+            [ed.forms :as forms]
+            [ed.view :as view]))
 
 ; ─── construction ───────────────────────────────────────────────────────────
 
@@ -251,15 +252,11 @@
 ; ─── viewport ───────────────────────────────────────────────────────────────
 
 (defn scroll-to-cursor
-  "Keep the primary head inside the view with a 3-line margin."
+  "Keep the primary head inside the view. The shared visible topology and the
+   fold-aware margin live in ed.view; a loaded package may replace where the
+   cursor lands through [:provides :navigation :reveal]."
   [ed]
-  (let [r (first (cursor ed))
-        {:keys [top height]} (:view ed)
-        margin (min 3 (quot height 4))
-        top (cond (< r (+ top margin)) (max 0 (- r margin))
-                  (>= r (- (+ top height) margin)) (+ (- r height) margin 1)
-                  :else top)]
-    (assoc-in ed [:view :top] (max 0 top))))
+  (view/reveal ed))
 
 
 (defn replace-text

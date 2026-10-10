@@ -1,0 +1,31 @@
+#+TITLE: DWIM package: visible outline navigation and documented interaction vision
+#+STATE: DONE
+#+SESSION_ID: 159a49419f9fc1db
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-05T12-00-21-630Z_159a49419f9fc1db.jsonl]]
+#+CUSTOM_ID: FEAT-022-dwim-package-visible-outline-navigation
+
+* Initial Message
+
+this is a very targeted feature update that i want you to use as a showcase of how bl-ed and omega support improving the UX and do so modularily and leanly and powerfully
+
+right now, the folding state of a section does not matter on the line that i go to when i hit j or k. it's always one less line (maybe not with the 'inbox' layout in the 'present package'. i would like the j and k and h and l to be the 'DWIM navigation' thing that move in terms of what i see (eg outlines)
+
+1. explain to me what you think i mean
+2. explain to me the parts of the code that are relevatn to understand to mke this work
+3. explain to me how you'd implement it in the omega-, bl-ed-, and beam-lisp-maximalist way
+
+User approved implementation of the targeted first slice described in PLAN-006 and asks that the dwim folder include .bl.md or .bl.org documents documenting the complete interaction vision from the conversation. Implement removable bl-ed package in spikes/dwim with plain BL bl-package map and loader in real editor. First slice: normal/select j/k move through visible source rows skipping nested folded sections; contextual normal-mode outline h collapses expanded heading otherwise parent, l expands collapsed heading otherwise enters visible contents; ordinary text h/l remain character navigation. Preserve counts, multi-selection/select mode, command dispatch/user bindings, composer input and existing present rail task stepping. Share generic visibility between core rendering and navigation rather than duplicate parser/predicate; projection-aware reveal and present integration as required for target slice. Do not implement later vision features (contextual selection, search arrival, temporary reveal, peek, attention trail, contextual actions, navigation explanations), but document all including boundaries and marginal-cost claims.
+
+Required proof from AGENTS.md: package exports bl-package, no shared table mutations, package state under pkg-state by name, exact unload behavior, compile into vendor/bl-ed/web/out and web/pkg/dwim.mjs loader, real editor screenshots with use and after unuse, contract drive tests, vendored drive tests green, unchanged spikes/present/test/check.mjs equivalence. Record generic vendored changes in VENDOR.md. Use offline memory server on port 8792 with temporary root; never write live world 8790. Read repo state before editing; coordinate disjoint files with subagents. Clarify scope only if source leaves material UX ambiguity. All pending claims verified by tests/runtime before final.
+
+Implementation completed (2026-10-05):
+- spikes/dwim/dwim/main.bl exports bl-package with four named normal/select commands, per-selection remembered goal columns, explicit event invalidation, source-position-preserving movement and contextual normal heading h/l. Hidden source heads are resolved to their visible representative; duplicate/multi-head fold actions use one snapshot; stationary counts terminate early. No user-table mutation, renderer, private page or IO.
+- vendor/bl-ed/ed/view.bl owns shared fold intervals/source visibility, logarithmic source-row resolution, bounded source-topology memo, visible-rank reveal, and layered :provides :navigation callbacks. core/scroll-to-cursor and main rendering delegate; package commands are discoverable with namespace-preserving palette/help/API labels. Generic changes documented in VENDOR.md.
+- present contributes full projection/source rows (not viewport :lines), task granularity in rail, cached row derivation via existing ed.memo/identity-pair, slot-aware reveal, and source-outline ownership. It defers rail keys to an advertised navigation-policy, preserving counts and multi-head behavior in either load order. Explicit omega folds now outrank fisheye focus detail. Existing frame links and composer input remain intact.
+- spikes/dwim/build.sh compiles into real editor output and creates generated web/pkg/dwim.mjs loader. Folder contains complete vision.bl.md roadmap, implemented dwim.bl.md contract/reproduction/results, same-source BL selftest, drive suite, fixture, use/unuse screenshots and asserted native trace.json. Exact wrapped-line stepping and broader vision features explicitly deferred.
+
+Verified against current project pin b4861edf after its concurrent cold build finished: full editor/language build passed; final Node suite 118/118 (40 DWIM, 66 vendored, 12 present scrolling), zero skipped; BEAM and JS shared BL contract 10/10 each. Unchanged spikes/present/test/check.mjs produced empty :bad lists for four docs / 36 scroll-and-fold variants. Scoped git diff --check and checker-file unchanged checks passed. A full-workspace whitespace check separately reported another session's extra blank EOF in research/domain/interface/loading-and-macros.bl.md; left untouched.
+
+Real proof on offline memory port8792 under /tmp/omega-dwim-proof: native 2j h j => head [10 0], fold #{2}, DOM rows3–9 absent and row10 visible; k => [2 0]; native :(ed/unuse "dwim") => packages[], own goal state nil, fold retained; next j => raw :move-down [3 0]; native :(ed/use "dwim") reload succeeded with head/fold unchanged; source text remained equal to saved text. Screenshots: spikes/dwim/proof/01-used-folded-j.png and 02-unused-folds-preserved.png; trace.json contains assertions/input sequence. Proof browser and owned offline server stopped; running world8790 was never written. Existing tabs need saving/reload once for the generic ES-module seam, then package use/unuse is runtime-only.
+
+Build-source pin changed from94700545 to b4861edf concurrently. No external pin/source or other work rolled back; final proof uses b4861edf. Found launcher first --root precedence issue, documented safe cwd workaround, tracked separately as FUP-012. No source feature work remains pending.

@@ -29,7 +29,8 @@ try{
  const panel=page.frameLocator('iframe[data-embed-source]'),desktop=panel.frameLocator('#viewport iframe');
  await desktop.locator('html[data-connected="true"]').waitFor();
  await desktop.locator('canvas').evaluate(c=>new Promise((resolve,reject)=>{const start=Date.now();const check=()=>{const pixels=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let painted=0;for(let i=3;i<pixels.length;i+=400)if(pixels[i])painted++;if(painted>100)return resolve();if(Date.now()-start>15000)return reject(Error('Streamed framebuffer did not paint'));setTimeout(check,50);};check();}));
- const native=adapter.handles.get(manager.get('manual').kernelId).browser.contexts()[0].pages().at(-1);await native.waitForSelector('#operator');
+ // Attach a test observer explicitly; separate manual proof checks no attachment.
+ const native=(await adapter.connect(manager.get('manual'))).contexts()[0].pages().at(-1);await native.waitForSelector('#operator');
  const input=await native.locator('#operator').boundingBox(),[left,top]=await native.evaluate(()=>[(outerWidth-innerWidth)/2,outerHeight-innerHeight]),canvas=desktop.locator('canvas'),box=await canvas.boundingBox();
  await canvas.click({position:{x:(left+input.x+input.width/2)*box.width/1280,y:(top+input.y+input.height/2)*box.height/900}});await page.keyboard.press('Shift+H');await page.keyboard.type('uman in bl-ed');await native.waitForFunction(()=>document.querySelector('#operator').value==='Human in bl-ed');
  await page.screenshot({path:new URL('02-editor-human.png',proof).pathname});
@@ -42,8 +43,8 @@ try{
  await panel.locator('#credentials summary').click();assert.equal(await panel.locator('#native-credentials').isVisible(),true);assert.equal(await panel.locator('#kernel-credentials').isVisible(),false);
  // Exercise the local extension-manager control without downloading or unlocking
  // a password manager during an automated synthetic proof.
- await panel.locator('[data-auth="extensions"]').click();await adapter.handles.get(manager.get('manual').kernelId).browser.contexts()[0].pages().at(-1).waitForURL('chrome://extensions/');
- await adapter.handles.get(manager.get('manual').kernelId).browser.contexts()[0].pages().at(-1).locator('extensions-manager').waitFor();
+ await panel.locator('[data-auth="extensions"]').click();await (await adapter.connect(manager.get('manual'))).contexts()[0].pages().at(-1).waitForURL('chrome://extensions/');
+ await (await adapter.connect(manager.get('manual'))).contexts()[0].pages().at(-1).locator('extensions-manager').waitFor();
  await page.waitForTimeout(500); // Let the independently streamed final screenshot catch up.
  await page.screenshot({path:new URL('05-editor-extensions.png',proof).pathname});
  await page.locator('#input-sink').focus();await page.keyboard.press(':');await page.keyboard.insertText('(ed/unuse "browser")');await page.keyboard.press('Enter');

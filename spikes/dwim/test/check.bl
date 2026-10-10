@@ -1,0 +1,4 @@
+(ns dwim.check (:require [dwim.selftest :as s]))
+(let [r (s/run)]
+  (println "DWIM BEAM" (pr-str r))
+  (when (seq (:fail r)) (throw (ex-info "DWIM contract failed" r))))

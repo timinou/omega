@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import Kernel from '@onkernel/sdk';
 import {KernelBrowser} from '../kernel.mjs';
 import {safeError} from '../sessions.mjs';
+import {fixture} from './fixture.mjs';
+test('Kernel launch options enable stealth and telemetry while keeping headed profile persistence',async()=>{
+ const {adapter,calls}=fixture();adapter.browserOptions={stealth:true,telemetry:{enabled:true},headless:true,name:'override',profile:{id:'wrong'}};
+ await adapter.create({id:'test',profile:'test',remoteName:'owned',idleSeconds:300},'https://example.com');
+ const body=calls.find(c=>c[0]==='browsers.create')[1];
+ assert.equal(body.stealth,true);assert.deepEqual(body.telemetry,{enabled:true});assert.equal(body.headless,false);assert.equal(body.name,'owned');assert.equal(body.profile.save_changes,true);assert.notEqual(body.profile.id,'wrong');
+});
 test('official SDK sends lifecycle bodies and auth only to the configured API',async()=>{
  const requests=[],profile={id:'p-1',name:'omega-test',updated_at:new Date(1000).toISOString()};
  const client=new Kernel({apiKey:'test-only-key',baseURL:'https://api.kernel.test',maxRetries:0,fetch:async(url,init)=>{

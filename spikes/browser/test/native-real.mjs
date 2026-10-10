@@ -32,7 +32,9 @@ try{
  // The X11 display must refuse clients without its private cookie.
  await new Promise((resolve,reject)=>{const socket=net.createConnection({path:'/tmp/.X11-unix/X'+h.info.display.slice(1)});socket.setTimeout(5000,()=>{socket.destroy();reject(Error('X11 authentication check timed out'));});socket.once('connect',()=>{const hello=Buffer.alloc(12);hello[0]=108;hello.writeUInt16LE(11,2);socket.write(hello);});socket.once('data',data=>{socket.destroy();try{assert.equal(data[0],0,'Unauthenticated X11 client accepted');resolve();}catch(e){reject(e);}});socket.once('error',reject);});
  }else{assert.equal(h.info.displayBackend,'wayland');assert.match(h.info.display,/^wayland-/);assert.equal(await fs.access(path.join(h.runtime,'client.auth')).then(()=>true,()=>false),false);}
- const context=h.browser.contexts()[0],page=context.pages().at(-1);
+ // Instrument this proof explicitly; native-manual-real proves uninstrumented human mode.
+ assert.equal(h.browser,undefined);await adapter.connect(s);
+ let context=h.browser.contexts()[0],page=context.pages().at(-1);
  await page.waitForSelector('#operator');
  assert.doesNotMatch(await page.evaluate(()=>navigator.userAgent),/HeadlessChrome/);
  const [left,top]=await page.evaluate(()=>[(outerWidth-innerWidth)/2,outerHeight-innerHeight]);
@@ -51,7 +53,7 @@ try{
  await manager.action(s.id,'resume');assert.equal(s.kernelId,id);
  await canvas.click({position:point});await outer.keyboard.type('BLOCKED');
  await new Promise(r=>setTimeout(r,200));assert.equal(await page.locator('#operator').inputValue(),'Native input');
- await manager.action(s.id,'pause');await canvas.click({position:point});await outer.keyboard.press('End');await outer.keyboard.type(' human');
+ await manager.action(s.id,'pause');context=(await adapter.connect(s)).contexts()[0];page=context.pages().at(-1);await canvas.click({position:point});await outer.keyboard.press('End');await outer.keyboard.type(' human');
  await page.waitForFunction(()=>document.querySelector('#operator').value==='Native input human');
  // A second helper cannot write the profile, even through an independent manager.
  const competitor=new NativeBrowser({root:adapter.root});await assert.rejects(competitor.create({profile:s.profile,remoteName:'competitor'},url),/writer/);await competitor.shutdown();
@@ -60,7 +62,7 @@ try{
  for(const [token,origin]of [[stream.token,'https://evil.example'],['wrong',host.url]])await new Promise((resolve,reject)=>{const ws=new WebSocket(host.url.replace('http:','ws:')+`/browser/vnc/supplier?token=${token}`,{origin});ws.on('open',()=>{ws.close();reject(Error('Unauthorised viewer accepted'));});ws.on('error',resolve);});
  await manager.action(s.id,'save-profile');assert.equal(s.status,'closed');assert.ok(s.savedAt);
  await manager.open({id:s.id});assert.notEqual(s.kernelId,id);
- const restored=adapter.handles.get(s.kernelId).browser.contexts()[0].pages().at(-1);
+ const restored=(await adapter.connect(s)).contexts()[0].pages().at(-1);
  await restored.waitForURL(url);assert.equal(await restored.evaluate(()=>localStorage.getItem('native-proof')),'retained');assert.match(await restored.evaluate(()=>document.cookie),/native-proof=retained/);
  // Native port raw CDP is reusable by the scenario runner without Node automation.
  const targets=await adapter.handles.get(s.kernelId).port.request({op:'cdp',method:'Target.getTargets'});assert.ok(targets.targetInfos.some(t=>t.url===url));
@@ -70,7 +72,7 @@ try{
  for(let i=0;i<100;i++){const alive=await Promise.all(owned.map(async pid=>{const stat=await fs.readFile(`/proc/${pid}/stat`,'utf8').catch(()=>null);return stat&&!/\) Z /.test(stat);}));if(alive.every(x=>!x))break;if(i===99)assert.fail('Owned native child survived helper death');await new Promise(r=>setTimeout(r,100));}
  await manager.action(s.id,'reconnect');assert.equal(s.status,'closed');
  await manager.open({id:s.id});
- assert.equal(await adapter.handles.get(s.kernelId).browser.contexts()[0].pages().at(-1).evaluate(()=>localStorage.getItem('native-proof')),'retained');
+ assert.equal(await (await adapter.connect(s)).contexts()[0].pages().at(-1).evaluate(()=>localStorage.getItem('native-proof')),'retained');
  // Refuse to forget arbitrary unmarked directories, even through the raw port.
  const {BrowserPort}=await import('../port.mjs'),guard=new BrowserPort(process.env.BL_BROWSER_PORT);
  const unrelated=path.join(root,'unrelated');await fs.mkdir(unrelated);await fs.writeFile(path.join(unrelated,'keep'),'keep');

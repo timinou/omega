@@ -1,5 +1,5 @@
 #+title: Shared Omega package development — plan refined by runtime prototypes
-#+status: PROTOTYPED; IMPLEMENTATION PLANNED
+#+status: IN_PROGRESS
 #+date: 2026-10-10
 
 * Outcome and scope
@@ -272,3 +272,8 @@ limits with concise executable examples and an actual PELAGIC demo.
 - [ ] Transactional watcher and safe audition adoption
 - [ ] Actor compute pool leases, cancellation/fairness and measured pressure tests
 - [ ] Full new-pin integration, consolidation audit and browser/physical evidence
+
+* Implementation log
+- Started upstream strict persistent transport (:warm "require" /
+  --warm-required). This is a transport contract, not yet service-task
+  lifecycle metadata. Finite-task Start behavior remains unchanged.

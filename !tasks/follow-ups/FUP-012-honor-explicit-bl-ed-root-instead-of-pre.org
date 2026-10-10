@@ -1,0 +1,21 @@
+#+TITLE: Honor explicit bl-ed --root instead of prepended launcher default
+#+STATE: ITEM
+#+SESSION_ID: 159a49419f9fc1db
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-undefine-omega/2026-10-05T12-00-21-630Z_159a49419f9fc1db.jsonl]]
+#+CUSTOM_ID: FUP-012-honor-explicit-bl-ed-root-instead-of-pre
+
+* Initial Message
+
+this is a very targeted feature update that i want you to use as a showcase of how bl-ed and omega support improving the UX and do so modularily and leanly and powerfully
+
+right now, the folding state of a section does not matter on the line that i go to when i hit j or k. it's always one less line (maybe not with the 'inbox' layout in the 'present package'. i would like the j and k and h and l to be the 'DWIM navigation' thing that move in terms of what i see (eg outlines)
+
+1. explain to me what you think i mean
+2. explain to me the parts of the code that are relevatn to understand to mke this work
+3. explain to me how you'd implement it in the omega-, bl-ed-, and beam-lisp-maximalist way
+
+Observed during FEAT-022 DWIM offline proof on 2026-10-05. bin/bl-ed unconditionally passes `--root "$PWD"` before "$@". src/omega/ed/main.bl's opt helper selects the first occurrence via drop-while. Therefore `bin/bl-ed --offline --memory --port 8792 --root /tmp/omega-dwim-proof` from omega's root printed documents under /home/user/code/undefine/omega, not the requested temporary root. This is an isolation/DX trap, even though the process was offline and memory-only and no saves were made.
+
+Current workaround used and documented in spikes/dwim/dwim.bl.md: invoke the absolute bin/bl-ed path with cwd=/tmp/omega-dwim-proof. Both prepended and explicit roots then agree. Do not modify or stop the user's running world on port8790 to test.
+
+Fix in a separate atomic change: only supply default --root if the user did not provide one, or make option parsing deterministically honor the last argument. Preserve relative-path meaning and all other CLI flags. Acceptance: offline memory invocation from repository root with explicit temporary --root serves a fixture existing only in that root; no explicit root defaults to cwd. Add command-line tests to prevent duplicate flag precedence regressions. No change to unrelated user state or BL pin.

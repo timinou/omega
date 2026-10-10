@@ -1,0 +1,17 @@
+; Small deterministic alternatives, always relative to a captured base.
+; Choosing one still goes through audition; exploration never edits the model.
+(ns pelagic.explore)
+(defn next-seed [seed] (mod (* (inc seed) 48271) 2147483647))
+(defn candidates [state seed size]
+  (when-not (and (integer? seed) (<= 0 seed) (< seed 2147483647)
+                (integer? size) (<= 1 size) (<= size 8))
+    (throw "Explore needs an integer seed and 1–8 alternatives"))
+  (loop [remaining size current seed result []]
+    (if (zero? remaining) result
+      (let [next (next-seed current)
+            density (/ (+ 10 (mod next 11)) 20.0)
+            transpose (nth [-12 -7 -5 0 5 7 12] (mod (quot next 11) 7))
+            variation {:seed next :density density :transpose transpose}]
+        (recur (dec remaining) next
+          (conj result {:name (str "seed " next) :base state :variation variation
+                       :edit {:kind "variation" :values variation}}))))))

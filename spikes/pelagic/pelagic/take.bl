@@ -1,0 +1,40 @@
+; A take is an immutable account, not a recording-specific browser object.
+; Explicit truncation preserves honest provenance when capture exceeds bounds.
+(ns pelagic.take)
+(def schema "omega.pelagic.take")
+(def version 2)
+(def max-events 512)
+(def max-bytes 2097152)
+(defn create [session document transport provenance]
+  {:schema schema :version version :base session :document document :transport transport
+   :provenance provenance :events [] :bytes 0 :reproducible true})
+(defn append [take event]
+  (if-not (:reproducible take) take
+    (let [size (count (pr-str event)) total (+ (:bytes take) size)]
+      (if (or (>= (count (:events take)) max-events) (> total max-bytes))
+        (assoc take :reproducible false :omitted "Capture exceeded the event/source budget")
+        (-> take (update :events conj (assoc event :sequence (count (:events take))))
+                 (assoc :bytes total))))))
+(defn check [take]
+  (when-not (and (= schema (:schema take)) (= version (:version take))
+                (map? (:base take)) (map? (:document take)) (vector? (:events take))
+                (<= (count (:events take)) max-events) (<= (:bytes take) max-bytes))
+    (throw "Unsupported or malformed take"))
+  (when-not (:reproducible take) (throw "Take capture is incomplete; export its recording as a partial take"))
+  take)
+(defn final-session [take]
+  (check take)
+  (reduce (fn [session event]
+            (if (= "active" (:kind event)) (assoc session :state (:state event)) session))
+          (:base take) (:events take)))
+(defn fork-source [take]
+  (let [session (final-session take) state (:state session)
+        edits (vec (concat [{:kind "configure" :values (:config state)}
+                            {:kind "variation" :values (:variation state)}]
+                           (vals (:patterns state))
+                           (map (fn [[scene value]] {:kind "scene" :name (name scene) :value value}) (:scenes state))
+                           [{:kind "visual" :values (:visual state)}]))]
+    (str "#+title: Pelagic — forked take\n\n"
+         "Edit the state below, then audition it before committing. Audio assets\n"
+         "remain content-addressed references in the companion take manifest.\n\n"
+         "#+begin_src beam-lisp\n(av/commit " (pr-str {:quantize :bar :edits edits}) ")\n#+end_src\n")))

@@ -1,0 +1,38 @@
+; Optional native host. Every work screen is the SAME real bl-ed package.
+(ns pocket.home (:require [android.screen :refer [defscreen]] [android.ui :as ui]
+                          [android.app :as app] [pocket.config :as config]))
+(defscreen)
+(def query "/?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile")
+(defn origin-valid? [s]
+  (let [u (URI/parse (str s)) host (str (:host u))]
+    (and (= "https" (:scheme u)) (ends-with? host ".ts.net")
+         (not (blank? (subs host 0 (- (count host) 7))))
+         (contains? #{nil ""} (:path u)) (nil? (:userinfo u))
+         (nil? (:query u)) (nil? (:fragment u))
+         (contains? #{443 8443} (:port u)))))
+(defn connect [assigns]
+  (let [origin (trim (or (:origin assigns) ""))]
+    (if (origin-valid? origin) (assoc assigns :connected origin :error nil)
+      (assoc assigns :error "Enter a private Tailscale HTTPS origin, with port 8443 if you used the spike’s Serve command."))))
+(defn render [a]
+  (if-let [origin (:connected a)]
+    (ui/el :web-view {:url (str origin query) :allow (str origin "/") :show-url false})
+    (ui/column {:padding 28 :gap 16 :background "#f7f6f0"}
+      (ui/spacer 36)
+      (ui/text "ω  omega / pocket" {:size :xl :color "#294c3c"})
+      (ui/text "Your work, within reach." {:size :lg :color "#263d35"})
+      (ui/text "Connect this phone to Tailscale, then enter the private HTTPS address of your host." {:color :ink-3})
+      (ui/el :text-field {:text (or (:origin a) "") :placeholder "https://host.tailnet.ts.net:8443"
+                          :on-change [(erlang/self) :origin]})
+      (when (:error a) (ui/text (:error a) {:color :care}))
+      (ui/button "Connect to host" [(erlang/self) :connect] {:background "#294c3c" :color "#fffef9"})
+      (ui/text "Execution stays on your computer. This app loads its existing mobile workbench." {:color :ink-3}))))
+(defn mount [_params _session socket]
+  (tuple :ok (app/assign socket {:origin config/origin :connected nil :error nil})))
+(defn handle_info [msg socket]
+  (let [a (app/assigns socket)]
+    (cond
+      (and (erlang/is_tuple msg) (= 3 (erlang/tuple_size msg)) (= :change (erlang/element 1 msg)) (= :origin (erlang/element 2 msg)))
+      (tuple :noreply (app/assign socket :origin (erlang/element 3 msg)))
+      (= msg (tuple :tap :connect)) (tuple :noreply (app/assign socket (connect a)))
+      :else (tuple :noreply socket))))

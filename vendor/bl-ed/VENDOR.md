@@ -266,6 +266,18 @@ same `:host` view name. This keeps independent package views composable. The
 procurement evidence pane uses this generic host boundary; its PDF DOM/resource
 lifecycle lives entirely in the procurement package.
 
+### 2026-10-08 — remote request failure context and explicit host saves
+
+`web/host.mjs` retains `:then`, `:block` and `:path` when an intent fails at
+transport level, just as on an HTTP response. Package submit handlers can now
+clear in-flight state and retry without losing their drafts. Save effects may
+set `:require-server? true`: a network failure answers `:saved :ok? false`
+and retains the editor draft, instead of treating a local download as a host
+publication. Existing static-page saves keep their download fallback. These
+are generic host contracts, with no mobile or Omega policy in the vendor.
+The mobile spike's real-browser tour exercises failed intent delivery and
+host-required saves; vendor drive tests and the presentation gate are rerun.
+
 ## Optional local document embedding (PELAGIC local compilation, 2026-10-08)
 
 `web/host.mjs` accepts an optional `globalThis.BL_DOCUMENTS` service with
@@ -330,3 +342,9 @@ adoption, or the failed-load message. The package catalog uses this to apply a
 session-only package's requested layout after its module and document arrive.
 No mutable package tables or host-specific package names are introduced. Contract checks:
 `test/pkg.test.mjs`, plus PELAGIC's real session launch/unload proof.
+
+### Persistent host shutdown (2026-10-10)
+
+`src/bl_ed/serve.bl` now retains the HTTP listener in the returned server value,
+reports bind failure, and provides `stop!` to end admission before an application
+closes its task system and storage. Rendering/package contracts are unchanged.

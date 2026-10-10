@@ -130,6 +130,8 @@
         dflt (p/default-lod ed)]
     (fn [o]
       (cond
+        ; Deliberate folds win over automatic focus detail, including on the heading.
+        (= 0 (dflt o)) 0
         (contains-row? o cur) 3
         (= :omega/turn (:type o)) (if (identical? o last-turn) 3 1)
         (= :omega/traces (:type o)) 1

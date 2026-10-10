@@ -1,0 +1,110 @@
+; A phone surface over retained, ordinary editors. No alternate task engine.
+(ns mob.main (:require [ed.core :as c] [ed.docs :as docs] [ed.text :as t]
+                       [ed.main :as m] [ed.pkg :as pkg] [ed.keymap :as km] [buffer.main :as buffers]))
+(def phone
+  {:name "mobile" :doc "Phone workbench with retained work, conversation and working-text editors."
+   :panes [{:id :rail :doc "workspace:all" :width [:ch 0]}
+           {:id :task :doc "desk:welcome" :width [:ch 0]}
+           {:id :file :doc "desk:welcome" :width [:ch 0]}
+           {:id :phone :view [:mobile-rail :rail] :width :fill}
+           {:id :task-model :view [:mobile-task :task] :width [:ch 0]}
+           {:id :file-model :view [:mobile-file :file] :width [:ch 0]}]
+   :links [] :focus :rail})
+(defn state [ed] (or (get-in ed [:pkg-state "mobile"]) {}))
+(defn put [ed k v] (assoc-in ed [:pkg-state "mobile" k] v))
+(defn objects [ed] (vec (map second (sort-by first (:obj-index ed)))))
+(defn task-data [ed] (get-in ed [:doc :data]))
+(defn draft [ed] (or (get-in ed [:pkg-state "mobile" :drafts (:path ed)]) ""))
+(defn visit-pane [ed pane path goto]
+  (c/effect ed {:kind :visit :pane pane :path path :goto goto}))
+(defn navigate [ed ev]
+  (let [screen (:screen ev) target (:path ev)]
+    (cond-> (put ed :screen screen)
+      (= screen "task") (put :tab "conversation")
+      (and target (= screen "task")) (put :task-path target)
+      (and target (= screen "task")) (visit-pane :task target nil)
+      (and target (contains? #{"places" "work"} screen)) (docs/visit target))))
+(defn send-reply [ed answer]
+  (let [d (task-data ed) text (or answer (draft ed))
+        question (first (filter (fn [o] (= "omega/msg" (:type o))) (objects ed)))
+        finished? (contains? #{"done" "failed" "cancelled"} (:task-status d))
+        op (cond finished? "task/open" question "msg/answer" :else "task/say")
+        args (cond finished? {:goal text :title (first (split text "\n")) :path (str "place:" (:place d)) :cwd (:cwd d)}
+                   question {:msg (:key question) :text text}
+                   :else {:id (:task-id d) :text text})]
+    (cond
+      (:pending (state ed)) ed
+      (blank? text) (c/message ed "Write an instruction first.")
+      :else (-> ed (put :pending {:path (:path ed) :text text :draft (draft ed)})
+                (c/effect {:kind :intent :intent op :args args :then :mobile-sent})
+                (c/message "Sending…")))))
+(defn create-task [ed ev]
+  (let [id (:place ev) goal (trim (:goal ev))
+        known? (or (= id (:place (task-data ed))) (some (fn [o] (= id (:place o))) (concat (objects ed) (:places (state ed)))))]
+    (cond
+      (:creating (state ed)) ed
+      (or (not known?) (blank? goal)) (c/message ed "Choose a place and write a goal.")
+      :else (-> ed (put :creating true)
+                (c/effect {:kind :intent :intent "task/open" :args {:goal goal :title (first (split goal "\n")) :path (str "place:" id)} :then :mobile-created})))))
+(defn choose-tab [ed ev]
+  (if (and (:dirty ev) (:path ev) (not= (:path ev) (:current-file ev)))
+    (c/message ed "Publish the file before opening another document. Your edits are retained.")
+    (cond-> (put ed :tab (:tab ev))
+    (:path ev) (put :file-path (:path ev))
+    (:path ev) (visit-pane :file (:path ev) (when (:block ev) {:block (:block ev)})))))
+(defn event [ed ev]
+  (case (:type ev)
+    :mobile/nav (navigate ed ev)
+    :mobile/tab (choose-tab ed ev)
+    :mobile/clear (assoc ed :message nil)
+    :mobile/modal (put ed :modal (:value ev))
+    :mobile/new-field (assoc-in ed [:pkg-state "mobile" :new (:field ev)] (:value ev))
+    :mobile/create (create-task ed ev)
+    :mobile/draft (assoc-in ed [:pkg-state "mobile" :drafts (:path ed)] (:text ev))
+    :mobile/send (send-reply ed (:answer ev))
+    :mobile/edit-mode (put ed :editing (not (:editing (state ed))))
+    :mobile/cancel (c/effect ed {:kind :intent :intent "task/cancel" :args {:id (:task-id (task-data ed))} :then :show-result})
+    :mobile/edit (if (docs/read-only? ed) (c/message ed "This document is read-only.") (c/replace-text ed (:text ev)))
+    :mobile/row-command (let [q [(:row ev) 0]] (km/run-command (assoc ed :sels [{:anchor q :head q}] :primary 0) (keyword (:name ev))))
+    :mobile/connection (put ed :connection {:online (:online ev) :checked (:checked ev)})
+    nil))
+(defn after [old ed ev]
+  (cond
+    (and (= :doc (:type ev)) (starts-with? (str (:path ed)) "workspace:"))
+    (put ed :places (vec (filter (fn [o] (and (= "desk/scope" (:type o)) (:place o))) (objects ed))))
+    (and (= :intent-result (:type ev)) (= :mobile-sent (:then ev)))
+    (let [pending (:pending (state ed)) path (:path pending)
+          ed (put ed :pending nil)]
+      (if (:ok? ev)
+        (cond-> (c/message ed "Instruction received by host.")
+          ; A quick Yes/No does not consume a separately composed reply.
+          (and (= (:text pending) (:draft pending)) (= (:draft pending) (get-in ed [:pkg-state "mobile" :drafts path])))
+          (assoc-in [:pkg-state "mobile" :drafts path] "")
+          (get-in ev [:data :path]) (docs/visit (get-in ev [:data :path])))
+        (c/message ed (str "Not sent: " (:message ev) ". Your draft is retained."))))
+    (and (= :intent-result (:type ev)) (= :mobile-created (:then ev)))
+    (let [ed (put ed :creating false)]
+      (if (:ok? ev)
+        (-> ed (put :modal nil) (put :new nil) (put :screen "task") (put :tab "conversation") (put :task-path (get-in ev [:data :path]))
+            (visit-pane :task (get-in ev [:data :path]) nil))
+        (c/message ed (str "Could not start: " (:message ev)))))
+    :else ed))
+(defn model [ed role]
+  {:package "mobile" :role role :path (:path ed) :text (t/to-string (:text ed))
+   :objects (objects ed) :data (task-data ed) :state (state ed)
+   :draft (draft ed) :dirty (c/dirty? ed) :read-only (docs/read-only? ed)
+   :cursor (first (c/cursor ed)) :message (:message ed) :revision (get-in ed [:doc :rev])})
+(def bl-package
+  {:name "mobile" :doc "Touch-first remote workbench: attention, places, retained conversations and actual working text."
+   :requires ["present" "workspace" "places" "references" "buffers" "workbench"]
+   :commands {:mobile/publish {:doc "Publish to the host; a disconnected save retains the draft."
+                      :run (fn [ed] (c/effect ed {:kind :save :path (:path ed) :text (t/to-string (:text ed)) :rev (:rev ed) :base (get-in ed [:doc :rev]) :require-server? true}))}
+              :mobile/work {:doc "Return to the attention list." :run (fn [ed] (put ed :screen "work"))}
+              :mobile/places {:doc "Browse working places." :run (fn [ed] (navigate ed {:screen "places" :path "places:"}))}
+              :mobile/unload {:doc "Remove the mobile surface and its host resources." :run (fn [ed] (pkg/unuse ed "mobile"))}
+              :mobile/send {:doc "Send the retained task draft." :run (fn [ed] (send-reply ed nil))}}
+   :intercept (fn [ed ev] (when-let [next (event ed ev)] (pkg/after ed next ev))) :on-event after
+   :provides {:layouts {"mobile" phone}
+              :views {:mobile-rail (fn [ed] (model ed "rail"))
+                      :mobile-task (fn [ed] (model ed "task"))
+                      :mobile-file (fn [ed] (model ed "file"))}}})

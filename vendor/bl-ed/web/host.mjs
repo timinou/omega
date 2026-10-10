@@ -453,7 +453,8 @@ async function perform(eff) {
                   K("data"), toBL(j), K("then"), get(e, "then"), K("block"), get(e, "block"), K("path"), get(e, "path")));
       watchCards(true);
     } catch (err) {
-      dispatchP(ev(K("type"), K("intent-result"), K("ok?"), false, K("message"), documents ? err.message : "no omega world — run bin/bl-ed"));
+      dispatchP(ev(K("type"), K("intent-result"), K("ok?"), false, K("message"), err.message || "Host request failed",
+                  K("then"), get(e, "then"), K("block"), get(e, "block"), K("path"), get(e, "path")));
     }
   } else if (kind === "save") {
     const body = { path: get(e, "path"), text: get(e, "text"), base: get(e, "base"), client: clientId, "client-seq": ++clientSequence };
@@ -469,10 +470,10 @@ async function perform(eff) {
       dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), (documents || r.ok) && j.ok === true, K("message"), j.message || "",
                   K("conflict?"), j.conflict === true, K("doc-rev"), j.rev || null, K("text"), j.text ?? null, K("submitted-text"), body.text));
     } catch (err) {
-      if (documents) {
-        dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), false, K("message"), "Local save failed: " + err.message + "; draft retained."));
+      if (documents || get(e, "require-server?")) {
+        dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), false, K("message"), documents ? "Local save failed: " + err.message + "; draft retained." : "Not published: host unavailable; draft retained."));
       } else {
-        // no server (opened as a static page): fall back to a download
+        // Static-page editors may still explicitly use the download fallback.
         download(body.path.split("/").pop(), body.text);
         dispatchP(ev(K("type"), K("saved"), K("rev"), get(e, "rev"), K("ok?"), true, K("message"), "downloaded"));
       }

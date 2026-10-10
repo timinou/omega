@@ -1,16 +1,16 @@
 const id=decodeURIComponent(location.pathname.split('/').at(-1));
 const $=s=>document.querySelector(s),message=$('#message'),viewport=$('#viewport');
-let session,frame,liveURL,timer,watchdog,busy=false,retries=0;
+let session,frame,liveURL,timer,watchdog,busy=false,retries=0,playing=false;
 const headers={'content-type':'application/json','x-omega-browser':'human'};
 async function request(url,body){
   const r=await fetch(url,{method:body?'POST':'GET',headers,cache:'no-store',...(body?{body:JSON.stringify(body)}:{})});
   const j=await r.json();if(!r.ok||j.ok===false)throw Error(j.message||'Browser request failed');return j;
 }
-function detach(){clearTimeout(watchdog);frame?.remove();frame=null;liveURL=null;}
+function detach(){clearTimeout(watchdog);frame?.remove();frame=null;liveURL=null;playing=false;}
 function mount(url){
   const native=session.provider==='native';
   if(frame&&(liveURL===url||(native&&new URL(liveURL,location.href).pathname===new URL(url,location.href).pathname))){
-    message.textContent=session.control==='human'?'Click the browser to type. You have control.':'Live view · Omega is browsing. Take control to interact.';
+    if(playing)message.textContent=session.control==='human'?'Click the browser to type. You have control.':'Live view · Omega is browsing. Take control to interact.';
     if(native)frame.contentWindow.postMessage({type:'OMEGA_CONTROL',readOnly:session.control!=='human'},location.origin);
     return;
   }
@@ -65,8 +65,9 @@ for(const b of document.querySelectorAll('[data-auth]'))b.onclick=async()=>{
 };
 window.addEventListener('message',event=>{
   if(!frame||event.source!==frame.contentWindow||event.origin!==new URL(liveURL,location.href).origin)return;
-  if(event.data?.type==='KERNEL_PLAYING'){if(session.provider==='native')frame.contentWindow.postMessage({type:'OMEGA_CONTROL',readOnly:session.control!=='human'},location.origin);clearTimeout(watchdog);message.textContent=session.control==='human'?'Click the browser to type. You have control.':'Live view · Omega is browsing. Take control to interact.';retries=0;}
+  if(event.data?.type==='KERNEL_PLAYING'){playing=true;if(session.provider==='native')frame.contentWindow.postMessage({type:'OMEGA_CONTROL',readOnly:session.control!=='human'},location.origin);clearTimeout(watchdog);message.textContent=session.control==='human'?'Click the browser to type. You have control.':'Live view · Omega is browsing. Take control to interact.';retries=0;}
   if(['KERNEL_CONNECTION_FAILED','KERNEL_CONNECTION_TIMEOUT'].includes(event.data?.type)){
+    playing=false;
     clearTimeout(watchdog);message.textContent='Browser live view disconnected. Use Reload view or Reconnect.';
     if(event.data.reason==='transport'&&retries++<1){detach();refresh();}
   }
