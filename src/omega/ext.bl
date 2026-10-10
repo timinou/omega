@@ -46,6 +46,12 @@
                            (catch _ nil))))))
     nil))
 
+(defn dev?
+  "Dev mode: a throwing hook fails the turn instead of being skipped. On when
+   the system has :dev? true or OMEGA_DEV=1. Production stays fail-open."
+  [sys]
+  (or (true? (:dev? sys)) (= "1" (System/get_env "OMEGA_DEV"))))
+
 (defn- runner [exts]
   (fn [kind value ctx]
     (reduce (fn [v x]
@@ -56,7 +62,10 @@
                              (tr/leave! (get-in ctx [:sys :env]) t
                                         {:kind :finding :subject (str "ext/" (name (:name x)))
                                          :text (str "hook " kind " failed: " (ex-message err))}))
-                           v)))
+                           (if (dev? (:sys ctx))
+                             (throw (ex-info (str "ext/" (name (:name x)) " hook " (name kind) " failed: " (ex-message err))
+                                             {:ext (:name x) :hook kind}))
+                             v))))
                 v))
             value
             exts)))

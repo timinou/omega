@@ -49,6 +49,17 @@
     (is (= ["ext/broken"] (map :subject (tr/all (:env sys) {:kind :finding}))))
     (task/stop-system! sys)))
 
+(deftest in-dev-mode-a-throwing-hook-fails-the-turn-loudly
+  (let [x {:name :broken :hooks {:context (fn [_ _] (throw (ex-info "undefined var: take-last" {})))}}
+        sys (ext/install (task/start-system (env/open) {:step (loop/scripted [(loop/say "never")])
+                                                         :tools cm/tools :root "/tmp" :dev? true}) [x])
+        id (task/open! sys {:goal "g"})
+        r (task/await sys id 5000)]
+    (is (= :failed (:status r)))
+    (is (includes? (str (:result r)) "ext/broken hook context failed: undefined var: take-last"))
+    (is (= ["ext/broken"] (map :subject (tr/all (:env sys) {:kind :finding}))))
+    (task/stop-system! sys)))
+
 (deftest extensions-contribute-tools
   (let [x {:name :hello :tools [{:name "hello" :description "greet" :input-schema {:type "object"}
                                   :run (fn [_ _] {:ok "hi from ext"})}]}
