@@ -347,3 +347,18 @@ limits with concise executable examples and an actual PELAGIC demo.
   across variable chunk boundaries. Reproduce with compute-pool-browser.py;
   evidence: spikes/pelagic/proof/shared-compute/pool.json. These are scheduling
   observations, not physical A/V latency measurements.
+
+- Extended the pool comparison to two complete 1,024-step scores, with matching
+  graph catalogs/digest. Latest run cancellation P95 8.6 ms / max 27.8 ms;
+  heartbeat P95 5.4 ms / max 7.8 ms. The tail exceeds the desired 16 ms.
+- Real editor browser drive passes using the compiled union with corrected
+  bootstrap/cache in a disposable local adapter. Playback, live evaluator,
+  controls, audio export and unuse all pass; page errors are empty. This is a
+  private corrected-artifact experiment, not exact pinned-release validation.
+  Screens and report: spikes/pelagic/proof/shared-bootstrap-browser/.
+- Cold union bootstrap regression hit the default isolated-test worker's 300s
+  limit. Re-running with documented BL_TEST_TIMEOUT=1200; no correctness pass
+  claimed from that timed-out run.
+- Cache audit: literate BL/compatible source suffixes and the complete compiler
+  source/logic tree now participate; compiler identity is re-read rather than
+  held indefinitely in a warm namespace atom. Focused validation is running.
