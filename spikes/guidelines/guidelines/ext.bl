@@ -1,6 +1,7 @@
 ; guidelines/ext.bl — the omega extension.
 ;
 ;   (extension {:sources [{:path p :scope :user|:project} …]   ; REQUIRED, explicit: nothing is auto-loaded
+;                                                               ; and only `* ON …` headings are used
 ;               :pipeline  guidelines.recall pipeline           ; default: triggers + semantic + gate
 ;               :judge     (fn [{:guideline :goal :work}] → {:verdict …})  ; optional, see lifecycle
 ;               :enabled   #{gid …}})                           ; optional allow-list (the explorer's "on" set)
@@ -38,10 +39,14 @@
    (let [sources (or (:sources opts) [])
          pipeline (or (:pipeline opts) recall/default-pipeline)
          state (atom nil)
-         reload! (fn [] (let [gs (load-all sources)
-                              gs (if-let [on (:enabled opts)] (filterv (fn [x] (contains? on (name (:id x)))) gs) gs)]
-                          (reset! state {:gs gs :idx (g/index gs)})))
-         ensure! (fn [] (when (nil? @state) (reload!)) @state)
+         ;; ON headings only (or an explicit :enabled set); re-read when a source changes
+         sig (fn [] (pr-str (map (fn [{:keys [path]}] (when (File/regular? path) (File/stat! path))) sources)))
+         reload! (fn [] (let [all (load-all sources)
+                              gs (if-let [on (:enabled opts)]
+                                   (filterv (fn [x] (contains? on (name (:id x)))) all)
+                                   (filterv :on? all))]
+                          (reset! state {:gs gs :idx (g/index gs) :sig (sig)})))
+         ensure! (fn [] (when (or (nil? @state) (not= (:sig @state) (sig))) (reload!)) @state)
          shown (atom {})]
      {:name :guidelines
       :doc "Matched guidelines at the request tail; uses become candidates, settled at turn end."

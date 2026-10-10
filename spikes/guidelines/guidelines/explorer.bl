@@ -1,0 +1,70 @@
+; guidelines/explorer.bl — the explorer's data, as one value (BEAM side).
+;
+;   (model {:sources [...] :enabled #{…} :env env :idx idx}) →
+;     {:sources [{:path :scope :exists? :rev :count}]
+;      :guidelines [{:id :name :rule :tags :scope :path :props :when :not :examples
+;                    :enabled? :stats {:shown :applied :ready :promoted :misfire :violated :dropped}
+;                    :last-at}]
+;      :inbox [{:kind :ready|:proposed|:misfire|:violated :gid :task :subject :text :line :at …}]
+;      :tags [[tag n] …]}
+;
+;   (try-text idx gs text) → every guideline's score for a free-text situation,
+;     with the anchor that won and which stage would pick it: the "try" pane.
+;
+; Pure over its inputs except reading the source files (one read per file).
+
+(ns guidelines.explorer
+  (:require [guidelines.core :as g]
+            [guidelines.recall :as recall]
+            [guidelines.lifecycle :as life]
+            [clojure.string :as str]))
+
+(defn- read-source [{:keys [path scope]}]
+  (if (File/regular? path)
+    (let [t (File/read! path)] {:path path :scope scope :exists? true :rev (life/rev t) :gs (g/parse t scope path)})
+    {:path path :scope scope :exists? false :rev nil :gs []}))
+
+(def STAT-OPS [:shown :candidate :ready :promoted :misfire :violated :dropped :proposed])
+
+(defn- gid-of [t] (or (get-in t [:data :gid]) (first (str/split (str (:subject t)) #"#"))))
+
+(defn model
+  [{:keys [sources enabled env]}]
+  (let [srcs (map read-source sources)
+        gs (apply g/layer (map :gs srcs))
+        traces (if env (life/uses env nil) [])
+        by-g (group-by gid-of traces)
+        stats (fn [gid] (let [ts (get by-g gid [])]
+                          (into {} (map (fn [o] [o (count (filter (fn [t] (= o (get-in t [:data :op]))) ts))]) STAT-OPS))))
+        inbox-ops #{:ready :proposed :misfire :violated}
+        inbox (->> traces
+                   (filter (fn [t] (contains? inbox-ops (get-in t [:data :op]))))
+                   (sort-by (fn [t] (- (or (:at t) 0))))
+                   (mapv (fn [t] (merge {:kind (get-in t [:data :op]) :gid (gid-of t) :task (:task t)
+                                         :subject (:subject t) :text (:text t) :at (:at t)}
+                                        (select-keys (:data t) [:line :goal :note :draft :reason :p :source :related])))))]
+    {:sources (mapv (fn [s] (assoc (dissoc s :gs) :count (count (:gs s)))) srcs)
+     :guidelines (mapv (fn [x] (let [gid (name (:id x))]
+                                 (merge (select-keys x [:name :rule :tags :scope :path :props :when :not :examples])
+                                        {:id gid
+                                         :enabled? (if enabled (contains? enabled gid) false)
+                                         :stats (stats gid)
+                                         :last-at (reduce max 0 (map (fn [t] (or (:at t) 0)) (get by-g gid [])))})))
+                       gs)
+     :inbox inbox
+     :tags (vec (sort-by (fn [[t n]] [(- n) t]) (frequencies (mapcat :tags gs))))}))
+
+(defn try-text
+  "Scores of every guideline for `text`: [{:id :score :anchor :neg :picked? :via}]
+   sorted best first. :picked? = the default pipeline would show it."
+  [idx gs text paths]
+  (let [sc (g/score-all idx text)
+        picked (into {} (map (fn [h] [(name (:id h)) h])
+                             (recall/select recall/default-pipeline {:gs gs :idx idx} {:text text :paths (or paths [])})))]
+    (->> gs
+         (mapv (fn [x] (let [gid (name (:id x)) s (get sc (:id x))]
+                         {:id gid :name (:name x)
+                          :score (or (:score s) 0.0) :anchor (:anchor s) :neg (:neg s)
+                          :picked? (contains? picked gid) :via (get-in picked [gid :via])})))
+         (sort-by (fn [r] (- (:score r))))
+         vec)))

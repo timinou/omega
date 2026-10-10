@@ -15,10 +15,15 @@
 
 (def SEED "spikes/guidelines/guidelines.bl.org")
 
-(defn- fresh-org []
-  (let [p (str "/tmp/gx-test-" (erlang/unique_integer) ".bl.org")]
-    (File/write! p (File/read! SEED))
-    p))
+(defn- fresh-org
+  "A copy of the seed with every guideline switched ON (or `ids` only)."
+  ([] (fresh-org nil))
+  ([ids]
+   (let [p (str "/tmp/gx-test-" (erlang/unique_integer) ".bl.org")
+         t (File/read! SEED)
+         ids (or ids (map :id (g/parse t :project p)))]
+     (File/write! p (reduce (fn [t id] (g/set-on t id true)) t ids))
+     p)))
 
 (defn- system [step x]
   (ext/install (task/start-system (env/open) {:step step :tools cm/tools :root "/tmp" :dev? true}) [x]))
@@ -26,6 +31,35 @@
 (defn- texts [m] (str/join "\n" (keep :text (:content m))))
 (defn- ops [sys] (frequencies (map (fn [t] (get-in t [:data :op])) (life/uses (:env sys) nil))))
 (defn- wait-for [f] (loop [i 0] (cond (f) true (> i 50) false :else (do (Process/sleep 40) (recur (inc i))))))
+
+(deftest a-guideline-that-is-not-ON-is-never-shown
+  (let [seen (atom nil) p (fresh-org [:test-first])
+        sys (system (loop/scripted [(fn [r] (reset! seen r) (loop/say "ok"))])
+                    (gx/extension {:sources [{:path p :scope :project}]}))
+        id (task/open! sys {:goal "make the blocked task row stand out in the rail"})]
+    (task/await sys id 5000)
+    (is (not (str/includes? (texts (last (:messages @seen))) "[guidelines]")))
+    (task/stop-system! sys)))
+
+(deftest switching-ON-in-the-file-takes-effect-on-the-next-step
+  (let [seen (atom []) p (fresh-org [:test-first])
+        sys (system (loop/scripted [(fn [r] (swap! seen conj r) (File/write! p (g/set-on (File/read! p) :visual-not-verbal true))
+                                      (loop/call-tool "eval" {:code "1"}))
+                                    (fn [r] (swap! seen conj r) (loop/say "ok"))])
+                    (gx/extension {:sources [{:path p :scope :project}]}))
+        id (task/open! sys {:goal "make the blocked task row stand out in the rail"})]
+    (task/await sys id 5000)
+    (is (not (str/includes? (texts (first (:messages (first @seen)))) "visual-not-verbal")))
+    (is (str/includes? (texts (last (:messages (second @seen)))) "visual-not-verbal"))
+    (task/stop-system! sys)))
+
+(deftest set-on-round-trips
+  (let [t (File/read! SEED)
+        on (g/set-on t :test-first true)]
+    (is (:on? (first (filter (fn [x] (= :test-first (:id x))) (g/parse on :project nil)))))
+    (is (str/includes? on "* ON Pin it before you change it"))
+    (is (= t (g/set-on on :test-first false)))
+    (is (= "Pin it before you change it" (:name (first (filter (fn [x] (= :test-first (:id x))) (g/parse on :project nil))))))))
 
 (deftest nothing-is-loaded-without-explicit-sources
   (let [seen (atom nil)

@@ -5,7 +5,9 @@
 ;   (match idx situation opts)→ [{:id :score :anchor} …] best first, over threshold
 ;   (inject req hits gs)      → req             ; request-time only: never recorded
 ;
-; A guideline: {:id :name :rule :tags :when [s] :not [s] :examples [s] :scope :path}
+; A guideline: {:id :name :on? :rule :tags :props :when [s] :not [s] :examples [s] :scope :path}
+; :on? — the heading starts with the keyword ON (`* ON Show, don't label`).
+; Nothing is ever injected unless it is ON: reading a file enables nothing.
 ; Anchors = :when ∪ :examples (positive) and :not (negative). The score of a
 ; guideline is its best positive anchor minus a penalty when a negative anchor
 ; is closer than that positive one. Rule text is NOT an anchor: measured, the
@@ -22,8 +24,10 @@
 
 (defn- heading [line]
   (when-let [[_ stars title] (re-find #"^(\*+)\s+(.*)$" line)]
-    (let [[_ t tags] (or (re-find #"^(.*?)\s+(:[\w:-]+:)\s*$" title) [nil title nil])]
-      {:level (count stars) :title (str/trim t)
+    (let [[_ t tags] (or (re-find #"^(.*?)\s+(:[\w:-]+:)\s*$" title) [nil title nil])
+          t (str/trim t)
+          on? (str/starts-with? t "ON ")]
+      {:level (count stars) :title (if on? (str/trim (subs t 3)) t) :on? on?
        :tags (if tags (vec (remove empty? (str/split tags #":"))) [])})))
 
 (defn- item [line] (when-let [[_ s] (re-find #"^\s*-\s+(.*)$" line)] (str/trim s)))
@@ -44,7 +48,7 @@
            (cond
              (and h (= 1 (:level h)))
              (recur more (finish acc g)
-                    {:id nil :name (:title h) :tags (:tags h) :props {} :rule [] :when [] :not [] :examples []
+                    {:id nil :name (:title h) :on? (:on? h) :tags (:tags h) :props {} :rule [] :when [] :not [] :examples []
                      :scope scope :path path}
                     :rule)
              (nil? g) (recur more acc g sec)
@@ -161,6 +165,20 @@
   (if-let [b (tail-block hits by-id)] (update req :tail (fn [t] (conj (vec t) b))) req))
 
 ;; ── write-back: a recorded use becomes an example (and an anchor) ───────
+
+(defn set-on
+  "The text with guideline `id`'s heading switched ON (or off). Pure."
+  [text id on?]
+  (let [ls (vec (str/split-lines text))
+        drawer (first (keep-indexed (fn [i l] (when (re-find (re-pattern (str "^\\s*:ID:\\s+" (name id) "\\s*$")) l) i)) ls))
+        h (when drawer (last (filter (fn [i] (re-find #"^\*\s" (nth ls i))) (range 0 drawer))))]
+    (if (nil? h)
+      text
+      (let [l (nth ls h)
+            [_ stars rest*] (re-find #"^(\*+\s+)(.*)$" l)
+            bare (if (str/starts-with? rest* "ON ") (subs rest* 3) rest*)
+            nl (str stars (if on? "ON " "") bare)]
+        (str (str/join "\n" (assoc ls h nl)) (if (str/ends-with? text "\n") "\n" ""))))))
 
 (defn add-example
   "The guidelines .bl.org text with `line` appended under guideline `id`'s
