@@ -258,17 +258,75 @@
 (defn- add-usage [a b]
   (merge-with (fn [x y] (+ (or x 0) (or y 0))) (or a {}) (or b {})))
 
+;; ── the situation: what this step is about (one value, many consumers) ──
+;
+; Guidelines, the attention line and scope checks all ask "what is the agent
+; doing right now?". `situation` answers once per step from what is already
+; known — the goal, the last exchange, the tool just used, the task's claims —
+; and hooks receive it in ctx as :situation. Pure over (turns, claims).
+
+(defn- block-gist [b]
+  (case (:type b)
+    :text (:text b)
+    :tool-use (str (:name b) " " (pr-str (:input b)))
+    :tool-result (let [c (str (:content b))] (subs c 0 (min 300 (count c))))
+    ""))
+
+(defn- ext-of [p]
+  (let [b (last (clojure.string/split (str p) #"/"))
+        i (clojure.string/index-of b ".")]
+    (when i (subs b i))))
+
+(defn situation
+  "{:goal :recent :step :last-tool :paths :exts :text} for task `id` over turns
+   `ts`. :text is the one string a matcher reads (goal + recent exchange +
+   paths); :paths are the task's claimed paths (absolute), :exts their file
+   extensions (\".bl\" \".css\" \".bl.org\")."
+  [sys id ts]
+  (let [ms (vec ts)
+        goal (clojure.string/join " " (map block-gist (:content (first ms))))
+        tail (subvec ms (max 1 (- (count ms) 2)) (count ms))
+        recent (clojure.string/join " " (map block-gist (mapcat :content tail)))
+        last-tool (last (keep (fn [b] (when (= :tool-use (:type b)) (:name b))) (mapcat :content ms)))
+        paths (if (:env sys) (vec (sort (distinct (map :subject (tr/all (:env sys) {:kind :claim :task id}))))) [])]
+    {:goal goal :recent recent :step (count ms) :last-tool last-tool
+     :paths paths :exts (vec (distinct (keep ext-of paths)))
+     :text (str goal "\n" recent (when (seq paths) (str "\nfiles: " (clojure.string/join " " paths))))}))
+
+;; ── the request tail (spikes/prompt-cache.bl.md §4) ─────────────────────
+;
+; :tail is a vector of content blocks that ride AFTER the last user message's
+; content for THIS request only. They are never turns, so the next request's
+; prefix is byte-identical and the provider cache holds. Hooks add to it;
+; `with-tail` folds it in at the wire boundary (llm/step), so every adapter
+; and the cassette digest see the same thing.
+
+(defn with-tail
+  "`req` with its :tail folded into the last user message (or as a new user
+   message when the last one is the assistant's), and :tail removed."
+  [req]
+  (let [t (vec (:tail req)) req (dissoc req :tail)]
+    (if (empty? t)
+      req
+      (let [ms (vec (:messages req)) i (dec (count ms))]
+        (assoc req :messages
+               (if (and (>= i 0) (= :user (:role (nth ms i))))
+                 (assoc ms i (update (nth ms i) :content (fn [c] (into (vec c) t))))
+                 (conj ms {:role :user :content t})))))))
+
 (defn request
   "The model request for task `id` over its turns `ts` (read from the store
-   when omitted), after the :context hooks."
+   when omitted), after the :context hooks. Carries :tail (request-time blocks,
+   see `with-tail`); hooks get {:sys :task :situation} as ctx."
   ([sys id] (request sys id (turns sys id)))
   ([sys id ts]
   (let [cwd (:task/cwd (env/pull (:env sys) [:task/cwd] (env/eid (:env sys) :task/id id)))
         req {:system (str (or (:system-prompt sys) "You are omega, a coding agent.")
                           (when cwd (str "\nTask working directory: " cwd ". Relative file paths and shell commands resolve here.")))
              :messages (messages ts)
-             :tools (vec (map (fn [t] (select-keys t [:name :description :input-schema])) (tool-table sys)))}]
-    (hook sys :context req {:sys sys :task id}))))
+             :tools (vec (map (fn [t] (select-keys t [:name :description :input-schema])) (tool-table sys)))
+             :tail []}]
+    (hook sys :context req {:sys sys :task id :situation (situation sys id ts)}))))
 
 (defn- add-cost!
   "Fold one response's usage into the task's running cost. The running turn
@@ -313,7 +371,13 @@
         (budget-exhausted? sys cost) {:status :idle :result "paused: reported token budget reached; durable partial outputs are retained"}
         :else (let [turn-n (inc (count ts))
               ;; deltas are broadcast, never recorded: the final content below is the fact
-              resp (step (assoc (update (request sys id ts) :system str (budget-notice sys cost)) :on-delta
+              ;; volatile notes (budget, hook :tail blocks) ride the tail: the system
+              ;; prompt and every stored turn stay byte-stable across steps
+              req (request sys id ts)
+              req (if-let [note (budget-notice sys cost)]
+                    (update req :tail (fn [t] (conj (vec t) {:type :text :text (clojure.string/trim note)})))
+                    req)
+              resp (step (assoc (with-tail req) :on-delta
                                 (fn [d] (stream/delta! world id (assoc d :turn turn-n)))))
               _ (stream/turn-done! world id)]
           (cond

@@ -148,20 +148,16 @@
                                           (when-let [x (last (:examples g))] (str " (e.g. " (strip-date x) ")")))))
                            hits))))
 
+(defn tail-block
+  "The hits as one request-tail block (omega.loop :tail), or nil."
+  [hits by-id]
+  (when (seq hits) {:type :text :text (render-hits hits by-id)}))
+
 (defn inject
-  "Append the hits as a text block to the LAST user message of the request.
-   The loop builds a fresh request per step from the stored turns, so this
-   block is never recorded: the cacheable prefix is unchanged (the :tail
-   contract, done from a :context hook until the loop has a :tail field)."
+  "Add the hits to the request's :tail (omega.loop folds it into the last user
+   message at the wire; it is never a turn, so the cached prefix holds)."
   [req hits by-id]
-  (if (empty? hits)
-    req
-    (let [ms (:messages req) i (dec (count ms))]
-      (if (and (>= i 0) (= :user (:role (nth ms i))))
-        (assoc req :messages
-               (assoc (vec ms) i (update (nth ms i) :content
-                                         (fn [c] (conj (vec c) {:type :text :text (render-hits hits by-id)})))))
-        req))))
+  (if-let [b (tail-block hits by-id)] (update req :tail (fn [t] (conj (vec t) b))) req))
 
 ;; ── write-back: a recorded use becomes an example (and an anchor) ───────
 

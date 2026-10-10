@@ -50,7 +50,7 @@
          (when (nil? @state) (reload!))
          (let [{:keys [idx]} @state
                task (:task ctx)
-               hits (g/match idx (g/situation req) (:match opts))
+               hits (g/match idx (or (get-in ctx [:situation :text]) (g/situation req)) (:match opts))
                ;; already-shown guidelines stay in the transcript? No: injection is not
                ;; recorded, so re-show while they still match; but trace only the first time.
                fresh (remove (fn [h] (contains? (get @shown task #{}) (:id h))) hits)]

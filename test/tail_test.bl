@@ -1,0 +1,68 @@
+(ns tail-test
+  (:require [omega.env :as env]
+            [omega.loop :as loop]
+            [omega.task :as task]
+            [omega.trace :as tr]
+            [omega.codemode :as cm]
+            [omega.ext :as ext]))
+
+(defn- texts [m] (vec (keep :text (:content m))))
+
+(deftest with-tail-appends-to-the-last-user-message-and-drops-the-key
+  (let [r (loop/with-tail {:messages [{:role :user :content [{:type :text :text "g"}]}]
+                           :tail [{:type :text :text "[note]"}]})]
+    (is (= ["g" "[note]"] (texts (first (:messages r)))))
+    (is (not (contains? r :tail))))
+  (let [r (loop/with-tail {:messages [{:role :user :content [{:type :text :text "g"}]}
+                                      {:role :assistant :content [{:type :text :text "a"}]}]
+                           :tail [{:type :text :text "[note]"}]})]
+    (is (= 3 (count (:messages r))))
+    (is (= :user (:role (last (:messages r))))))
+  (is (= {:messages []} (loop/with-tail {:messages [] :tail []}))))
+
+(deftest a-hook-tail-reaches-the-model-each-step-and-is-never-recorded
+  (let [seen (atom [])
+        x {:name :note :hooks {:context (fn [req ctx] (update req :tail conj {:type :text :text (str "[step " (get-in ctx [:situation :step]) "]")}))}}
+        sys (ext/install (task/start-system (env/open)
+                                            {:root "/tmp" :tools cm/tools
+                                             :step (loop/scripted [(fn [r] (swap! seen conj r) (loop/call-tool "eval" {:code "1"}))
+                                                                   (fn [r] (swap! seen conj r) (loop/say "ok"))])})
+                         [x])
+        id (task/open! sys {:goal "g"})]
+    (task/await sys id 5000)
+    (let [[r1 r2] @seen]
+      (is (not (contains? r1 :tail)))
+      (is (= ["g" "[step 1]"] (texts (first (:messages r1)))))
+      ;; step 2: the goal message is back to exactly what was stored
+      (is (= ["g"] (texts (first (:messages r2)))))
+      (is (= "[step 3]" (last (keep :text (:content (last (:messages r2))))))))
+    (is (every? (fn [t] (not (some (fn [b] (and (string? (:text b)) (starts-with? (:text b) "[step"))) (:content t))))
+                (loop/turns sys id)))
+    (task/stop-system! sys)))
+
+(deftest the-budget-notice-rides-the-tail-not-the-system-prompt
+  (let [seen (atom nil)
+        sys (task/start-system (env/open)
+                               {:root "/tmp" :tools cm/tools :token-budget {:input 1000}
+                                :step (loop/scripted [{:content [{:type :tool-use :id "a" :name "eval" :input {:code "1"}}]
+                                                       :stop :tool-use :usage {:input 800 :output 1}}
+                                                      (fn [r] (reset! seen r) (loop/say "ok"))])})
+        id (task/open! sys {:goal "g"})]
+    (task/await sys id 5000)
+    (is (not (includes? (:system @seen) "budget")))
+    (is (includes? (last (keep :text (:content (last (:messages @seen))))) "budget is nearing"))
+    (task/stop-system! sys)))
+
+(deftest situation-carries-goal-tool-and-claimed-paths
+  (let [sys (task/start-system (env/open) {:root "/tmp" :tools cm/tools :step (loop/scripted [(loop/say "ok")])})
+        id (task/open! sys {:goal "style the rail"})]
+    (task/await sys id 5000)
+    (tr/leave! (:env sys) id {:kind :claim :subject "/tmp/p/theme.css"})
+    (loop/record! sys id :assistant [{:type :tool-use :id "x" :name "eval" :input {:code "(ls)"}}])
+    (let [s (loop/situation sys id (loop/turns sys id))]
+      (is (= "style the rail" (:goal s)))
+      (is (= "eval" (:last-tool s)))
+      (is (= ["/tmp/p/theme.css"] (:paths s)))
+      (is (= [".css"] (:exts s)))
+      (is (includes? (:text s) "files: /tmp/p/theme.css")))
+    (task/stop-system! sys)))

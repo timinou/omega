@@ -4,7 +4,7 @@
 ; tail block the :context hook would add. Scored by simple, inspectable rules.
 
 (ns guidelines.ab
-  (:require [guidelines.core :as g] [omega.llm :as llm] [clojure.string :as str]))
+  (:require [guidelines.core :as g] [omega.llm :as llm] [omega.loop :as loop] [clojure.string :as str]))
 
 (def prompts
   [{:id :rail
@@ -40,7 +40,7 @@
                     :tools []}
                hits (g/match idx (g/situation req))
                req (if (= cond* :with) (g/inject req hits (:by-id idx)) req)
-               out (text-of (step req))]
+               out (text-of (step (loop/with-tail req)))]
            {:prompt (:id p) :cond cond* :injected (mapv :id hits) :score ((:score p) out) :out out}))))
 
 (when-not (File/dir? "spikes/guidelines/proof") (File/mkdir_p! "spikes/guidelines/proof"))
