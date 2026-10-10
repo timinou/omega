@@ -27,3 +27,22 @@
        (is (= :stopped (receive [:DOWN seen :process _ _] :when (= ref seen) :stopped
                                (after 5000 :timeout))))))))
    (finally (manager/drain id) (File/rm_rf! root)))))
+
+(deftest failed-listener-start-rolls-back-the-task-system
+ (let [root (str (System/tmp_dir!) "/omega-host-failure-" (System/unique_integer (list :positive)))
+       socket (elem (gen_tcp/listen 0 (list :binary (tuple :active false))) 1)
+       port (elem (elem (inet/sockname socket) 1) 1)
+       captured (atom nil)]
+  (File/mkdir_p! root)
+  (try
+   (is (= :failed
+    (try
+     (omega/start! {:root root :web root :port port :offline? true :memory? true
+                    :intent-factory (fn [sys] (reset! captured sys) {})})
+     :unexpected-success
+     (catch _ :failed))))
+   (is (some? @captured))
+   (let [ref (erlang/monitor :process (:sup @captured))]
+    (is (= :stopped (receive [:DOWN seen :process _ _] :when (= ref seen) :stopped
+                            (after 5000 :timeout)))))
+   (finally (gen_tcp/close socket) (File/rm_rf! root)))))

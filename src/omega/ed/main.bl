@@ -44,10 +44,13 @@
         home (or (System/get_env "OMEGA_HOME") (File/cwd!))
         db (when-not (or (:memory? opts) (and (:offline? opts) (nil? (:db opts)))) (env/db-path root (:db opts)))
         e (if db (env/open-durable! db) (env/open))
-        step (or (:step opts) (if (:offline? opts) (offline-model) (llm/step (llm/from-env home))))
+        acquired (atom nil)]
+    (try
+      (let [step (or (:step opts) (if (:offline? opts) (offline-model) (llm/step (llm/from-env home))))
         sys (task/start-system e (merge (select-keys opts [:max-steps :token-budget :dev?])
                                   {:step step :tools (or (:tools opts) cm/tools) :root root
                                    :system-prompt (or (:system-prompt opts) cli/SYSTEM-PROMPT)}))
+        _ (reset! acquired sys)
         ;; extensions go in BEFORE recovery and serving: executors copy the
         ;; system they start with (omega.task/start-system)
         sys (if (seq (:extensions opts)) (ext/install sys (:extensions opts)) sys)
@@ -64,7 +67,14 @@
                                    (when-let [factory (:intent-factory opts)] (factory sys))
                                    (packages/intents registry sys))})]
     (when db (println (str "omega: tasks are kept in " db (when (seq interrupted) (str " · interrupted: " (clojure.string/join " " interrupted))))))
-    (assoc r :sys sys :env e :db db :packages registry)))
+    (assoc r :sys sys :env e :db db :packages registry))
+      (catch error
+        ;; Readiness is transactional: a failed listener must not leave a task
+        ;; supervisor or storage owner behind when the service is retried.
+        (try
+          (when @acquired (task/stop-system! @acquired))
+          (finally (env/close! e)))
+        (throw error)))))
 
 (defn stop!
   "Close a started host in dependency order: HTTP, task executors, storage.
