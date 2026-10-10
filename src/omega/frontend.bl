@@ -19,7 +19,7 @@
   f))
 (defn manifests [root names]
  (mapv (fn [name]
-         (when-not (re-matches #"[A-Za-z0-9_-]+" name)
+         (when-not (Regex/match? (Regex/compile! "^[A-Za-z0-9_-]+\\z") name)
           (throw (ex-info "Invalid frontend package name" {:name name})))
          (let [m (edn/read-string (File/read! (str root "/packages/" name ".edn")))]
           (when-not (= name (:name m)) (throw (ex-info "Package identity mismatch" {:name name})))

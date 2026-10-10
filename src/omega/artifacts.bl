@@ -1,0 +1,18 @@
+; Cross-process build ownership. The OS descriptor releases on process death.
+(ns omega.artifacts (:require [os.lease :as lease]))
+(defn staging [output]
+ (str output ".stage-" (System/pid) "-" (System/unique_integer (list :positive))))
+(defn coordinated
+ "Serialize publishers, including independent cold VMs. No timestamp takeover;
+  dead owners release their descriptor. Recheck inputs/cache inside action."
+ [path action]
+ (File/mkdir_p! (Path/dirname path))
+ (let [deadline (+ (System/monotonic_time :millisecond) 1800000)]
+  (loop [announced? false]
+   (let [r (lease/acquire! path)]
+    (if-let [held (:ok r)]
+     (try (action) (finally (lease/release! held)))
+     (if (and (= :busy (:error r)) (< (System/monotonic_time :millisecond) deadline))
+      (do (when-not announced? (println "Frontend build in progress; waiting for its publication"))
+          (Process/sleep 100) (recur true))
+      (throw (ex-info "Cannot acquire frontend build lease" {:path path :reason (:error r)}))))))))

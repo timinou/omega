@@ -277,3 +277,32 @@ limits with concise executable examples and an actual PELAGIC demo.
 - Started upstream strict persistent transport (:warm "require" /
   --warm-required). This is a transport contract, not yet service-task
   lifecycle metadata. Finite-task Start behavior remains unchanged.
+- Upstream ba9ea25d: task :service true, :warm "require", --warm-required;
+  installed launcher refuses temporary-VM fallback for persistent services.
+  Rust launcher: 82 tests pass. Actual first-ever dispatch against existing
+  release 04805c33: same owner survives both commands; 23.46 s first, 130.83 ms
+  second. This tests the new launcher with an old runtime, not the new pin.
+- Upstream c386e14e: vm.service/acquire uses existing manager reservations and
+  realm membership, captures request resolution/env and retains callback code;
+  bounded graceful realm drain. Service/identity tests: 38 assertions pass.
+  Runtime task schema: 120 assertions pass. Earlier mixed-protocol harness run
+  was discarded; final evidence comes from a fresh VM.
+- Omega work in progress: listener handle/stop!, application stop!, generic
+  realm-backed development host, versioned frontend manifests and union graph.
+  Production pin/default tasks remain gated on a clean new-release integration.
+- Metadata/read/cache tests: Omega frontend 10 assertions and PELAGIC launch/cache
+  15 assertions pass against current upstream source. OS build leases and unique
+  staging now wrap the existing graph/frontend/local pipeline (verification next).
+- Upstream 33d8a91c: service-owned descriptor route leases, generation-fenced
+  release and OS-serialized hostname admission. Private-runtime port suite:
+  30 assertions pass. Bind remains a probe, not listener socket adoption.
+- Reproducible source validation moved to detached upstream worktree 33d8a91c
+  after unrelated in-progress datom edits broke shared checkout parsing.
+  Omega artifacts/frontend/dev-host/launch checks pass: 35 assertions. The
+  actual offline host listener and supervisor both stop; no port 8790 writes.
+- New graph compilation found native evidence staging self-dependency. Upstream
+  fix 56bab07f (isolated commit 468b4461) initializes system.js before target staging; cold regression
+  extended to compile the checker alongside an annotated native namespace.
+- Actor preparation now supports independent bounded jobs in the canonical
+  actor engine. Browser worker-sharing adapter awaits compiled/browser proof;
+  no new scheduler or async CPU pipeline was added.

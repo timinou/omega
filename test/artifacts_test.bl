@@ -1,0 +1,15 @@
+(ns omega.artifacts-test (:require [omega.artifacts :as artifacts] [os.lease :as lease]))
+(deftest concurrent-publishers-wait-for-the-existing-os-owner
+ (let [root (str (System/tmp_dir!) "/omega-artifact-" (System/unique_integer (list :positive)))
+       path (str root "/.build.lock") parent (erlang/self)]
+  (File/mkdir_p! root)
+  (try
+   (let [held (:ok (lease/acquire! path))
+         child (spawn (fn [] (artifacts/coordinated path
+                             (fn [] (erlang/send parent :published)))))]
+    (is (= :busy (:error (lease/acquire! path))))
+    (is (= :waiting (receive :published :wrong (after 30 :waiting))))
+    (lease/release! held)
+    (is (= :published (receive :published :published (after 5000 :timeout))))
+    (is (not= (artifacts/staging root) (artifacts/staging root))))
+   (finally (File/rm_rf! root)))))

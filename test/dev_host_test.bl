@@ -1,0 +1,29 @@
+(ns omega.dev-host-test
+ (:require [omega.ed.main :as omega] [omega.dev :as dev] [vm.manager :as manager]
+           [vm.scope :as scope]))
+(deftest an-owned-offline-host-reuses-and-stops-its-resources
+ (let [root (str (System/tmp_dir!) "/omega-host-" (System/unique_integer (list :positive)))
+       id (str "omega-host-test-" (System/unique_integer (list :positive)))
+       probe (elem (gen_tcp/listen 0 (list :binary (tuple :active false))) 1)
+       port (elem (elem (inet/sockname probe) 1) 1)]
+  (gen_tcp/close probe)
+  (File/mkdir_p! root)
+  (File/write! (str root "/index.html") "owned offline host")
+  (manager/start)
+  (manager/ensure {:id id})
+  (try
+   (scope/with-vm id
+    (fn []
+     (let [opts {:root root :web root :port port :offline? true :memory? true}
+           a (dev/acquire! {:world root :frontend "fixture"} opts)
+           b (dev/acquire! {:world root :frontend "fixture"} opts)]
+      (is (= (:listener a) (:listener b)))
+      (is (= (:sup (:sys a)) (:sup (:sys b))))
+      (is (Process/alive? (:listener a)))
+      (is (Process/alive? (:sup (:sys a))))
+      (dev/stop! root)
+      (is (not (Process/alive? (:listener a))))
+      (let [ref (erlang/monitor :process (:sup (:sys a)))]
+       (is (= :stopped (receive [:DOWN seen :process _ _] :when (= ref seen) :stopped
+                               (after 5000 :timeout))))))))
+   (finally (manager/drain id) (File/rm_rf! root)))))
