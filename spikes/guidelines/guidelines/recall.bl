@@ -1,0 +1,118 @@
+; guidelines/recall.bl — the selection pipeline: wide recall, then precision.
+;
+;   situation ─┬─ trigger stage  (:PATHS: globs, :TOOLS: names)   → certain hits
+;              ├─ semantic stage (code.embed, low threshold, top-k) → candidates
+;              └─ (lexical stage, optional)
+;                         ∪ (union by id, keep best evidence)
+;                         ▼
+;                  precision stage  (Jev noul per candidate; or the semantic gate)
+;                         ▼
+;                  hits [{:id :score :via :anchor :p}]
+;
+; A STAGE is a value: {:name kw :run (fn [ctx situation] → [hit …])}. A
+; pipeline is {:recall [stage …] :precision stage-or-nil :k n}. This is data,
+; like extensions: tests swap stages, the explorer can show which stage found
+; each hit (:via), and a missing network just means no precision stage.
+;
+; Fail direction: certain hits (triggers) always pass. Candidates need the
+; precision stage's yes; without one, they need the semantic gate threshold.
+; A Jev error drops candidates (fail closed = show nothing extra), never
+; certain hits.
+
+(ns guidelines.recall
+  (:require [clojure.re]
+            [guidelines.core :as g]
+            [clojure.string :as str]))
+
+;; ── glob → regex (enough for **, *, ?) ──────────────────────────────────
+
+(defn- glob-re [glob]
+  (let [esc (fn [c] (if (contains? #{"." "+" "(" ")" "|" "^" "$" "{" "}" "[" "]" "\\"} c) (str "\\" c) c))
+        cs (map str (seq glob))]
+    (re-pattern
+     (str "(^|/)"
+          (loop [cs cs acc ""]
+            (cond (empty? cs) acc
+                  (and (= "*" (first cs)) (= "*" (second cs))) (recur (drop 2 (if (= "/" (nth (vec cs) 2 nil)) (rest cs) cs)) (str acc ".*"))
+                  (= "*" (first cs)) (recur (rest cs) (str acc "[^/]*"))
+                  (= "?" (first cs)) (recur (rest cs) (str acc "[^/]"))
+                  :else (recur (rest cs) (str acc (esc (first cs))))))
+          "$"))))
+
+(defn glob-match? [glob path] (some? (re-find (glob-re (str/trim glob)) path)))
+
+(defn- split-prop [s] (vec (remove str/blank? (map str/trim (str/split (or s "") #",")))))
+
+;; ── stages ──────────────────────────────────────────────────────────────
+
+(def triggers
+  "Deterministic: a guideline with :PATHS: fires when a claimed path matches one
+   of its globs; with :TOOLS: when the last tool used is listed. Certain."
+  {:name :trigger
+   :run (fn [{:keys [gs]} sit]
+          (vec (keep (fn [g*]
+                       (let [globs (split-prop (get-in g* [:props :paths]))
+                             tools (set (split-prop (get-in g* [:props :tools])))
+                             p (first (filter (fn [p] (some (fn [gl] (glob-match? gl p)) globs)) (:paths sit)))
+                             t (when (contains? tools (str (:last-tool sit))) (:last-tool sit))]
+                         (when (or p t)
+                           {:id (:id g*) :score 1.0 :via :trigger :certain? true
+                            :anchor (if p (str "path " p) (str "tool " t))})))
+                     gs)))})
+
+(defn semantic
+  "Embedding similarity over When/Examples anchors. opts as guidelines.core/match;
+   used for RECALL, so the default threshold is lower than the single-stage gate."
+  ([] (semantic {:threshold 0.25 :k 4}))
+  ([opts]
+   {:name :semantic
+    :run (fn [{:keys [idx]} sit]
+           (mapv (fn [h] (assoc h :via :semantic)) (g/match idx (:text sit) opts)))}))
+
+(defn gate
+  "The no-network precision stage: keep candidates scoring ≥ threshold."
+  ([] (gate 0.42))
+  ([t] {:name :gate :run (fn [_ _ cands] (filterv (fn [h] (>= (:score h) t)) cands))}))
+
+(defn jev
+  "Precision by Jev (omega.jev): one calibrated yes/no per candidate, asked in
+   ONE request. `ask` is (fn [state questions] → {:ok {id verdict}} | {:error}),
+   e.g. (partial omega.jev/ask transport). Keeps p ≥ :act (default 0.6)."
+  ([ask] (jev ask {}))
+  ([ask {:keys [act] :or {act 0.6}}]
+   {:name :jev
+    :run (fn [{:keys [idx]} sit cands]
+           (if (empty? cands)
+             []
+             (let [qs (into {} (map (fn [h] (let [g* (get-in idx [:by-id (:id h)])]
+                                               [(:id h) {:type :noul
+                                                         :instructions (str "Does this guideline apply to what the agent is doing now? Guideline: "
+                                                                            (:name g*) ". " (:rule g*)
+                                                                            (when (seq (:not g*)) (str " It does NOT apply to: " (str/join "; " (:not g*)))))}]))
+                                    cands))
+                   r (ask (:text sit) qs)]
+               (if (contains? r :error)
+                 []
+                 (vec (keep (fn [h] (let [p (get-in r [:ok (:id h) :value])]
+                                      (when (and (number? p) (>= p act)) (assoc h :p p))))
+                            cands))))))}))
+
+;; ── the pipeline ────────────────────────────────────────────────────────
+
+(def default-pipeline {:recall [triggers (semantic)] :precision (gate) :k 3})
+
+(defn select
+  "Run `pipeline` over situation `sit` with ctx {:gs :idx}. → hits, certain ones
+   first, then by precision probability/score. Each hit says :via which stage."
+  [pipeline ctx sit]
+  (let [found (mapcat (fn [st] ((:run st) ctx sit)) (:recall pipeline))
+        best (vals (reduce (fn [m h] (let [o (get m (:id h))]
+                                       (if (or (nil? o) (:certain? h) (and (not (:certain? o)) (> (:score h) (:score o))))
+                                         (assoc m (:id h) h) m)))
+                           {} found))
+        certain (filter :certain? best)
+        cands (remove :certain? best)
+        kept (if-let [p (:precision pipeline)] ((:run p) ctx sit (vec cands)) (vec cands))]
+    (vec (take (or (:k pipeline) 3)
+               (concat (sort-by (fn [h] (:id h)) certain)
+                       (sort-by (fn [h] (- (or (:p h) (:score h)))) kept))))))

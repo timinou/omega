@@ -1,0 +1,10 @@
+recall stage t=0.25 k=3 (no precision)    P 0.43 R 0.65 (tp 13 fp 17)
+  + oracle precision (ceiling)         P 1.0 R 0.65 (tp 13 fp 0)
+recall stage t=0.2 k=4 (no precision)    P 0.36 R 0.7 (tp 14 fp 25)
+  + oracle precision (ceiling)         P 1.0 R 0.7 (tp 14 fp 0)
+recall stage t=0.15 k=5 (no precision)    P 0.27 R 0.8 (tp 16 fp 43)
+  + oracle precision (ceiling)         P 1.0 R 0.8 (tp 16 fp 0)
+single-stage gate 0.42 (baseline)            P 0.88 R 0.35 (tp 7 fp 1)
+recall t=0.2 k=4 + LIVE Jev p>=0.6          P 0.92 R 0.55 (tp 11 fp 1)
+  jev wall time for 24 cases: 5174 ms
+:ok

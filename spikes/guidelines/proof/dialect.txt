@@ -1,0 +1,32 @@
+vars 489 ms 496
+[dialect] `take-last` does not exist in this Beam Lisp. Nearest existing functions:
+- last — Return the last item in coll, in linear time.
+- butlast — Return a seq of all but the last item in coll, in linear time.
+- last-key — `(last-key coll)` — the largest key/member, or nil when empty. O(log n).
+- last-index-of — The index of the LAST occurrence of `sub` in `s`, or nil when absent.
+[dialect] `array-map` does not exist in this Beam Lisp. Nearest existing functions:
+- map
+- map?
+- mapv — Like `map`, but returns a VECTOR (eager).
+- call-map? (rt) — RT's `map?`: a plain map, a sorted map, or a bl record — in RT a record is a user-facing map. NOT the classifier's `map?`, which answers for the plain map al…
+[dialect] `ns-publics` does not exist in this Beam Lisp. Nearest existing functions:
+- namespace-of (rt)
+- namespace
+- print-namespace-of (rt) — jank's `cpp/jank.runtime.namespace_`: the namespace String of a symbol or keyword, or nil. A STRING has no namespace here — this is the asymmetry with `name-…
+- nthrest — Returns the nth rest of coll, coll when n is 0.
+[dialect] `with-out-str` does not exist in this Beam Lisp. Nearest existing functions:
+- str
+- print-str
+- str-0 (rt) — RT's `str/0`.
+- to-str (rt) — Clojure's `toString` for ONE value: what each argument of `str` contributes.
+[dialect] `mapcat-indexed` does not exist in this Beam Lisp. Nearest existing functions:
+- map-indexed — Returns a lazy seq of (f i x), where i is the zero-based index of x in coll.
+- map
+- map?
+- sorted-map-of — `(sorted-map-of coll)` — an ordered map from a collection of `[k v]` entries.
+[dialect] `all-ns` does not exist in this Beam Lisp. Nearest existing functions:
+- namespace-of (rt)
+- namespace
+- nthrest — Returns the nth rest of coll, coll when n is 0.
+- print-namespace-of (rt) — jank's `cpp/jank.runtime.namespace_`: the namespace String of a symbol or keyword, or nil. A STRING has no namespace here — this is the asymmetry with `name-…
+nil

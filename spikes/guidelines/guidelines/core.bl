@@ -13,7 +13,8 @@
 ; "when" phrases match at 0.5–0.9 (see ../guidelines.bl.md §2).
 
 (ns guidelines.core
-  (:require [code.embed :as e]
+  (:require [clojure.re]
+            [code.embed :as e]
             [datom.vector :as v]
             [clojure.string :as str]))
 
@@ -43,14 +44,14 @@
            (cond
              (and h (= 1 (:level h)))
              (recur more (finish acc g)
-                    {:id nil :name (:title h) :tags (:tags h) :rule [] :when [] :not [] :examples []
+                    {:id nil :name (:title h) :tags (:tags h) :props {} :rule [] :when [] :not [] :examples []
                      :scope scope :path path}
                     :rule)
              (nil? g) (recur more acc g sec)
              h (recur more acc g (section-key (:title h)))
              :else
-             (if-let [[_ id] (re-find #"^\s*:ID:\s+(\S+)" l)]
-               (recur more acc (assoc g :id (keyword id)) sec)
+             (if-let [[_ k v] (re-find #"^\s*:([A-Z]+):\s+(.*\S)\s*$" l)]
+               (recur more acc (if (= k "ID") (assoc g :id (keyword v)) (assoc-in g [:props (keyword (str/lower-case k))] v)) sec)
                (cond
                  (re-find #"^\s*:\w+:" l) (recur more acc g sec)  ; drawer lines
                  (and (= sec :rule) (not (str/blank? l)) (not (str/starts-with? (str/trim l) "#")))

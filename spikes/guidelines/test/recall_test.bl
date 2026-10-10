@@ -1,0 +1,47 @@
+(ns guidelines.recall-test
+  (:require [guidelines.core :as g]
+            [guidelines.recall :as r]))
+
+(def ORG "* Rail style\n:PROPERTIES:\n:ID: rail-style\n:PATHS: **/theme.css, src/omega/ed/render.bl\n:END:\nStyle, not words.\n** When\n- render a task status\n\n* No 8790\n:PROPERTIES:\n:ID: offline-world\n:TOOLS: http\n:END:\nOffline only.\n** When\n- check the change in the live editor\n\n* Tests\n:PROPERTIES:\n:ID: test-first\n:END:\nPin it.\n** When\n- fix a bug\n** Not when\n- rename a variable\n")
+
+(def gs (g/parse ORG :project "x"))
+(def idx (g/index gs))
+(def ctx {:gs gs :idx idx})
+(defn sit ([text] (sit text {})) ([text {:keys [paths tool]}] {:text text :paths (or paths []) :last-tool tool}))
+
+(deftest globs
+  (is (r/glob-match? "**/theme.css" "/home/u/p/vendor/bl-ed/web/theme.css"))
+  (is (r/glob-match? "*.css" "/a/b/x.css"))
+  (is (not (r/glob-match? "*.css" "/a/b/x.cssx")))
+  (is (r/glob-match? "src/omega/ed/render.bl" "/home/u/omega/src/omega/ed/render.bl"))
+  (is (not (r/glob-match? "src/*.bl" "/r/src/a/b.bl"))))
+
+(deftest props-are-parsed
+  (is (= "**/theme.css, src/omega/ed/render.bl" (get-in (first gs) [:props :paths])))
+  (is (= "http" (get-in (second gs) [:props :tools]))))
+
+(deftest a-path-trigger-is-certain-even-when-the-text-says-nothing
+  (let [hs (r/select r/default-pipeline ctx (sit "tweak the padding" {:paths ["/p/web/theme.css"]}))]
+    (is (= [:rail-style] (map :id hs)))
+    (is (= :trigger (:via (first hs))))))
+
+(deftest a-tool-trigger
+  (is (= [:offline-world] (map :id (r/select r/default-pipeline ctx (sit "look at it" {:tool "http"}))))))
+
+(deftest jev-keeps-yes-drops-no-and-fails-closed-on-error
+  (let [yes-to (fn [ids] (fn [_ qs] {:ok (into {} (map (fn [[id _]] [id {:value (if (contains? ids id) 0.9 0.1)}]) qs))}))
+        p {:recall [r/triggers (r/semantic {:threshold 0.0 :k 3})] :k 3}
+        s (sit "fix a bug in the parser" {:paths ["/p/theme.css"]})]
+    (is (= [:rail-style :test-first]
+           (map :id (r/select (assoc p :precision (r/jev (yes-to #{:test-first}))) ctx s))))
+    (is (= [:rail-style]
+           (map :id (r/select (assoc p :precision (r/jev (yes-to #{}))) ctx s))))
+    (is (= [:rail-style]
+           (map :id (r/select (assoc p :precision (r/jev (fn [_ _] {:error {:kind :transport}}))) ctx s)))
+        "a Jev outage drops candidates, never certain triggers")))
+
+(deftest jev-sees-the-not-when-list
+  (let [seen (atom nil)
+        ask (fn [_ qs] (reset! seen qs) {:ok {}})]
+    (r/select {:recall [(r/semantic {:threshold 0.0 :k 3})] :precision (r/jev ask)} ctx (sit "fix a bug"))
+    (is (includes? (get-in @seen [:test-first :instructions]) "does NOT apply to: rename a variable"))))

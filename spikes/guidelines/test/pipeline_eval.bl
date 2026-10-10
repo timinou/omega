@@ -1,0 +1,49 @@
+(ns guidelines.pipeline-eval (:require [guidelines.core :as g] [guidelines.recall :as r] [omega.jev :as jev] [clojure.string :as str]))
+(def cases
+  [["show which tasks in the inbox are waiting on me" #{:visual-not-verbal}]
+   ["the failed cards should look different from done ones" #{:visual-not-verbal}]
+   ["add a 'stale' marker to rows older than a day" #{:visual-not-verbal}]
+   ["highlight the current guideline in the explorer list" #{:visual-not-verbal}]
+   ["put a (needs review) suffix after the task title" #{:visual-not-verbal}]
+   ["the tests pass now, write up what changed" #{:observed-vs-inferred}]
+   ["explain why the headless run timed out" #{:observed-vs-inferred}]
+   ["tell me what you found in the profiler output" #{:observed-vs-inferred :measure-first}]
+   ["let the package save the draft to disk on C-s" #{:pure-packages}]
+   ["fetch the url from inside the render function" #{:pure-packages}]
+   ["start a timer in on-event to poll the server" #{:pure-packages}]
+   ["the parser drops trailing whitespace, fix it" #{:test-first}]
+   ["make sum return 0 for an empty list" #{:test-first}]
+   ["check the change in the live editor" #{:offline-world}]
+   ["open bl-ed and try the new keybinding" #{:offline-world}]
+   ["the rail takes 400ms to render, speed it up" #{:measure-first}]
+   ["memoise the layout so scrolling is smoother" #{:measure-first}]
+   ["not sure whether to use datoms or org for this, need the user's call" #{:ask-with-options}]
+   ["which of the two layouts does the human prefer" #{:ask-with-options}]
+   ;; near-misses and nothing-applies
+   ["rename the variable foo to bar" #{}]
+   ["fix the typo in the README" #{}]
+   ["write the aria-label for the close button" #{}]
+   ["list the files in src" #{}]
+   ["bump the pinned beam-lisp commit in env.bl" #{}]])
+; test/pipeline_eval.bl — recall ceiling and (LIVE, if TYPESAFE_API_KEY) Jev precision on the 24 cases.
+(def gs (g/parse (File/read! "spikes/guidelines/guidelines.bl.org") :project "x"))
+(def ctx {:gs gs :idx (g/index gs)})
+(defn ev [label f]
+  (let [rs (map (fn [[s w]] [w (set (map :id (f s)))]) cases)
+        tp (reduce + (map (fn [[w got]] (count (filter w got))) rs))
+        fp (reduce + (map (fn [[w got]] (count (remove w got))) rs))
+        fnn (reduce + (map (fn [[w got]] (count (remove got w))) rs))]
+    (println (str label "  P " (/ (erlang/round (* 100 (/ tp (max 1 (+ tp fp))))) 100.0)
+                  " R " (/ (erlang/round (* 100 (/ tp (+ tp fnn)))) 100.0) " (tp " tp " fp " fp ")"))))
+(def want (into {} cases))
+(defn sit [s] {:text s :paths []})
+(doseq [[t k] [[0.25 3] [0.2 4] [0.15 5]]]
+  (ev (str "recall stage t=" t " k=" k " (no precision)  ") (fn [s] (r/select {:recall [(r/semantic {:threshold t :k k})] :k k} ctx (sit s))))
+  (ev (str "  + oracle precision (ceiling)       ") (fn [s] (filter (fn [h] (contains? (get want s) (:id h)))
+                                                                    (r/select {:recall [(r/semantic {:threshold t :k k})] :k k} ctx (sit s))))))
+(ev "single-stage gate 0.42 (baseline)          " (fn [s] (r/select r/default-pipeline ctx (sit s))))
+(when-let [key (jev/key-from-env (File/cwd!))]
+  (let [ask (partial jev/ask (jev/http key))
+        t0 (erlang/monotonic_time :millisecond)]
+    (ev "recall t=0.2 k=4 + LIVE Jev p>=0.6        " (fn [s] (r/select {:recall [(r/semantic {:threshold 0.2 :k 4})] :precision (r/jev ask) :k 3} ctx (sit s))))
+    (println (str "  jev wall time for 24 cases: " (- (erlang/monotonic_time :millisecond) t0) " ms"))))

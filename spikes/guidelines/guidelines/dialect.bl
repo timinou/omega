@@ -1,0 +1,147 @@
+; guidelines/dialect.bl — when the agent hits a dialect gap, show it what exists.
+;
+;   "undefined var: guidelines.core/take-last"
+;     → (gap "…")      {:name "take-last" :ns "guidelines.core"}
+;     → (related idx "take-last" k)  the k nearest LIVE vars by name+docstring,
+;                                    each {:ns :name :doc :score}
+;     → (note gap rel) a tail block: "take-last does not exist here. Nearby: subvec — …"
+;     → (proposal gap rel) a guideline draft ("bl-dialect: take-last → subvec")
+;
+; The index is built from the running VM's own var table (BeamLisp.Env:
+; public_names + doc_string), NOT from source: it is exactly what resolves in
+; this VM, includes Elixir-backed core, and indexes ~600 vars in well under a
+; second (source indexing of priv/boot takes ~50 s and skips core.bl).
+;
+; As an omega extension (`extension`): a :tool/after hook watches tool results
+; for undefined-var errors; it appends the note to the result the model reads
+; (so the fix arrives with the error, not a step later) and leaves a
+; {:kind :guideline :data {:op :proposed}} trace for the explorer.
+
+(ns guidelines.dialect
+  (:require [clojure.re]
+            [code.embed :as e]
+            [datom.vector :as v]
+            [omega.trace :as tr]
+            [clojure.string :as str]))
+
+(def DEFAULT-NSES ["core" "rt" "clojure.string" "clojure.re" "clojure.set" "clojure.walk"
+                   "clojure.core-more" "clojure.core-ext"])
+
+(def REQUIRE-NSES
+  "Namespaces whose vars are interned into core only once the ns is LOADED.
+   A gap whose exact name lives here is not missing: it needs a require. Found
+   live: `re-find` works under `bl run` (something already loaded clojure.re)
+   and is an undefined var under `bl test` in the same namespace."
+  #{"clojure.re" "clojure.set" "clojure.walk" "clojure.core-more" "clojure.core-ext"})
+
+(defn- ensure-loaded! [nses]
+  (doseq [n nses] (try (require (symbol n)) (catch _ nil))))
+
+(defn gap
+  "The missing name in an error message, or nil."
+  [msg]
+  (when-let [[_ q] (re-find #"undefined var:\s+([^\s,}\"]+)" (str msg))]
+    (let [i (str/last-index-of q "/")]
+      (if (and i (pos? i))
+        {:ns (subs q 0 i) :name (subs q (inc i)) :qualified q}
+        {:ns nil :name q :qualified q}))))
+
+(defn- first-para [d] (str/replace (str/trim (first (str/split (str d) #"\n\s*\n"))) #"\s+" " "))
+
+(defn- canon [nm] (str/replace (str nm) "_" "-"))
+
+(defn vars
+  "Public vars of `nses` with their docs: [{:ns :name :doc}]. One entry per
+   name: `foo_bar` and `foo-bar`, and a name in both core and rt, collapse to
+   the first ns listed (core) — keeping a doc if any twin has one."
+  [nses]
+  (let [all (vec (mapcat (fn [ns]
+                 (keep (fn [nm]
+                         (let [d (BeamLisp.Env/doc_string ns nm)]
+                           ;; only vars that resolve to THIS ns (refers resolve elsewhere)
+                           (when (or (nil? d) (= ns (:ns d)))
+                             {:ns ns :name (str nm) :doc (when d (first-para (:doc d)))})))
+                       (BeamLisp.Env/public_names ns)))
+               nses))
+        groups (group-by (fn [x] (canon (:name x))) all)]
+    ;; one per name; a name defined by a require-to-load ns is attributed to
+    ;; it (loading interns a doc-less copy into core — that copy is a symptom)
+    (vec (keep (fn [x] (let [twins (get groups (canon (:name x)))
+                             home (or (first (filter (fn [t] (contains? REQUIRE-NSES (:ns t))) twins)) (first twins))]
+                         (when (= x home)
+                           (assoc x :name (canon (:name x)) :doc (some :doc twins)))))
+               all))))
+
+(defn- humanize [nm] (str/replace nm #"[-_?!>*]+" " "))
+
+(defn index
+  "Embed name + humanized name + first doc paragraph of every var."
+  ([] (index DEFAULT-NSES))
+  ([nses]
+   (ensure-loaded! nses)
+   (let [vs (vars nses)
+         texts (map (fn [x] (str (:name x) " — " (humanize (:name x)) ". " (or (:doc x) ""))) vs)
+         dv (e/embed-batch texts)]
+     {:vars vs :cands (mapv (fn [i] [i (nth dv i)]) (range (count vs)))})))
+
+(defn related
+  "The k vars nearest to the missing `name` (humanized: take-last → 'take last').
+   `context` (optional) is extra text — the code around the call — to aim it."
+  ([idx name k] (related idx name k nil))
+  ([idx name k context]
+   (let [q (str name " " (humanize name) (when context (str " " context)))]
+     (vec (map (fn [[i s]] (assoc (nth (:vars idx) i) :score s))
+               (v/search (e/embed q) (:cands idx) k 0))))))
+
+(defn exact
+  "The var with exactly the missing name, if it lives in a require-to-load ns."
+  [idx g]
+  (first (filter (fn [x] (and (= (:name x) (:name g)) (contains? REQUIRE-NSES (:ns x)))) (:vars idx))))
+
+(defn note
+  "The text the model reads beside the error."
+  ([g rel] (note g rel nil))
+  ([g rel ex]
+  (if ex
+    (str "[dialect] `" (:name g) "` exists but is not loaded here: add `[" (:ns ex) "]` to this namespace's :require."
+         (when (:doc ex) (str "\n- " (:name ex) " — " (:doc ex))))
+  (str "[dialect] `" (:name g) "` does not exist in this Beam Lisp. Nearest existing functions:\n"
+       (str/join "\n" (map (fn [r] (str "- " (:name r) (when (not= "core" (:ns r)) (str " (" (:ns r) ")"))
+                                        (when (:doc r) (str " — " (let [d (:doc r)] (if (> (count d) 160) (str (subs d 0 157) "…") d))))))
+                           rel))))))
+
+(defn proposal
+  "A draft guideline for the explorer: the human decides if it is worth keeping."
+  ([g rel] (proposal g rel nil))
+  ([g rel ex]
+   {:id (str "bl-dialect-" (:name g))
+    :name (if ex (str "`" (:name g) "` needs [" (:ns ex) "]") (str "No `" (:name g) "` in Beam Lisp"))
+    :rule (if ex
+            (str "`" (:name g) "` comes from " (:ns ex) ", which must be required to be defined; add [" (:ns ex) "] to :require.")
+            (str "`" (:name g) "` is not defined. Use "
+                 (str/join " or " (map (fn [r] (str "`" (:name r) "`")) (take 2 rel))) " instead."))
+    :when [(str "call " (:name g)) (str "undefined var " (:name g))]}))
+
+(defn extension
+  "omega extension: dialect help on undefined-var tool errors. opts {:k 4 :nses […]}"
+  ([] (extension {}))
+  ([opts]
+   (let [idx (delay (index (or (:nses opts) DEFAULT-NSES)))
+         k (or (:k opts) 4)]
+     {:name :dialect
+      :doc "Undefined var in a tool result → nearest existing functions with docs; a proposal trace."
+      :hooks
+      {:tool/after
+       (fn [r ctx]
+         (if-let [g (and (:error r) (gap (:error r)))]
+           (let [code (str (get-in ctx [:block :input :code]))
+                 rel (related @idx (:name g) k)
+                 ex (exact @idx g)
+                 draft (proposal g rel ex)]
+             (tr/leave! (get-in ctx [:sys :env]) (:task ctx)
+                        {:kind :guideline :subject (str "bl-dialect-" (:name g) "#proposed")
+                         :text (:rule draft)
+                         :data {:op :proposed :draft draft :source :dialect
+                                :related (mapv (fn [x] (select-keys x [:ns :name :score])) rel)}})
+             (assoc r :error (str (:error r) "\n\n" (note g rel ex))))
+           r))}})))

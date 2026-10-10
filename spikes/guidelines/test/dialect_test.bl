@@ -1,0 +1,40 @@
+(ns guidelines.dialect-test
+  (:require [omega.env :as env]
+            [omega.task :as task]
+            [omega.loop :as loop]
+            [omega.trace :as tr]
+            [omega.codemode :as cm]
+            [omega.ext :as ext]
+            [guidelines.dialect :as d]))
+
+(deftest gap-reads-qualified-and-bare-names
+  (is (= {:ns "guidelines.core" :name "take-last" :qualified "guidelines.core/take-last"}
+         (d/gap "undefined var: guidelines.core/take-last")))
+  (is (= "array-map" (:name (d/gap "%RuntimeError{message: \"undefined var: user/array-map\"}"))))
+  (is (nil? (d/gap "badarg"))))
+
+(deftest an-undefined-var-in-eval-comes-back-with-nearby-functions-and-a-proposal
+  (let [seen (atom nil)
+        sys (ext/install (task/start-system (env/open)
+                                            {:root "/tmp" :tools cm/tools
+                                             :step (loop/scripted [(loop/call-tool "eval" {:code "(map-indexd vector [:a :b])"})
+                                                                   (fn [r] (reset! seen (get-in (last (:messages r)) [:content 0 :content])) (loop/say "ok"))])})
+                         [(d/extension)])
+        id (task/open! sys {:goal "number the items"})]
+    (task/await sys id 10000)
+    (is (includes? (str @seen) "undefined var"))
+    (is (includes? (str @seen) "[dialect] `map-indexd` does not exist"))
+    (is (includes? (str @seen) "- map-indexed — Returns a lazy seq"))
+    (let [p (first (tr/all (:env sys) {:kind :guideline}))]
+      (is (= :proposed (get-in p [:data :op])))
+      (is (= :dialect (get-in p [:data :source])))
+      (is (= "bl-dialect-map-indexd" (get-in p [:data :draft :id]))))
+    (task/stop-system! sys)))
+
+(deftest a-name-that-needs-a-require-says-so
+  (let [idx (d/index)
+        g (d/gap "undefined var: my.ns/re-find")
+        ex (d/exact idx g)]
+    (is (= "clojure.re" (:ns ex)))
+    (is (includes? (d/note g (d/related idx "re-find" 3) ex) "add `[clojure.re]` to this namespace's :require"))
+    (is (nil? (d/exact idx (d/gap "undefined var: x/take-last"))))))
