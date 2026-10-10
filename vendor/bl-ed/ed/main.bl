@@ -211,9 +211,10 @@
   (let [ty (:type ev)]
     (cond
       ; the host loaded a module: install its package (or report why not)
-      (= ty :use) (if (some? (:package ev))
-                    (c/message (pkg/use ed (:package ev)) (str "using " (:name (:package ev))))
-                    (c/message ed (str "error: " (or (:message ev) "no package"))))
+      (= ty :use) (pkg/after ed
+                    (if (some? (:package ev))
+                      (c/message (pkg/use ed (:package ev)) (str "using " (:name (:package ev))))
+                      (c/message ed (str "error: " (or (:message ev) "no package")))) ev)
       :else
         (let [taken (pkg/intercept ed ev)
               new (if (some? taken) taken (handle-core ed ev))

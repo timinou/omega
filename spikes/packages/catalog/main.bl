@@ -13,14 +13,18 @@
 (defn open [ed] (docs/visit ed "package:catalog"))
 (defn model [ed]
  {:package "packages" :state (get-in ed [:pkg-state "packages"] {}) :loaded (pkg/names ed)})
-(defn load-editor [ed name entry]
- (let [ed (c/effect ed {:kind :load-package :name name})]
+(defn load-editor [ed name entry layout]
+ (let [ed (cond-> (c/effect ed {:kind :load-package :name name})
+            layout (assoc-in [:pkg-state "packages" :pending-layout] {:package name :layout layout :entry entry}))]
   (if entry (docs/visit ed entry) ed)))
 (defn intercept [ed ev]
  (cond
   (= :packages/refresh (:type ev)) (refresh ed)
   (= :packages/load (:type ev))
-   (if (:editor-only ev) (load-editor ed (:name ev) nil)
+   (if (:editor-only ev)
+    (let [p (first (filter (fn [p] (= (:name p) (:name ev)))
+                          (get-in ed [:pkg-state "packages" :catalog :packages])))]
+      (load-editor ed (or (:editor p) (:name ev)) (:entry p) (:layout p)))
     (c/effect ed {:kind :intent :intent "package/use" :then :packages/used
                  :args {:name (:name ev)}}))
   (= :packages/unload (:type ev)) (c/message (pkg/unuse ed (:name ev)) (str "Unloaded editor view: " (:name ev)))
@@ -30,15 +34,22 @@
    (assoc-in ed [:pkg-state "packages" :catalog]
     (if (:ok? ev) (:data ev) {:error (:message ev)}))
   (and (= :intent-result (:type ev)) (= :packages/used (:then ev)))
-   (if (:ok? ev) (load-editor ed (get-in ev [:data :editor]) (get-in ev [:data :entry]))
+   (if (:ok? ev) (load-editor ed (get-in ev [:data :editor]) (get-in ev [:data :entry]) nil)
     (c/message ed (str "Package failed: " (:message ev))))
   (and (= :intent-result (:type ev)) (= :packages/disabled (:then ev)))
    (if (:ok? ev) (refresh ed) (c/message ed (:message ev)))
   :else nil))
+(defn on-event [_ ed ev]
+ (let [pending (get-in ed [:pkg-state "packages" :pending-layout])
+       p (first (filter (fn [p] (= (:package pending) (:name p))) (pkg/packages ed)))]
+  (if (and pending p (or (nil? (:entry pending)) (= (:entry pending) (:path ed))))
+   (let [layout (get-in p [:provides :layouts (:layout pending)])]
+    (cond-> (update-in ed [:pkg-state "packages"] dissoc :pending-layout)
+      layout (assoc :frame/layout layout))) ed)))
 (def bl-package
  {:name "packages" :doc "Discover shared packages and manage editor views and world capabilities."
   :commands {:packages/open {:doc "Discover/load/unload shared packages." :run open}
              :packages/refresh {:doc "Refresh shared package catalog." :run refresh}}
   :keys {:normal {"space p p" :packages/open}}
-  :adopt adopt :intercept intercept :owns [:frame/layout]
+  :adopt adopt :intercept intercept :on-event on-event :owns [:frame/layout]
   :provides {:layouts {"packages" (layout)} :views {:packages/catalog model}}})

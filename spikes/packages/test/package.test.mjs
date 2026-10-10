@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import {pathToFileURL} from 'node:url';
-const out=path.resolve('vendor/bl-ed/web/out'),imp=n=>import(pathToFileURL(path.join(out,n+'.mjs')));
+const out=path.resolve(process.env.BLED_OUT||'vendor/bl-ed/web/out'),imp=n=>import(pathToFileURL(path.join(out,n+'.mjs')));
 const {start}=await imp('repl'),repl=await start(f=>fs.readFileSync(path.join(out,'src',f),'utf8'));Object.assign(globalThis.BL_HOST||(globalThis.BL_HOST={}),{'eval-ed':(src,api)=>repl.evalWith(src,'ed',api),'eval-cells':cells=>repl.evalCells(cells)});
 const [M,R,A,F,P]=await Promise.all(['ed.main','rt','catalog.main','ed.frame','ed.pkg'].map(imp));const K=R.kw,get=(m,k)=>m?.get(K(k)),ev=(...kv)=>R.hashMap(...kv),use=ed=>M.d_handle(ed,ev(K('type'),K('use'),K('package'),A.d_bl_package));
 const source='#+TITLE: Packages\n#+USE: packages\n';
@@ -9,3 +9,25 @@ test('load activates backend before emitting shared module and entry visit',()=>
 test('editor-only packages load without invented backend capabilities',()=>{const ed=M.d_handle(use(M.d_boot(source,'package:catalog')),ev(K('type'),K('packages/load'),K('name'),'buffers',K('editor-only'),true));assert.ok(fx(ed).some(x=>get(x,'kind')===K('load-package')&&get(x,'name')==='buffers'));assert.ok(!fx(ed).some(x=>get(x,'intent')==='package/use'));});
 test('world disable and editor unload are distinct operations',()=>{let ed=use(M.d_boot(source,'package:catalog'));ed=M.d_handle(ed,ev(K('type'),K('packages/disable'),K('name'),'atlas'));assert.ok(fx(ed).some(x=>get(x,'intent')==='package/unuse'));assert.ok(P.d_names(ed).toArray().includes('packages'));const before=ed;ed=M.d_handle(ed,ev(K('type'),K('packages/unload'),K('name'),'packages'));assert.deepEqual(P.d_names(ed).toArray(),[]);for(const k of ['text','sels','user-keys','user-commands','history'])assert.equal(get(ed,k),get(before,k));assert.equal(get(ed,'frame/layout'),undefined);assert.equal(get(ed,'pkg-state').get('packages'),undefined);});
 test('catalog frame returns to the editor after unuse',()=>{let fr=F.d_handle(F.d_single(M.d_boot(source,'package:catalog')),ev(K('type'),K('use'),K('package'),A.d_bl_package));assert.equal(get(get(fr,'layout'),'name'),'packages');fr=F.d_handle(fr,ev(K('type'),K('packages/unload'),K('name'),'packages'));assert.equal(get(get(fr,'layout'),'name'),'single');assert.equal(get(F.d_focused(fr),'path'),'package:catalog');});
+
+test('session-only entries retain document visits in either module/document arrival order',()=>{
+ for(const moduleFirst of [true,false]){
+  let fr=F.d_handle(F.d_single(M.d_boot(source,'package:catalog')),ev(K('type'),K('use'),K('package'),A.d_bl_package));
+  const row=ev(K('name'),'pelagic',K('editor'),'pelagic',K('entry'),'spikes/pelagic/live-set.bl.org',K('layout'),'pelagic');
+  fr=F.d_handle(fr,ev(K('type'),K('intent-result'),K('then'),K('packages/catalog-result'),K('ok?'),true,K('data'),ev(K('packages'),R.vec(row))));
+  fr=F.d_handle(fr,ev(K('type'),K('packages/load'),K('name'),'pelagic',K('editor-only'),true));
+  const effects=get(fr,'effects').toArray();
+  assert.ok(effects.some(x=>get(x,'kind')===K('visit')&&get(x,'path')==='spikes/pelagic/live-set.bl.org'));
+  assert.ok(!effects.some(x=>get(x,'intent')==='package/use'));
+  const layout=ev(K('name'),'pelagic',K('panes'),R.vec(ev(K('id'),K('main'),K('doc'),K('linked'))));
+  const pkg=ev(K('name'),'pelagic',K('provides'),ev(K('layouts'),R.hashMap('pelagic',layout)));
+  const installed=ev(K('type'),K('use'),K('package'),pkg);
+  const arrived=ev(K('type'),K('doc'),K('path'),'spikes/pelagic/live-set.bl.org',K('text'),'live source',K('rev'),'one',K('read-only?'),false,K('objects'),R.vec(),K('visit?'),true);
+  fr=F.d_handle(fr,moduleFirst?installed:arrived);
+  assert.equal(get(get(fr,'layout'),'name'),'packages','keep the response pane until both arrivals');
+  fr=F.d_handle(fr,moduleFirst?arrived:installed);
+  assert.equal(get(get(fr,'layout'),'name'),'pelagic');
+  assert.equal(get(F.d_focused(fr),'path'),'spikes/pelagic/live-set.bl.org');
+  assert.equal(get(get(F.d_focused(fr),'pkg-state').get('packages'),'pending-layout'),undefined);
+ }
+});

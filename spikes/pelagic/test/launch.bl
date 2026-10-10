@@ -1,0 +1,42 @@
+(ns pelagic-launch-test
+  (:require [pelagic.build :as build] [pelagic.launch :as launch]
+            [pelagic.artifact :as artifact] [bl.json :as json]))
+(deftest launch-options-and-session-address
+  (is (= {:port 8812 :live? false} (launch/options [] 8812)))
+  (is (= {:port 8820 :live? true} (launch/options ["--live" "--port" "8820"] 8812)))
+  (doseq [args [["--port"] ["--port" "0"] ["--port" "65536"] ["--wat"]]]
+    (is (try (launch/options args 8812) false (catch _ true))))
+  (is (= "http://localhost:8820/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org"
+         (launch/studio-url 8820))))
+(deftest content-cache-distinguishes-assets-from-the-compiled-graph
+  (let [root (str (System/tmp_dir!) "/pelagic-input-test-" (System/unique_integer (list :positive)))]
+    (try
+      (File/mkdir_p! root)
+      (File/write! (str root "/main.bl") "(def answer 42)")
+      (File/write! (str root "/stage.glsl") "first shader")
+      (let [graph (build/source-fingerprint [root] true)
+            all (build/source-fingerprint [root] false)]
+        (File/write! (str root "/stage.glsl") "second shader")
+        (is (= graph (build/source-fingerprint [root] true)))
+        (is (not= all (build/source-fingerprint [root] false)))
+        (File/mkdir_p! (str root "/dist"))
+        (File/write! (str root "/dist/generated.bl") "ignore generated code")
+        (is (= graph (build/source-fingerprint [root] true)))
+        (File/write! (str root "/main.bl") "(def answer 43)")
+        (is (not= graph (build/source-fingerprint [root] true))))
+      (finally (File/rm_rf! root)))))
+(deftest a-cache-hit-requires-intact-artifacts
+  (let [root (str (System/tmp_dir!) "/pelagic-cache-test-" (System/unique_integer (list :positive)))]
+    (try
+      (File/mkdir_p! root)
+      (File/write! (str root "/.inputs") "identity")
+      (File/write! (str root "/module.mjs") "export const value=42;")
+      (File/write! (str root "/pelagic-build.json")
+        (json/encode {:inputs "identity" :compiler build/compiler :files (:files (artifact/manifest root))}))
+      (is (build/artifact-valid? root "identity"))
+      (is (not (build/artifact-valid? root "different inputs")))
+      (File/write! (str root "/module.mjs") "corrupted")
+      (is (not (build/artifact-valid? root "identity")))
+      (File/rm! (str root "/module.mjs"))
+      (is (not (build/artifact-valid? root "identity")))
+      (finally (File/rm_rf! root)))))

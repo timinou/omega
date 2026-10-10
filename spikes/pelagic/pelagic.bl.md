@@ -26,25 +26,22 @@ files with `bash spikes/pelagic/test/compress.sh`. Smaller studio screenshots:
 
 ## Run it
 
-From Omega:
+From the Omega repository root:
 
 ```sh
-spikes/pelagic/build.sh
-bin/bl-ed --offline --memory --port 8812 --root /tmp/omega-pelagic-world
+bl pelagic.dev
 ```
 
-Open:
+Open the printed link, normally
+[PELAGIC](http://localhost:8812/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org),
+and click **PERFORM**. The default is an offline, in-memory Omega development
+world. `bl pelagic.dev -- --live` uses the normal model configuration and durable
+world; `bl pelagic.dev -- --port 8820` chooses another port. A compatible host is reused.
 
-```
-http://127.0.0.1:8812/?use=pelagic&layout=pelagic&file=spikes/pelagic/demo.bl.org
-```
-
-The existing server currently resolves file documents relative to Omega even
-when passed a different `--root`; that separate issue is already tracked in
-FUP-012. This proof used a fresh offline memory world on **8812** because **8792**
-was occupied. It performs **no writes to a world**, and never tests against 8790.
-The demo is read directly from this repository. Build output and the loader live
-in `vendor/bl-ed/web/out` and `vendor/bl-ed/web/pkg/pelagic.mjs`.
+The host serves a checked frontend generation directly, without installing over
+`vendor/bl-ed/web`. PELAGIC loads into each editor session through the existing
+package API. [Launch/build architecture](session-launch.bl.md) explains caching,
+ownership and the optional standalone demo.
 
 The package works independently: no `present`, `workspace`, `browser`, images,
 DWIM, procurement or other domain package is required. There is no private page.

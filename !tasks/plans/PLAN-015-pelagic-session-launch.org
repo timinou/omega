@@ -1,0 +1,43 @@
+#+title: PELAGIC as an Omega session package
+#+status: DONE
+
+* Contract
+Root env.bl exposes pelagic.dev, pelagic.local and pelagic.bundle. One compiler
+pin and one JS frontend graph. Launching must not package a ZIP or overwrite
+vendor/bl-ed/web. Use the existing bl-package and per-editor package ownership.
+Reuse a compatible development host; reject a conflicting listener without
+writing to it. Never test against the user's world on port 8790.
+
+* Steps
+- [X] Unify compiler selection and expose root tasks.
+- [X] Extract cached frontend compilation from standalone export.
+- [X] Launch Omega with the frontend directory directly; reuse compatible host.
+- [X] Keep standalone storage/offline/ZIP as optional demo adapters.
+- [X] Verify compilation/cache invalidation, host reuse, two sessions, unload,
+      audio, package/editor tests and presentation equivalence.
+- [X] Document commands, ownership and remaining realm/incremental work; commit.
+
+* Scope
+Existing editor sessions already load packages by query/use. This change builds
+on that path. It does not invent a new realm scheduler, share mutable editor
+state across sessions, or claim module-level incremental compiler support.
+
+* Results
+- Root tasks exercised against the pinned, cached compiler image.
+- Omega: 23 files green; headless UI: 9 scenarios green.
+- PELAGIC: 61 checks; catalog: 6; vendored editor: 75; launch helpers: 3 tests / 15 assertions.
+- Presentation equivalence unchanged (12 variants, zero bad).
+- Real server-backed browser: two audible sessions, isolated unload, explicit
+  package use and catalog load/open without world activation. Local Play and
+  Perform checked with worker and main-thread graphics.
+- Compatible Omega/static host reuse, host-mode and unrelated-listener rejection,
+  and unchanged vendored frontend output verified.
+- Cache invalidation, asset-only graph reuse, generation isolation, complete
+  local asset hashes and exported ZIP verified.
+- Evidence: spikes/pelagic/proof/session-launch/.
+
+* Follow-ups
+Module-level bl.js dependency reuse, warm CLI task dispatch, universal package
+frontend manifests, cross-session worker pools and backend realm reuse remain
+separate runtime/build work. The current frontend includes PELAGIC and catalog;
+other packages retain their existing build integration.

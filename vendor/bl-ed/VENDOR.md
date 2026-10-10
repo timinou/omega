@@ -321,3 +321,12 @@ window on :use keeps the effects its :adopt emitted"). Found by the guideline
 explorer (`spikes/guidelines`). Vendor drive tests 74/74 (frame 15, pkg 3,
 drive 24, omega 12, host 17, document-packages 2, serve-cold 1); presentation
 equivalence unchanged (0 bad on welcome, packages, frames and both guideline files).
+
+### 2026-10-10 — package observers receive module installation events
+
+`ed/main.bl` now folds `pkg/after` over `:use` results, just as it does over
+other core-handled events. Observers see the installed package and completed
+adoption, or the failed-load message. The package catalog uses this to apply a
+session-only package's requested layout after its module and document arrive.
+No mutable package tables or host-specific package names are introduced. Contract checks:
+`test/pkg.test.mjs`, plus PELAGIC's real session launch/unload proof.

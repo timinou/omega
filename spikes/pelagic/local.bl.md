@@ -5,31 +5,30 @@ compiler, shaders and example patches as static files. It needs no Omega world
 or BEAM server at runtime. Omega's server compiler pin is unchanged; both launch
 modes now share the native-JS frontend graph.
 
-From `spikes/pelagic`, run the Beam Lisp launcher:
+From the Omega repository root:
 
 ```sh
-bl bundle
+bl pelagic.local                 # serve the demo at http://localhost:8818/
+bl pelagic.local -- --port 8820     # choose another port
+bl pelagic.bundle                # export dist/pelagic-local.zip
 ```
 
-From the repository root, `spikes/pelagic/build.sh --local` invokes the same task.
-Set `PELAGIC_BL=/path/to/beam-lisp/bin/bl` to use an explicit checkout.
+The normal server-backed session is `bl pelagic.dev`; local is the optional demo
+adapter. Both reuse the same checked BL JavaScript graph. Only `pelagic.bundle`
+creates the ZIP. [Build and session architecture](session-launch.bl.md).
 
-The local `env.bl` pins the native-JS interop compiler and declares the `bundle`
-task, whose implementation is `bundle.bl`. For a checked-out compiler at that
-commit, `/path/to/beam-lisp/bin/bl bundle` works from the same directory. The
-build requires Node and Python 3 and runs one compilation graph with one runtime.
-The launcher may take tens of minutes to build the pinned compiler on first use;
-subsequent builds reuse that compiler.
-It produces `dist/local/` and `dist/pelagic-local.zip`. Other packages and a
-universal bundle manifest are outside this task's scope.
+From `spikes/pelagic`, `bl bundle` still exports the demo. The compatibility
+command `spikes/pelagic/build.sh --local` does the same. The first use resolves
+the pinned compiler once; it can take several minutes. Later launches reuse it
+and unchanged frontend output.
 
-Unzip and serve the `local` directory with any static HTTP server, for example:
+The ZIP contains `local/`. Unzip it and use any static HTTP server:
 
 ```sh
-python3 -m http.server 8792 --directory dist/local
+python3 -m http.server 8820 --bind 127.0.0.1 --directory local
 ```
 
-Open `http://localhost:8792/`. Static hosting is needed for browser modules and
+Open `http://localhost:8820/`. Static hosting is needed for browser modules and
 worklets; opening `index.html` through `file://` is not supported. After the first
 complete load and service-worker installation, reload works offline on the same
 origin. Service workers require localhost or HTTPS. Changing the hosting port

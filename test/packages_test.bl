@@ -75,3 +75,37 @@
   (is (try (p/use! r "example") false (catch _ true)))
   (is (not (p/active? r "example")))
   (File/rm_rf! home) (File/rm_rf! root)))
+
+(deftest an-explicit-frontend-defines-the-editor-package-catalog
+ (let [home (dir!) root (dir!) web (str home "/frontend")
+       r (p/registry home root {:web web})]
+  (try
+   (File/mkdir_p! (str web "/pkg"))
+   (File/mkdir_p! (str home "/vendor/bl-ed/web/pkg"))
+   (File/mkdir_p! (str home "/packages"))
+   (File/write! (str home "/packages/session.edn")
+     (pr-str {:name "session" :editor-only true :entry "demo.bl.org" :layout "studio"}))
+   (File/write! (str web "/pkg/session.mjs") "export {};\n")
+   (File/write! (str home "/vendor/bl-ed/web/pkg/other.mjs") "export {};\n")
+   (is (= ["session"] (mapv :name (:packages (p/catalog r)))))
+   (is (:editor-only (p/manifest r "session")))
+   (let [row (first (:packages (p/catalog r)))]
+    (is (:available row)) (is (:editor-only row))
+    (is (= "demo.bl.org" (:entry row))) (is (= "studio" (:layout row))))
+   (is (try (p/manifest r "other") false (catch _ true)))
+   (is (= "session" (:name (p/use! r "session"))))
+   (finally (File/rm_rf! home) (File/rm_rf! root)))))
+
+(deftest immutable-frontends-do-not-run-legacy-installers-on-package-use
+ (let [home (dir!) root (dir!) web (str home "/frontend")
+       r (p/registry home root {:web web})]
+  (try
+   (File/mkdir_p! (str home "/packages"))
+   (File/write! (str home "/packages/missing.edn")
+     (pr-str {:name "missing" :build "build.sh"}))
+   (File/write! (str home "/build.sh") "touch should-not-exist\n")
+   (is (= false (:available (first (:packages (p/catalog r))))))
+   (is (try (p/use! r "missing") false (catch _ true)))
+   (is (not (p/active? r "missing")))
+   (is (not (File/exists? (str home "/should-not-exist"))))
+   (finally (File/rm_rf! home) (File/rm_rf! root)))))

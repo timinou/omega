@@ -37,7 +37,7 @@
 
 (defn start!
   "Start the world and the editor. opts {:root :port :web :offline? :db :memory? :step :tools :system-prompt :max-steps
-   :intent-factory :extensions [ext …] :dev?}.
+   :intent-factory :providers :extensions [ext …] :dev?}.
    Returns {:url :sys :env}."
   [opts]
   (let [root (or (:root opts) (File/cwd!))
@@ -58,7 +58,8 @@
         ;; VM forwards the same provider later)
         img (image/provider)
         r (serve/start! {:port (or (:port opts) 8790) :root root :web web
-                         :providers (assoc (pv/providers sys) "bl" (:provider img) "package" (packages/provider registry))
+                         :providers (merge (:providers opts)
+                                           (assoc (pv/providers sys) "bl" (:provider img) "package" (packages/provider registry)))
                          :intents (merge (pv/intents sys) (:intents img)
                                    (when-let [factory (:intent-factory opts)] (factory sys))
                                    (packages/intents registry sys))})]

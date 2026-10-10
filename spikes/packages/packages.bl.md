@@ -118,3 +118,18 @@ The running 8811 catalog was also checked without activating a package:
 ![Catalog on 8811](proof/05-catalog-on-8811.png)
 
 Machine-readable browser results: [proof/browser.json](proof/browser.json).
+
+## Session frontends
+
+`bl pelagic.dev` serves an immutable frontend generation directly. The registry
+uses that host's `:web` directory for editor loader discovery. Packages absent
+from that generation are shown as unavailable; loading a package does not run
+an installer against it.
+
+Editor-only manifests can declare `:entry` and `:layout`. Load & open then visits
+the document and selects the package's layout after its module and document arrive, without
+activating world capabilities. PELAGIC exercises this path. The existing package
+layer and exact unload contract remain the same.
+
+Proof: [session launch](../pelagic/session-launch.bl.md), including real editor
+screenshots, session isolation and unload checks under `../pelagic/proof/session-launch/`.

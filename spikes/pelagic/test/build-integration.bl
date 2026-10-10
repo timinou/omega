@@ -1,0 +1,24 @@
+(ns pelagic-build-integration
+  (:require [pelagic.build :as build] [bl.json :as json]))
+(defn assert! [value message] (when-not value (throw (ex-info message {}))))
+(defn timed [f]
+  (let [start (System/monotonic_time :microsecond) value (f)]
+    {:value value :ms (/ (- (System/monotonic_time :microsecond) start) 1000.0)}))
+(let [first (timed build/frontend!) second (timed build/frontend!)
+      original (:value first) graph (build/graph-fingerprint)
+      probe (str (build/home) "/host/.cache-probe-" (System/unique_integer (list :positive)) ".css")]
+  (assert! (= original (:value second)) "Unchanged frontend did not reuse its generation")
+  (assert! (not (File/exists? (str original "/sw.mjs"))) "Server frontend contains demo service worker")
+  (try
+    (File/write! probe "/* isolated asset-only cache probe */\n")
+    (assert! (= graph (build/graph-fingerprint)) "Asset edit invalidated the BL graph")
+    (let [changed (timed build/frontend!)]
+      (assert! (not= original (:value changed)) "Asset edit did not create a new frontend generation")
+      (assert! (File/regular? (str original "/out/ed.main.mjs")) "New generation replaced older frontend")
+      (File/write! (str (build/home) "/proof/session-launch/cache.json")
+        (json/encode {:first first :unchanged second :asset-only changed :compiled-graph-reused true})))
+    (finally (File/rm! probe)))
+  (assert! (= original (build/frontend!)) "Removing the probe did not restore the original cache hit")
+  (let [archive (build/bundle!)]
+    (assert! (File/regular? archive) "Demo archive missing"))
+  (println "PASS cached frontend, asset-only graph reuse, generation isolation and demo export"))

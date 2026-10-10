@@ -1,0 +1,3 @@
+; Optional standalone demo server; no Omega task world.
+(ns pelagic.local-task (:require [pelagic.launch :as launch]))
+(launch/local! (vec (BeamLisp/argv)))

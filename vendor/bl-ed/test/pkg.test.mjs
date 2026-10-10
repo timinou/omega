@@ -69,7 +69,7 @@ test("a package intercepts before the core, reacts after it, adopts visited docu
   ed = M.d_handle(ed, key("!"));
   assert.equal(get(ed, "message"), "taken", "intercept took the key");
   ed = M.d_handle(ed, key("j"));
-  assert.equal(get(ed, "pkg-state").get("shout", 0), 1, "on-event ran after the core moved the cursor (not for the intercepted key)");
+  assert.equal(get(ed, "pkg-state").get("shout", 0), 2, "on-event ran for installation and after the core moved the cursor (not for the intercepted key)");
   ed = M.d_handle(ed, doc("shout:one", "x\ny\n", true));
   assert.equal(get(ed, "shout-adopted"), "shout:one", "a visited document is adopted");
   assert.deepEqual(get(M.d_render(ed), "packages").toArray(), ["shout"], "the package survives the visit");
@@ -89,4 +89,20 @@ test("ed/use asks the host for the module (an effect); a failed load is a messag
   assert.equal(get(load, "name"), "present");
   ed = M.d_handle(ed, ev(K("type"), K("use"), K("package"), null, K("message"), "cannot load ./pkg/present.mjs"));
   assert.match(get(ed, "message"), /error: cannot load/);
+});
+
+test("package observers see completed module installation and failed loads", () => {
+  const events=[];
+  const observer=ev(K("name"),"observer",K("on-event"),(old,nw,event)=>{
+    if(get(event,"type")===K("use"))events.push({old,new:nw,event});
+    return nw;
+  });
+  let ed=use(M.d_boot("source","x.bl.org"),observer);
+  const added=ev(K("name"),"added");ed=use(ed,added);
+  assert.equal(events.length,2);
+  assert.deepEqual(get(events[1].old,"packages").toArray().map(p=>get(p,"name")),["observer"]);
+  assert.deepEqual(get(events[1].new,"packages").toArray().map(p=>get(p,"name")),["observer","added"]);
+  assert.equal(get(events[1].event,"package"),added);
+  ed=M.d_handle(ed,ev(K("type"),K("use"),K("package"),null,K("message"),"missing"));
+  assert.equal(events.length,3);assert.match(get(ed,"message"),/error: missing/);
 });

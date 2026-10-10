@@ -20,10 +20,12 @@
   (if (File/dir? dir)
    (mapv (fn [f] (edn/read-string (File/read! (str dir "/" f))))
     (sort (filter (fn [f] (str/ends-with? f ".edn")) (File/ls! dir)))) [])))
+(defn editor-dir [r]
+ (str (or (:web (:opts r)) (str (:home r) "/vendor/bl-ed/web")) "/pkg"))
 (defn manifest [r nm]
  (or (first (filter (fn [m] (= nm (:name m))) (manifests r)))
   (if (and (string? nm) (re-matches #"[A-Za-z0-9_-]+" nm)
-           (File/regular? (str (:home r) "/vendor/bl-ed/web/pkg/" nm ".mjs")))
+           (File/regular? (str (editor-dir r) "/" nm ".mjs")))
    {:name nm :editor nm :editor-only true}
    (throw (ex-info (str "Unknown shared package: " nm) {:package nm})))))
 (defn active? [r nm] (contains? (:active @(:state r)) nm))
@@ -64,8 +66,11 @@
  (when (:build m)
   (global/trans (tuple (tuple :omega/package-build (:home r)) (erlang/self))
    (fn []
-    (when-not (File/regular? (str (:home r) "/vendor/bl-ed/web/pkg/" (or (:editor m) (:name m)) ".mjs"))
-     (build-one! r m))))))
+    (when-not (File/regular? (str (editor-dir r) "/" (or (:editor m) (:name m)) ".mjs"))
+     (if (:web (:opts r))
+      (throw (ex-info "Package is not in this frontend generation; rebuild the package graph before loading it."
+                     {:package (:name m) :web (:web (:opts r))}))
+      (build-one! r m)))))))
 (defn use! [r nm]
  (let [m (manifest r nm)]
   (profile r nm) (ensure-editor! r m) (seed! r m)
@@ -86,13 +91,15 @@
 (defn recover-system [r sys id]
  (if-let [nm (get-in @(:state r) [:tasks id])] (system r sys nm) sys))
 (defn catalog [r]
- (let [dir (str (:home r) "/vendor/bl-ed/web/pkg")
+ (let [dir (editor-dir r)
        known (manifests r) names (set (map :name known))
        editors (if (File/dir? dir) (keep (fn [f]
         (when (str/ends-with? f ".mjs") (subs f 0 (- (count f) 4)))) (File/ls! dir)) [])]
   {:root (:root r) :offline? (boolean (:offline? (:opts r))) :packages
    (vec (sort-by :name
-    (concat (map (fn [m] (assoc (select-keys m [:name :doc :entry :editor]) :backend (boolean (:backend m))
+    (concat (map (fn [m] (assoc (select-keys m [:name :doc :entry :editor :editor-only :layout])
+                          :available (boolean (or (and (not (:web (:opts r))) (:build m))
+                            (File/regular? (str (editor-dir r) "/" (or (:editor m) (:name m)) ".mjs")))) :backend (boolean (:backend m))
                           :active (active? r (:name m)))) known)
      (map (fn [nm] {:name nm :editor nm :doc "Shared editor package. Any external service must be configured separately."
                     :backend false :active (active? r nm) :editor-only true})

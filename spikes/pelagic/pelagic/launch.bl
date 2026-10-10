@@ -1,0 +1,72 @@
+; Launch policy belongs to Omega's development task, not the editor package.
+(ns pelagic.launch
+  (:require [pelagic.build :as build] [omega.ed.main :as omega]
+            [bl-ed.serve :as serve] [bl.json :as json]))
+(defn options [args default-port]
+  (loop [xs args result {:port default-port :live? false}]
+    (if (empty? xs) result
+      (case (first xs)
+        "--port" (let [port (when (second xs) (erlang/binary_to_integer (second xs)))]
+                   (when-not (and port (<= 1024 port 65535))
+                     (throw (ex-info "--port requires an integer from 1024 to 65535" {})))
+                   (recur (drop 2 xs) (assoc result :port port)))
+        "--live" (recur (rest xs) (assoc result :live? true))
+        (throw (ex-info (str "Unknown launch option: " (first xs)) {}))))))
+(defn studio-url [port]
+  (str "http://localhost:" port "/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org"))
+(defn identity [web opts]
+  ; The dynamic provider proves the host mode and document root, not just assets.
+  (json/encode {:schema "omega.dev-session" :version 1 :root (build/root)
+                :host (build/host-fingerprint)
+                :frontend (File/read! (str web "/.inputs")) :live (:live? opts)}))
+(defn- http-get [port path]
+  (Application/ensure_all_started :inets)
+  (try
+    (let [response (httpc/request :get
+                     (tuple (String/to_charlist (str "http://127.0.0.1:" port path)) (list))
+                     (list (tuple :timeout 1500) (tuple :connect_timeout 500))
+                     (list (tuple :body_format :binary)))]
+      (when (and (= :ok (elem response 0)) (= 200 (elem (elem (elem response 1) 0) 1)))
+        (elem (elem response 1) 2)))
+    (catch _ nil)))
+(defn remote-identity [port]
+  (try
+    (get (json/decode (http-get port "/api/doc?path=launch:identity")) "text")
+    (catch _ nil)))
+(defn- local-identity [port]
+  (try (get (json/decode (http-get port "/assets.json")) "sha256")
+       (catch _ nil)))
+(defn occupied? [port]
+  (let [connection (gen_tcp/connect (String/to_charlist "127.0.0.1") port (list) 500)]
+    (when (= :ok (elem connection 0))
+      (gen_tcp/close (elem connection 1))
+      true)))
+(defn host-state [port expected]
+  (cond (= expected (remote-identity port)) :reuse
+        (occupied? port) :conflict
+        :else :start))
+(defn dev! [args]
+  (let [opts (options args 8812) web (build/frontend!) expected (identity web opts)
+        port (:port opts) state (host-state port expected)]
+    (case state
+      :reuse (println (str "Omega host already running; open a PELAGIC session: " (studio-url port)))
+      :conflict (throw (ex-info (str "Port " port " belongs to an incompatible host. Use bl pelagic.dev -- --port N; no changes were sent to it.") {:port port}))
+      :start (do
+               (omega/start! {:root (build/root) :web web :port port :dev? true
+                              :offline? (not (:live? opts)) :memory? (not (:live? opts))
+                              :providers {"launch" {:read (fn [_ _] {:text expected :rev expected :read-only? true})}}})
+               (println (str "Omega + PELAGIC" (if (:live? opts) " (live)" " (offline development)") ": " (studio-url port)))
+               (println "Each browser session owns its package state and audio. Ctrl+C stops this host.")
+               (receive :never nil)))))
+(defn local! [args]
+  (let [opts (options args 8818)]
+    (when (:live? opts) (throw (ex-info "--live belongs to pelagic.dev; local is a standalone demo" {})))
+    (let [web (build/local!) port (:port opts)
+          expected (get (json/decode (File/read! (str web "/assets.json"))) "sha256")
+          url (str "http://localhost:" port "/")]
+      (cond
+        (= expected (local-identity port)) (println (str "PELAGIC demo already running: " url))
+        (occupied? port) (throw (ex-info "Demo port is occupied; use bl pelagic.local -- --port N" {:port port}))
+        :else (do (serve/start! {:root web :web web :port port})
+                  (println (str "PELAGIC standalone demo: " url))
+                  (receive :never nil))))))

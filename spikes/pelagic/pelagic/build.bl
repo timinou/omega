@@ -1,0 +1,168 @@
+; One frontend graph. Server sessions consume it directly; demos add adapters.
+(ns pelagic.build
+  (:require [bl.js :as js] [bl.json :as json]
+            [pelagic.actor-build :as actors] [pelagic.artifact :as artifact]))
+
+(def compiler "797dc039")
+(defn home []
+  (Path/expand ".." (Path/dirname (BeamLisp.Loader/source_path "pelagic.build"))))
+(defn root [] (Path/expand "../.." (home)))
+(defn copy! [from to]
+  (File/mkdir_p! (Path/dirname to))
+  (File/cp! from to))
+(defn copy-files! [from to suffixes]
+  (doseq [name (File/ls! from)]
+    (when (some (fn [suffix] (ends-with? name suffix)) suffixes)
+      (copy! (str from "/" name) (str to "/" name)))))
+(defn- sources [directory]
+  (mapcat (fn [name]
+            (let [path (Path/join directory name)]
+              (cond
+                (contains? #{"dist" "out" "proof" "test" ".git" "node_modules" "__pycache__"} name) []
+                (File/dir? path) (sources path)
+                (and (File/regular? path)
+                     (some (fn [suffix] (ends-with? name suffix)) [".bl" ".mjs" ".css" ".html" ".glsl" ".org" ".in" ".json" ".edn"]))
+                  [[path (artifact/sha256 (File/read! path))]]
+                :else [])))
+          (sort (File/ls! directory))))
+(def compiler-context (atom nil))
+(defn compiler-identity []
+  ; Include the actual compiler sources too: explicit checkout overrides must
+  ; not reuse a graph emitted by the pinned image or an earlier checkout edit.
+  (or @compiler-context
+      (let [entry (BeamLisp.Loader/source_path "bl.js")
+            identity [compiler [entry (artifact/sha256 (File/read! entry))]
+                      (sources (Path/dirname (BeamLisp.Loader/source_path "js.build")))
+                      (sources (Path/dirname (BeamLisp.Loader/source_path "core")))]]
+        (reset! compiler-context identity)
+        identity)))
+(defn fingerprint
+  "Conservative content cache: compiler identity and all frontend inputs."
+  []
+  (artifact/sha256 (json/encode
+    [(compiler-identity) (sources (home)) (sources (str (root) "/vendor/bl-ed/ed"))
+     (sources (str (root) "/spikes/packages"))
+     ; Package output is generated, not a source dependency.
+     (filter (fn [entry] (not (starts-with? (first entry) (str (root) "/vendor/bl-ed/web/pkg/"))))
+             (sources (str (root) "/vendor/bl-ed/web")))])))
+(defn host-fingerprint []
+  (artifact/sha256 (json/encode [(sources (str (root) "/src"))
+                               (sources (str (root) "/vendor/bl-ed/src"))
+                               (sources (str (root) "/packages"))
+                               (File/read! (str (root) "/env.bl"))])))
+(defn- replace! [stage output marker]
+  (when (and (File/exists? output) (not (File/regular? (str output "/" marker))))
+    (throw (ex-info "Refusing to replace unmarked build output" {:path output})))
+  (when (File/exists? output) (File/rm_rf! output))
+  (File/rename! stage output))
+(defn artifact-valid? [output identity]
+  (try
+    (let [manifest (json/decode (File/read! (str output "/pelagic-build.json")) {:keys :keyword})
+          files (:files manifest)]
+      (and (= identity (File/read! (str output "/.inputs")))
+           (= identity (:inputs manifest)) (= compiler (:compiler manifest)) (seq files)
+           (every? (fn [file]
+                     (let [path (str output "/" (:path file))]
+                       (and (File/regular? path)
+                            (= (:sha256 file) (artifact/sha256 (File/read! path)))))) files)))
+    (catch _ false)))
+(defn source-fingerprint [directories bl-only?]
+  (let [entries (mapcat sources directories)]
+    (artifact/sha256 (json/encode
+      [(compiler-identity) (if bl-only? (filter (fn [entry] (ends-with? (first entry) ".bl")) entries) entries)]))))
+(defn graph-fingerprint []
+  (source-fingerprint [(home) (str (root) "/vendor/bl-ed/ed")
+                       (str (root) "/spikes/packages")] true))
+(defn- seal! [stage identity]
+  (File/write! (str stage "/.inputs") identity)
+  (File/write! (str stage "/pelagic-build.json")
+    (json/encode {:root (root) :compiler compiler :inputs identity
+                  :files (:files (artifact/manifest stage))})))
+(defn graph!
+  "Compile the BL graph once. Asset-only edits reuse these checked modules."
+  []
+  (let [here (home) root (root) identity (graph-fingerprint)
+        output (str here "/dist/graph/" identity)]
+    (if (artifact-valid? output identity)
+      (do (println "PELAGIC: reusing compiled BL graph") output)
+      (let [stage (str output ".stage-" (System/unique_integer (list :positive)))]
+        (File/mkdir_p! stage)
+        (try
+          (println "PELAGIC: compiling shared editor, language and package graph")
+          (let [result (js/build! "pelagic.bundle"
+                         {:paths (list (str root "/vendor/bl-ed") (str root "/spikes/packages") here)
+                          :stub "lower" :with "reader" :preload ["pelagic.overtone"]
+                          :host "run,eval-ed,eval-cells" :out (str stage "/out")})]
+            (doseq [module (:modules result)]
+              (let [alias (str stage "/out/" module ".mjs")]
+                (when-not (File/exists? alias)
+                  (File/write! alias (str "export * from './ns/" module ".mjs';\n")))))
+            (File/write! (str stage "/build.json")
+              (json/encode {:name "pelagic-frontend" :compiler compiler :modules (count (:modules result))})))
+          (actors/build! here (str stage "/out") (str stage "/pkg/pelagic/actor"))
+          (File/write! (str stage "/.pelagic-graph") "PELAGIC compiled BL graph\n")
+          (when-not (= identity (graph-fingerprint))
+            (throw (ex-info "BL inputs changed during compilation; run the task again." {})))
+          (seal! stage identity)
+          (replace! stage output ".pelagic-graph")
+          output
+          (finally (when (File/exists? stage) (File/rm_rf! stage))))))))
+(defn frontend!
+  "Return the shared, checked server frontend; compile only when inputs change."
+  []
+  (let [here (home) root (root) identity (fingerprint)
+        output (str here "/dist/frontend/" identity)]
+    (if (artifact-valid? output identity)
+      (do (println "PELAGIC: reusing compiled frontend") output)
+      (let [stage (str output ".stage-" (System/unique_integer (list :positive)))]
+        (File/mkdir_p! (Path/dirname stage))
+        (try
+          (File/cp_r! (graph!) stage)
+          (File/rm! (str stage "/pelagic-build.json"))
+          (println "PELAGIC: staging session frontend assets")
+          (copy-files! (str root "/vendor/bl-ed/web") stage [".mjs" ".css"])
+          (copy! (str root "/vendor/bl-ed/web/index.html") (str stage "/index.html"))
+          (copy! (str root "/vendor/bl-ed/web/welcome.bl.org") (str stage "/welcome.bl.org"))
+          (copy-files! (str here "/host") (str stage "/pkg/pelagic") [".mjs" ".css"])
+          (copy-files! (str here "/shaders") (str stage "/pkg/pelagic") [".glsl"])
+          (copy! (str here "/pelagic/overtone.bl") (str stage "/pkg/pelagic/overtone.bl"))
+          (doseq [name ["live-set.bl.org" "demo.bl.org"]]
+            (copy! (str here "/" name) (str stage "/" name)))
+          (copy-files! (str here "/tutorials") (str stage "/tutorials") [".org" ".json"])
+          (let [boot (Path/dirname (BeamLisp.Loader/source_path "core"))]
+            (doseq [name ["core.bl" "sugar.bl"]]
+              (copy! (str boot "/" name) (str stage "/out/src/priv/boot/" name))))
+          (File/write! (str stage "/pkg/pelagic.mjs")
+            "export {d_bl_package as package} from '../out/pelagic.main.mjs';\nexport {createHost} from './pelagic/host.mjs';\n")
+          (copy! (str root "/spikes/packages/host/catalog.mjs") (str stage "/pkg/packages/catalog.mjs"))
+          (File/write! (str stage "/pkg/packages.mjs")
+            "export {d_bl_package as package} from '../out/catalog.main.mjs';\nexport {createHost} from './packages/catalog.mjs';\n")
+          (File/write! (str stage "/.pelagic-server") "PELAGIC shared frontend\n")
+          (when-not (= identity (fingerprint))
+            (throw (ex-info "Frontend inputs changed during staging; run the task again." {})))
+          (seal! stage identity)
+          (replace! stage output ".pelagic-server")
+          output
+          (finally (when (File/exists? stage) (File/rm_rf! stage))))))))
+(defn local!
+  "Add local documents and offline caching to the same compiled frontend. No ZIP."
+  []
+  (let [frontend (frontend!) output (str (home) "/dist/local")
+        stage (str output ".stage-" (System/unique_integer (list :positive)))]
+    (try
+      (File/cp_r! frontend stage)
+      (File/write! (str stage "/index.html")
+        (replace-str (File/read! (str frontend "/index.html")) "./host.mjs" "./local/boot.mjs"))
+      (doseq [name ["boot.mjs" "documents.mjs"]]
+        (copy! (str (home) "/local/" name) (str stage "/local/" name)))
+      (File/write! (str stage "/.pelagic-local") "PELAGIC optional local demo\n")
+      (artifact/write! stage)
+      (replace! stage output ".pelagic-local")
+      output
+      (finally (when (File/exists? stage) (File/rm_rf! stage))))))
+(defn bundle! []
+  (let [output (local!) archive (str (home) "/dist/pelagic-local.zip")
+        result (System/cmd "python3" (list "-m" "zipfile" "-c" archive output))]
+    (when-not (= 0 (elem result 1)) (throw (ex-info "Demo archive failed" {:output (elem result 0)})))
+    (println (str "PELAGIC demo: " archive))
+    archive))

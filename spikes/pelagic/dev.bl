@@ -1,0 +1,3 @@
+; Root task: bl pelagic.dev [--port N] [--live].
+(ns pelagic.dev-task (:require [pelagic.launch :as launch]))
+(launch/dev! (vec (BeamLisp/argv)))

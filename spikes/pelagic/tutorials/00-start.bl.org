@@ -1,23 +1,27 @@
 #+TITLE: PELAGIC showcase · start here
 
 * Five minutes to something alive
-Read these files in order. Each numbered patch is complete; paste its contents
-into the PELAGIC source buffer, replacing the previous patch. In a server editor,
-you can instead open the file as a document with the PELAGIC package active.
+Read these files in order. Each numbered patch is complete. Open it as a document
+with the PELAGIC package active, or paste its contents into the source buffer,
+replacing the previous patch.
 C-Enter evaluates every Beam Lisp source block in the buffer, not just the block
 under the cursor. Examples marked as example blocks are reading material only.
 
 Already running PELAGIC? Press ▶ PERFORM once to enable browser audio, then start
 with [[file:01-first-light.bl.org][First light]]. Keep your listening volume comfortable.
 
-For a local build, from the repository root:
+From the Omega repository root:
 #+begin_example
-spikes/pelagic/build.sh --local
-python3 -m http.server 8808 --directory spikes/pelagic/dist/local
+bl pelagic.dev
 #+end_example
-Open http://localhost:8808/. The first build can take a while; reuse the generated
-bundle afterward. See [[file:../local.bl.md][local setup]] for compiler selection and offline use.
-The tutorials also work with the regular server frontend built from this graph.
+Open the printed link. For the standalone demo instead, use =bl pelagic.local=.
+The compiler is resolved once; unchanged launches reuse the frontend.
+See [[file:../session-launch.bl.md][launch and build architecture]].
+
+The local demo now includes the numbered tutorial documents. For example:
+http://localhost:8818/?file=tutorials/01-first-light.bl.org
+
+Source walkthrough links refer to files in the repository checkout.
 
 * The fast route
 1. [[file:01-first-light.bl.org][First light]] — an instrument, three notes, one loop.

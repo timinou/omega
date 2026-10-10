@@ -19,6 +19,17 @@ cd /some/project
 ~/code/undefine/omega/bin/omega --jev --notify "…"          # + Jev done-gate, desktop notifications
 ```
 
+PELAGIC opens as a package in an Omega editor session:
+
+```sh
+bl pelagic.dev                   # server + frontend; open the printed URL
+bl pelagic.dev -- --port 8820       # another development host
+bl pelagic.local                 # standalone demo server
+bl pelagic.bundle                # portable demo ZIP
+```
+
+Unchanged launches reuse compiled output. See the [PELAGIC launch guide](spikes/pelagic/session-launch.bl.md).
+
 Flags: `--offline`, `--jev`, `--notify`, `--cassette PATH` (record/replay the model),
 `--db DIR` (where to keep tasks), `--memory` (keep nothing).
 

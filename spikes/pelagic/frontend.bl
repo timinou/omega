@@ -1,7 +1,3 @@
-; The same compilation serves both storage/transport modes.
-(ns pelagic.build-frontend)
-(BeamLisp/eval (File/read! "bundle.bl"))
-(let [result (System/cmd "node" (list "local/frontend.mjs"))]
-  (print (erlang/element 1 result))
-  (when-not (= 0 (erlang/element 2 result))
-    (throw (ex-info "Server frontend staging failed" {}))))
+; Compile/reuse the shared frontend without offline packaging or installation.
+(ns pelagic.frontend-task (:require [pelagic.build :as build]))
+(println (build/frontend!))
