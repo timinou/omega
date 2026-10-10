@@ -1,0 +1,24 @@
+#+title: Offline application package experiment
+
+Run against a source checkout under the upstream memory ceiling:
+
+#+begin_src sh
+OMEGA_HOME=$PWD /path/to/beam-lisp/bin/bl --cold run -p src -p vendor/bl-ed/src research/application-prototype/run.bl
+#+end_src
+
+The script creates disposable worlds and web assets, chooses ephemeral ports,
+starts and stops source and package-backed hosts, and drains every realm. It
+never contacts the user's running world. The global runtime is already warm;
+these are cold project realms, not independent cold process measurements.
+
+The consolidated prototype selected zero compiled artifacts and 146 source
+fallbacks. Omega's aliases and body macros exceed the finite AOT profile. Its
+second, faster host does not demonstrate an AOT speedup. The normal Omega task
+therefore keeps ordinary source loading in its persistent shared realm.
+
+Verified finite lexical libraries can use vm.shared with content-addressed
+:uses declarations. Broader application admission needs closed macro, resolution
+and compile-time capability evidence. Packages now preserve the exact capability
+grant so installation cannot bypass source compiler restrictions.
+
+Machine-readable result: ../../spikes/pelagic/proof/shared-development/application-package.json.

@@ -1,0 +1,57 @@
+; Offline, disposable application-package experiment. Never contacts a live world.
+(ns omega.application-prototype
+ (:require [application.package :as package] [vm.manager :as manager]
+           [vm.service :as service] [vm.core :as vmc] [bl.json :as json]
+           [omega.ed.main :as omega]))
+(defn milliseconds [action]
+ (let [before (System/monotonic_time :millisecond) value (action)]
+  {:ms (- (System/monotonic_time :millisecond) before) :value value}))
+(defn port []
+ (let [socket (elem (gen_tcp/listen 0 (list :binary (tuple :active false))) 1)
+       port (elem (elem (inet/sockname socket) 1) 1)]
+  (gen_tcp/close socket) port))
+(defn host [spec world web artifact program]
+ (manager/ensure spec)
+ (try
+  (let [result (milliseconds
+    (fn [] (manager/run (:id spec) (fn [] (service/acquire (:id spec) :application {}
+      (fn []
+       (when artifact (package/install! artifact program []))
+       (omega/start! {:root world :web web :port (port) :offline? true :memory? true}))
+      (fn [started] (omega/stop! started)))))))
+        started (:value (:value result))]
+   (when-not (and (Process/alive? (:listener started)) (Process/alive? (:sup (:sys started))))
+    (throw (ex-info "Prototype host did not become ready" {})))
+   (service/stop! (:pid (:value result)))
+   {:ms (:ms result) :listener-stopped (not (Process/alive? (:listener started)))})
+  (finally (manager/drain (:id spec)))))
+(defn main []
+ (BeamLisp.Env/with_env :global (fn [] (BeamLisp.Loader/ensure_loaded "build")))
+ (let [scratch (str (System/tmp_dir!) "/omega-application-package-" (System/unique_integer (list :positive)))
+       key (str "OmegaPackage" (System/unique_integer (list :positive)))
+       spec {:id (str "application-prototype-" key) :root (File/cwd!) :key key
+             :decl {:shadow [] :uses {}}}
+       entry (str scratch "/entry.bl") output (str scratch "/package")
+       program "(ns omega.application-entry (:require [omega.ed.main]))"
+       world (str scratch "/world") web (str scratch "/web")]
+  (File/mkdir_p! world) (File/mkdir_p! web)
+  (File/write! (str web "/index.html") "Owned offline application prototype")
+  (File/write! entry program)
+  (manager/start)
+  (try
+   (let [source (host spec world web nil program)
+         _ (println (str "SOURCE_PROBE " (json/encode source)))
+         producer (vmc/spawn-vm spec)
+         built (try (milliseconds
+                      (fn [] (vmc/run producer (fn []
+                       (println (str "AUTHORITY_PROBE " (json/encode (BeamLisp.AOT/local_package_authority_report))))
+                       (package/build! entry output [])))))
+                    (finally (vmc/drain producer)))
+         admitted (host spec world web output program)
+         manifest (:value built)]
+    (println (str "APPLICATION_PROBE " (json/encode
+      {:source source :package-build-ms (:ms built) :admitted admitted
+       :namespaces (count (:namespaces manifest)) :artifacts (count (:artifacts manifest))
+       :fallback (- (count (:namespaces manifest)) (count (:artifacts manifest)))}))))
+   (finally (manager/drain (:id spec)) (File/rm_rf! scratch)))))
+(main)

@@ -1,0 +1,39 @@
+{
+  "twoFunctionsAfterOmega": {
+    "cached": {
+      "samples": 30,
+      "medianMs": 19.2865,
+      "p95Ms": 30.423,
+      "statuses": [
+        "hit"
+      ]
+    },
+    "uncached": {
+      "samples": 30,
+      "medianMs": 8.807500000000001,
+      "p95Ms": 14.624,
+      "statuses": [
+        "declined"
+      ]
+    }
+  },
+  "hundredFunctions": {
+    "cached": {
+      "samples": 10,
+      "medianMs": 62.793499999999995,
+      "p95Ms": 85.368,
+      "statuses": [
+        "hit"
+      ]
+    },
+    "uncached": {
+      "samples": 10,
+      "medianMs": 28.836,
+      "p95Ms": 36.318,
+      "statuses": [
+        "declined"
+      ]
+    }
+  },
+  "decision": "Experimental checked ANF disk cache remains opt-in; normal builds compile directly."
+}

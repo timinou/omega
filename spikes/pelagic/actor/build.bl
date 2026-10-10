@@ -1,4 +1,0 @@
-; Standalone artifact task. The frontend graph owns native export contracts.
-(ns pelagic.build-actors (:require [pelagic.actor-build :as actors]))
-(let [here (Path/expand (BeamLisp/cwd))]
-  (actors/build! here (str here "/dist/local/out") (str here "/dist/local/pkg/pelagic/actor")))

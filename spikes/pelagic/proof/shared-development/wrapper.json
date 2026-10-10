@@ -1,0 +1,37 @@
+{
+  "preservesLaunchFlags": true,
+  "resolvesCallerFiles": true,
+  "buildCompatibilityUsesRoot": true,
+  "invocations": [
+    {
+      "args": [
+        "--cold",
+        "test",
+        "-p",
+        "/home/user/code/undefine/omega/src",
+        "-p",
+        "/home/user/code/undefine/omega/vendor/bl-ed/src",
+        "/home/user/code/undefine/omega/test/frontend_test.bl"
+      ],
+      "cwd": "/home/user/code/undefine/omega"
+    },
+    {
+      "args": [
+        "--warm-required",
+        "run",
+        "-p",
+        "/home/user/code/undefine/omega/src",
+        "-p",
+        "/home/user/code/undefine/omega/vendor/bl-ed/src",
+        "/tmp/omega-wrapper-proof-w0w3fpnp/demo.bl"
+      ],
+      "cwd": "/home/user/code/undefine/omega"
+    },
+    {
+      "args": [
+        "pelagic.build"
+      ],
+      "cwd": "/home/user/code/undefine/omega"
+    }
+  ]
+}
