@@ -45,7 +45,22 @@ try:
      const start=performance.now();a.worker.terminate();await wait(()=>P.preparationWorkers().resetting===0);cancel.push(performance.now()-start);
      if(P.preparationWorkers().active!==0)throw new Error('Lease leaked');
     }
-    if(new Set(chunks).size!==1)throw new Error('Pooled jobs changed score output');
+    if(new Set(chunks).size!==1)throw new Error('Pooled jobs changed score prefix');
+    const complete=async()=>{
+     const a=await lease(),rows=[],graphs=new Map();let consumed=0;
+     a.worker.postMessage({op:'prepare',id:1});
+     while(rows.length<1024){
+      await wait(()=>a.events.filter(e=>e.op==='chunk').length>consumed);
+      const packet=a.events.filter(e=>e.op==='chunk')[consumed++];
+      if(packet.start!==rows.length)throw new Error('Noncontiguous full score');
+      rows.push(...packet.rows);for(const graph of packet.graphs)graphs.set(graph.id,graph);
+      a.worker.postMessage({op:'credit',id:1});
+     }
+     await wait(()=>a.events.some(e=>e.op==='done'));a.worker.terminate();
+     await wait(()=>P.preparationWorkers().resetting===0);
+     return JSON.stringify({rows,graphs:[...graphs.values()]});
+    };
+    const full=await complete();if(full!==await complete())throw new Error('Complete pooled scores differ');
     const a=await lease(),b=await lease();a.worker.postMessage({op:'prepare',id:1});b.worker.postMessage({op:'prepare',id:1});
     await wait(()=>a.events.some(e=>e.op==='chunk')&&b.events.some(e=>e.op==='chunk'));
     a.worker.terminate();await wait(()=>P.preparationWorkers().resetting===0);
@@ -54,8 +69,8 @@ try:
     const pooled=P.preparationWorkers();if(pooled.created!==1||pooled.forced!==0)throw new Error('Pool did not reuse cleanly '+JSON.stringify(pooled));
     await new Promise(r=>setTimeout(r,100));P.closeIdlePreparationWorkers();
     const sorted=xs=>[...xs].sort((a,b)=>a-b),p95=xs=>sorted(xs)[Math.floor((xs.length-1)*.95)];
-    const data=new TextEncoder().encode(chunks[0]),digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),x=>x.toString(16).padStart(2,'0')).join('');
-    return {cycles:100,pooled,final:P.preparationWorkers(),cancelP95Ms:p95(cancel),cancelMaxMs:Math.max(...cancel),heartbeatP95Ms:p95(gaps),heartbeatMaxMs:Math.max(...gaps),digest,independentSessions:true};
+    const data=new TextEncoder().encode(full),digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),x=>x.toString(16).padStart(2,'0')).join('');
+    return {cycles:100,completeScores:2,scoreRows:1024,pooled,final:P.preparationWorkers(),cancelP95Ms:p95(cancel),cancelMaxMs:Math.max(...cancel),heartbeatP95Ms:p95(gaps),heartbeatMaxMs:Math.max(...gaps),digest,independentSessions:true};
    }finally{clearInterval(heartbeat);P.closeIdlePreparationWorkers();}
   }''')
   assert not errors,errors
