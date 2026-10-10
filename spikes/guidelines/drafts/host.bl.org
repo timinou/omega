@@ -1,0 +1,78 @@
+#+TITLE: host guidelines — DRAFT converted from ~/.agents/AGENTS.md (not loaded)
+#+SCOPE: user
+
+# Each heading is one section of ~/.agents/AGENTS.md (9.4 KB, today sent to
+# every session in every repo). As guidelines, each costs nothing until its
+# situation comes up. :BODY: points at the full text; the rule here is the
+# short form the agent sees. :TOOLS:/:PATHS: are deterministic triggers.
+# Review in the explorer before enabling any of them.
+
+* direnv daemons must close fds 3-9                                  :host:shell:
+:PROPERTIES:
+:ID:       direnv-close-fds
+:PATHS:    **/.envrc
+:BODY:     ~/.agents/AGENTS.md#direnv + background daemons
+:END:
+A long-lived child spawned from .envrc must close fds 3-9
+(`setsid cmd >>log 2>&1 </dev/null 3>&- 4>&- … 9>&- &`) or every direnv entry hangs.
+** When
+- start a watcher or daemon from .envrc
+- direnv exec hangs at loading
+- shell entry never returns after direnv
+** Examples
+
+* Host `timeout` and `kill` are crippled                             :host:shell:
+:PROPERTIES:
+:ID:       host-kill-timeout
+:BODY:     ~/.agents/AGENTS.md#direnv + background daemons
+:END:
+`timeout` here accepts no signal flags; bound a child by polling `kill -0`.
+The tool shell's `kill` rejects signal numbers: use `/bin/kill -KILL PID`,
+then confirm with `ss -ltnp` that the old pid released its port.
+** When
+- kill a server and restart it
+- kill -9 a process
+- timeout -k a command
+- restarted server still serves old code
+** Examples
+
+* Android emulator: Wayland needs xcb                                :host:android:
+:PROPERTIES:
+:ID:       emulator-wayland-xcb
+:BODY:     ~/.agents/AGENTS.md#Android emulator: KVM, GPU, and the Wayland trap
+:END:
+Launch the emulator with `QT_QPA_PLATFORM=xcb` (or `emu`); "no Qt platform
+plugin" is not a GPU problem. KVM is already correct: do not "fix" it. Ignore the
+"Your GPU cannot be used" line; check `dumpsys SurfaceFlinger | grep GLES`.
+** When
+- start the android emulator
+- emulator fails with Qt platform plugin
+- emulator is slow
+- adb no devices
+** Examples
+
+* Emulator benchmarks: three samples, no stale process               :host:android:perf:
+:PROPERTIES:
+:ID:       emulator-bench
+:BODY:     ~/.agents/AGENTS.md#Benchmarking protocol
+:END:
+`pkill -f qemu-system-x86_64` and wait before relaunching; take ≥3 cold-launch
+samples and report the spread. The first launch is always slower.
+** When
+- measure app launch time on the emulator
+- did this emulator change help
+** Examples
+
+* Elixir VMs have ONE dirty-IO scheduler                             :host:elixir:
+:PROPERTIES:
+:ID:       elixir-dirty-io
+:BODY:     ~/.agents/AGENTS.md#Elixir/OTP: one dirty-IO scheduler
+:END:
+File I/O in one process can stall another's for minutes (file_server_2 queue).
+Do fewer file round trips per request; assert content, not latency; for a tight
+run give that VM `+S 8:8 +SDio 8`.
+** When
+- mix test times out on a file read
+- http handler hangs reading a file
+- Req transport timeout in tests
+** Examples
