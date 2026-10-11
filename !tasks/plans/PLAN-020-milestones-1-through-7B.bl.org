@@ -1,0 +1,50 @@
+#+title: Runtime consolidation through creative-workflow review
+#+status: IN_PROGRESS
+
+* Authority and stop point
+User requests autonomous implementation of roadmap milestones 1–7, followed by
+7B: manual browser use of all five Pelagic creative workflows and Omega Pocket;
+a visual-usability audit; implementation of that audit; screenshots, videos,
+interactive reports and runnable scenarios. Commit each completed step.
+Stop after 7B for user review. Broad performance/release milestones 8–9 remain
+outside this stopping point, except checks necessary for correctness of 1–7B.
+The editor remains the existing vendored bl-ed in Omega. Do not move it upstream.
+Never test against the live world on 8790. Preserve concurrent work.
+
+* Completion ledger
+| Milestone | Work / acceptance | Status | Evidence |
+|-----------+-------------------+--------+----------|
+| 1 | bounded scoped query, identity/support contract, lifecycle/isolation audit | underway | upstream observation tutorial; PLAN-019 inventory |
+| 2 | bounded subscription changes/loss/resync; teardown/race matrix | pending | |
+| 3 | ordinary JS and actor execution consolidation; semantic parity | pending | |
+| 4 | compiler/logic evidence and provenance; negative fixtures | pending | |
+| 5 | reusable bl-ed inspector plus domain contributions; standalone proof | pending | |
+| 6 | Pelagic integration and server/local acceptance | pending | |
+| 7 | five creative workflows demonstrated and verified | pending | |
+| 7B | manual Pelagic/Pocket use, visual audit applied, recordings and review report | pending | |
+
+Every milestone includes .bl.org explanation/tutorial, a self-contained
+interactive evidence report (local HTML, linking recorded artifacts), and
+screenshots where it changes UI. Record artifacts as evidence of actual actions,
+not mockups. Explain exact guarantees and unknowns. Keep scenarios runnable.
+
+* Baseline
+Omega main 9bc4730 (isolated implementation tree 3952072, same consumer content).
+Beam Lisp main a82822ec; tested source release pin 070720a3 / build 3bc51aa2.
+Previous gates: 67 Omega assertions, 68 Pelagic contracts, 75 editor tests,
+four Runtime drive checks, fourteen private-browser checks, actual Worker reuse.
+Concurrent uncommitted Pocket/workspace changes stay outside our commits.
+
+* 7B visual audit rubric
+- Discoverability: primary action and current mode visible without instructions.
+- Hierarchy: performance, preview and committed revision clearly distinguished.
+- State: preparing/ready/playing/failed/cancelled distinguishable without color alone.
+- Placement: controls beside their effects; destructive/irreversible actions distinct.
+- Typography: readable scale, restrained labels, numbers aligned and meaningful.
+- Layout: responsive Pocket use, usable touch targets, no occluded actions.
+- Feedback: immediate response, visible progress, clear undo/cancel and recovery.
+- Accessibility: contrast, keyboard focus, semantic names and reduced motion.
+- Copy: explain only what visual structure cannot convey; keep essential labels.
+
+Record each issue with scenario, before image, impact, change, after image and
+verification. Retest all five workflows and Pocket after applying the audit.
