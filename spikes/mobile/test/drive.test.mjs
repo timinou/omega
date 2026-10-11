@@ -111,3 +111,27 @@ test('native prompts expose data and submit through the existing editor',()=>{
  assert.equal(g(ed,'message'),'work:project/note.org');
  assert.equal(g(ed,'minibuf'),null);
 });
+
+test('reading a task home does not manufacture unpublished edits when a task completes',()=>{
+ let ed=P.d_use(M.d_boot('#+begin_task :id t-1\nGoal\n#+end_task\n#+RESULTS: t-1\n: #omega/task {:id "t-1" :goal "Goal"}\n','omega:scratch'),U.d_bl_package);
+ ed=event(ed,'cards',{data:R.vec(map({id:'t-1',status:'done',result:'Answer'}))});
+ assert.equal(g(U.d_model(ed,'file'),'dirty'),false,'a reading surface follows cards without rewriting the source');
+});
+
+test('long goals retain their complete instruction under a compact editable title',()=>{
+ let ed=boot().assoc(K('doc'),map({data:map({place:'project'})}));
+ const goal='A deliberately long instruction '.repeat(8);
+ ed=event(ed,'mobile/create',{place:'project',goal});
+ const args=g(effects(ed).at(-1),'args');assert.equal(g(args,'goal'),goal.trim());assert.ok(g(args,'title').length<=72);
+ ed=event(boot().assoc(K('doc'),map({data:map({place:'project'})})),'mobile/create',{place:'project',goal,title:'Short title'});
+ assert.equal(g(g(effects(ed).at(-1),'args'),'title'),'Short title');
+});
+test('running task instructions steer the current turn',()=>{
+ let ed=task();ed=ed.assoc(K('doc'),g(ed,'doc').assoc(K('data'),g(g(ed,'doc'),'data').assoc(K('task-status'),'running')));
+ ed=event(event(ed,'mobile/draft',{text:'A new direction'}),'mobile/send',{});
+ assert.equal(g(effects(ed).at(-1),'intent'),'task/steer');
+});
+test('place form invokes the existing place intent as ordinary data',()=>{
+ const ed=event(boot(),'mobile/place-save',{id:'notes',name:'Notes',root:'/tmp',parent:'',home:'',cwd:'.'}),fx=effects(ed).at(-1);
+ assert.equal(g(fx,'intent'),'place/put');assert.match(g(g(fx,'args'),'text'),/:id "notes"/);assert.match(g(g(fx,'args'),'text'),/:cwd "\."/);
+});

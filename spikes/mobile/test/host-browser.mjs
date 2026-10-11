@@ -45,6 +45,19 @@ try{
  await page.evaluate(()=>{ms.rail.state.connection.checked=Date.now();update();});
  assert.equal(await page.locator('.execution').evaluate(e=>e.open),true,'execution remains expanded across background updates');
  assert.equal(await disclosure.evaluate(e=>e.isConnected),true,'execution retains its DOM identity');
+ await page.evaluate(()=>{ms.task.data.turns=[{n:1,role:'user',content:[{type:'text',text:'A full prompt'}]},{n:2,role:'assistant',content:[{type:'text',text:'## Answer\n\n**Readable** with `code`.\n\n- First\n- Second'}]}];ms.task.data['task-result']='## Answer\n\n**Readable** with `code`.\n\n- First\n- Second';update();});
+ assert.equal(await page.locator('.message.agent h2').innerText(),'Answer','typed turns render structured responses');
+ assert.equal(await page.locator('.message.agent strong').innerText(),'Readable');
+ assert.equal(await page.locator('.message.agent li').count(),2);
+ assert.equal(await page.locator('.result-card').count(),0,'one canonical response');
+ await page.evaluate(()=>{ms.task.data.turns.push({n:3,role:'assistant',content:[{type:'tool-use',id:'full',name:'eval',input:{code:'(read \"brief.org\")'}}]},{n:4,role:'user',content:[{type:'tool-result',id:'full',content:'<script>danger()</script>\n'+('Full evidence\n'.repeat(200))}]});update();});
+ await page.locator('[data-key="step:full"] summary').click();
+ assert.equal(await page.locator('.tool-result').innerText().then(x=>x.includes('Full evidence\n'.repeat(199))),true,'execution shows the full recorded result');
+ assert.equal(await page.locator('.tool-result script').count(),0,'model evidence remains escaped');
+
+ await page.evaluate(()=>{ms.rail.state.screen='places';update();});
+ assert.equal(await page.locator('[data-act="add-place"]').count(),1,'places exposes attachment');
+ await page.evaluate(()=>{ms.rail.state.screen='task';update();});
  await page.evaluate(()=>{ms.rail.state.modal='commands';update();});
  await page.locator('[data-field="address"]').fill('work:test/slowly-typed.org');
  await page.evaluate(()=>{ms.rail.state.connection.checked=Date.now()+1;update();});

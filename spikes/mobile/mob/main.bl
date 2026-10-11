@@ -29,7 +29,7 @@
   (let [d (task-data ed) text (or answer (draft ed))
         question (first (filter (fn [o] (= "omega/msg" (:type o))) (objects ed)))
         finished? (contains? #{"done" "failed" "cancelled"} (:task-status d))
-        op (cond finished? "task/open" question "msg/answer" :else "task/say")
+        op (cond finished? "task/open" question "msg/answer" (= "running" (:task-status d)) "task/steer" :else "task/say")
         args (cond finished? {:goal text :title (first (split text "\n")) :path (str "place:" (:place d)) :cwd (:cwd d)}
                    question {:msg (:key question) :text text}
                    :else {:id (:task-id d) :text text})]
@@ -39,6 +39,17 @@
       :else (-> ed (put :pending {:path (:path ed) :text text :draft (draft ed)})
                 (c/effect {:kind :intent :intent op :args args :then :mobile-sent})
                 (c/message "Sending…")))))
+(defn compact-title [text]
+  (let [line (first (split (trim text) "\n"))]
+    (if (> (count line) 72) (str (subs line 0 69) "…") line)))
+(defn save-place [ed ev]
+  (let [m {:id (:id ev) :name (:name ev) :root (when-not (blank? (:root ev)) (:root ev))
+           :parent (when-not (blank? (:parent ev)) (:parent ev)) :directory :adopt
+           :home (when-not (blank? (:home ev)) {:path (:home ev)})
+           :config (cond-> (dissoc (or (:config ev) {}) :cwd)
+                     (not (blank? (:cwd ev))) (assoc :cwd (:cwd ev)))}]
+    (-> ed (put :saving-place true)
+        (c/effect {:kind :intent :intent "place/put" :args {:text (pr-str m)} :then :mobile-place-saved}))))
 (defn create-task [ed ev]
   (let [id (:place ev) goal (trim (:goal ev))
         known? (or (= id (:place (task-data ed))) (some (fn [o] (= id (:place o))) (concat (objects ed) (:places (state ed)))))]
@@ -47,7 +58,7 @@
       (or (not known?) (blank? goal)) (c/message ed "Choose a place and write a goal.")
       :else (-> ed (put :creating true)
                 (c/effect {:kind :intent :intent "task/open"
-                           :args (cond-> {:goal goal :title (first (split goal "\n")) :path (str "place:" id)}
+                           :args (cond-> {:goal goal :title (if (blank? (:title ev)) (compact-title goal) (:title ev)) :path (str "place:" id)}
                                    (:selection (state ed))
                                    (assoc :selection (:selection (state ed)) :path (get-in (state ed) [:selection :path]) :cwd (str "@" id)))
                            :then :mobile-created})))))
@@ -59,6 +70,10 @@
     (:path ev) (visit-pane :file (:path ev) (when (:block ev) {:block (:block ev)})))))
 (defn event [ed ev]
   (case (:type ev)
+    ; A phone reading surface receives live cards without creating a source edit.
+    ; The ordinary editor's terminal rewrite remains available while editing.
+    :cards (when-not (:editing (state ed))
+             (assoc ed :cards (reduce (fn [m cd] (assoc m (:id cd) cd)) (or (:cards ed) {}) (or (:data ev) []))))
     :mobile/nav (navigate ed ev)
     :mobile/document (if (and (:dirty ev) (not= (:path ev) (:current-file ev)))
                        (c/message ed "Publish the file before opening another document. Your edits are retained.")
@@ -71,9 +86,11 @@
     :mobile/clear (assoc ed :message nil)
     :mobile/modal (put ed :modal (:value ev))
     :mobile/field (put ed (keyword (:field ev)) (:value ev))
-    :mobile/machine-eval (c/effect ed {:kind :intent :intent "world/eval" :args {:code (:text ev)} :then :mobile-evaluated})
+    :mobile/machine-eval (-> ed (put :eval-result nil) (put :evaluating true)
+                            (c/effect {:kind :intent :intent "world/eval" :args {:code (:text ev)} :then :mobile-evaluated}))
     :mobile/new-field (assoc-in ed [:pkg-state "mobile" :new (:field ev)] (:value ev))
     :mobile/create (create-task ed ev)
+    :mobile/place-save (save-place ed ev)
     :mobile/draft (assoc-in ed [:pkg-state "mobile" :drafts (:path ed)] (:text ev))
     :mobile/send (send-reply ed (:answer ev))
     :mobile/edit-mode (put ed :editing (not (:editing (state ed))))
@@ -84,8 +101,13 @@
     nil))
 (defn after [old ed ev]
   (cond
+    (and (= :intent-result (:type ev)) (= :mobile-place-saved (:then ev)))
+    (let [ed (put ed :saving-place false)]
+      (if (:ok? ev) (-> ed (put :modal nil) (navigate {:screen "places" :path (get-in ev [:data :path])}))
+          (c/message ed (str "Could not save place: " (:message ev)))))
     (and (= :intent-result (:type ev)) (= :mobile-evaluated (:then ev)))
-    (put ed :eval-result (if (:ok? ev) (get-in ev [:data :result]) (:message ev)))
+    (-> ed (put :evaluating false) (put :eval-namespace (get-in ev [:data :namespace]))
+           (put :eval-result (if (:ok? ev) (get-in ev [:data :result]) (:message ev))))
     (and (= :doc (:type ev)) (starts-with? (str (:path ed)) "workspace:"))
     (put ed :places (vec (filter (fn [o] (and (= "desk/scope" (:type o)) (:place o))) (objects ed))))
     (and (= :intent-result (:type ev)) (= :mobile-sent (:then ev)))
@@ -108,7 +130,7 @@
 (defn model [ed role]
   {:package "mobile" :role role :path (:path ed) :text (t/to-string (:text ed))
    :objects (objects ed) :data (task-data ed) :state (state ed)
-   :draft (draft ed) :dirty (c/dirty? ed) :read-only (docs/read-only? ed)
+   :structure (:struct ed) :draft (draft ed) :dirty (and (not (docs/read-only? ed)) (c/dirty? ed)) :read-only (docs/read-only? ed)
    :cursor (first (c/cursor ed)) :message (:message ed) :revision (get-in ed [:doc :rev])
    :minibuf (when (:minibuf ed) (select-keys (:minibuf ed) [:kind :prompt :text :sel]))
    :commands (mapv (fn [[name spec]] {:name (subs (pr-str name) 1) :doc (:doc spec)})
