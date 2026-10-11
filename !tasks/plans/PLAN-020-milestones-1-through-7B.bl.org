@@ -16,7 +16,7 @@ Never test against the live world on 8790. Preserve concurrent work.
 |-----------+-------------------+--------+----------|
 | 1 | bounded scoped query, identity/support contract, lifecycle/isolation audit | implemented; consumer pin pending | upstream a7d140a7, native query report |
 | 2 | bounded subscription changes/loss/resync; teardown/race matrix | implemented; consumer pin pending | upstream 34e41a54; 101 native assertions, 11 Node tests, delivery report |
-| 3 | ordinary JS and actor execution consolidation; semantic parity | pending | |
+| 3 | ordinary JS and actor execution consolidation; semantic parity | canonical-link experiment verified; full cutover open | upstream 66f1213a; actor-canonical-cutover.bl.org |
 | 4 | compiler/logic evidence and provenance; negative fixtures | pending | |
 | 5 | reusable bl-ed inspector plus domain contributions; standalone proof | verified extraction; new upstream pin pending | spikes/runtime/inspector.bl.org; interactive report; 80/68/15 gates |
 | 6 | Pelagic integration and server/local acceptance | pending | |
