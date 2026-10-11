@@ -103,6 +103,7 @@
     :mobile/connection (put ed :connection {:online (:online ev) :checked (:checked ev)})
     nil))
 (defn after [old ed ev]
+  (let [ed (if (and (= :doc (:type ev)) (:visit? ev) (not= (:path old) (:path ed))) (put ed :editing false) ed)]
   (cond
     (and (:open-runtime (state ed)) (some (fn [name] (= name "runtime")) (pkg/names ed)))
       (-> ed (put :open-runtime false) (assoc-in [:pkg-state "runtime" :return] "mobile")
@@ -132,7 +133,7 @@
         (-> ed (put :modal nil) (put :new nil) (put :selection nil) (put :screen "task") (put :tab "conversation") (put :task-path (get-in ev [:data :path]))
             (visit-pane :task (get-in ev [:data :path]) nil))
         (c/message ed (str "Could not start: " (:message ev)))))
-    :else ed))
+    :else ed)))
 (defn model [ed role]
   {:package "mobile" :role role :path (:path ed) :text (t/to-string (:text ed))
    :objects (objects ed) :data (task-data ed) :state (state ed)

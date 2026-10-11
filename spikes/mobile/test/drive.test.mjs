@@ -145,3 +145,8 @@ test('clearing a local cwd setting restores inheritance',()=>{
  const ed=event(boot(),'mobile/place-save',{id:'notes',name:'Notes',root:'/tmp',parent:'',home:'',cwd:'',config:map({cwd:'.',model:'keep'})});
  const text=g(g(effects(ed).at(-1),'args'),'text');assert.ok(!text.includes(':cwd'));assert.match(text,/:model "keep"/);
 });
+test('a newly visited document opens in reading mode without changing the retained editor text',()=>{
+ let ed=event(boot(),'mobile/edit-mode',{});assert.equal(g(U.d_state(ed),'editing'),true);
+ ed=event(ed,'doc',{path:'work:project/b.org',text:'New document',rev:'1','read-only?':false,'visit?':true});
+ assert.equal(g(U.d_state(ed),'editing'),false);assert.equal(g(U.d_model(ed,'file'),'text'),'New document');
+});
