@@ -364,3 +364,13 @@ same contained static routing as the initial frontend. Bare generation roots
 redirect to a trailing slash so relative package/module URLs resolve correctly.
 Unknown IDs return 404. Generation admission, pinning and retirement belong to
 the application host. Existing editor sessions remain on their chosen graph.
+
+## Runtime observatory prototype — 2026-10-11
+
+- `web/package-observations.mjs` is an optional package-owned read-only resource
+  observation boundary. Same-origin peer reports expire after six seconds, have
+  bounded size/count, and cannot invoke remote actions. Readers/responders close
+  their BroadcastChannel when their final owner leaves. It knows no Omega domain.
+- `ed/frame.bl` honors an on-unuse replacement layout effect before collapsing
+  an unprovided layout. This preserves retained editors when a layered inspector
+  restores a still-loaded package's layout. No package tables are merged.

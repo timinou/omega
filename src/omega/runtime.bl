@@ -1,0 +1,121 @@
+; Read models over existing owners; a small actor owns only inspector probe jobs.
+(ns omega.runtime
+ (:require [vm.scope :as scope] [vm.manager :as manager] [vm.owner :as owner]
+           [vm.service :as service] [omega.ui.model :as model] [omega.env :as env]))
+(defn- now [] (System/monotonic_time :millisecond))
+(defn- worker [controller id]
+ (let [ref (erlang/monitor :process controller) start (now)]
+  (loop [step 0]
+   (receive
+    :cancel (erlang/send controller [:finished id :cancelled (now)])
+    [:DOWN seen :process _ _] :when (= ref seen) :ok
+    (after 25
+     (let [_ (reduce + 0 (range 256)) next (inc step)]
+      (erlang/send controller [:progress id next])
+      (if (= next 200) (erlang/send controller [:finished id :done (now)])
+       (recur next))))))))
+(defn- run [state parent]
+ (let [parent-ref (erlang/monitor :process parent)]
+  (try
+   (loop []
+    (receive
+     [:start caller ref]
+      (if (>= (count (filter (fn [j] (contains? #{:running :cancelling} (:status j))) (vals @state))) 4)
+       (do (erlang/send caller [ref {:ok false :message "Four probe jobs are already active"}]) (recur))
+       (let [id (str "probe-" (System/unique_integer (list :positive))) controller (erlang/self)
+             pid (spawn (fn [] (worker controller id)))]
+        (swap! state (fn [jobs]
+          (into {} (take 32 (sort-by (fn [[_ j]] (- (:started j)))
+           (assoc jobs id {:id id :title "Inspector actor probe" :status :running :progress 0
+                          :started (now) :pid pid :ref (erlang/monitor :process pid) :source "src/omega/runtime.bl"}))))))
+        (erlang/send caller [ref {:id id}]) (recur)))
+     [:cancel caller ref id]
+      (let [job (get @state id)]
+       (if (and job (contains? #{:running :cancelling} (:status job)))
+        (do (swap! state assoc-in [id :cancel-at] (now))
+            (swap! state assoc-in [id :status] :cancelling)
+            (erlang/send (:pid job) :cancel) (erlang/send caller [ref {:id id :accepted true}]))
+        (erlang/send caller [ref {:ok false :message "Probe is no longer active"}]))
+       (recur))
+     [:progress id step] (do (swap! state assoc-in [id :progress] step) (recur))
+     [:finished id status at]
+      (do (swap! state update id (fn [job] (assoc job :status status :finished at
+                    :cancel-ms (when (:cancel-at job) (- at (:cancel-at job)))))) (recur))
+     [:DOWN seen :process _ _] :when (= seen parent-ref) :ok
+     [:DOWN seen :process _ reason]
+      (do (doseq [[id job] @state]
+            (when (and (= seen (:ref job)) (contains? #{:running :cancelling} (:status job)))
+             (swap! state update id assoc :status :failed :finished (now) :error (pr-str reason)))) (recur))
+     :stop :ok
+     _ (recur)))
+   (finally (doseq [job (vals @state)]
+              (when (Process/alive? (:pid job)) (erlang/send (:pid job) :cancel)))))))
+(defn start! [sys opts generations]
+ (let [state (atom {}) parent (erlang/self) realm (scope/current)
+       pid (spawn-link (fn [] (run state parent)))]
+  (when realm (owner/adopt realm :runtime-inspector pid))
+  {:pid pid :jobs state :realm realm :sys sys :root (:root opts) :web (:web opts) :generations generations}))
+(defn stop! [runtime]
+ (when runtime
+  (let [ref (erlang/monitor :process (:pid runtime))]
+   (erlang/send (:pid runtime) :stop)
+   (receive [:DOWN seen :process _ _] :when (= seen ref) :ok (after 5000 :timeout))))
+ :ok)
+(defn- request! [runtime message]
+ (let [ref (erlang/make_ref)]
+  (erlang/send (:pid runtime) (into [(first message) (erlang/self) ref] (rest message)))
+  (receive [seen result] :when (= ref seen) result
+           (after 3000 (throw (ex-info "Inspector owner is unavailable" {}))))))
+(defn- process-row [pid role]
+ (let [info (erlang/process_info pid (list :status :memory :reductions :message_queue_len))]
+  (merge {:id (pr-str pid) :kind "process" :title (str role) :role (str role)}
+   (when (erlang/is_list info) (into {} (map (fn [entry] [(elem entry 0) (elem entry 1)]) info))))))
+(defn- watch-state [runtime]
+ (when (:realm runtime)
+  (when-let [running (service/lookup (:realm runtime) [:omega-frontend-watch (:root runtime)])]
+   @(:status (:value running)))))
+(defn snapshot [runtime]
+ (let [realm (:realm runtime) vm (when realm (manager/get-vm realm))
+       members (if vm (owner/members realm) [])
+       jobs (mapv (fn [j] (-> j (dissoc :pid :ref) (assoc :kind "probe" :elapsed-ms (- (or (:finished j) (now)) (:started j)))))
+                  (sort-by (fn [j] (- (:started j))) (vals @(:jobs runtime))))
+       e (:env (:sys runtime))
+       task-ids (map first (take 64 (sort-by (fn [[id status]] [(if (contains? #{:running :waiting :idle :open} status) 0 1) id])
+                             (env/q e '[:find ?id ?status :where [?t :task/id ?id] [?t :task/status ?status]]))))
+       tasks (model/task-rows e task-ids)
+       web (:web runtime) identity (when (and web (File/regular? (str web "/.inputs"))) (File/read! (str web "/.inputs")))
+       watch (watch-state runtime)]
+  {:schema "omega.runtime.v1" :sampled-at (erlang/system_time :millisecond)
+   :scope "This Omega world and its project realm; browser reports are separate"
+   :vm {:id (str "os-" (System/pid)) :pid (System/pid) :memory (erlang/memory :total)
+        :processes (erlang/system_info :process_count)}
+   :realm {:id (or realm "foreground") :title (or (:alias vm) "Foreground host") :members (count members)}
+   :world {:root (:root runtime) :source "src/omega/ed/main.bl"}
+   :services (mapv (fn [[slot entry]] {:id (pr-str slot) :pid (pr-str (:pid entry))
+                    :status (if (Process/alive? (:pid entry)) "live" "retired")}) (:services vm))
+   :members (if vm (mapv (fn [m] (process-row (:pid m) (:role m))) (take 128 members))
+               [(process-row (:pid runtime) :runtime-inspector)])
+   :members-truncated (> (count members) 128)
+   :jobs (vec (concat jobs (map (fn [t] {:id (:id t) :kind "task" :title (:title t)
+                    :status (:status t) :source (get-in t [:home :path]) :age-ms (:age-ms t)}) (take 64 tasks))))
+   :build {:current identity :watch watch
+           :generations (mapv (fn [[id _]] {:id id :pinned true :url (str "/generations/" id "/")}) @(:generations runtime))}
+   :limits {:jobs 32 :active-probes 4 :members 128 :task-rows 64 :browser-poll-ms 1000
+            :physical-av "not measured" :mailboxes "contents not collected"}}))
+(def PUBLIC-SOURCES #{"src/omega/runtime.bl" "src/omega/ed/main.bl" "spikes/pelagic/pelagic/main.bl"})
+(defn provider [runtime]
+ {:read (fn [name _]
+   (if (starts-with? name "source/")
+    (let [relative (subs name 7)]
+     (if (contains? PUBLIC-SOURCES relative)
+      {:title relative :read-only? true :text (File/read! (str (or (System/get_env "OMEGA_HOME") (File/cwd!)) "/" relative))}
+      {:error "Source is not exposed by this runtime projection" :status 404}))
+    {:title "Runtime observatory" :read-only? true :rev "runtime-v1"
+     :text "#+TITLE: Runtime observatory\n#+USE: runtime\n\nOwned work, reported sessions, immutable builds.\nUse space r r to open the inspector.\n"}))})
+(defn intents [runtime]
+ {"runtime/snapshot" (fn [_] (snapshot runtime))
+  "runtime/start-probe" (fn [_] (request! runtime [:start]))
+  "runtime/cancel" (fn [args] (request! runtime [:cancel (:id args)]))
+  "runtime/watch-stop" (fn [_]
+    (if-let [running (when (:realm runtime) (service/lookup (:realm runtime) [:omega-frontend-watch (:root runtime)]))]
+     (do (service/stop! (:pid running)) {:stopped true}) {:stopped false}))})

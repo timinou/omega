@@ -1,0 +1,104 @@
+{
+  "backend": {
+    "build": {
+      "current": "3e871811547ce3532ac740db126c0c46f7a39981c54ac2f2143b6a8308080f12",
+      "generations": [
+        {
+          "id": "3e871811547ce3532ac740db126c0c46f7a39981c54ac2f2143b6a8308080f12",
+          "pinned": true,
+          "url": "/generations/3e871811547ce3532ac740db126c0c46f7a39981c54ac2f2143b6a8308080f12/"
+        }
+      ],
+      "watch": {
+        "attempt": 1,
+        "candidate": {
+          "generation": "3e871811547ce3532ac740db126c0c46f7a39981c54ac2f2143b6a8308080f12",
+          "path": "/generations/3e871811547ce3532ac740db126c0c46f7a39981c54ac2f2143b6a8308080f12/",
+          "url": "http://127.0.0.1:35859/generations/3e871811547ce3532ac740db126c0c46f7a39981c54ac2f2143b6a8308080f12/"
+        },
+        "error": null,
+        "status": "ready"
+      }
+    },
+    "jobs": [
+      {
+        "cancel-at": -576460733580,
+        "cancel-ms": 0,
+        "elapsed-ms": 62,
+        "finished": -576460733580,
+        "id": "probe-3866",
+        "kind": "probe",
+        "progress": 2,
+        "source": "src/omega/runtime.bl",
+        "started": -576460733642,
+        "status": "cancelled",
+        "title": "Inspector actor probe"
+      }
+    ],
+    "limits": {
+      "active-probes": 4,
+      "browser-poll-ms": 1000,
+      "jobs": 32,
+      "mailboxes": "contents not collected",
+      "members": 128,
+      "physical-av": "not measured",
+      "task-rows": 64
+    },
+    "members": [
+      {
+        "id": "#PID<0.1409.0>",
+        "kind": "process",
+        "memory": 29648,
+        "message_queue_len": 0,
+        "reductions": 7292,
+        "role": "runtime-inspector",
+        "status": "waiting",
+        "title": "runtime-inspector"
+      },
+      {
+        "id": "#PID<0.2040.0>",
+        "kind": "process",
+        "memory": 230664,
+        "message_queue_len": 0,
+        "reductions": 2786,
+        "role": "service",
+        "status": "waiting",
+        "title": "service"
+      }
+    ],
+    "members-truncated": false,
+    "ok": true,
+    "realm": {
+      "id": "runtime-prototype-proof",
+      "members": 2,
+      "title": "Foreground host"
+    },
+    "sampled-at": 1791731706837,
+    "schema": "omega.runtime.v1",
+    "scope": "This Omega world and its project realm; browser reports are separate",
+    "services": [
+      {
+        "id": "[:omega-frontend-watch \"/tmp/omega-runtime-proof-19recwbl/world\"]",
+        "pid": "#PID<0.2040.0>",
+        "status": "live"
+      }
+    ],
+    "vm": {
+      "id": "os-1517512",
+      "memory": 1502330280,
+      "pid": "1517512",
+      "processes": 424
+    },
+    "world": {
+      "root": "/tmp/omega-runtime-proof-19recwbl/world",
+      "source": "src/omega/ed/main.bl"
+    }
+  },
+  "browser": [
+    {
+      "at": 1791731706468,
+      "resources": [],
+      "session": "d3f9935a-a472-48d1-90c1-961dc6ada167"
+    }
+  ]
+}

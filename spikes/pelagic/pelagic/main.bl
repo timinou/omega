@@ -1,4 +1,4 @@
-(ns pelagic.main (:require [ed.core :as c] [ed.text :as t] [pelagic.score :as score]))
+(ns pelagic.main (:require [ed.core :as c] [ed.text :as t] [pelagic.score :as score] [ed.pkg :as pkg]))
 (def stage {:name "pelagic" :doc "Live source beside the audiovisual stage."
             :panes [{:id :main :doc :linked :width [:fr 78]}
                     {:id :stage :view [:host :main] :width [:fr 160]}]
@@ -30,6 +30,10 @@
       (let [new (assoc-in ed [:pkg-state "pelagic" k] v)] (send new :configure (state new))) ed)))
 (defn intercept [ed ev]
   (cond
+    (= :pelagic/runtime (:type ev))
+     (if (some (fn [name] (= name "runtime")) (pkg/names ed))
+      (c/effect (assoc-in ed [:pkg-state "runtime" :return] "pelagic") {:kind :frame-layout :layout "runtime-pelagic" :keep {:main :origin}})
+      (-> ed (assoc-in [:pkg-state "pelagic" :open-runtime] true) (c/effect {:kind :load-package :name "runtime"})))
     (= :pelagic/request (:type ev)) (send ed :request (:request ev))
     (= :pelagic/control (:type ev)) (settings ed ev)
     (= :pelagic/sample (:type ev)) (send ed :sample ev)
@@ -60,6 +64,13 @@
               :pelagic/cinema {:doc "Enlarge the stage" :run (fn [ed] (assoc ed :frame/layout cinema))}}
    :keys {:normal {"g p" :pelagic/play "g P" :pelagic/perform "g !" :pelagic/panic "g s" :pelagic/stop "g e" :pelagic/eval "g v" :pelagic/stage}}
    :intercept intercept :on-unuse leave
-   :on-event (fn [_ ed ev] (if (= :session-leave (:type ev)) (leave ed) ed))
+   :on-event (fn [_ ed ev]
+     (cond
+      (= :session-leave (:type ev)) (leave ed)
+      (and (get-in ed [:pkg-state "pelagic" :open-runtime]) (some (fn [name] (= name "runtime")) (pkg/names ed)))
+       (-> ed (update-in [:pkg-state "pelagic"] dissoc :open-runtime)
+           (assoc-in [:pkg-state "runtime" :return] "pelagic")
+           (c/effect {:kind :frame-layout :layout "runtime-pelagic" :keep {:main :origin}}))
+      :else ed))
    :provides {:layouts {"pelagic" stage "pelagic-cinema" cinema}
               :views {:host (fn [ed] {:package "pelagic" :state (state ed)})}}})

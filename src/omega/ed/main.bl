@@ -18,6 +18,7 @@
             [omega.packages :as packages]
             [omega.ext :as ext]
             [omega.artifacts :as artifacts]
+            [omega.runtime :as runtime]
             [omega.workspace :as workspace]
             [buffer.model :as buffer]
             [bl-ed.serve :as serve]
@@ -52,7 +53,7 @@
         opts (assoc opts :state state :package-state
                (or (:package-state opts) (if db (str (Path/dirname db) "/packages.edn")
                                              (str state "/packages.edn"))))
-        acquired (atom nil) workspace-owner (atom nil) pinned (atom nil) generations (atom {})]
+        acquired (atom nil) inspector (atom nil) workspace-owner (atom nil) pinned (atom nil) generations (atom {})]
     (try
       (let [server (workspace/start! e root)
         _ (reset! workspace-owner server)
@@ -71,22 +72,24 @@
         ;; bl: shows THIS VM's image — omega itself, live (a project's target
         ;; VM forwards the same provider later)
         _ (reset! pinned (artifacts/pin! web))
+        inspection (runtime/start! sys (assoc opts :root root :web web) generations)
+        _ (reset! inspector inspection)
         img (image/provider)
         r (serve/start! {:port (or (:port opts) 8790) :root root :web web
                          :landing-pages (:landing-pages opts) :generations generations
                          :providers (merge (:providers opts)
-                                           (assoc (workspace/providers sys server context-opts) "bl" (:provider img) "package" (packages/provider registry)))
-                         :intents (merge (pv/intents sys context-opts) (workspace/intents sys server) (:intents img)
+                                           (assoc (workspace/providers sys server context-opts) "bl" (:provider img) "runtime" (runtime/provider inspection) "package" (packages/provider registry)))
+                         :intents (merge (pv/intents sys context-opts) (workspace/intents sys server) (:intents img) (runtime/intents inspection)
                                    (when-let [factory (:intent-factory opts)] (factory sys))
                                    (packages/intents registry sys context-opts))})]
     (when db (println (str "omega: tasks are kept in " db (when (seq interrupted) (str " · interrupted: " (clojure.string/join " " interrupted))))))
-    (assoc r :sys sys :env e :db db :buffers server :state state :ephemeral-state? ephemeral-state? :packages registry :frontend-pin @pinned :generations generations))
+    (assoc r :sys sys :env e :db db :buffers server :state state :ephemeral-state? ephemeral-state? :packages registry :runtime inspection :frontend-pin @pinned :generations generations))
       (catch error
         ;; Readiness is transactional: a failed listener must not leave a task
         ;; supervisor or storage owner behind when the service is retried.
         (try
           (when @acquired (task/stop-system! @acquired))
-          (finally (try (workspace/stop! @workspace-owner)
+          (finally (try (try (runtime/stop! @inspector) (finally (workspace/stop! @workspace-owner)))
                      (finally (try (env/close! e) (finally (when ephemeral-state? (File/rm_rf! state)) (artifacts/unpin! @pinned)))))))
         (throw error)))))
 
@@ -97,7 +100,7 @@
   (try (serve/stop! host)
     (finally
       (try (task/stop-system! (:sys host))
-        (finally (try (workspace/stop! (:buffers host))
+        (finally (try (try (runtime/stop! (:runtime host)) (finally (workspace/stop! (:buffers host))))
           (finally (try (env/close! (:env host))
                    (finally
                      (when (:ephemeral-state? host) (File/rm_rf! (:state host)))

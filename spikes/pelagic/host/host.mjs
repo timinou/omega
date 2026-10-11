@@ -1,4 +1,5 @@
 import * as R from '../../out/rt.mjs';
+import {observePackage} from '../../package-observations.mjs';
 import * as Score from '../../out/pelagic.score.mjs';
 import * as Performance from '../../out/pelagic.performance.mjs';
 import * as Audition from '../../out/pelagic.audition.mjs';
@@ -8,7 +9,7 @@ import {performanceControls} from './controls.mjs';
 import {SceneStage} from './scenes.mjs';
 import {createStage} from './render-stage.mjs';
 import {prepareScore} from './prepare.mjs';
-import {createPreparationWorker} from './compute-worker.mjs';
+import {createPreparationWorker,preparationWorkers} from './compute-worker.mjs';
 import {freezeGraph} from './score-wire.mjs';
 import * as Bridge from '../../out/pelagic.bridge.mjs';
 import {conversions,download,setText,audioContext,readText,createEvaluator,afterPaint,createScoreSource,audibleTime,createGraphicsWorker,continuePreparation,admitWork,exportWindow,playbackVoices} from './values.mjs';
@@ -502,6 +503,7 @@ export function createHost(api) {
       else if(b.dataset.stem)dispatch({type:'pelagic/control',control:b.dataset.stem,value:!config[b.dataset.stem]});
       else if(b.hasAttribute('data-freeze'))dispatch({type:'pelagic/control',control:'freeze',value:!config.freeze});
       else if(b.hasAttribute('data-fullscreen')){if(document.fullscreenElement)document.exitFullscreen();else $('.visual').requestFullscreen();}
+      else if(b.hasAttribute('data-runtime'))dispatch({type:'pelagic/runtime'});
       else if(b.hasAttribute('data-export'))dispatch({type:'pelagic/export'});
       else if(b.hasAttribute('data-record'))dispatch({type:'pelagic/record'});
       else if(b.dataset.deckOp)dispatch({type:'pelagic/deck',deck:b.dataset.deckKey,op:b.dataset.deckOp,value:+b.dataset.value||0});
@@ -519,6 +521,7 @@ export function createHost(api) {
       for(const key of ['a','b']){const name=decks[key]?.name;$(`[data-file-name="${key}"]`).textContent=name||(key==='a'?'harmonic field / D minor':'deep-house pulse / melodic fragments');}
     },dispose(){dead=true;canvas.removeEventListener('webglcontextlost',lost);canvas.removeEventListener('webglcontextrestored',restored);controls?.dispose();cancelAnimationFrame(raf);v.shader?.dispose();views.delete(v);delete root.pelagic;shadow.replaceChildren();}};
   }
+  const unobserve=observePackage('pelagic',()=>({diagnostics:report(),pool:preparationWorkers(),playing,revision:revisionID(),pending:pending.length,preparing:scoreVoices.stats(),evaluator:!!evaluatorClient,graphics:[...views].some(v=>!!v.shader?.worker),audioContext:ctx?.state||'none'}),{'audition-cancel':()=>request({kind:'audition-cancel'})});
   return {mount,async effect(e){alive();switch(e.op){case 'play':configure(e.args);play();break;case 'stop':stop();notice('All voices stopped',false);break;
     case 'perform':configure(e.args);play(0,true);break;
     case 'request':try{request(e.args);}catch(error){notice('Edit rejected · '+errorText(error));}break;
@@ -528,7 +531,7 @@ export function createHost(api) {
     case 'deck':unlock();decks[e.args.deck].action(e.args.op,e.args.value);break;
     case 'record':await record();break;case 'export':await exportAudio();break;
     default:throw new Error('Unknown Pelagic effect '+e.op);}},
-    dispose(){disposed=true;++evaluation;stopAudition(true);scoreVoices.dispose();evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
+    dispose(){unobserve();disposed=true;++evaluation;stopAudition(true);scoreVoices.dispose();evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
       for(const d of Object.values(decks))d.dispose();for(const job of offlineRenders)job.abort();offlineRenders.clear();audio?.dispose();ctx?.close();files.clear();handles.clear();pending=[];patterns.clear();for(const url of urls)URL.revokeObjectURL(url);
       for(const v of views)v.shader?.dispose();}
   };

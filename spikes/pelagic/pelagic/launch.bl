@@ -18,7 +18,7 @@
                      (throw (ex-info "--port requires an integer from 1024 to 65535" {})))
                    (recur (drop 2 xs) (assoc result :port port)))
         "--preset" (let [preset (second xs)]
-                     (when-not (contains? #{"pelagic" "spikes" "packages" "pocket"} preset)
+                     (when-not (contains? #{"pelagic" "spikes" "packages" "pocket" "runtime"} preset)
                        (throw (ex-info "--preset requires pelagic, spikes, packages or pocket" {})))
                      (recur (drop 2 xs) (assoc result :preset preset)))
         "--live" (recur (rest xs) (assoc result :live? true))
@@ -32,6 +32,7 @@
 (defn preset-url [port preset]
   (case preset
     "pocket" (str "http://localhost:" port "/?use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile&file=workspace:all")
+    "runtime" (str "http://localhost:" port "/?use=runtime&layout=runtime&file=runtime:overview")
     "packages" (str "http://localhost:" port "/?use=packages&file=package:catalog")
     "spikes" (str "http://localhost:" port "/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org")
     (studio-url port)))

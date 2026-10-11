@@ -293,8 +293,10 @@
                            (-> fr (assoc-in [:editors other] ed)
                                (update :effects into (map (fn [e] (assoc e :pane other)) effects)))))
                        fr (filter (fn [o] (not= o id)) (editor-ids fr)))
-            provided? (contains? (layouts now) (:name (:layout fr)))]
-        (if (or (= "single" (:name (:layout fr))) provided?) fr (unarrange fr))))))
+            provided? (contains? (layouts now) (:name (:layout fr)))
+            replacement? (some (fn [effect] (and (= :frame-layout (:kind effect))
+                              (contains? (layouts now) (:layout effect)))) (:effects fr))]
+        (if (or (= "single" (:name (:layout fr))) provided? replacement?) fr (unarrange fr))))))
 
 
 (defn- layout-request

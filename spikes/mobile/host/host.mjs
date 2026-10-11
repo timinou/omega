@@ -187,7 +187,7 @@ const restored=new Set(),restoring=new Set();
  }
  function buffers(){const recent=session.recent||[],paths=[...new Set([...(session.pins||[]).filter(p=>p!=='machine:'),...recent.map(x=>x.path)])];return `<div class="heading-row"><h1>Buffers</h1>${btn(icon('plus'),'commands','icon-button','aria-label="Open buffer"')}</div><div class="place-entry">${btn(icon('host')+'Machine','machine','sheet-option')}${btn(session.pins?.includes('machine:')?'★':'☆','pin','icon-button','data-path="machine:" aria-label="Pin Machine"')}</div>${paths.map(path=>`<div class="place-entry">${btn(icon(path.startsWith('place:')?'places':'file')+`<span>${esc(recent.find(x=>x.path===path)?.title||path.split('/').pop())}<small>${esc(path)}</small></span>`,'buffer','place-card',`data-path="${esc(path)}"`)}${btn(session.pins?.includes(path)?'★':'☆','pin','icon-button',`data-path="${esc(path)}" aria-label="Pin buffer"`)}</div>`).join('')||empty('No buffers','')}`;}
  function machine(){return `<div class="heading-row"><h1>Machine</h1>${connection()}</div><code>${esc(shell()['eval-namespace']||location.hostname)}</code><div class="repl-history">${(session.repl||[]).map((x,i)=>`<article data-key="repl:${i}"><pre class="repl-input">${esc(x.code)}</pre><pre class="repl-result">${esc(x.result)}</pre></article>`).join('')}</div><form data-form="machine" class="repl-form"><label class="sr-only" for="machine-code">Lisp expression</label><textarea id="machine-code" data-field="machine-code" spellcheck="false" placeholder="(+ 1 2)">${esc(fields['machine-code']||'')}</textarea>${btn(shell().evaluating?'Evaluating…':'Evaluate','machine-run','primary',online()&&!shell().evaluating?'':'disabled')}${btn('Namespaces','namespaces','secondary')}</form>${btn('Connection','host','sheet-option')}`;}
- function host(){return `<h1>Machine</h1><section class="host-card"><span class="host-illustration">${icon('host')}</span><h2>${esc(location.hostname)}</h2><span role="status">${online()?'Connected':'Reconnecting'}</span>${btn('Reconnect','reconnect','secondary')}</section>${btn('Live image','machine','sheet-option')}${btn('Commands','commands','sheet-option')}${btn('Return to bl·ed','unload','sheet-option')}`;}
+ function host(){return `<h1>Machine</h1><section class="host-card"><span class="host-illustration">${icon('host')}</span><h2>${esc(location.hostname)}</h2><span role="status">${online()?'Connected':'Reconnecting'}</span>${btn('Reconnect','reconnect','secondary')}</section>${btn('Runtime inspector','runtime','sheet-option')}${btn('Live image','machine','sheet-option')}${btn('Commands','commands','sheet-option')}${btn('Return to bl·ed','unload','sheet-option')}`;}
  const inline=formatInline;
  function reader(f=file(),pane='file'){
   const lines=(f.text||'').split('\n'),query=queries.get(f.path)||'',selected=shell().selection;
@@ -273,6 +273,7 @@ const restored=new Set(),restoring=new Set();
    case 'places':nav('places','places:');break;
    case 'host':nav('host');break;
    case 'buffers':nav('buffers');break;
+   case 'runtime':send('rail',{type:'mobile/runtime'});break;
    case 'machine':nav('machine');break;
    case 'namespaces':openDocument('bl:');break;
    case 'machine-run':if(shell().evaluating)break;send('rail',{type:'mobile/machine-eval',text:fields['machine-code']||''});session.pendingCode=fields['machine-code'];break;

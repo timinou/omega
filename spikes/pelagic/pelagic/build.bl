@@ -9,7 +9,7 @@
   (Path/expand ".." (Path/dirname (BeamLisp.Loader/source_path "pelagic.build"))))
 (defn root [] (Path/expand "../.." (home)))
 (defn package-manifests [] (frontend/manifests (root)
-  ["pelagic" "packages" "atlas" "present" "dwim" "workspace" "places" "references" "buffers" "workbench" "mobile"]))
+  ["pelagic" "packages" "atlas" "present" "dwim" "workspace" "places" "references" "buffers" "workbench" "mobile" "runtime"]))
 (defn assembly [] (frontend/assembly (root) (package-manifests)))
 (defn manifest-inputs []
   [(package-manifests)
@@ -61,6 +61,7 @@
      (sources (str (root) "/spikes/present"))
      (sources (str (root) "/spikes/atlas"))
      (sources (str (root) "/spikes/mobile"))
+     (sources (str (root) "/spikes/runtime"))
      (sources (str (root) "/spikes/workspace"))
      (sources (str (root) "/spikes/dwim"))
      ; Package output is generated, not a source dependency.

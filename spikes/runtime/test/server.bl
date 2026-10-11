@@ -1,0 +1,15 @@
+(ns runtime.prototype-server
+ (:require [omega.ed.main :as omega] [omega.frontend-watch :as watch]
+           [vm.service :as service] [vm.manager :as manager] [vm.scope :as scope]))
+(let [root (System/get_env "RUNTIME_WORLD") web (System/get_env "RUNTIME_FRONTEND")
+      port (erlang/binary_to_integer (System/get_env "RUNTIME_PORT")) id "runtime-prototype-proof"]
+ (manager/start) (manager/ensure {:id id :root root})
+ (scope/with-vm id
+  (fn []
+   (let [host (omega/start! {:root root :web web :port port :offline? true :memory? true})]
+    (omega/admit-frontend! host (File/read! (str web "/.inputs")) web)
+    (service/acquire id [:omega-frontend-watch root] {:proof true}
+     (fn [] (watch/start! {:paths [root] :fingerprint (fn [] "validated-proof-candidate")
+                          :build (fn [] web) :accept (fn [output] (omega/admit-frontend! host (File/read! (str output "/.inputs")) output))})) watch/stop!)
+    (println (str "Runtime proof host: " (:url host)))
+    (try (receive :stop nil) (finally (omega/stop! host)))))))

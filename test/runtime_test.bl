@@ -1,0 +1,30 @@
+(ns omega.runtime-test (:require [omega.runtime :as runtime] [omega.env :as env] [bl.json :as json]))
+(defn- await [predicate]
+ (loop [left 300] (cond (predicate) true (zero? left) false :else (do (Process/sleep 10) (recur (dec left))))))
+(deftest native-probe-cancellation-and-read-only-snapshot
+ (let [e (env/open) r (runtime/start! {:env e} {:root "/tmp/runtime-fixture"} (atom {}))
+       intents (runtime/intents r)]
+  (try
+   (let [first ((get intents "runtime/start-probe") {}) id (:id first)]
+    (is (string? id))
+    (is (await (fn [] (> (get-in @(:jobs r) [id :progress]) 0))))
+    (is (:accepted ((get intents "runtime/cancel") {:id id})))
+    (is (await (fn [] (= :cancelled (get-in @(:jobs r) [id :status])))))
+    (is (number? (get-in @(:jobs r) [id :cancel-ms])))
+    (let [s (runtime/snapshot r)]
+     (is (= "omega.runtime.v1" (:schema s)))
+     (is (= "not measured" (get-in s [:limits :physical-av])))
+     (is (= id (:id (first (:jobs s)))))
+     (is (not (contains? (first (:jobs s)) :pid)))
+     (is (string? (json/encode s))))
+    (is (= false (:ok ((get intents "runtime/cancel") {:id "unowned"}))))
+    (is (= false (:stopped ((get intents "runtime/watch-stop") {})))))
+   (finally (runtime/stop! r) (env/close! e)))
+  (is (not (Process/alive? (:pid r))))))
+(deftest probe-worker-failure-is-not-reported-as-running
+ (let [e (env/open) r (runtime/start! {:env e} {:root "/tmp/runtime-fixture"} (atom {}))]
+  (try
+   (let [id (:id ((get (runtime/intents r) "runtime/start-probe") {}))]
+    (erlang/exit (get-in @(:jobs r) [id :pid]) :kill)
+    (is (await (fn [] (= :failed (get-in @(:jobs r) [id :status]))))))
+   (finally (runtime/stop! r) (env/close! e)))))

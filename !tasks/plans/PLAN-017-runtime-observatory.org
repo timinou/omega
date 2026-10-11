@@ -1,0 +1,41 @@
+#+title: Runtime observatory — prototype vertical
+#+status: PROTOTYPE_COMPLETE
+
+* Scope
+A loadable bl-ed package, not a separate dashboard application. Provide a real
+ownership tree, active work, scoped timing, immutable build candidates and item
+details/actions. Keep backend and browser ownership distinct. Report unavailable
+telemetry honestly. No writes to the live world on 8790.
+
+* Implementation
+- [X] Native BL inspector actor and bounded, cancellable demonstration jobs.
+- [X] Read-only snapshots from existing realm/service/member and task authority.
+- [X] Package-owned browser observations, reported sessions, bounded polling.
+- [X] Pure BL package state, layouts, selection and effect-based actions.
+- [X] Five inspector sections, source/candidate navigation and snapshot export.
+- [X] Main interface and Pocket entrypoints; companion PELAGIC layout.
+- [X] Offline real-editor proof, cancellation, two sessions, exact unuse and tests.
+- [X] Documentation, screenshots and commits.
+
+* Boundaries
+The prototype does not expose arbitrary process killing, environment variables,
+mailbox contents or other projects' capabilities. Browser sessions are reported
+same-origin resources, not an assertion that every browser tab is observable.
+Physical audio/video latency remains unmeasured. Inspection samples at 1 Hz,
+pauses when hidden, and never schedules CPU work on the UI thread.
+
+* Verification (2026-10-11)
+- Native source gates: 14 runtime and 26 host assertions pass.
+- Compiled package/observation drive checks: 5 pass.
+- Vendored editor: 75 pass. PELAGIC: 67 pass, none skipped.
+- Real-browser vertical: 12 checks pass, zero browser errors.
+- Unchanged presentation check: 11 and 12 variants, no differences.
+  A temporary printer export alias adapts its older Core.pr_str test API.
+- Build: 3m30s, 2.1 GiB peak; no performance improvement claimed.
+- See spikes/runtime/runtime.bl.md and spikes/runtime/proof/.
+
+* Follow-ups
+- Owner-published browser actor identities, queue depth and cancellation timing.
+- Keyed DOM updates and expandable ownership branches for larger worlds.
+- Physical audio/video measurements and observer-overhead benchmarks.
+- Host/realm restart stays in the CLI; no cross-tab control capabilities.

@@ -1,0 +1,87 @@
+; Every decision is editor state or an effect. The host owns IO and painting.
+(ns rtview.main (:require [ed.core :as c] [ed.docs :as docs] [ed.pkg :as pkg]))
+(def layout {:name "runtime" :doc "Source and runtime ownership, work, timing and builds."
+ :panes [{:id :main :doc :linked :width [:fr 1]}
+         {:id :observatory :view [:runtime/inspector :main] :width [:fr 4]}] :focus :main})
+(def pelagic-layout {:name "runtime-pelagic" :doc "Inspect without removing the playing stage."
+ :panes [{:id :main :doc :linked :width [:fr 1]}
+         {:id :stage :view [:host :main] :width [:fr 2]}
+         {:id :observatory :view [:runtime/inspector :main] :width [:fr 3]}] :focus :main})
+(def pocket-layout {:name "runtime-pocket" :doc "Pocket retains its editors beside the inspector."
+ :panes [{:id :rail :doc "workspace:all" :width [:ch 0]}
+         {:id :task :doc "desk:welcome" :width [:ch 0]}
+         {:id :file :doc "desk:welcome" :width [:ch 0]}
+         {:id :phone :view [:mobile-rail :rail] :width [:fr 2]}
+         {:id :task-model :view [:mobile-task :task] :width [:ch 0]}
+         {:id :file-model :view [:mobile-file :file] :width [:ch 0]}
+         {:id :observatory :view [:runtime/inspector :rail] :width [:fr 3]}] :focus :rail})
+(defn state [ed] (get-in ed [:pkg-state "runtime"] {}))
+(defn put [ed key value] (assoc-in ed [:pkg-state "runtime" key] value))
+(defn send [ed intent args]
+ (c/effect ed {:kind :intent :intent intent :args args :then :runtime/result}))
+(defn refresh [ed]
+ (if (:pending (state ed)) ed
+  (-> ed (put :pending true)
+      (c/effect {:kind :intent :intent "runtime/snapshot" :args {} :then :runtime/snapshot}))))
+(defn open
+ ([ed] (open ed "runtime"))
+ ([ed variant]
+  (-> ed (put :return (case variant "runtime-pelagic" "pelagic" "runtime-pocket" "mobile" nil))
+      (c/effect {:kind :frame-layout :layout variant
+                 :keep (case variant "runtime-pocket" {:rail [:rail :origin] :task :task :file :file}
+                             {:main [:main :origin]})}) refresh)))
+(defn close [ed]
+ (c/effect ed {:kind :frame-layout :layout (or (:return (state ed)) "runtime")
+              :keep (if (= "mobile" (:return (state ed))) {:rail :rail :task :task :file :file}
+                       {:main [:main :origin]})}))
+(defn leave [ed] (if (:return (state ed)) (close ed) ed))
+(defn adopt [ed] (if (= (:path ed) "runtime:overview") (open ed) ed))
+(defn intercept [ed ev]
+ (case (:type ev)
+  :runtime/open (open ed (or (:layout ev) "runtime"))
+  :runtime/close (if (:return (state ed)) (close ed) (assoc ed :frame/layout :none))
+  :runtime/refresh (if (:paused (state ed)) ed (refresh ed))
+  :runtime/pause (put ed :paused (not (:paused (state ed))))
+  :runtime/select (put ed :selected (:item ev))
+  :runtime/browser (put ed :browser (:data ev))
+  :runtime/source (when (:path ev) (docs/visit ed (str "runtime:source/" (:path ev))))
+  :runtime/start (send ed "runtime/start-probe" {})
+  :runtime/cancel (send ed "runtime/cancel" {:id (:id ev)})
+  :runtime/watch-stop (when (:confirmed ev) (send ed "runtime/watch-stop" {}))
+  :runtime/export (c/effect ed {:kind :package-host :package "runtime" :op :export
+                              :args {:backend (:backend (state ed)) :browser (:browser (state ed))}})
+  :runtime/candidate (c/effect ed {:kind :package-host :package "runtime" :op :candidate :args {:url (:url ev)}})
+  :runtime/audition-cancel (c/effect ed {:kind :package-host :package "runtime" :op :audition-cancel :args {:id (:id ev)}})
+  :intent-result
+   (cond
+    (= :runtime/snapshot (:then ev)) (-> ed (put :pending false)
+      (put :backend (if (:ok? ev) (:data ev) nil)) (put :error (when-not (:ok? ev) (:message ev))))
+    (= :runtime/result (:then ev)) (-> ed (put :notice (if (:ok? ev) "Action acknowledged" (:message ev))) refresh)
+    :else nil)
+  nil))
+(defn items [ed]
+ (let [s (state ed) b (:backend s) vm (:vm b) realm (:realm b)]
+  (vec (concat
+   (when b [{:id (:id vm) :kind "vm" :title (str "BEAM · PID " (:pid vm)) :data vm}
+            {:id (:id realm) :parent (:id vm) :kind "realm" :title (:title realm) :data realm}
+            {:id "world" :parent (:id realm) :kind "world" :title "Omega world" :data (:world b) :source "src/omega/ed/main.bl"}])
+   (map (fn [p] (assoc p :kind "service" :parent (:id realm) :title (:id p))) (:services b))
+   (map (fn [p] (assoc p :parent (:id realm))) (:members b))
+   (map (fn [j] (assoc j :parent "world")) (:jobs b))
+   (mapcat (fn [session]
+     (cons {:id (:session session) :kind "browser" :title (if (:remote session) "Reported peer tab" "This browser tab")
+            :data (dissoc session :resources)}
+       (map (fn [r] {:id (:id r) :parent (:session session) :kind "browser-resource" :title (:name r)
+                    :remote (:remote session) :data (:data r) :error (:error r) :source "spikes/pelagic/pelagic/main.bl"}) (:resources session)))) (:browser s))))))
+(defn model [ed]
+ (let [rows (items ed) selected (or (first (filter (fn [r] (= (:id r) (:selected (state ed)))) rows)) (first rows))]
+  {:package "runtime" :state (state ed) :items rows :selected selected}))
+(def bl-package
+ {:name "runtime" :doc "Observe owned actors, reported browser resources, timing and immutable builds."
+  :commands {:runtime/open {:doc "Open the runtime inspector" :run open}
+             :runtime/refresh {:doc "Sample runtime state" :run refresh}
+             :runtime/close {:doc "Return to the previous surface" :run (fn [ed] (if (:return (state ed)) (close ed) (assoc ed :frame/layout :none)))}}
+  :keys {:normal {"space r r" :runtime/open}}
+  :adopt adopt :intercept intercept :on-unuse leave :owns [:frame/layout]
+  :provides {:layouts {"runtime" layout "runtime-pelagic" pelagic-layout "runtime-pocket" pocket-layout}
+             :views {:runtime/inspector model}}})

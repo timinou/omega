@@ -86,6 +86,10 @@
     :mobile/clear (assoc ed :message nil)
     :mobile/modal (put ed :modal (:value ev))
     :mobile/field (put ed (keyword (:field ev)) (:value ev))
+    :mobile/runtime (if (some (fn [name] (= name "runtime")) (pkg/names ed))
+                      (-> ed (assoc-in [:pkg-state "runtime" :return] "mobile")
+                          (c/effect {:kind :frame-layout :layout "runtime-pocket" :keep {:rail :rail :task :task :file :file}}))
+                      (-> ed (put :open-runtime true) (c/effect {:kind :load-package :name "runtime"})))
     :mobile/machine-eval (-> ed (put :eval-result nil) (put :evaluating true)
                             (c/effect {:kind :intent :intent "world/eval" :args {:code (:text ev)} :then :mobile-evaluated}))
     :mobile/new-field (assoc-in ed [:pkg-state "mobile" :new (:field ev)] (:value ev))
@@ -101,6 +105,9 @@
     nil))
 (defn after [old ed ev]
   (cond
+    (and (:open-runtime (state ed)) (some (fn [name] (= name "runtime")) (pkg/names ed)))
+      (-> ed (put :open-runtime false) (assoc-in [:pkg-state "runtime" :return] "mobile")
+          (c/effect {:kind :frame-layout :layout "runtime-pocket" :keep {:rail :rail :task :task :file :file}}))
     (and (= :intent-result (:type ev)) (= :mobile-place-saved (:then ev)))
     (let [ed (put ed :saving-place false)]
       (if (:ok? ev) (-> ed (put :modal nil) (navigate {:screen "places" :path (get-in ev [:data :path])}))
