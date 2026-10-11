@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-11",
+  "method": "Interactive Playwright Chromium audit against user-authorized live Pocket world",
+  "identity": {
+    "db": "/home/user/.local/state/omega-pocket/0a15d6a7189e/db",
+    "frontend": "848027892cb07ccf1689a5b81dba18ee5346e5deb8a422ef7991c356a18491d5",
+    "host": "7627d7a54918f819ef41cde3e67aef5968bc3ecd983421c9878952da0ddc9f52",
+    "live": true,
+    "port": 8812,
+    "root": "/home/user/code/undefine/omega",
+    "routes": {
+      "omega.localhost": "/?use=packages&file=package:catalog",
+      "pelagic.dev": "/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org",
+      "spikes.pelagic.dev": "/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org"
+    },
+    "schema": "omega.dev-session",
+    "version": 1
+  },
+  "tasks": [
+    {
+      "path": "task:t-23",
+      "place": "project",
+      "cwd": "/home/user/code/undefine/omega",
+      "status": "idle",
+      "result": "## Editor-package rules\n\n- **Export one pure value:** `(def bl-package {...})` built from plain maps and fns. Per-editor state goes under `(:pkg-state ed)`, and the package never merges into shared tables.\n- **Load into the real bl-ed:** multi-pane screens are `:provides {:layouts …}`. `:(ed/unuse \"<name>\")` must restore the editor exactly.\n\nExample: `:(ed/use \"<name>\")`",
+      "recordedRead": "AGENTS.md"
+    },
+    {
+      "path": "task:t-26",
+      "place": "beam-lisp",
+      "cwd": "/home/user/code/undefine/beam-lisp",
+      "status": "idle",
+      "result": "The project name is **beam-lisp**. That's the top-level `:name` in `env.bl`. The `:app` section uses a different spelling, `beam_lisp`, as the OTP application name (version 0.1.0).\n\nI only read the file. I made no writes and ran no shell commands.",
+      "recordedRead": "env.bl"
+    }
+  ],
+  "observations": {
+    "executionOpenInitially": true,
+    "executionOpenAfter9500ms": false,
+    "openAddressBefore": "work:project/README.md",
+    "openAddressAfter9500ms": "",
+    "newGoalBeforeReload": "Unsent Pocket audit draft",
+    "newGoalAfterReload": "",
+    "documentScrollBeforeReload": 1816,
+    "screenAfterReload": "Work",
+    "scrollAfterReload": 0,
+    "modalFocusEscaped": true,
+    "narrowWidths": {
+      "viewport": 320,
+      "body": 320,
+      "pocketScroll": 320
+    },
+    "pageErrors": []
+  },
+  "limitations": [
+    "No physical device",
+    "No Safari or real software keyboard",
+    "No real mobile-network handover",
+    "No application source changed"
+  ]
+}
