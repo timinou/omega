@@ -2,24 +2,165 @@
   "cycles": 100,
   "completeScores": 2,
   "scoreRows": 1024,
+  "observed": {
+    "id": 1,
+    "generation": "/pkg/pelagic/prepare-worker.mjs",
+    "scope": "pooled worker",
+    "available": true,
+    "ageMs": 3.6000000089406967,
+    "snapshot": {
+      "limits": {
+        "payloads": "not collected",
+        "resources": 128
+      },
+      "resources": [
+        {
+          "id": [
+            "pid",
+            1,
+            0
+          ],
+          "kind": "actor",
+          "links": 0,
+          "message_queue_len": 0,
+          "owner": null,
+          "status": "running"
+        },
+        {
+          "id": [
+            "pid",
+            1,
+            103
+          ],
+          "kind": "actor",
+          "links": 0,
+          "message_queue_len": 0,
+          "owner": [
+            "pid",
+            1,
+            0
+          ],
+          "status": "waiting"
+        },
+        {
+          "id": [
+            "pid",
+            1,
+            104
+          ],
+          "kind": "actor",
+          "links": 0,
+          "message_queue_len": 0,
+          "owner": [
+            "pid",
+            1,
+            0
+          ],
+          "status": "waiting"
+        }
+      ],
+      "runnable": 0,
+      "schema": "bl.runtime.observation.v1",
+      "scope": {
+        "runtime": 1
+      },
+      "target": "javascript-actor",
+      "total": 3,
+      "truncated": false
+    }
+  },
   "pooled": {
     "workers": 1,
     "active": 0,
     "resetting": 0,
     "created": 1,
-    "forced": 0
+    "forced": 0,
+    "actors": [
+      {
+        "id": 1,
+        "generation": "/pkg/pelagic/prepare-worker.mjs",
+        "scope": "pooled worker",
+        "available": true,
+        "ageMs": 15.900000005960464,
+        "snapshot": {
+          "limits": {
+            "payloads": "not collected",
+            "resources": 128
+          },
+          "resources": [
+            {
+              "id": [
+                "pid",
+                1,
+                0
+              ],
+              "kind": "actor",
+              "links": 0,
+              "message_queue_len": 0,
+              "owner": null,
+              "status": "running"
+            },
+            {
+              "id": [
+                "pid",
+                1,
+                103
+              ],
+              "kind": "actor",
+              "links": 0,
+              "message_queue_len": 0,
+              "owner": [
+                "pid",
+                1,
+                0
+              ],
+              "status": "waiting"
+            },
+            {
+              "id": [
+                "pid",
+                1,
+                104
+              ],
+              "kind": "actor",
+              "links": 0,
+              "message_queue_len": 0,
+              "owner": [
+                "pid",
+                1,
+                0
+              ],
+              "status": "waiting"
+            }
+          ],
+          "runnable": 0,
+          "schema": "bl.runtime.observation.v1",
+          "scope": {
+            "runtime": 1
+          },
+          "target": "javascript-actor",
+          "total": 3,
+          "truncated": false
+        }
+      }
+    ]
   },
   "final": {
     "workers": 0,
     "active": 0,
     "resetting": 0,
     "created": 1,
-    "forced": 0
+    "forced": 0,
+    "actors": []
   },
-  "cancelP95Ms": 8.600000001490116,
-  "cancelMaxMs": 27.80000000447035,
-  "heartbeatP95Ms": 5.4000000059604645,
-  "heartbeatMaxMs": 7.800000004470348,
+  "cancelP50Ms": 4.100000008940697,
+  "cancelP95Ms": 4.200000002980232,
+  "cancelP99Ms": 4.299999997019768,
+  "cancelMaxMs": 4.4000000059604645,
+  "heartbeatP50Ms": 5,
+  "heartbeatP95Ms": 5.100000008940697,
+  "heartbeatP99Ms": 5.100000008940697,
+  "heartbeatMaxMs": 5.100000008940697,
   "digest": "d77e635fea215911aed99b5304c885febfbdbc4542b6f3d0f8d064db90c3ed8b",
   "independentSessions": true
 }

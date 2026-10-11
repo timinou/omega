@@ -76,3 +76,18 @@ test('closing before worker readiness queues cancellation without poisoning anot
  assert.equal(preparationWorkers().active,1);assert.equal(preparationWorkers().resetting,0);
  b.terminate();actual.emit({op:'cancelled',id:actual.sent.at(-1).id});closeIdlePreparationWorkers();
 });
+
+test('actor observations are demand-driven, bounded and never routed as lease work',async()=>{
+ const actual=new WorkerStub(),a=createPreparationWorker('observations',()=>actual),events=[];
+ a.addEventListener('message',e=>events.push(e.data));a.postMessage({op:'init'});await turn();
+ const before=actual.sent.length;preparationWorkers();assert.equal(actual.sent.length,before);
+ const pending=preparationWorkers({observe:true});assert.equal(pending.actors[0].available,false);
+ assert.equal(actual.sent.at(-1).op,'observe');
+ preparationWorkers({observe:true});assert.equal(actual.sent.length,before+1);
+ actual.emit({op:'observation',id:0,value:{schema:'bl.runtime.observation.v1',resources:[{kind:'actor'}]}});
+ assert.equal(events.length,1);
+ const observed=preparationWorkers().actors[0];assert.equal(observed.available,true);assert.ok(observed.ageMs>=0);
+ assert.equal(observed.snapshot.resources[0].kind,'actor');
+ a.terminate();await turn();closeIdlePreparationWorkers();
+ assert.equal(preparationWorkers().actors.length,0);
+});

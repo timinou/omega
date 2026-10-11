@@ -248,3 +248,26 @@ remote process killing, cross-tab control, or runtime restart UI to this cutover
 API naming is finalized in phase 0 against actual upstream exports, not invented
 in advance. Physical 16 ms remains an explicitly measured goal, not a promise
 that static analysis or this observability cutover can certify by itself.
+
+* Implementation checkpoint — 2026-10-11
+- Upstream main integrated through 070720a3 (six implementation commits): native
+  scoped projections, creator-owned private work, explicit JS owned spawn,
+  bounded actor snapshot, BL browser observations/subscriptions, and checked
+  direct lowering of closed runtime projections.
+- Current checkout gates: 66 BL assertions, nine compiled browser tests,
+  fourteen canonical ABI/callback tests; populated actor semantics/lifecycle
+  fixtures and eleven OTP exit-reason comparisons pass.
+- Clean commit-pinned release 070720a3 built as 3bc51aa2. Omega's 52 runtime and
+  15 frontend assertions pass against that release, without checkout overrides.
+- Populated actor snapshot benchmark (129 actors, 128 rows, 100 measured reads):
+  P95 172.08 ms before specialization, 0.637 ms after. This measures projection
+  only; conversion, DOM and physical audio/video are excluded.
+- Consumer cutover remains isolated in /tmp/omega-observation-cutover; shared
+  frontend assembly/browser acceptance are underway. No writes to port 8790.
+  Concurrent Pocket/workspace changes are preserved.
+- Concrete inventory: spikes/runtime/cutover-inventory.bl.org. Walkthrough:
+  spikes/runtime/implementation.bl.org. Upstream documentation and benchmark
+  raw evidence: docs/runtime-observation.bl.org and docs/proof/runtime-observation.
+- Full default/actor compiler consolidation, generic inspector extraction,
+  delta/loss reporting and the broader performance matrix remain open. Do not
+  report the full plan complete or infer a physical 16 ms A/V guarantee.

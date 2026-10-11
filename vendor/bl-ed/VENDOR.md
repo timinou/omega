@@ -374,3 +374,12 @@ the application host. Existing editor sessions remain on their chosen graph.
 - `ed/frame.bl` honors an on-unuse replacement layout effect before collapsing
   an unprovided layout. This preserves retained editors when a layered inspector
   restores a still-loaded package's layout. No package tables are merged.
+
+## Runtime observation cutover (2026-10-11)
+
+Removed `web/package-observations.mjs`. Package-owned browser registrations,
+peer bounds and subscription disposal now come from upstream `js.observation`,
+compiled in the same frontend graph. Runtime and Pelagic manifests request that
+namespace explicitly. The editor remains the existing vendored bl-ed package;
+this change does not move it into Beam Lisp. Generic actor ownership stays in
+upstream runtime records, rather than this browser resource collector.

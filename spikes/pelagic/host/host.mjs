@@ -1,5 +1,5 @@
 import * as R from '../../out/rt.mjs';
-import {observePackage} from '../../package-observations.mjs';
+import {d_observe_package as observePackage} from '../../out/js.observation.mjs';
 import * as Score from '../../out/pelagic.score.mjs';
 import * as Performance from '../../out/pelagic.performance.mjs';
 import * as Audition from '../../out/pelagic.audition.mjs';
@@ -521,7 +521,7 @@ export function createHost(api) {
       for(const key of ['a','b']){const name=decks[key]?.name;$(`[data-file-name="${key}"]`).textContent=name||(key==='a'?'harmonic field / D minor':'deep-house pulse / melodic fragments');}
     },dispose(){dead=true;canvas.removeEventListener('webglcontextlost',lost);canvas.removeEventListener('webglcontextrestored',restored);controls?.dispose();cancelAnimationFrame(raf);v.shader?.dispose();views.delete(v);delete root.pelagic;shadow.replaceChildren();}};
   }
-  const unobserve=observePackage('pelagic',()=>({diagnostics:report(),pool:preparationWorkers(),playing,revision:revisionID(),pending:pending.length,preparing:scoreVoices.stats(),evaluator:!!evaluatorClient,graphics:[...views].some(v=>!!v.shader?.worker),audioContext:ctx?.state||'none'}),{'audition-cancel':()=>request({kind:'audition-cancel'})});
+  const unobserve=observePackage('pelagic',()=>({diagnostics:report(),pool:preparationWorkers({observe:true}),playing,revision:revisionID(),pending:pending.length,preparing:scoreVoices.stats(),evaluator:!!evaluatorClient,graphics:[...views].some(v=>!!v.shader?.worker),audioContext:ctx?.state||'none'}),{'audition-cancel':()=>request({kind:'audition-cancel'})});
   return {mount,async effect(e){alive();switch(e.op){case 'play':configure(e.args);play();break;case 'stop':stop();notice('All voices stopped',false);break;
     case 'perform':configure(e.args);play(0,true);break;
     case 'request':try{request(e.args);}catch(error){notice('Edit rejected · '+errorText(error));}break;

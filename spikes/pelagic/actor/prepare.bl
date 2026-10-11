@@ -19,11 +19,14 @@
     (receive
       [:browser :prepare id]
         (if (compute/admit? jobs id)
-          (recur (assoc jobs id (rt-spawn prepare-score [(browser/preparation-context) id 0 owner])))
+          (recur (assoc jobs id (rt-spawn-owned prepare-score [(browser/preparation-context) id 0 owner])))
           (do (.postMessage js/self #js {:op "error" :id id :error "Preparation capacity exhausted"})
               (recur jobs)))
       [:browser :credit id]
         (do (when-let [worker (get jobs id)] (rt-send worker [:credit])) (recur jobs))
+      [:browser :observe id]
+        (do (.postMessage js/self #js {:op "observation" :id id :value (bl->js (rt-observation 32))})
+            (recur jobs))
       [:browser :ping id]
         (do (.postMessage js/self #js {:op "pong" :id id}) (recur jobs))
       [:browser :cancel id]

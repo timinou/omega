@@ -21,8 +21,8 @@ function connect(client,budget,url,factory){
  if(record&&!leaseRoom(record.clients.size,record.resetting.size))throw new Error('Preparation capacity exhausted');
  if(!record){
   const worker=factory();if(!worker)throw new Error('Preparation worker unavailable');
-  record={key,worker,clients:new Map(),resetting:new Map(),ready:false,closed:false,idle:0,pending:[]};
-  realms.set(key,record);created++;fresh=true;
+  record={id:++created,key,worker,clients:new Map(),resetting:new Map(),ready:false,closed:false,idle:0,pending:[],observation:null,observedAt:null,observationRequested:-Infinity};
+  realms.set(key,record);fresh=true;
   worker.addEventListener('error',event=>end(record,new Error(event.message||'Preparation worker failed')));
   worker.addEventListener('messageerror',()=>end(record,new Error('Preparation message could not be decoded')));
   worker.addEventListener('message',({data})=>{
@@ -31,6 +31,10 @@ function connect(client,budget,url,factory){
     record.ready=true;
     try{for(const pending of record.pending.splice(0))record.worker.postMessage(pending);}catch(error){end(record,error);return;}
     for(const target of record.clients.values())emit(target,'message',{data});
+   }else if(data.op==='observation'){
+    if(data.value?.schema==='bl.runtime.observation.v1'&&Array.isArray(data.value.resources)&&data.value.resources.length<=32){
+     record.observation=data.value;record.observedAt=performance.now();
+    }
    }else if(data.op==='cancelled'){
     clearTimeout(record.resetting.get(data.id));record.resetting.delete(data.id);idle(record);
    }else if(data.op==='error'&&!Number.isSafeInteger(data.id))end(record,new Error(data.error));
@@ -69,5 +73,20 @@ export function createPreparationWorker(url,factory){
   }
  };
 }
-export function preparationWorkers(){return {workers:realms.size,active:[...realms.values()].reduce((n,r)=>n+r.clients.size,0),resetting:[...realms.values()].reduce((n,r)=>n+r.resetting.size,0),created,forced};}
+function urlFor(record){return record.key.split('\n')[0];}
+export function preparationWorkers({observe=false}={}){
+ const now=performance.now(),actors=[];
+ for(const record of realms.values()){
+  // Pull only while an observer asks. Real Worker boundaries require messages;
+  // actor enumeration itself is the direct BL call inside the worker namespace.
+  if(observe&&record.ready&&!record.closed&&now-record.observationRequested>=1000){
+   record.observationRequested=now;
+   try{record.worker.postMessage({op:'observe',id:0});}catch(error){end(record,error);}
+  }
+  actors.push({id:record.id,generation:urlFor(record),scope:'pooled worker',available:record.observation!==null,ageMs:record.observedAt===null?null:now-record.observedAt,
+               snapshot:record.observation});
+ }
+ return {workers:realms.size,active:[...realms.values()].reduce((n,r)=>n+r.clients.size,0),
+         resetting:[...realms.values()].reduce((n,r)=>n+r.resetting.size,0),created,forced,actors};
+}
 export function closeIdlePreparationWorkers(){for(const r of realms.values())if(!r.clients.size&&!r.resetting.size)end(r);}

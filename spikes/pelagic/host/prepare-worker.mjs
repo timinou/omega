@@ -13,7 +13,7 @@ self.addEventListener('message',({data})=>{
     actor=H;return import('./actor/out/prepare.mjs');
    }).catch(fail);
   }else{
-   if(!actor||!['prepare','credit','ping','cancel'].includes(data.op)||!Number.isSafeInteger(data.id))
+   if(!actor||!['prepare','credit','ping','cancel','observe'].includes(data.op)||!Number.isSafeInteger(data.id))
     throw new Error('Invalid preparation event');
    actor.enqueueData(data.op,data.id);
   }

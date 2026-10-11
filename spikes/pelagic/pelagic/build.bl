@@ -4,7 +4,7 @@
             [pelagic.actor-build :as actors] [pelagic.artifact :as artifact]
             [omega.frontend :as frontend] [omega.artifacts :as artifacts]))
 
-(def compiler "b7837470")
+(def compiler "070720a3")
 (defn home []
   (Path/expand ".." (Path/dirname (BeamLisp.Loader/source_path "pelagic.build"))))
 (defn root [] (Path/expand "../.." (home)))

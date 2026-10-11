@@ -2,5 +2,6 @@
  :doc "Observe owned work, browser sessions, timing and frontend generations."
  :entry "runtime:overview"
  :frontend {:version 1 :entry "rtview.main" :roots ["vendor/bl-ed" "spikes/runtime"]
+  :includes ["js.observation"]
   :host ["eval-ed" "eval-cells"] :loader {:host "runtime/host.mjs"}
   :assets [{:from "spikes/runtime/host" :to "pkg/runtime" :suffixes [".mjs" ".css"]}]}}

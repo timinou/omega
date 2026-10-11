@@ -45,3 +45,21 @@ test('unconfirmed watcher stop is inert; one pending snapshot prevents polling o
  ed=Runtime.d_refresh(ed);const effects=get(ed,'effects');
  assert.equal(get(Runtime.d_refresh(ed),'effects'),effects);
 });
+test('pooled workers expose actual actor owners under the reporting browser resource',()=>{
+ const pid=n=>R.vecFromArray(['pid',1,n]);
+ const actor=(n,owner)=>R.hashMap(K('id'),pid(n),K('owner'),owner===null?null:pid(owner),K('status'),'waiting');
+ const worker=R.hashMap(K('id'),7,K('available'),true,K('snapshot'),
+   R.hashMap(K('resources'),R.vecFromArray([actor(0,null),actor(1,0)])));
+ const resource=R.hashMap(K('id'),'tab/resource',K('name'),'pelagic',K('data'),
+   R.hashMap(K('pool'),R.hashMap(K('actors'),R.vecFromArray([worker]))));
+ const tab=R.hashMap(K('session'),'tab',K('remote'),true,K('resources'),R.vecFromArray([resource]));
+ const s=session().use(Runtime.d_bl_package);
+ s.send(ev(K('type'),K('runtime/browser'),K('data'),R.vecFromArray([tab])));
+ const rows=Runtime.d_items(F.d_focused(s.fr)).toArray(),thread=rows.find(r=>get(r,'kind')==='worker');
+ const actors=rows.filter(r=>get(r,'kind')==='actor');
+ assert.equal(get(thread,'parent'),'tab/resource');assert.equal(actors.length,2);
+ assert.equal(get(actors[0],'parent'),get(thread,'id'));
+ assert.equal(get(actors[1],'parent'),get(actors[0],'id'));
+ assert.ok(actors.every(r=>get(r,'remote')===true));
+ assert.ok(actors.every(r=>get(r,'source')==='spikes/pelagic/actor/prepare.bl'));
+});

@@ -1,0 +1,85 @@
+#+title: Runtime cutover — ownership and a first walkthrough
+#+status: Consumer cutover verified; full PLAN-019 remains in progress
+
+* Scope
+The editor remains Omega's existing vendored bl-ed. Its inspector is a layered
+bl-ed package, with frame layouts and exact removal. Moving the editor into
+Beam Lisp is a separate project.
+
+Beam Lisp owns scoped runtime projections, explicit actor ownership, private
+work lifecycle and bounded browser observation handles. Omega owns world/task
+and build-generation adapters. Pelagic owns audio reserve, preparation and safe
+audition meaning. A printable resource ID is never permission to control it.
+
+* Read the implementation
+- [[file:../../src/omega/runtime.bl][Omega runtime adapter]] now delegates native enumeration and work lifecycle.
+- [[file:../../packages/runtime.edn][Runtime package manifest]] requests the compiled browser observation namespace.
+- [[file:rtview/main.bl][Inspector model]] remains pure editor state and effects.
+- [[file:host/host.mjs][Browser host]] owns DOM painting and a disposable upstream subscription.
+- Upstream walkthrough: docs/runtime-observation.bl.org in Beam Lisp.
+
+* What has been replaced
+The application-specific probe actor/controller and process-row enumeration
+have been removed from omega.runtime. Native work uses proc.work; native scope
+reads use vm.observation. Browser registrations/subscriptions now use the BL
+js.observation namespace. vendor/bl-ed/web/package-observations.mjs and its
+superseded local contract tests have been removed; stronger contract tests live
+with the upstream implementation.
+
+* Try the layout
+From Omega's root, run =bl runtime.dev=. Open the local address it prints.
+The =runtime= package opens the observatory; in an ordinary editor use
+=space r r=. Start an actor probe, select it, cancel it and inspect its terminal
+state. Open Pelagic in another tab of the same origin to see a descriptive peer
+report. Only the local tab's resource handles can invoke local package actions.
+
+Physical VM totals cover all projects sharing that BEAM. Realm rows cover only
+the hosting realm. Browser peers are reported sessions, not authenticated
+native realm members. Pausing/unmounting stops subscription sampling; six-second
+peer expiry uses a monotonic clock. No mailbox contents are collected.
+
+* Evidence so far
+Current upstream checkout toolchain: 66 BL assertions pass (native scope,
+private work and synchronous-host classification). The compiled browser module
+passes nine Node tests, and actor ownership/canonical-callable checks pass.
+Omega's native adapter passes its 52 integration assertions. Initial checks used
+the previous pinned compiler plus new source paths; the current checkout tests
+were run afterward. The final clean release is 070720a3 / 3bc51aa2: all 67 Omega runtime/frontend
+assertions pass. Its shared frontend passes 68 Pelagic, 75 vendored editor and
+four Runtime package drive tests. The unchanged presentation checker passes
+11 welcome and 12 Pelagic variants (a temporary printStr export alias adapts
+only its legacy diagnostic formatter). Twelve real-browser lifecycle checks
+pass in a private offline memory world, including Pocket at phone width.
+
+The actual Worker test performs 100 lease cycles and two complete 1024-row
+scores with one physical Worker, zero forced terminations and zero retained
+workers after cleanup. It observes three actual actors with owner edges and
+proves closing session A preserves B. This run measured cancellation P95
+4.2 ms and main-thread heartbeat P95 5.1 ms; these are not audio latency.
+
+* Still open
+Generic inspector extraction and domain contribution composition, bounded
+native membership queries, observation delta/loss semantics, actor-profile
+compiler consolidation, broader performance
+measurements and the five experience recordings remain tracked in PLAN-019.
+This document is a progress walkthrough, not a claim that the whole roadmap is
+finished or that physical audio/video latency meets 16 ms.
+
+* Follow the real preparation actors
+The tree now includes each pooled preparation Worker and its actual BL actor
+rows. Child rows use the owner edges reported by the runtime. Worker IDs are
+allocated by the existing physical pool and qualified by the reporting browser
+resource; recreating a thread gets a fresh ID. A report includes its age and
+availability, rather than displaying missing actor information as zero.
+
+Reading ordinary pool counters sends no messages. An active observation sample
+requests a report at most once per second per Worker. The read happens directly
+inside the BL preparation namespace; a message crosses only the real Worker
+boundary. Preparing jobs use explicit owned actor spawn, so the controller's
+lifetime owns those jobs. Shared physical pool leases retain their existing
+session isolation and cancellation contracts.
+
+The populated upstream observation benchmark measured 172 ms → 0.64 ms P95 for
+128 rows, using direct lowering of the same checked BL projection. That excludes
+DOM and physical audio/video output. Measurements and artifact hashes are in
+Beam Lisp's docs/proof/runtime-observation/ directory.

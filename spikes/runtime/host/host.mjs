@@ -1,4 +1,4 @@
-import {observations} from '../../package-observations.mjs';
+import {d_observations as observations,d_subscribe as subscribe} from '../../out/js.observation.mjs';
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const json=x=>JSON.stringify(x??null,null,2);
 const short=x=>String(x||'unavailable').slice(0,12);
@@ -18,13 +18,13 @@ export function createHost(){
    const reader=observations();try{reader.invoke(e.args.id,'audition-cancel');}finally{reader.dispose();}
   }
  },mount(root,dispatch){
-  const shadow=root.attachShadow({mode:'open'}),reader=observations();let dead=false,paused=false,signature;
+  const shadow=root.attachShadow({mode:'open'});let dead=false,paused=false,signature;
   const css=document.createElement('link');css.rel='stylesheet';css.href=new URL('./style.css',import.meta.url).href;
   const layoutCSS=document.createElement('link');layoutCSS.rel='stylesheet';layoutCSS.href=new URL('./layout.css',import.meta.url).href;document.head.append(layoutCSS);
   const shell=document.createElement('main');shadow.append(css,shell);
   const send=event=>{if(!dead)dispatch(event);};
-  const sample=()=>{if(dead||paused||document.hidden)return;send({type:'runtime/browser',data:reader.sample()});send({type:'runtime/refresh'});};
-  const timer=setInterval(sample,1000);document.addEventListener('visibilitychange',sample);queueMicrotask(sample);
+  const active=()=>!dead&&!paused&&!document.hidden;
+  const disposeObservation=subscribe(data=>{send({type:'runtime/browser',data});send({type:'runtime/refresh'});},{interval:1000,active});
   function render(m){
    const s=m.state||{},b=s.backend||{},items=m.items||[],selected=m.selected,build=b.build||{};
    const jobs=items.filter(i=>['probe','task'].includes(i.kind)),resources=items.filter(i=>i.kind==='browser-resource');
@@ -74,6 +74,6 @@ export function createHost(){
    if(b.dataset.action==='watch-stop'){if(confirm('Stop speculative builds for this world? Existing pages and playback remain.'))send({type:'runtime/watch-stop',confirmed:true});}
    else if(b.dataset.action)send({type:'runtime/'+b.dataset.action});
   });
-  return {update(model){paused=!!model.state?.paused;const next=JSON.stringify(model);if(next!==signature){signature=next;render(model);}},dispose(){dead=true;clearInterval(timer);document.removeEventListener('visibilitychange',sample);reader.dispose();layoutCSS.remove();shadow.replaceChildren();}};
+  return {update(model){paused=!!model.state?.paused;const next=JSON.stringify(model);if(next!==signature){signature=next;render(model);}},dispose(){dead=true;disposeObservation();layoutCSS.remove();shadow.replaceChildren();}};
  }};
 }

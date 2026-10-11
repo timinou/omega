@@ -1,0 +1,87 @@
+#+title: Runtime cutover inventory
+#+date: 2026-10-11
+#+status: Working inventory; measurement matrix incomplete
+
+* Baselines
+The isolated Omega tree starts at 4ebeae5; upstream starts at 03388121. Initial
+source probes use Omega's b7837470 compiler pin. Current upstream checkout tests
+then pass under its rebuilt toolchain. Six implementation commits have been integrated into upstream main through
+070720a3. The clean pinned release builds as 3bc51aa2 and passes 67 Omega
+runtime/frontend assertions. The assembled graph has passed editor, Pelagic,
+private browser and real Worker acceptance; see implementation.bl.org.
+
+* Authoritative lifetimes
+| Resource | Actual owner | Observation path | Disposal |
+|----------+--------------+------------------+----------|
+| Native realm processes | vm.owner registry | vm.observation | existing registry death/halt |
+| Native realm services | vm.manager/vm.service | vm.observation service projection | service lease/stop |
+| Native speculative probe | proc.work server + linked worker | work/snapshot | checkpoint, forced private cancel, owner stop |
+| JavaScript actors | js.actor runtime :procs | rt-observation | existing atomic death transaction |
+| Explicit owned JS children | :owner/:owned in same process records | same projection | owner death, child edge retraction |
+| Browser package resource | js.observation disposable registration | bounded callback projection | package host teardown |
+| Observation view | js.observation subscription | bounded reader/timer | view disposal/inactive predicate |
+| Preparation physical Worker | compute-worker.mjs pooled realm record | existing pool stats + actor report | final leases/reset/idle retirement |
+| Preparation job | BL actor in actor/prepare.bl | runtime actor projection | finished/cancel/owner death |
+| Live evaluator Worker | live-worker.mjs + host session | Pelagic diagnostics | session host disposal |
+| Graphics Worker | shader.mjs/render-worker.mjs | Pelagic diagnostics | view/engine disposal |
+| Audio context/graph/worklet | audio.mjs/timing-worklet.mjs host engine | audio diagnostics | engine shutdown |
+| Immutable frontend graph | omega.artifacts and host generation pins | Omega build adapter | graph leases/cache collection |
+| Editor package state | ed.pkg layer under :pkg-state | inspector model | exact ed/unuse |
+
+The pool owns physical threads and routes actual Worker messages; BL actors
+own logical jobs and bounded CPU turns. A pooled worker can serve two sessions,
+so disposing session A must preserve session B's leases. Browser peer reports
+carry descriptive data only; they do not extend native realm authority.
+
+* Execution and logic audit
+- Current ordinary JS lowering and js.actor are still separate execution
+  backends. They share canonical persistent values and callback boundaries.
+  Full actor-profile consolidation remains a real compiler task; it cannot be
+  checked off merely because conversion/value tests pass.
+- system.suspension proves non-suspension over checked IR. Unknown calls fail
+  closed. Immutable host state/self reads are admitted; writes, critical sections
+  and suspension/scheduler entrypoints remain excluded for callback evidence.
+- That proof is separate from purity, bounded cost, termination, worker safety
+  and physical latency. These facts must not be synthesized from one another.
+- runtime.observation keeps active history before completed rows; proc.work
+  bounds admission separately. Durable accepted effects still use existing
+  proc.admission/queue, rather than this discardable private-work API.
+- Native rows are bounded on output but vm.owner membership enumeration is not
+  yet paged. Delta/loss semantics and broader discipline display are unfinished.
+
+* Superseded implementations
+| Implementation | Disposition |
+|----------------+-------------|
+| omega.runtime worker/run/request! loop | removed in isolated consumer cutover |
+| omega.runtime process-row + process enumeration | replaced by vm.observation |
+| vendor/bl-ed/web/package-observations.mjs | removed; BL js.observation replaces it |
+| Omega collector-only tests | moved/strengthened upstream |
+| Inspector-owned browser interval | replaced by owned upstream subscription |
+| Pelagic independent preparation spawn | switched to explicit owned actor spawn |
+| Application-specific inspector models/layout variants | not yet extracted into generic package + adapters |
+| Default/direct versus actor compiler execution paths | unresolved consolidation dependency |
+| Existing canonical native-value host leaves | retained: shared ABI, not duplicate language semantics |
+| compute-worker physical Worker lease pool | retained: real thread/resource boundary, not a second actor scheduler |
+| Omega editor packaging inside vendored bl-ed | retained by explicit user scope |
+
+* Measurement protocol
+Record compiler commit and artifact identity for every run. Separate cold
+build, cached graph reuse and warm launch. Measure observation off/on during
+playback, history churn, cancellation and shared-worker sessions. Report native
+reductions/memory separately from browser timing. Record frame P95/P99 and
+missed events; label submission/clock estimates separately from physical output.
+
+Verified gates: 66 upstream BL assertions, nine compiled browser tests,
+fourteen canonical ABI/callback tests; actor semantics/lifecycle fixtures and
+11 OTP comparisons. Omega: 67 native/frontend assertions, 68 Pelagic contracts,
+75 vendored editor tests, four Runtime drive tests, unchanged presentation
+variants and twelve private real-browser lifecycle checks.
+
+The real Worker fixture passes 100 reuse/cancel cycles and two complete scores,
+with independent sessions and actual owned actor snapshots. It leaves no Worker.
+Raw evidence is spikes/pelagic/proof/shared-compute/pool.json.
+
+Populated actor projection benchmark: 129 actors, 128 rows, 20 warm-up plus
+100 measured reads. P95 falls from 172.08248 ms to 0.636692 ms using checked
+closed-kernel direct lowering. Conversion, DOM and physical A/V are excluded.
+Raw samples and environment hashes live upstream under docs/proof/runtime-observation.

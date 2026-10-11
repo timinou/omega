@@ -6,5 +6,4 @@ const stage=mkdtempSync(join(tmpdir(),'pelagic-host-test-'));
 const out=resolve(process.env.PELAGIC_OUT||new URL('../dist/local/out',import.meta.url).pathname);
 mkdirSync(join(stage,'pkg'),{recursive:true});cpSync(new URL('../host',import.meta.url),join(stage,'pkg/pelagic'),{recursive:true});
 symlinkSync(out,join(stage,'out'),'dir');process.on('exit',()=>rmSync(stage,{recursive:true,force:true}));
-symlinkSync(new URL('../../../vendor/bl-ed/web/package-observations.mjs',import.meta.url),join(stage,'package-observations.mjs'));
 export const hostImport=name=>import(pathToFileURL(join(stage,'pkg/pelagic',name)));
