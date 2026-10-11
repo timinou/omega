@@ -41,7 +41,7 @@
                                         {:type "omega/task" :key (:id t) :home (:home t) :cwd (:cwd t)})) (line d "* Tasks here and below") tasks)
         d (reduce (fn [d [k v]] (line d (str (pr-str k) " = " (pr-str (:value v)) " ← " (:from v))))
                   (line d "* Effective configuration") (sort-by first (p/settings places id)))]
-    (assoc (finish d) :data {:place id :name (:name here) :parent (:parent here) :root r :own-root (:root here) :home (:home here) :config (:config here) :settings (p/settings places id)})))
+    (assoc (finish d) :data {:place id :name (:name here) :parent (:parent here) :root r :cwd (:cwd (context sys (str "place:" id) nil)) :own-root (:root here) :home (:home here) :config (:config here) :settings (p/settings places id)})))
 (defn directory-doc [path]
   (let [dir (Path/expand (if (str/blank? path) "/" path))
         _ (when-not (File/dir? dir) (throw (ex-info (str "Not a directory: " dir) {})))

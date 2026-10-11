@@ -135,3 +135,13 @@ test('place form invokes the existing place intent as ordinary data',()=>{
  const ed=event(boot(),'mobile/place-save',{id:'notes',name:'Notes',root:'/tmp',parent:'',home:'',cwd:'.'}),fx=effects(ed).at(-1);
  assert.equal(g(fx,'intent'),'place/put');assert.match(g(g(fx,'args'),'text'),/:id "notes"/);assert.match(g(g(fx,'args'),'text'),/:cwd "\."/);
 });
+test('Files index clears an earlier file target without discarding that editor',()=>{
+ let ed=event(boot(),'mobile/tab',{tab:'plan',path:'work:project/a.org'});
+ ed=event(ed,'mobile/tab',{tab:'plan'});
+ assert.equal(g(U.d_state(ed),'file-path'),null);
+ assert.equal(g(effects(ed).at(-1),'path'),'work:project/a.org');
+});
+test('clearing a local cwd setting restores inheritance',()=>{
+ const ed=event(boot(),'mobile/place-save',{id:'notes',name:'Notes',root:'/tmp',parent:'',home:'',cwd:'',config:map({cwd:'.',model:'keep'})});
+ const text=g(g(effects(ed).at(-1),'args'),'text');assert.ok(!text.includes(':cwd'));assert.match(text,/:model "keep"/);
+});

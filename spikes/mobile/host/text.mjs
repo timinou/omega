@@ -36,5 +36,5 @@ export function unified(oldText,newText){
  while(end<a.length-start&&end<b.length-start&&a[a.length-1-end]===b[b.length-1-end])end++;
  const before=a.slice(Math.max(0,start-3),start),after=b.slice(b.length-end,Math.min(b.length,b.length-end+3));
  const rows=[...before.map(x=>[' ',x]),...a.slice(start,a.length-end).map(x=>['-',x]),...b.slice(start,b.length-end).map(x=>['+',x]),...after.map(x=>[' ',x])];
- return `<pre class="diff"><code><span class="diff-range">@@ ${start+1} · ${a.length-end-start} → ${b.length-end-start} @@</span>\n${rows.map(([p,x])=>`<span class="${p==='-'?'removed':p==='+'?'added':'context'}">${p}${escape(x)}</span>`).join('\n')}</code></pre>`;
+ return `<pre class="diff"><code><span class="diff-range">@@ -${Math.max(0,start-3)+1},${before.length+a.length-end-start+after.length} +${Math.max(0,start-3)+1},${before.length+b.length-end-start+after.length} @@</span>${rows.map(([p,x])=>`<span class="${p==='-'?'removed':p==='+'?'added':'context'}">${p}${escape(x)}</span>`).join('')}</code></pre>`;
 }

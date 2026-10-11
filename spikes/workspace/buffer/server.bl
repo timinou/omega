@@ -19,7 +19,7 @@
                                                    (when (:op/cell op) (str " · cell " (:op/cell op)))
                                                    "\nid: " (:op/id op) "\n- " (pr-str (:op/old op)) "\n+ " (pr-str (:op/new op)))) ops)) "\n")
      :read-only? true :data {:buffer-path address}
-     :objects (vec (map-indexed (fn [i op] {:row (+ 2 (* 4 i)) :type "buffer/op" :key (:op/id op) :path address :old (:op/old op) :new (:op/new op)
+     :objects (vec (map-indexed (fn [i op] {:row (+ 2 (* 4 i)) :type "buffer/op" :key (:op/id op) :path address :old (:op/old op) :new (:op/new op) :before (:op/before op) :after (:op/after op) :span (:op/span op)
                                             :actor (:op/actor op) :kind (name (:op/kind op)) :rev (:op/rev op) :task (:op/task op)}) ops))}))
 (defn providers [sys server]
   {"work" (provider sys server)

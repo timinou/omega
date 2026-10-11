@@ -32,6 +32,8 @@
         (is (= "Agent edit\n" (File/read! (str root "/note.org"))))
         (is (= 1 (count (buffer/operations (:env h) (str root "/note.org")))))
         (is (seq (:turns (desk/task-context (:sys h) id))))
+        (is (= root (:cwd (first (filter :place (:objects (desk/scope-doc (:sys h) "all")))))))
+        (is (= root (get-in (places/place-doc (:sys h) "project") [:data :cwd])))
         (is (= (Path/basename root) (:place-name (desk/task-context (:sys h) id))))
         (is (= root (:root (first (:objects (places/tree-doc (:sys h)))))))
         (is (= "Agent edit" (:new (first (:objects (changes/changes-doc (:sys h) "work:project/note.org"))))))

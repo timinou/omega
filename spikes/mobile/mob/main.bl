@@ -65,8 +65,7 @@
 (defn choose-tab [ed ev]
   (if (and (:dirty ev) (:path ev) (not= (:path ev) (:current-file ev)))
     (c/message ed "Publish the file before opening another document. Your edits are retained.")
-    (cond-> (put ed :tab (:tab ev))
-    (:path ev) (put :file-path (:path ev))
+    (cond-> (-> ed (put :tab (:tab ev)) (put :file-path (:path ev)))
     (:path ev) (visit-pane :file (:path ev) (when (:block ev) {:block (:block ev)})))))
 (defn event [ed ev]
   (case (:type ev)

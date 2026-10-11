@@ -20,7 +20,7 @@ page.on('pageerror',e=>errors.push(e.stack));
 const start=async(at=123)=>page.evaluate(async at=>{
  const {createHost}=await import('/host.mjs');
  window.ms={rail:{role:'rail',path:'workspace:all',state:{screen:'task',tab:'conversation','task-path':'task:1',connection:{online:true}},objects:[],text:''},task:{role:'task',path:'task:1',draft:'',data:{desk:'task','task-id':'1','task-at':at,'task-status':'done','task-title':'Task'},state:{},text:'',objects:[]},file:{role:'file',path:'work:test/doc',revision:'1',text:'Selected words\nNext line',state:{},objects:[]}};
- window.host=createHost({dispatch(e){if(e.type==='mobile/draft')ms.task.draft=e.text;if(e.type==='mobile/selection')ms.rail.state.selection=e.selection;if(e.type==='mobile/connection')ms.rail.state.connection={online:e.online,checked:e.checked};if(e.type==='mobile/new-field')(ms.rail.state.new??={})[e.field]=e.value;if(e.type==='mobile/field')ms.rail.state[e.field]=e.value;if(e.type==='mobile/modal')ms.rail.state.modal=e.value;if(e.type==='mobile/nav')Object.assign(ms.rail.state,{screen:e.screen,'task-path':e.screen==='task'?e.path:ms.rail.state['task-path']});if(e.type==='mobile/document'){Object.assign(ms.rail.state,{screen:'document','file-path':e.path});ms.file.path=e.path;}window.update();}});
+ window.events=[];window.host=createHost({dispatch(e){events.push(e);if(e.type==='mobile/draft')ms.task.draft=e.text;if(e.type==='mobile/selection')ms.rail.state.selection=e.selection;if(e.type==='mobile/connection')ms.rail.state.connection={online:e.online,checked:e.checked};if(e.type==='mobile/new-field')(ms.rail.state.new??={})[e.field]=e.value;if(e.type==='mobile/field')ms.rail.state[e.field]=e.value;if(e.type==='mobile/modal')ms.rail.state.modal=e.value;if(e.type==='mobile/nav')Object.assign(ms.rail.state,{screen:e.screen,'task-path':e.screen==='task'?e.path:ms.rail.state['task-path']});if(e.type==='mobile/document'){Object.assign(ms.rail.state,{screen:'document','file-path':e.path});ms.file.path=e.path;}window.update();}});
  window.views=Object.fromEntries(['rail','task','file'].map(k=>[k,host.mount(document.getElementById(k))]));
  window.update=()=>{for(const k of ['task','file','rail'])views[k].update(ms[k]);};update();
 },at);
@@ -50,6 +50,10 @@ try{
  assert.equal(await page.locator('.message.agent strong').innerText(),'Readable');
  assert.equal(await page.locator('.message.agent li').count(),2);
  assert.equal(await page.locator('.result-card').count(),0,'one canonical response');
+ await page.evaluate(()=>{ms.task.objects=[{type:'omega/msg',key:'q-1',message:'Which route?'}];ms.task.data.questions=[{id:'q-1',data:{choices:[{label:'Keep',value:'keep'},{label:'Replace',value:'replace'}]}}];update();});
+ assert.equal(await page.locator('[data-act="choice"]').count(),2,'typed choices retain their actual semantics');await page.locator('[data-act="choice"]').first().click();assert.equal(await page.evaluate(()=>events.filter(e=>e.type==='mobile/send').at(-1).answer),'keep');
+ await page.evaluate(()=>{ms.task.objects=[];ms.task.data.questions=[];update();});
+
  await page.evaluate(()=>{ms.task.data.turns.push({n:3,role:'assistant',content:[{type:'tool-use',id:'full',name:'eval',input:{code:'(read \"brief.org\")'}}]},{n:4,role:'user',content:[{type:'tool-result',id:'full',content:'<script>danger()</script>\n'+('Full evidence\n'.repeat(200))}]});update();});
  await page.locator('[data-key="step:full"] summary').click();
  assert.equal(await page.locator('.tool-result').innerText().then(x=>x.includes('Full evidence\n'.repeat(199))),true,'execution shows the full recorded result');
@@ -57,7 +61,19 @@ try{
 
  await page.evaluate(()=>{ms.rail.state.screen='places';update();});
  assert.equal(await page.locator('[data-act="add-place"]').count(),1,'places exposes attachment');
+ await page.evaluate(()=>{ms.rail.state.modal='place';ms.rail.message='Could not save place: missing directory';update();});
+ assert.equal(await page.locator('[role="dialog"] [role="alert"]').count(),1,'form errors appear inside the active dialog');
+ await page.evaluate(()=>{ms.rail.state.modal=null;ms.rail.message=null;update();});
+
  await page.evaluate(()=>{ms.rail.state.screen='task';update();});
+ await page.evaluate(()=>{ms.task.data.home={path:'omega:scratch',block:'1'};ms.task.data.artifacts=[{kind:'home',path:'omega:scratch'}];update();});
+ await page.locator('[data-act="tab-changes"]').click();
+ assert.equal(await page.evaluate(()=>events.filter(e=>e.type==='mobile/tab').at(-1).path),undefined,'source home is not a changed file');
+ await page.evaluate(()=>{ms.rail.state.tab='changes';ms.file.path='changes:work:test/unrelated.org';ms.file.objects=[{type:'buffer/op',key:'old',row:2,old:'Old',new:'New'}];update();});
+ assert.equal(await page.locator('.change-card').count(),0,'another task cannot inherit an unrelated review');
+ await page.evaluate(()=>{ms.rail.state.tab='conversation';ms.file.path='work:test/doc';ms.file.objects=[];update();});
+
+
  await page.evaluate(()=>{ms.rail.state.modal='commands';update();});
  await page.locator('[data-field="address"]').fill('work:test/slowly-typed.org');
  await page.evaluate(()=>{ms.rail.state.connection.checked=Date.now()+1;update();});
@@ -77,6 +93,7 @@ try{
  await page.locator('.reader-line').first().evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);el.dispatchEvent(new PointerEvent('pointerup',{bubbles:true}));});
  assert.equal(await page.evaluate(()=>window.getSelection().toString()),'Selected words','Ask selection preserves native copy');
  assert.equal(await page.locator('[data-act="ask-passage"]').isDisabled(),false);
+ assert.equal(await page.locator('[data-act="copy-passage"]').isDisabled(),false,'selected passage enables Copy without destroying the native range');
  await dispose();assert.equal(await page.locator('[data-mobile-resource]').count(),0);
  assert.deepEqual(errors,[]);
  console.log('host browser: retained replies, task identity, native selection, disposal passed');
