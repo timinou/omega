@@ -1,0 +1,248 @@
+#+title: Beam Lisp runtime observability — complete upstream cutover
+#+status: READY_FOR_REVIEW
+#+date: 2026-10-11
+
+* Purpose and completion contract
+Replace the Runtime observatory prototype's application-owned runtime machinery
+with standard Beam Lisp ownership, actor, observation and discipline facilities.
+Omega composes the interface and world/task projections; Pelagic contributes
+application diagnostics. Ordinary BL namespaces inherit inspection automatically
+from their runtime participation, without maintaining a second registration or
+optimization specification.
+
+This is a complete production cutover, not an optional competing backend.
+Finish means migrated consumers, deleted superseded implementations, documented
+contracts, reproducible evidence and a pinned release that runs from root env.bl.
+Do not label a scaffolding implementation or unperformed proof as complete.
+This document plans work; no runtime implementation is authorized by its status.
+
+* Relationship to existing work
+- PLAN-017-runtime-observatory supplies the working vertical and regression base.
+- PLAN-014-actor-native-consolidation supplies the canonical actor/value/compiler
+  requirement. Audit its TODOs against current upstream: documentation can lag
+  implementation. Any remaining parallel production execution/value path used
+  by this vertical is a cutover dependency, not an acceptable hidden fallback.
+- PLAN-016-shared-package-development supplies realm/world/session boundaries,
+  immutable generations, warm launch and shared graph ownership. Retain them.
+- Preserve the five existing Pelagic experience contracts, especially safe
+  audition; exercise them as integration regressions. This plan does not silently
+  promise unrelated language rewrites or new creative features.
+- Inspection anchors (moving checkouts, not release pins): Omega 69ca14b;
+  upstream a62e8473. Reconcile changes before implementation. Record the actual
+  clean baseline and installed/pinned compiler identity in phase 0.
+
+* Non-negotiable architecture
+One reader, checked ANF, canonical value/callback ABI and actor execution model.
+Direct same-realm native JavaScript calls specialize that model. Actual Worker
+and tab boundaries use real messages/transfers and explicit ownership; an
+inspector must never introduce a mandatory transport on local calls.
+
+Authority remains with the owner of the actual resource. Observation is a
+bounded read projection, not another process registry or a scheduler. A remote
+report cannot grant cancellation or restart authority. Shared physical VMs do
+not make different projects, worlds, tabs or generations interchangeable.
+
+Unknown evidence remains unknown. A synchronous function is not necessarily
+pure, cheap, terminating, worker-safe, or capable of meeting a 16 ms deadline.
+No copying of full mailboxes, arbitrary environment values or payload contents.
+No writes to the user's world on port 8790; test private offline memory worlds.
+Preserve concurrent changes, cap BL jobs and stop owned test processes.
+
+* Ownership of the final code
+| Concern | Final owner |
+|---------+-------------|
+| Process identity, ownership, monitors, links, runnable/mailbox counters | Beam Lisp actor/runtime modules |
+| Scoped read projections, observations and subscription lifetime | Beam Lisp standard libraries |
+| Admission, cancellation, execution and job lifecycle | Existing proc facilities, extended only where needed |
+| Interop/effect/suspension/transition evidence | typed and system modules over canonical checked IR |
+| Browser DOM, Worker, channel and clock operations | Small bounded JS interop namespaces/host leaves |
+| Generic inspector package and frame integration | bl-ed, reusable without Omega imports |
+| World/task/catalog/host-generation projections and root tasks | Omega |
+| Audio reserve, audition, preparation, graphics and revision meaning | Pelagic |
+
+The generic inspector stays a loadable bl-ed package. Its models and controller
+are BL; imperative browser work is bounded interop. Omega adds domain adapters,
+not a fork of the inspector. No application domain names enter generic ed/*.
+
+* Phase 0 — baseline, inventory and settled contracts
+- [ ] Map every native/JS owner, scheduler, queue, worker pool, observer and
+      disposal path used by ordinary server/frontend and local Pelagic builds.
+      Include editor, live evaluator, preparation, graphics and audio resources.
+- [ ] Classify durable queue work separately from ephemeral actor work. Reuse
+      proc contracts without forcing transient playback work into a durable DB.
+- [ ] Audit current typed/system/proc coverage with focused probes. Distinguish
+      implemented checks, sound but incomplete analyses and proposed extensions.
+- [ ] Inventory duplicate actor/value/callback paths relevant to this graph;
+      reconcile PLAN-014 with concrete files, consumers and removal owners.
+- [ ] Record baseline startup/build/cache, artifact sizes, CPU/memory, actor
+      fairness, cancellation, playback and observer-off/on measurements.
+- [ ] Settle public names, schemas, authority and target-support matrix in an
+      upstream design note before adding exported APIs. Names below are
+      conceptual contracts, not claims that new namespaces already exist.
+Exit: concrete migration/deletion inventory and benchmark protocol checked in;
+no unresolved choice that could require a second production execution model.
+
+* Phase 1 — upstream ownership and observation contract
+- [ ] Define immutable resource identity: issuing runtime/session, owner,
+      resource identity, kind, generation and lifecycle epoch where required.
+      Do not use printable PIDs or user-visible labels as control capabilities.
+- [ ] Project existing vm.owner/service/realm authority and JS actor registry.
+      Include owner relationships and native worker/scheduler placement where
+      known. Generic non-actor resources have owned handles tied to lifecycle.
+- [ ] Define bounded snapshot and delta/subscription contracts: schema version,
+      sample sequence, monotonic durations, wall timestamp, units, availability,
+      truncation, staleness and dropped/coalesced update counts.
+- [ ] Keep telemetry demand-driven and cheap when disabled. Consumers cannot
+      block actors; bound cardinality, bytes, retained history and subscriber
+      backlog. Overflow reports loss and supports bounded resynchronization.
+- [ ] Scope observations to authorized realm/world/session views. Counters for
+      the physical VM are explicitly distinguished from realm-owned resources.
+- [ ] Define target support explicitly: BEAM/native host versus JS main thread,
+      Worker and AudioWorklet. Missing counters are unavailable, never zero.
+Exit: native and JS contract fixtures, identity/isolation/death/overflow tests;
+no independent shadow registry holding the authoritative actor lifecycle.
+
+* Phase 2 — standard lifecycle and browser interop
+- [ ] Give ordinary proc/actor users standard lifecycle/progress observations
+      through existing owners. Optional application progress is data attached
+      to existing work; bookkeeping is not repeated by every caller.
+- [ ] Preserve admission cancellation before execution, cooperative cancellation
+      of private speculative work, and draining of accepted shared effects.
+      Define outcomes, cancellation races and completion precedence explicitly.
+- [ ] Preserve active ownership through history churn; bounded completed history
+      cannot remove active work or weaken concurrency admission.
+- [ ] Tie workers, subscriptions, timers, channels and host handles to owners.
+      Define owner death, package unuse, realm close and worker failure cleanup.
+- [ ] Move generic browser observation mechanics into upstream BL, using the
+      existing JS namespace boundary and bl->js/js->bl conversions. Retain only
+      necessary browser leaves. No extra reader or hand-maintained JS BL model.
+- [ ] Treat tab reports as expiring observations with bounded validation. Same
+      origin alone is not a control grant. Local controls resolve current owner
+      authority at invocation; stale handles are refused.
+- [ ] Extend existing worker/resource facilities where required instead of
+      introducing a second pool. Preserve direct local calls and transferable
+      buffers; observations must not serialize DSP or graph payloads.
+Exit: owner-death, churn, duplicate cancel, timeout, stale-generation, worker
+crash, teardown and disposal tests pass on every supported execution target.
+
+* Phase 3 — disciplines and compiler evidence
+- [ ] Reuse typed/system.js for native receiver and conversion diagnostics,
+      known missing #js and explicit numeric-policy checks. Keep JS use bounded
+      to the declared interop namespace; ordinary callers need no annotation.
+- [ ] Reuse system.suspension to specialize proven synchronous calls inside the
+      canonical actor profile. Test recursive and higher-order calls, callbacks,
+      exceptions and unknown callees; unproved calls use the canonical safe path.
+- [ ] Extend effect summaries for observation leaves. Check declared read-only
+      projections and separate control effects; unknown effects stay unknown.
+- [ ] Model lifecycle transitions with system.model/proc contracts. Add bounded
+      model/property checks for active ownership, terminal transitions and
+      generation publication/cancellation races. Runtime enforcement remains
+      necessary for dynamic limits, owner liveness and authority.
+- [ ] Carry source/generation/proof provenance with compiled definitions so the
+      inspector explains evidence without reanalyzing on each sample. Consume
+      existing publication evidence only for the properties it actually proves.
+- [ ] Infer from ordinary BL code and existing declarations wherever possible.
+      Do not require per-function telemetry registrations or duplicated policies.
+Exit: positive and negative fixtures show exact diagnosed properties; unknown
+cases never acquire a fabricated proof. Compiler passes preserve language and
+interop semantics on both targets. No general hard-real-time proof is claimed.
+
+* Phase 4 — reusable bl-ed inspector and thin Omega integration
+- [ ] Extract a generic bl-package over upstream observation values and controls.
+      Keep five sections: ownership, active work, health/timing, builds/revisions,
+      selected-item details. Domain projections are explicit contributions.
+- [ ] Use expandable ownership branches, stable selection and keyed DOM updates.
+      Preserve scroll, focus and open details across samples; bound rendered rows.
+- [ ] Use demand-driven subscriptions/coalescing; pause hidden views and close
+      listeners on unload. Selected details can request bounded extra information.
+- [ ] Make unavailable/stale/sampled telemetry and scope visible. Source links
+      distinguish project-source authority from world documents; supported task
+      links must navigate correctly rather than hitting a project allowlist.
+- [ ] Keep native controls scoped to authorized owners. Candidate opening creates
+      a new immutable session. Watch stop is explicit and world-scoped. Host/realm
+      restart remains CLI-owned until a separately reviewed authority design.
+- [ ] Replace Omega runtime.bl's generic runtime projection/controller with thin
+      world/task/source/build adapters. Keep runtime.dev and package catalog entry.
+- [ ] Integrate layout-scoped composition in bl-ed/Pocket so companion views
+      require no Runtime-specific workaround for Pocket's global full-screen CSS.
+      Preserve main, Pelagic and Pocket editors, host identity and exact unuse.
+Exit: inspector also works without Omega domain providers; real editor tests,
+viewport/click proof at desktop/phone widths, exact use/unuse and unchanged
+presentation equivalence pass. Record vendored changes in VENDOR.md.
+
+* Phase 5 — Pelagic full consumer migration
+- [ ] Derive actor/worker identities, queue/cancellation and generic resource
+      counters from upstream authority. Keep only audio/graphics/domain metrics
+      in Pelagic. Remove duplicate observation/job registries and disposal logic.
+- [ ] Observe reuse before playback, obsolete preparation cancellation, revision
+      adoption, preparation reserve and speculative export/analysis pressure.
+- [ ] Preserve reserve-based admission and bounded background bursts; expensive
+      pure work uses existing actor workers, with CPU contention measured.
+- [ ] Verify safe audition: prepare, preview, atomic quantized commit, cancel,
+      failure and retention of the active revision. Exercise all five existing
+      experiences and source-to-performance navigation under inspection.
+- [ ] Cover regular shared server/frontend and optional local bundle. One graph,
+      actor/value contract and package implementation; local is packaging policy.
+Exit: no Pelagic production toggle selects a legacy implementation. Playback,
+audition, warm reuse, supersession and disposal pass native and browser gates.
+
+* Phase 6 — performance and package/build completion
+- [ ] Benchmark seeded repeatable workloads: observer absent, present/paused and
+      active; idle, playback, preparation bursts, rapid edits, audition, export,
+      multiple sessions and workers. Hold concurrency/device/config fixed.
+- [ ] Record warmup, run duration, sample counts, repetitions and order. Use at
+      least five repeated runs with paired off/on cases; retain raw samples and
+      report P50/P95/P99, misses/underruns, cancellations, CPU and memory.
+- [ ] Separate queue wait, worker execution, UI/frame submission and audio-clock
+      estimates. Physical speaker/display latency requires device measurements;
+      headless Chromium cannot certify the 16 ms physical target.
+- [ ] Freeze observer overhead budgets from phase-0 baselines before tuning.
+      Gate on bounded retained memory/backlogs and no observer-induced playback
+      failures. Report latency changes with variance, not a best isolated run.
+- [ ] Use compiler-discovered dependency evidence for precise invalidation where
+      available. Test BL edits, assets, docs, compiler changes and external inputs;
+      unknown dependencies remain conservative. Reuse checked graph on doc/asset
+      edits that cannot affect compiled code. Never relabel stale output.
+- [ ] Pin the tested upstream release and validate fresh/warm root env.bl tasks,
+      shared VM/project realms, server/frontend and local package builds.
+Exit: reproducible results and explicit limitations; unresolved performance
+work has measured evidence and a named follow-up. Semantic/ownership failures
+or parallel production implementations cannot be waived as latency follow-ups.
+
+* Phase 7 — delete, document, demonstrate, audit
+- [ ] Delete the prototype probe scheduler/controller in omega.runtime after
+      replacing its demo with ordinary upstream actor/proc examples.
+- [ ] Delete vendor/bl-ed/web/package-observations.mjs after all browser consumers
+      use the upstream BL facility; remove its imports, tests and duplicate logic.
+- [ ] Delete superseded projection, polling, history, transport and disposal
+      implementations and temporary compatibility aliases. Retain only deliberate
+      target/DOM leaves and application adapters with documented contracts.
+- [ ] Remove obsolete tests/configs and replace them with canonical contract and
+      integration checks. Temporary migration adapters must have no consumers
+      before deletion; no migration adapter remains in the final release graph.
+- [ ] Audit imports, generated graph/manifests and ordinary launch paths for
+      abandoned code, optional legacy profiles and duplicate ownership tables.
+- [ ] Commit upstream in reviewable slices, then pin and commit Omega consumers.
+      Intermediate commits build; any temporary adapter has a removal gate in
+      this plan. No production feature-flag fork is the finished state.
+- [ ] Write .bl.org showcases from simple actors through interop, workers,
+      cancellation, observation, evidence and Pelagic audition. Distinguish real
+      guarantees from proposed features; source links point to runnable examples.
+- [ ] Record real-editor demos of all five inspector sections, the five retained
+      Pelagic experiences, native/JS work, worker failure, two sessions, narrow
+      Pocket, and exact unload. Preserve before/after screenshots and raw evidence.
+- [ ] Final source/native/compiler/actor semantics, editor/package, browser,
+      presentation, fresh/warm launch, local build and benchmark gates pass.
+Exit: deletion inventory is empty, documentation matches the pinned release,
+all supported paths use the canonical implementation, and conclusions state
+what improved, what was measured, and which performance questions remain.
+
+* Review decisions already settled
+Prefer ordinary namespace code and inferred evidence over new annotation syntax.
+Reuse ownership and proc semantics rather than upstreaming prototype machinery
+unchanged. Keep mechanisms upstream and domain meaning in Omega/Pelagic. Local
+demos remain optional packaging of the same application. Do not add universal
+remote process killing, cross-tab control, or runtime restart UI to this cutover.
+API naming is finalized in phase 0 against actual upstream exports, not invented
+in advance. Physical 16 ms remains an explicitly measured goal, not a promise
+that static analysis or this observability cutover can certify by itself.
