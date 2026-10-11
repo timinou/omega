@@ -1,5 +1,5 @@
 #+title: Beam Lisp runtime observability — complete upstream cutover
-#+status: READY_FOR_REVIEW
+#+status: IN_PROGRESS
 #+date: 2026-10-11
 
 * Purpose and completion contract
@@ -14,7 +14,8 @@ This is a complete production cutover, not an optional competing backend.
 Finish means migrated consumers, deleted superseded implementations, documented
 contracts, reproducible evidence and a pinned release that runs from root env.bl.
 Do not label a scaffolding implementation or unperformed proof as complete.
-This document plans work; no runtime implementation is authorized by its status.
+Implementation approved by the user; editor work stays in the existing vendored
+bl-ed here. Moving or integrating bl-ed into Beam Lisp is explicitly out of scope.
 
 * Relationship to existing work
 - PLAN-017-runtime-observatory supplies the working vertical and regression base.
@@ -60,7 +61,8 @@ Preserve concurrent changes, cap BL jobs and stop owned test processes.
 | World/task/catalog/host-generation projections and root tasks | Omega |
 | Audio reserve, audition, preparation, graphics and revision meaning | Pelagic |
 
-The generic inspector stays a loadable bl-ed package. Its models and controller
+The generic inspector stays a loadable package in Omega’s existing vendored
+bl-ed. No editor packaging/repository migration into Beam Lisp is included. Its models and controller
 are BL; imperative browser work is bounded interop. Omega adds domain adapters,
 not a fork of the inspector. No application domain names enter generic ed/*.
 
