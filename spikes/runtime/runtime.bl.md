@@ -53,3 +53,10 @@ Run the compiled package drive tests with `BLED_OUT=<frontend>/out node --test
 spikes/runtime/test/drive.test.mjs`. Run backend ownership tests with
 `bin/bl --cold test test/runtime_test.bl`. The standard vendored-editor drive
 suite and unchanged presentation check are release gates too.
+
+See the [live inspector](proof/used.png), [editor after unuse](proof/unused.png),
+[PELAGIC companion](proof/pelagic-companion.png), and
+[Pocket companion](proof/pocket-companion.png). The
+[browser report](proof/browser.json), [native gates](proof/source-tests.log),
+[editor regressions](proof/editor-tests.log), and
+[PELAGIC regressions](proof/pelagic-tests.log) record the checks.

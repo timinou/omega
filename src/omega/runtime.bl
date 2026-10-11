@@ -25,9 +25,12 @@
        (let [id (str "probe-" (System/unique_integer (list :positive))) controller (erlang/self)
              pid (spawn (fn [] (worker controller id)))]
         (swap! state (fn [jobs]
-          (into {} (take 32 (sort-by (fn [[_ j]] (- (:started j)))
-           (assoc jobs id {:id id :title "Inspector actor probe" :status :running :progress 0
-                          :started (now) :pid pid :ref (erlang/monitor :process pid) :source "src/omega/runtime.bl"}))))))
+          (let [ordered (sort-by (fn [[_ j]] (- (:started j)))
+                         (assoc jobs id {:id id :title "Inspector actor probe" :status :running :progress 0
+                          :started (now) :pid pid :ref (erlang/monitor :process pid) :source "src/omega/runtime.bl"}))
+                active? (fn [[_ j]] (contains? #{:running :cancelling} (:status j)))
+                active (filter active? ordered)]
+           (into {} (concat active (take (- 32 (count active)) (remove active? ordered)))))))
         (erlang/send caller [ref {:id id}]) (recur)))
      [:cancel caller ref id]
       (let [job (get @state id)]

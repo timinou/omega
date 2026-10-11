@@ -1,0 +1,9 @@
+/* Pocket keeps its host and editors mounted while the inspector shares the frame.
+   These rules exist only for this companion layout and leave with its host view. */
+.omega-mobile #panes:has(>[data-pane="phone"]):has(>[data-pane="observatory"]) {display:flex!important}
+.omega-mobile #panes:has(>[data-pane="observatory"])>[data-pane="phone"] {width:auto!important;min-width:0;flex:2 1 0!important}
+.omega-mobile #panes:has(>[data-pane="phone"])>[data-pane="observatory"] {min-width:0;height:100%;flex:3 1 0!important;overflow:hidden}
+@media(max-width:800px) {
+ .omega-mobile #panes:has(>[data-pane="observatory"])>[data-pane="phone"] {display:none}
+ .omega-mobile #panes:has(>[data-pane="phone"])>[data-pane="observatory"] {flex:1 1 0!important}
+}

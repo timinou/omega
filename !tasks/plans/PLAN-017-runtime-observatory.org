@@ -25,7 +25,7 @@ Physical audio/video latency remains unmeasured. Inspection samples at 1 Hz,
 pauses when hidden, and never schedules CPU work on the UI thread.
 
 * Verification (2026-10-11)
-- Native source gates: 14 runtime and 26 host assertions pass.
+- Native source gates: 52 runtime and 26 host assertions pass.
 - Compiled package/observation drive checks: 5 pass.
 - Vendored editor: 75 pass. PELAGIC: 67 pass, none skipped.
 - Real-browser vertical: 12 checks pass, zero browser errors.
@@ -39,3 +39,19 @@ pauses when hidden, and never schedules CPU work on the UI thread.
 - Keyed DOM updates and expandable ownership branches for larger worlds.
 - Physical audio/video measurements and observer-overhead benchmarks.
 - Host/realm restart stays in the CLI; no cross-tab control capabilities.
+
+* Main-checkout integration
+- Root runtime.dev task serves the real package and native snapshot on a private port.
+- All 12 browser checks repeated against the current Pocket frontend, no errors.
+- History churn: keep active jobs through 34 newer completions, retain 32 rows,
+  and enforce the four-job limit; active work remains cancellable.
+- Evidence: [[file:../../spikes/runtime/proof/used.png][inspector]],
+  [[file:../../spikes/runtime/proof/unused.png][after unuse]],
+  [[file:../../spikes/runtime/proof/pelagic-companion.png][PELAGIC companion]],
+  [[file:../../spikes/runtime/proof/pocket-companion.png][Pocket companion]].
+
+- Visual review caught Pocket’s full-screen styling hiding a mounted inspector.
+  Companion-only CSS restores the frame; narrow screens retain Pocket behind
+  the inspector. Browser proof checks viewport bounds, clicks and CSS cleanup.
+- Build follow-up: compiler-discovered dependency sets should avoid rebuilding
+  the entire graph for documentation-only edits.

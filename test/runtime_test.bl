@@ -28,3 +28,18 @@
     (erlang/exit (get-in @(:jobs r) [id :pid]) :kill)
     (is (await (fn [] (= :failed (get-in @(:jobs r) [id :status]))))))
    (finally (runtime/stop! r) (env/close! e)))))
+(deftest retained-history-never-evicts-an-active-owner
+ (let [e (env/open) r (runtime/start! {:env e} {:root "/tmp/runtime-fixture"} (atom {}))
+       intents (runtime/intents r) start (get intents "runtime/start-probe") cancel (get intents "runtime/cancel")]
+  (try
+   (let [retained (:id (start {}))]
+    (doseq [_ (range 34)]
+     (let [id (:id (start {}))]
+      (cancel {:id id})
+      (is (await (fn [] (= :cancelled (get-in @(:jobs r) [id :status])))))))
+    (is (= 32 (count @(:jobs r))))
+    (is (= :running (get-in @(:jobs r) [retained :status])))
+    (doseq [_ (range 3)] (start {}))
+    (is (= false (:ok (start {}))))
+    (is (:accepted (cancel {:id retained}))))
+   (finally (runtime/stop! r) (env/close! e)))))
