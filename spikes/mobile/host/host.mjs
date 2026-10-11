@@ -1,5 +1,6 @@
 // Package-owned DOM/connection boundary. Models and commands come from mob.main;
 // editor documents, revisions, polling, intents and buffers use the real host.
+import {reconcile} from './dom.mjs';
 const icons = {
  work:'<rect x="4" y="6" width="16" height="15" rx="3"/><path d="M9 6V4h6v2M4 11h16M10 11v3h4v-3"/>',
  places:'<path d="M3 7a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
@@ -36,7 +37,16 @@ export function createHost(api){
  const online=()=>shell().connection?.online===true;
  // Local composition belongs to this browser tab and this durable world.
  // A task's creation fact prevents a reused ID inheriting an older draft.
- let draftKey=null,draftCache={},draftAbort;const restored=new Set(),restoring=new Set();
+ let draftKey=null,draftCache={},draftAbort,sessionKey=null;const fields={};let session={};
+ function saveSession(){if(!sessionKey)return;try{sessionStorage.setItem(sessionKey,JSON.stringify({...session,route:currentRoute(),fields,new:shell().new,positions:[...positions]}));}catch{}}
+ let routeReady=false,lastRoute='',restoringRoute=false;
+ function currentRoute(){const s=shell(),screen=s.screen||'work';return {screen,path:screen==='task'?(s['task-path']||task().path):screen==='document'?(s['file-path']||file().path):['work','places'].includes(screen)?rail().path:null,tab:s.tab||'conversation',file:s['file-path']};}
+ function applyRoute(r){if(!r||!['work','places','task','document','host','buffers','machine'].includes(r.screen))return;restoringRoute=true;lastRoute=JSON.stringify(r);if(r.screen==='document')openDocument(r.path);else{nav(r.screen,r.path);if(r.screen==='task'&&r.tab!=='conversation')tab(r.tab,r.file);}restoringRoute=false;}
+ function syncRoute(){if(!routeReady||restoringRoute)return;const r=currentRoute(),encoded=JSON.stringify(r);if(encoded===lastRoute)return;const u=new URL(location.href);u.searchParams.set('pocket',r.screen);if(r.path)u.searchParams.set('at',r.path);else u.searchParams.delete('at');u.searchParams.set('view',r.tab);if(r.file)u.searchParams.set('doc',r.file);else u.searchParams.delete('doc');window.history[lastRoute?'pushState':'replaceState']({pocket:r},'',u);lastRoute=encoded;}
+ const pop=()=>{const u=new URL(location.href);applyRoute(window.history.state?.pocket||{screen:u.searchParams.get('pocket')||'work',path:u.searchParams.get('at')||'workspace:all',tab:u.searchParams.get('view')||'conversation',file:u.searchParams.get('doc')});};
+ window.addEventListener('popstate',pop);
+
+const restored=new Set(),restoring=new Set();
  function saveDraft(t,text){
   if(!draftKey||t.path!=='task:'+t.data?.['task-id']||t.data?.['task-at']==null)return;
   if(text)draftCache[t.path]={at:t.data['task-at'],text};else delete draftCache[t.path];
@@ -59,8 +69,11 @@ export function createHost(api){
    const r=await fetch('/api/doc?path=launch:identity',{signal:draftAbort.signal,cache:'no-store'}),j=await r.json(),identity=JSON.parse(j.text);
    if(disposed||!r.ok||!j.ok||!identity.db)return;
    draftKey='omega.pocket.drafts:'+JSON.stringify([identity.root,identity.db,identity.live]);
+   sessionKey=draftKey+':view';
+   try{session=JSON.parse(sessionStorage.getItem(sessionKey)||'{}');Object.assign(fields,session.fields||{});for(const [k,v] of session.positions||[])positions.set(k,v);for(const [field,value] of Object.entries(session.new||{}))send('rail',{type:'mobile/new-field',field,value});}catch{}
    try{const cached=JSON.parse(sessionStorage.getItem(draftKey)||'{}');if(cached&&typeof cached==='object'&&!Array.isArray(cached))draftCache=cached;}catch{}
-   syncDraft();render();
+   const u=new URL(location.href);const restoredRoute=u.searchParams.has('pocket')?{screen:u.searchParams.get('pocket'),path:u.searchParams.get('at'),tab:u.searchParams.get('view')||'conversation',file:u.searchParams.get('doc')}:session.route;
+   routeReady=true;if(restoredRoute)applyRoute(restoredRoute);syncDraft();render();
   }catch{}finally{clearTimeout(timeout);}
  }
  const connection=()=>`<button class="connection ${online()?'':'offline'}" data-act="host"><i></i><span class="sr-only">${online()?'Host connected':'Reconnecting'}</span></button>`;
@@ -97,7 +110,7 @@ export function createHost(api){
   // Provider source stays inspectable. Source syntax is only styled here;
   // task identity, questions, results and available controls are typed data.
   const lines=t.text.split('\n'),out=[];let chunk=[],who='';
-  const flush=()=>{if(chunk.some(x=>x.trim())&&chunk.some(x=>/^#\+begin_src/i.test(x))){out.push(`<details class="execution"><summary>Agent step · execution details</summary><pre>${esc(chunk.join('\n'))}</pre></details>`);chunk=[];return;}if(chunk.some(x=>x.trim()))out.push(`<article class="message ${who==='you'?'human':'agent'}"><div class="message-who"><span class="avatar">${who==='you'?'Y':'ω'}</span>${esc(who==='you'?'You':'Agent')}<span class="message-rule"></span></div>${prose(chunk)}</article>`);chunk=[];};
+  const flush=()=>{if(chunk.some(x=>x.trim())&&chunk.some(x=>/^#\+begin_src/i.test(x))){out.push(`<details class="execution" data-key="${esc(t.path+':'+(chunk.join('\n').match(/:id\s+([^\s]+)/)?.[1]||chunk[0]))}"><summary>Agent step · execution details</summary><pre>${esc(chunk.join('\n'))}</pre></details>`);chunk=[];return;}if(chunk.some(x=>x.trim()))out.push(`<article class="message ${who==='you'?'human':'agent'}"><div class="message-who"><span class="avatar">${who==='you'?'Y':'ω'}</span>${esc(who==='you'?'You':'Agent')}<span class="message-rule"></span></div>${prose(chunk)}</article>`);chunk=[];};
   let collecting=false;
   for(const l of lines){
    if(/^\* (you|agent|assistant|model)\s*[·:]/i.test(l)){flush();who=/^\* you/i.test(l)?'you':'agent';collecting=true;continue;}
@@ -184,8 +197,8 @@ export function createHost(api){
   if(value==='cancel')content=`<h2>Cancel this task?</h2>${btn('Keep working','dismiss','secondary')}${btn('Cancel task','confirm-cancel','primary',online()?'':'disabled')}`;
   if(value==='source')content=`<h2>Task source</h2><pre class="inspect-source">${esc(t.text)}</pre>`;
   if(value==='outline')content=`<h2>Outline</h2>${(readerModel().text||'').split('\n').flatMap((l,row)=>/^(\*+|#{1,6}) /.test(l)?[btn(esc(l.replace(/^(\*+|#{1,6}) /,'')),'heading','sheet-option',`data-row="${row}"`)]:[]).join('')}`;
-  if(value==='commands')content=`<h2>Commands</h2><label for="command-pane">Pane</label><select id="command-pane" data-field="command-pane">${['rail','task','file'].map(p=>`<option ${p===(s['command-pane']||'file')?'selected':''}>${p}</option>`).join('')}</select><form data-form="open"><label for="open-address">Open</label><input id="open-address" data-field="address" placeholder="bl: or a document address"/><button class="secondary" type="submit">Open</button></form><form data-form="eval"><label for="eval-code">Lisp</label><textarea id="eval-code" data-field="eval-code" placeholder="(+ 1 2)">${esc(s['eval-code']||'')}</textarea><button class="secondary" name="target" value="editor" type="submit">Editor</button><button class="secondary" name="target" value="machine" type="submit">Machine</button></form>${(s['eval-result']||models.get(s['command-pane']||'file')?.message)?`<pre role="status">${esc(s['eval-result']||models.get(s['command-pane']||'file')?.message)}</pre>`:''}<label for="command-query">Find</label><input id="command-query" data-field="command-query" value="${esc(s['command-query']||'')}"/>${(models.get(s['command-pane']||'file')?.commands||[]).filter(c=>(c.name+' '+c.doc).toLowerCase().includes((s['command-query']||'').toLowerCase())).map(c=>btn(esc(c.name),'run-command','sheet-option',`data-name="${esc(c.name)}" title="${esc(c.doc)}"`)).join('')}`;
-  return `<div class="scrim" data-act="dismiss"><section class="sheet" role="dialog" aria-modal="true" aria-label="${esc(value)}"><div class="sheet-handle"></div>${btn(icon('close'),'dismiss','sheet-close','aria-label="Close dialog"')}${content}</section></div>`;
+  if(value==='commands')content=`<h2>Commands</h2><label for="command-pane">Pane</label><select id="command-pane" data-field="command-pane">${['rail','task','file'].map(p=>`<option ${p===(s['command-pane']||'file')?'selected':''}>${p}</option>`).join('')}</select><form data-form="open"><label for="open-address">Open</label><input id="open-address" data-field="address" value="${esc(fields.address||'')}" placeholder="bl: or a document address"/><button class="secondary" type="submit">Open</button></form><form data-form="eval"><label for="eval-code">Lisp</label><textarea id="eval-code" data-field="eval-code" placeholder="(+ 1 2)">${esc(s['eval-code']||'')}</textarea><button class="secondary" name="target" value="editor" type="submit">Editor</button><button class="secondary" name="target" value="machine" type="submit">Machine</button></form>${(s['eval-result']||models.get(s['command-pane']||'file')?.message)?`<pre role="status">${esc(s['eval-result']||models.get(s['command-pane']||'file')?.message)}</pre>`:''}<label for="command-query">Find</label><input id="command-query" data-field="command-query" value="${esc(s['command-query']||'')}"/>${(models.get(s['command-pane']||'file')?.commands||[]).filter(c=>(c.name+' '+c.doc).toLowerCase().includes((s['command-query']||'').toLowerCase())).map(c=>btn(esc(c.name),'run-command','sheet-option',`data-name="${esc(c.name)}" title="${esc(c.doc)}"`)).join('')}`;
+  return `<div class="scrim" data-act="dismiss"><section class="sheet" data-key="sheet:${esc(value)}" role="dialog" aria-modal="true" aria-label="${esc(value)}"><div class="sheet-handle"></div>${btn(icon('close'),'dismiss','sheet-close','aria-label="Close dialog"')}${content}</section></div>`;
  }
  let rendering=false,renderQueued=false;
  function render(){
@@ -214,14 +227,19 @@ export function createHost(api){
    const work=root.querySelector('.bottom-nav [data-act="work"]'),needs=(rail().objects||[]).some(o=>o.ask),dot=work?.querySelector('.nav-dot');
    if(needs&&work&&!dot)work.insertAdjacentHTML('beforeend','<b class="nav-dot"></b>');else if(!needs)dot?.remove();return;
   }
+  const priorDialog=root.querySelector('[role="dialog"]');
   const active=document.activeElement,field=active?.dataset.field,start=active?.selectionStart,end=active?.selectionEnd;
   const oldScroll=root.querySelector('.mobile-scroll')?.scrollTop||0;if(root._viewKey)positions.set(root._viewKey,oldScroll);
   const viewKey=screen+':'+(screen==='document'?file().path:screen==='task'?which+':'+(which==='conversation'?t.path:file().path):rail().path);
   const noticeOrder=[...models.entries()].sort(([a],[b])=>(messageOrder.get(b)||0)-(messageOrder.get(a)||0)).map(([,m])=>m.message);
   const message=noticeOrder.filter(Boolean).find(x=>/unsaved|discard|overlap|not sent|could not|not published|retained|reverted|received by host|Published shared|Publish the file|Choose a place|Write an instruction/i.test(x));
-  root.innerHTML=`<div class="mobile-app"><header class="mobile-header">${screen==='task'?btn(icon('back')+'Work','work','back-button'):'<a class="wordmark" href="#" data-act="work"><span class="omega-mark">ω</span> omega<span class="wordmark-note"> / pocket</span></a>'}<div>${btn('⌘','commands','icon-button','aria-label="Commands"')}${screen==='task'?btn(icon('dots'),'actions','icon-button','aria-label="Task actions"'):connection()}</div></header><main class="mobile-scroll"><div class="mobile-content">${screen==='document'?reader():screen==='task'?taskScreen():screen==='places'?places():screen==='host'?host():work()}</div></main>${message?`<div class="mobile-notice" role="status">${esc(message)}</div>`:''}<nav class="bottom-nav" aria-label="Main navigation">${[['work','Work'],['places','Places'],['host','Host']].map(([id,label])=>btn(icon(id)+`<span>${label}</span>`+(id==='work'?(rail().objects||[]).some(o=>o.ask)?'<b class="nav-dot"></b>':'':''),id,`nav-item ${screen===id||id==='work'&&screen==='task'?'active':''}`,screen===id?'aria-current="page"':'')).join('')}</nav>${sheet()}</div>`;
+  reconcile(root,`<div class="mobile-app"><header class="mobile-header">${screen==='task'?btn(icon('back')+'Work','work','back-button'):'<a class="wordmark" href="#" data-act="work"><span class="omega-mark">ω</span> omega<span class="wordmark-note"> / pocket</span></a>'}<div>${btn('⌘','commands','icon-button','aria-label="Commands"')}${screen==='task'?btn(icon('dots'),'actions','icon-button','aria-label="Task actions"'):connection()}</div></header><main class="mobile-scroll"><div class="mobile-content">${screen==='document'?reader():screen==='task'?taskScreen():screen==='places'?places():screen==='host'?host():work()}</div></main>${message?`<div class="mobile-notice" role="status">${esc(message)}</div>`:''}<nav class="bottom-nav" aria-label="Main navigation">${[['work','Work'],['places','Places'],['host','Host']].map(([id,label])=>btn(icon(id)+`<span>${label}</span>`+(id==='work'?(rail().objects||[]).some(o=>o.ask)?'<b class="nav-dot"></b>':'':''),id,`nav-item ${screen===id||id==='work'&&screen==='task'?'active':''}`,screen===id?'aria-current="page"':'')).join('')}</nav>${sheet()}</div>`);
   root.querySelector('.mobile-scroll').scrollTop=positions.get(viewKey)||0;root._viewKey=viewKey;
   root._readerKey=readerKey;
+  const dialog=root.querySelector('[role="dialog"]');
+  if(dialog&&!priorDialog){root._returnFocus=active;queueMicrotask(()=>dialog.querySelector('[autofocus],input,textarea,button')?.focus({preventScroll:true}));}
+  if(!dialog&&priorDialog&&root._returnFocus?.isConnected)root._returnFocus.focus({preventScroll:true});
+  syncRoute();saveSession();
   if(field){const el=root.querySelector(`[data-field="${field}"]`);if(el){el.focus({preventScroll:true});if(typeof start==='number'&&el.setSelectionRange)el.setSelectionRange(start,end);}}
  }
  function handle(event){
@@ -277,7 +295,7 @@ export function createHost(api){
    case 'unload':command('rail','mobile/unload');break;
   }
  }
- function input(event){const e=event.target,f=e.dataset.field;if(f==='prompt')send(e.dataset.pane,{type:'mobile/prompt',text:e.value});if(f==='search'){queries.set(e.dataset.path||file().path,e.value);const root=mounts.get('rail')?.root;if(root)root._fingerprint=null;render();}if(['command-pane','command-query','eval-code'].includes(f))send('rail',{type:'mobile/field',field:f,value:e.value});if(f==='reply'){send('task',{type:'mobile/draft',text:e.value});saveDraft(task(),e.value);}if(f==='file')send(e.dataset.pane||'file',{type:'mobile/edit',text:e.value});if(f?.startsWith('new-'))send('rail',{type:'mobile/new-field',field:f.slice(4),value:e.value});}
+ function input(event){const e=event.target,f=e.dataset.field;if(f)fields[f]=e.value;if(f==='prompt')send(e.dataset.pane,{type:'mobile/prompt',text:e.value});if(f==='search'){queries.set(e.dataset.path||file().path,e.value);const root=mounts.get('rail')?.root;if(root)root._fingerprint=null;render();}if(['command-pane','command-query','eval-code'].includes(f))send('rail',{type:'mobile/field',field:f,value:e.value});if(f==='reply'){send('task',{type:'mobile/draft',text:e.value});saveDraft(task(),e.value);}if(f==='file')send(e.dataset.pane||'file',{type:'mobile/edit',text:e.value});if(f?.startsWith('new-'))send('rail',{type:'mobile/new-field',field:f.slice(4),value:e.value});saveSession();}
  function submit(event){const form=event.target.closest('form');if(!form)return;event.preventDefault();
   if(form.dataset.form==='search'){handle({target:form.querySelector('[data-act="find-next"]'),preventDefault(){}});return;}
   if(form.dataset.form==='prompt'){send(form.dataset.pane,{type:'key',key:'Enter'});return;}
@@ -294,10 +312,10 @@ export function createHost(api){
  }
  const network=()=>probe();window.addEventListener('online',network);window.addEventListener('offline',network);
  probeTimer=setInterval(probe,8000);queueMicrotask(probe);queueMicrotask(restoreDrafts);
- return {mount(root){let role;const click=e=>{e.stopPropagation();handle(e);},onInput=e=>input(e),onSubmit=e=>submit(e);root.addEventListener('pointerup',passage);root.addEventListener('click',click);root.addEventListener('input',onInput);root.addEventListener('change',onInput);root.addEventListener('submit',onSubmit);
+ return {mount(root){let role;const click=e=>{e.stopPropagation();handle(e);},onInput=e=>input(e),onSubmit=e=>submit(e),onScroll=e=>{if(e.target.matches?.('.mobile-scroll')&&root._viewKey){positions.set(root._viewKey,e.target.scrollTop);saveSession();}};root.addEventListener('scroll',onScroll,true);root.addEventListener('pointerup',passage);root.addEventListener('click',click);root.addEventListener('input',onInput);root.addEventListener('change',onInput);root.addEventListener('submit',onSubmit);
   // The editor's global keyboard sink must not swallow native mobile fields.
   const compositionStart=()=>{composing=true;},compositionEnd=e=>{composing=false;input(e);render();};root.addEventListener('compositionstart',compositionStart);root.addEventListener('compositionend',compositionEnd);
-  const stop=e=>{e.stopPropagation();if(e.key==='Escape'&&prompt()){e.preventDefault();send(prompt()[0],{type:'key',key:'Escape'});}};root.addEventListener('keydown',stop);root.addEventListener('beforeinput',stop);
-  return {update(model){role=model.role;if(models.get(role)?.message!==model.message)messageOrder.set(role,++messageSequence);models.set(role,model);mounts.set(role,{root});if(role==='task')syncDraft();render();},dispose(){if(mounts.get(role)?.root===root)mounts.delete(role);root.removeEventListener('pointerup',passage);root.removeEventListener('click',click);root.removeEventListener('input',onInput);root.removeEventListener('change',onInput);root.removeEventListener('submit',onSubmit);root.removeEventListener('compositionstart',compositionStart);root.removeEventListener('compositionend',compositionEnd);root.removeEventListener('keydown',stop);root.removeEventListener('beforeinput',stop);root.replaceChildren();}};},
- dispose(){disposed=true;clearInterval(probeTimer);probeAbort?.abort();draftAbort?.abort();window.removeEventListener('online',network);window.removeEventListener('offline',network);css.remove();document.documentElement.classList.remove('omega-mobile');document.title=priorTitle;models.clear();mounts.clear();positions.clear();history.length=0;queries.clear();restored.clear();restoring.clear();}};
+  const stop=e=>{e.stopPropagation();const dialog=root.querySelector('[role="dialog"]');if(e.key==='Escape'&&dialog){e.preventDefault();const p=prompt();if(p)send(p[0],{type:'key',key:'Escape'});else modal(null);}if(e.key==='Tab'&&dialog){const items=[...dialog.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href]')];const first=items[0],last=items.at(-1);if(e.shiftKey&&(document.activeElement===first||!dialog.contains(document.activeElement))){e.preventDefault();last?.focus();}else if(!e.shiftKey&&(document.activeElement===last||!dialog.contains(document.activeElement))){e.preventDefault();first?.focus();}}};root.addEventListener('keydown',stop);root.addEventListener('beforeinput',stop);
+  return {update(model){role=model.role;if(models.get(role)?.message!==model.message)messageOrder.set(role,++messageSequence);models.set(role,model);mounts.set(role,{root});if(role==='task')syncDraft();render();},dispose(){if(mounts.get(role)?.root===root)mounts.delete(role);root.removeEventListener('scroll',onScroll,true);root.removeEventListener('pointerup',passage);root.removeEventListener('click',click);root.removeEventListener('input',onInput);root.removeEventListener('change',onInput);root.removeEventListener('submit',onSubmit);root.removeEventListener('compositionstart',compositionStart);root.removeEventListener('compositionend',compositionEnd);root.removeEventListener('keydown',stop);root.removeEventListener('beforeinput',stop);root.replaceChildren();}};},
+ dispose(){disposed=true;clearInterval(probeTimer);probeAbort?.abort();draftAbort?.abort();window.removeEventListener('popstate',pop);window.removeEventListener('online',network);window.removeEventListener('offline',network);css.remove();document.documentElement.classList.remove('omega-mobile');document.title=priorTitle;models.clear();mounts.clear();positions.clear();history.length=0;queries.clear();restored.clear();restoring.clear();}};
 }
