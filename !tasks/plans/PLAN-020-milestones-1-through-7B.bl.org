@@ -14,11 +14,11 @@ Never test against the live world on 8790. Preserve concurrent work.
 * Completion ledger
 | Milestone | Work / acceptance | Status | Evidence |
 |-----------+-------------------+--------+----------|
-| 1 | bounded scoped query, identity/support contract, lifecycle/isolation audit | underway | upstream observation tutorial; PLAN-019 inventory |
-| 2 | bounded subscription changes/loss/resync; teardown/race matrix | pending | |
+| 1 | bounded scoped query, identity/support contract, lifecycle/isolation audit | implemented; consumer pin pending | upstream a7d140a7, native query report |
+| 2 | bounded subscription changes/loss/resync; teardown/race matrix | implemented; consumer pin pending | upstream 34e41a54; 101 native assertions, 11 Node tests, delivery report |
 | 3 | ordinary JS and actor execution consolidation; semantic parity | pending | |
 | 4 | compiler/logic evidence and provenance; negative fixtures | pending | |
-| 5 | reusable bl-ed inspector plus domain contributions; standalone proof | pending | |
+| 5 | reusable bl-ed inspector plus domain contributions; standalone proof | implementation under verification | spikes/runtime/inspector.bl.org |
 | 6 | Pelagic integration and server/local acceptance | pending | |
 | 7 | five creative workflows demonstrated and verified | pending | |
 | 7B | manual Pelagic/Pocket use, visual audit applied, recordings and review report | pending | |
