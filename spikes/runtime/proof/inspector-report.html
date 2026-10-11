@@ -1,0 +1,20 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Inspector extraction evidence</title><style>body{margin:2rem auto;max-width:1000px;padding:0 1rem;background:#111820;color:#e5edf6;font:16px/1.55 system-ui}h1{font-size:2rem}select{font:inherit;padding:.5rem;background:#253747;color:inherit}img{display:block;width:100%;margin-top:1rem;border:1px solid #526578}pre{overflow:auto}li{margin:.5rem 0}a{color:#8cdaeb}</style><h1>One inspector, domain contributions</h1><p>Recorded actions in a private offline memory world. These images show the real editor. No physical audio/video latency claim.</p><label>Recorded view <select id="scene"><option value="inspector-used.png">Standalone inspector</option><option value="inspector-unused.png">Standalone unloaded</option><option value="used.png">Omega runtime</option><option value="unused.png">Omega unloaded</option><option value="pelagic-companion.png">Pelagic companion</option><option value="pocket-companion.png">Pocket companion</option><option value="pocket-narrow.png">Pocket narrow</option></select></label><img id="shot" alt="Recorded editor view"><h2>Verified actions</h2><ol><li>generic inspector loads independently and restores source on unuse</li><li>all five sections render live backend ownership</li><li>generic DOM leaf retains keyed identity/focus on reorder and removes obsolete nodes</li><li>real native actor job starts, progresses and cancels</li><li>snapshot export contains actual native job evidence</li><li>admitted candidate navigation opens a separate session</li><li>confirmed watcher stop keeps the host and inspector alive</li><li>pause stops backend polling and resume restarts it</li><li>another live PELAGIC tab reports package workers and timing</li><li>sampling preserves focused controls, open details and ownership scroll</li><li>selected native job navigates to read-only project source</li><li>unuse restores the real editor without interrupting the other session</li><li>companion inspector opens and unuses without replacing the live audio engine</li><li>departed peer expires from the ownership view</li><li>Pocket entry and unload retain all three editors</li></ol><details><summary>Raw browser result</summary><pre>{
+  &quot;checks&quot;: [
+    &quot;generic inspector loads independently and restores source on unuse&quot;,
+    &quot;all five sections render live backend ownership&quot;,
+    &quot;generic DOM leaf retains keyed identity/focus on reorder and removes obsolete nodes&quot;,
+    &quot;real native actor job starts, progresses and cancels&quot;,
+    &quot;snapshot export contains actual native job evidence&quot;,
+    &quot;admitted candidate navigation opens a separate session&quot;,
+    &quot;confirmed watcher stop keeps the host and inspector alive&quot;,
+    &quot;pause stops backend polling and resume restarts it&quot;,
+    &quot;another live PELAGIC tab reports package workers and timing&quot;,
+    &quot;sampling preserves focused controls, open details and ownership scroll&quot;,
+    &quot;selected native job navigates to read-only project source&quot;,
+    &quot;unuse restores the real editor without interrupting the other session&quot;,
+    &quot;companion inspector opens and unuses without replacing the live audio engine&quot;,
+    &quot;departed peer expires from the ownership view&quot;,
+    &quot;Pocket entry and unload retain all three editors&quot;
+  ],
+  &quot;errors&quot;: []
+}</pre></details><p><a href="../inspector.bl.org">Source walkthrough</a></p><script>const s=document.querySelector('#scene'),i=document.querySelector('#shot');function show(){i.src=s.value;i.alt=s.selectedOptions[0].textContent} s.addEventListener('change',show);show();</script>

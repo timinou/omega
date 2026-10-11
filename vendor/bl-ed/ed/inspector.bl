@@ -1,0 +1,82 @@
+; Reusable inspector state and bounded ownership presentation. No domain imports.
+(ns ed.inspector (:require [ed.core :as c]))
+(def max-rows 512)
+(def max-depth 16)
+(def layout {:name "inspector" :doc "Source beside owned runtime resources."
+ :panes [{:id :main :doc :linked :width [:fr 1]}
+         {:id :observatory :view [:inspector/view :main] :width [:fr 3]}] :focus :main})
+(defn state [ed name] (get-in ed [:pkg-state name] {}))
+(defn put [ed name key value] (assoc-in ed [:pkg-state name key] value))
+(defn selection [rows id]
+ (if id
+  (or (first (filter (fn [row] (= id (:id row))) rows))
+      {:id id :kind "unavailable" :title "Resource ended" :available false})
+  (first rows)))
+(defn- ancestry [row by-id]
+ (loop [parent (:parent row) path [] seen #{(:id row)}]
+  (cond
+   (nil? (get by-id parent)) {:path (vec (reverse path))}
+   (or (contains? seen parent) (>= (count path) max-depth)) {:path [] :cycle true}
+   :else (recur (:parent (get by-id parent)) (conj path parent) (conj seen parent)))))
+(defn tree
+ "Bounded, stable ownership rows. Collapse is presentation only; it changes no
+  runtime owner or subscription. Missing/cyclic parents cannot loop the view."
+ [input collapsed]
+ (let [rows (vec (take max-rows input)) by-id (into {} (map (fn [r] [(:id r) r]) rows))
+       parents (set (keep :parent rows))]
+  (->> rows
+   (map (fn [row] (let [a (ancestry row by-id)]
+    (assoc row :depth (count (:path a)) :cycle (:cycle a)
+               :branch (contains? parents (:id row)) :collapsed (contains? collapsed (:id row))
+               :ancestry (:path a) :sort-path (conj (:path a) (:id row))))))
+   (remove (fn [row] (some (fn [id] (contains? collapsed id)) (:ancestry row))))
+   (sort-by :sort-path) vec)))
+(defn browser-items [sessions contribute]
+ (vec (mapcat (fn [session]
+  (cons {:id (:session session) :kind "browser"
+         :title (if (:remote session) "Reported peer tab" "This browser tab")
+         :remote (:remote session) :data (dissoc session :resources)}
+   (mapcat (fn [resource]
+    (let [extra (contribute session resource)]
+     (cons (merge {:id (:id resource) :parent (:session session) :kind "browser-resource"
+           :title (:name resource) :remote (:remote session) :available (nil? (:error resource))
+           :data (:data resource) :error (:error resource)} (:resource extra))
+          (:children extra)))) (take 128 (:resources session))))) (take 33 sessions))))
+(defn model
+ "A domain contributes sections and rows; shared state controls selection/tree."
+ [ed name rows project]
+ (let [s (state ed name) limited (vec (take max-rows rows)) selected (selection limited (:selected s))]
+  (merge {:package name :state s :items limited :selected selected
+          :tree (tree (remove (fn [r] (:work r)) limited) (:collapsed s #{}))
+          :rows-truncated (> (count (take (inc max-rows) rows)) max-rows)}
+         (project s limited selected))))
+(defn intercept [ed name ev]
+ (let [prefix (str name "/") type (str (:type ev))]
+  (cond
+   (= type (str prefix "select")) (put ed name :selected (:item ev))
+   (= type (str prefix "toggle")) (put ed name :collapsed
+     ((if (contains? (:collapsed (state ed name) #{}) (:item ev)) disj conj)
+       (:collapsed (state ed name) #{}) (:item ev)))
+   (= type (str prefix "pause")) (put ed name :paused (not (:paused (state ed name))))
+   (= type (str prefix "browser")) (put ed name :browser (:data ev))
+   (= type (str prefix "delivery")) (put ed name :delivery (:data ev))
+   :else nil)))
+(defn open [ed] (assoc ed :frame/layout "inspector"))
+(defn view [ed]
+ (let [s (state ed "inspector")
+       rows (concat (:resources (:snapshot s)) (browser-items (:browser s) (fn [_ _] {})))]
+  (model ed "inspector" rows
+   (fn [_ _ selected]
+    {:title "Owned work, in view" :eyebrow "RUNTIME" :scope "Reported resources"
+     :sections [{:id "owners" :title "Ownership" :class "owners" :blocks [{:type "tree"}]}
+                {:id "work" :title "Active work" :blocks [{:type "text" :text "No work contribution"}]}
+                {:id "health" :title "Health & timing" :blocks [{:type "text" :text "No timing contribution"}]}
+                {:id "builds" :title "Builds & revisions" :blocks [{:type "text" :text "No build contribution"}]}
+                {:id "detail" :title "Selected item" :class "detail" :blocks [{:type "json" :value selected}]}]}))))
+(def bl-package
+ {:name "inspector" :doc "Reusable bounded ownership inspector; optional domain contributions."
+  :commands {:inspector/open {:doc "Inspect reported resources" :run open}}
+  :intercept (fn [ed ev]
+    (or (intercept ed "inspector" ev)
+        (when (= :inspector/snapshot (:type ev)) (put ed "inspector" :snapshot (:data ev)))))
+  :owns [:frame/layout] :provides {:layouts {"inspector" layout} :views {:inspector/view view}}})

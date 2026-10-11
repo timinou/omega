@@ -1,0 +1,81 @@
+; Omega/Pelagic vocabulary becomes generic inspector blocks. Pure BL values.
+(ns rtview.presentation)
+(defn text [value] {:type "text" :text value})
+(defn json [value] {:type "json" :value value})
+(defn actions [items] {:type "actions" :items (vec items)})
+(defn action [label type args] {:label label :event (assoc args :type type)})
+(defn card [id blocks] {:type "card" :id id :blocks (vec (remove nil? blocks))})
+(defn section [id title blocks] {:id id :title title :blocks (vec (remove nil? blocks))})
+(defn short [value] (if (string? value) (subs value 0 (min 12 (count value))) "Unavailable"))
+(defn- work-card [j]
+ (card (:id j)
+  [(actions [(action (str (:title j) " · " (:status j)) :runtime/select {:item (:id j)})])
+   (when (= "probe" (:kind j))
+    {:type "progress" :max 200 :value (:progress j 0)
+     :label (str (:progress j 0) "/200 turns · " (:elapsed-ms j 0) " ms"
+                 (when (:cancel-ms j) (str " · cancellation " (:cancel-ms j) " ms")))})
+   (when (contains? #{:running :cancelling "running" "cancelling"} (:status j))
+    (actions [(action "Cancel" :runtime/cancel {:id (:id j)})]))]))
+(defn- resource-work [r]
+ (let [data (:data r) preparing (:preparing data)]
+  (card (:id r)
+   [(actions [(action (str (:title r) " · browser work") :runtime/select {:item (:id r)})])
+    {:type "metrics" :rows [["Preparation" (cond (:done preparing) "Complete" (:worker preparing) "Running" :else "Idle")]
+                           ["Rows" (str (:rows preparing 0) "/1024")]
+                           ["Evaluator" (if (:evaluator data) "Available" "Absent")]
+                           ["Queued edits" (:pending data 0)]]}])))
+(defn- resource-health [r]
+ (let [data (:data r) d (:diagnostics data) pool (:pool data)]
+  (card (:id r)
+   [{:type "heading" :text (str (:title r) (when (:remote r) " · reported peer"))}
+    {:type "metrics" :rows [["Audio" (:audioContext data)] ["Missed events" (:missedEvents d)]
+                           ["Frame P95 / P99" (str (:frameP95 d "—") " / " (:frameP99 d "—") " ms")]
+                           ["Prepare turn P95" (str (get-in d [:preparation :nativeTurnP95Ms] "—") " ms")]
+                           ["A/V submit P95" (str (:avSubmitP95Ms d "—") " ms (submission only)")]
+                           ["Preparation pool" (when pool (str (:workers pool) " workers · " (:active pool) " leases"))]]}
+    {:type "details" :label "All timing and resource counters" :blocks [(json d)]}])))
+(defn project [s rows selected]
+ (let [backend (:backend s) build (:build backend) jobs (filter :work rows)
+       resources (filter (fn [r] (= "browser-resource" (:kind r))) rows)
+       active (count (filter (fn [j] (contains? #{:running :cancelling "running" "cancelling"} (:status j))) jobs))]
+  {:title "Owned work, in view" :eyebrow "OMEGA / RUNTIME"
+   :scope (str active " active jobs · " (count resources) " reported package resources · "
+               (if (:paused s) "sampling paused" "sampling 1 Hz"))
+   :error (when (:error s) (str "Backend unavailable: " (:error s) ". Browser observations remain available."))
+   :notice (:notice s)
+   :actions [(action "Refresh" :runtime/refresh {}) (action "Export snapshot" :runtime/export {})
+             (action "Return" :runtime/close {})]
+   :sections
+   [(assoc (section "owners" "Ownership"
+     [(text "BEAM ownership and reported browser tabs are separate trees.") {:type "tree"}
+      (assoc (text "Other projects and unreported tabs are outside this view. Member rows are capped at 128.") :muted true)]) :class "owners")
+    (section "work" "Active work"
+     (concat [(text "Probe jobs exercise the native actor path; they are not playback work.")
+              (actions [(action "Start actor probe" :runtime/start {})])]
+             (map work-card jobs) (map resource-work resources)))
+    (section "health" "Health & timing"
+     (concat [(text "Browser clocks and audio-clock estimates; physical output latency is not measured.")
+              {:type "metrics" :rows [["BEAM memory" (when (:vm backend) (str (quot (get-in backend [:vm :memory]) 1048576) " MiB"))]
+                                      ["Processes" (get-in backend [:vm :processes])]]}]
+             (if (seq resources) (map resource-health resources)
+               [(text "No package timing reports yet. Open PELAGIC in another tab on this origin.")])))
+    (section "builds" "Builds & revisions"
+     (concat [{:type "metrics" :rows [["Serving" (short (:current build))] ["Watcher" (get-in build [:watch :status] "not running")]]}
+              (when (get-in build [:watch :error]) (text (str "Held: " (get-in build [:watch :error]))))
+              (when-let [candidate (get-in build [:watch :candidate])]
+               (actions [(action "Open candidate" :runtime/candidate {:url (:path candidate)})]))
+              (when (and (:watch build) (not= "stopped" (str (get-in build [:watch :status]))))
+               (actions [(assoc (action "Stop watch" :runtime/watch-stop {:confirmed true})
+                          :confirm "Stop speculative builds for this world? Existing pages and playback remain.")]))]
+             (map (fn [g] (card (:id g) [(text (str (short (:id g)) " · host-pinned"))
+                                        (actions [(action "Open" :runtime/candidate {:url (:url g)})])])) (:generations build))
+             [(assoc (text "Opening a candidate creates a new frontend session. Existing performances keep their graph. Host/realm restart uses the CLI and affects all its sessions.") :muted true)]))
+    (assoc (section "detail" "Selected item"
+     (if selected
+      [{:type "heading" :text (:title selected)} (text (str (:kind selected) " · " (:id selected)))
+       (actions (concat (when (:source selected) [(action "Open source" :runtime/source {:path (:source selected)})])
+                        (when (and (= "browser-resource" (:kind selected)) (not (:remote selected))
+                                   (get-in selected [:data :diagnostics :audition]))
+                         [(action "Cancel local audition" :runtime/audition-cancel {:id (:id selected)})])))
+       (json selected)] [(text "Select an owner or job to inspect it.")])) :class "detail")]
+   :footer "Read-only observations unless you invoke an action. Same-origin peer reports expire after six seconds. No mailbox contents or environment variables are collected."}))

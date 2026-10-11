@@ -60,3 +60,12 @@ See the [live inspector](proof/used.png), [editor after unuse](proof/unused.png)
 [browser report](proof/browser.json), [native gates](proof/source-tests.log),
 [editor regressions](proof/editor-tests.log), and
 [PELAGIC regressions](proof/pelagic-tests.log) record the checks.
+
+## Generic inspector extraction
+
+The shared model and renderer now live in vendored bl-ed as `ed.inspector` and
+`inspector-host.mjs`. Omega contributes declarative sections and control effects;
+Pelagic contributes physical worker/actor rows. The duplicate application-local
+renderer and stylesheet are removed. Read the [walkthrough](inspector.bl.org)
+and [interactive proof](proof/inspector-report.html). Standalone proof:
+[used](proof/inspector-used.png), [unuse](proof/inspector-unused.png).

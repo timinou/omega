@@ -389,3 +389,16 @@ Runtime host. It preserves unchanged elements and user-opened details while
 updating attributes/text. It imports no Omega/editor model and creates no
 listeners, timers or state registry. Runtime's real-browser proof checks focus,
 open details and ownership scroll across live samples.
+
+## Reusable inspector extraction
+
+`ed/inspector.bl` owns bounded ownership-tree presentation, selection, collapsed
+branches and standalone `bl-package`. It imports no Omega/Pelagic namespaces.
+`web/inspector-host.mjs` renders declarative BL section/block values through the
+shared keyed DOM leaf and owns its upstream observation subscription. Its
+stylesheet is `web/inspector.css`; the application-local duplicate is removed.
+Omega supplies world/build/actions and pure presentation blocks; Pelagic supplies
+preparation-worker rows. The same host/model runs without either domain provider.
+Verification: 80 editor/Runtime checks, 68 Pelagic contracts, unchanged
+presentation equivalence, and 15 private real-browser checks pass. Standalone
+used/unuse images and interactive evidence are in spikes/runtime/proof/.

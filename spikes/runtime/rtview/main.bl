@@ -1,5 +1,6 @@
 ; Every decision is editor state or an effect. The host owns IO and painting.
-(ns rtview.main (:require [ed.core :as c] [ed.docs :as docs] [ed.pkg :as pkg]))
+(ns rtview.main (:require [ed.core :as c] [ed.docs :as docs] [ed.pkg :as pkg] [ed.inspector :as inspector]
+ [rtview.presentation :as presentation] [pelagic.observations :as pelagic]))
 (def layout {:name "runtime" :doc "Source and runtime ownership, work, timing and builds."
  :panes [{:id :main :doc :linked :width [:fr 1]}
          {:id :observatory :view [:runtime/inspector :main] :width [:fr 4]}] :focus :main})
@@ -41,9 +42,6 @@
   :runtime/open (open ed (or (:layout ev) "runtime"))
   :runtime/close (if (:return (state ed)) (close ed) (assoc ed :frame/layout :none))
   :runtime/refresh (if (:paused (state ed)) ed (refresh ed))
-  :runtime/pause (put ed :paused (not (:paused (state ed))))
-  :runtime/select (put ed :selected (:item ev))
-  :runtime/browser (put ed :browser (:data ev))
   :runtime/source (when (:path ev) (docs/visit ed (str "runtime:source/" (:path ev))))
   :runtime/start (send ed "runtime/start-probe" {})
   :runtime/cancel (send ed "runtime/cancel" {:id (:id ev)})
@@ -58,32 +56,7 @@
       (put :backend (if (:ok? ev) (:data ev) nil)) (put :error (when-not (:ok? ev) (:message ev))))
     (= :runtime/result (:then ev)) (-> ed (put :notice (if (:ok? ev) "Action acknowledged" (:message ev))) refresh)
     :else nil)
-  nil))
-(defn preparation-items [session resource]
- (mapcat
-  (fn [worker]
-   (let [worker-id (str (:id resource) "/worker/" (:id worker))
-         actor-id (fn [pid] (str worker-id "/actor/" (pr-str pid)))
-         rows (get-in worker [:snapshot :resources])
-         present (set (map :id rows))]
-    (cons {:id worker-id :parent (:id resource) :kind "worker"
-           :title (str "Preparation Worker " (:id worker))
-           :remote (:remote session) :data (dissoc worker :snapshot)
-           :source "spikes/pelagic/actor/prepare.bl"}
-     (map (fn [actor]
-       {:id (actor-id (:id actor))
-        :parent (if (contains? present (:owner actor)) (actor-id (:owner actor)) worker-id)
-        :kind "actor" :title (str "Actor " (pr-str (:id actor)) " · " (:status actor))
-        :remote (:remote session) :data actor :source "spikes/pelagic/actor/prepare.bl"}) rows))))
-  (get-in resource [:data :pool :actors])))
-(defn browser-items [session]
- (cons {:id (:session session) :kind "browser" :title (if (:remote session) "Reported peer tab" "This browser tab")
-        :data (dissoc session :resources)}
-  (mapcat (fn [resource]
-   (cons {:id (:id resource) :parent (:session session) :kind "browser-resource" :title (:name resource)
-          :remote (:remote session) :data (:data resource) :error (:error resource)
-          :source "spikes/pelagic/pelagic/main.bl"}
-         (preparation-items session resource))) (:resources session))))
+  (inspector/intercept ed "runtime" ev)))
 (defn items [ed]
  (let [s (state ed) b (:backend s) vm (:vm b) realm (:realm b)]
   (vec (concat
@@ -92,11 +65,9 @@
             {:id "world" :parent (:id realm) :kind "world" :title "Omega world" :data (:world b) :source "src/omega/ed/main.bl"}])
    (map (fn [p] (assoc p :kind "service" :parent (:id realm) :title (:id p))) (:services b))
    (map (fn [p] (assoc p :parent (:id realm))) (:members b))
-   (map (fn [j] (assoc j :parent "world")) (:jobs b))
-   (mapcat browser-items (:browser s))))))
-(defn model [ed]
- (let [rows (items ed) selected (or (first (filter (fn [r] (= (:id r) (:selected (state ed)))) rows)) (first rows))]
-  {:package "runtime" :state (state ed) :items rows :selected selected}))
+   (map (fn [j] (assoc j :parent "world" :work true)) (:jobs b))
+   (inspector/browser-items (:browser s) pelagic/contribution)))))
+(defn model [ed] (inspector/model ed "runtime" (items ed) presentation/project))
 (def bl-package
  {:name "runtime" :doc "Observe owned actors, reported browser resources, timing and immutable builds."
   :commands {:runtime/open {:doc "Open the runtime inspector" :run open}

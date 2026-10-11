@@ -1,0 +1,7 @@
+{:name "inspector" :editor "inspector" :editor-only true :layout "inspector"
+ :doc "Generic bounded runtime inspector, without Omega domain providers."
+ :entry "welcome.bl.org"
+ :frontend {:version 1 :entry "ed.inspector" :roots ["vendor/bl-ed"]
+  :includes ["js.observation"]
+  :host ["eval-ed" "eval-cells"] :loader {:host "inspector/host.mjs"}
+  :assets [{:from "vendor/bl-ed/web/inspector/host.mjs" :to "pkg/inspector/host.mjs"}]}}

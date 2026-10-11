@@ -33,6 +33,17 @@ with tempfile.TemporaryDirectory(prefix='omega-runtime-proof-') as temp:
     browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM','/home/user/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome'),args=['--no-sandbox','--autoplay-policy=no-user-gesture-required'])
     context=browser.new_context(viewport={'width':1600,'height':1100},accept_downloads=True)
     page=context.new_page();page.on('pageerror',lambda e:report['errors'].append(str(e)))
+    page.goto(base+'?use=inspector&layout=inspector&file=notes.bl.org')
+    page.get_by_role('heading',name='Owned work, in view').wait_for(timeout=90000)
+    for name in ['Ownership','Active work','Health & timing','Builds & revisions','Selected item']:
+     assert page.get_by_role('heading',name=name,exact=True).is_visible()
+    page.get_by_role('treeitem').filter(has_text='This browser tab').wait_for(timeout=15000)
+    page.screenshot(path=str(PROOF/'inspector-used.png'),full_page=True)
+    command(page,'(ed/unuse "inspector")')
+    page.get_by_role('heading',name='Owned work, in view').wait_for(state='detached',timeout=15000)
+    assert page.evaluate('window.blEd.state().get(window.blEd.K("path"))==="notes.bl.org"')
+    page.screenshot(path=str(PROOF/'inspector-unused.png'))
+    checked('generic inspector loads independently and restores source on unuse')
     page.goto(base+'?use=runtime&layout=runtime&file=notes.bl.org')
     page.get_by_role('heading',name='Owned work, in view').wait_for(timeout=90000)
     page.get_by_role('treeitem').filter(has_text='BEAM · PID').wait_for(timeout=30000)
@@ -88,7 +99,7 @@ with tempfile.TemporaryDirectory(prefix='omega-runtime-proof-') as temp:
     # Sampling must update values without replacing focused controls/details.
     page.evaluate("""() => {const root=document.querySelector('[data-pane="observatory"] .view-body').shadowRoot;
       window.retainedDetail=root.querySelector('details');window.retainedDetail.open=true;
-      window.retainedButton=root.querySelector('[data-action="refresh"]');window.retainedButton.focus();
+      window.retainedButton=Array.from(root.querySelectorAll('nav button')).find(b=>b.textContent==='Refresh');window.retainedButton.focus();
       window.retainedScroll=root.host;window.retainedScroll.scrollTop=40;
       window.retainedScrollTop=window.retainedScroll.scrollTop;}""")
     page.wait_for_timeout(2200)

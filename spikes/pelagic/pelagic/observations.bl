@@ -1,0 +1,19 @@
+; Pelagic meaning over actual pool/actor observations; no registry or controls.
+(ns pelagic.observations)
+(defn- worker-items [session resource]
+ (mapcat (fn [worker]
+  (let [id (str (:id resource) "/worker/" (:id worker))
+        actor-id (fn [pid] (str id "/actor/" (pr-str pid)))
+        rows (get-in worker [:snapshot :resources]) present (set (map :id rows))]
+   (cons {:id id :parent (:id resource) :kind "worker" :title (str "Preparation Worker " (:id worker))
+          :remote (:remote session) :available (:available worker) :data (dissoc worker :snapshot)
+          :source "spikes/pelagic/actor/prepare.bl"}
+    (map (fn [actor]
+     {:id (actor-id (:id actor))
+      :parent (if (contains? present (:owner actor)) (actor-id (:owner actor)) id)
+      :kind "actor" :title (str "Actor " (pr-str (:id actor)) " · " (:status actor))
+      :remote (:remote session) :data actor :source "spikes/pelagic/actor/prepare.bl"}) rows))))
+  (take 32 (get-in resource [:data :pool :actors]))))
+(defn contribution [session resource]
+ (if (= "pelagic" (:name resource))
+  {:resource {:source "spikes/pelagic/pelagic/main.bl"} :children (worker-items session resource)} {}))

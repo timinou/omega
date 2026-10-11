@@ -9,7 +9,7 @@
   (Path/expand ".." (Path/dirname (BeamLisp.Loader/source_path "pelagic.build"))))
 (defn root [] (Path/expand "../.." (home)))
 (defn package-manifests [] (frontend/manifests (root)
-  ["pelagic" "packages" "atlas" "present" "dwim" "workspace" "places" "references" "buffers" "workbench" "mobile" "runtime"]))
+  ["pelagic" "packages" "atlas" "present" "dwim" "workspace" "places" "references" "buffers" "workbench" "mobile" "runtime" "inspector"]))
 (defn assembly [] (frontend/assembly (root) (package-manifests)))
 (defn manifest-inputs []
   [(package-manifests)

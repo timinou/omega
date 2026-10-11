@@ -8,7 +8,7 @@ const load=n=>import(pathToFileURL(path.join(out,n+'.mjs')).href);
 const R=await load('rt');
 const {start}=await load('repl');const repl=await start(f=>fs.readFileSync(path.join(out,'src',f),'utf8'));
 globalThis.BL_HOST=Object.assign(globalThis.BL_HOST||{},{'eval-ed':(src,api)=>repl.evalWith(src,'ed',api),'eval-cells':cells=>repl.evalCells(cells)});
-const [M,F,Runtime,Mobile]=await Promise.all(['ed.main','ed.frame','rtview.main','mob.main'].map(load));
+const [M,F,Runtime,Mobile,Inspector]=await Promise.all(['ed.main','ed.frame','rtview.main','mob.main','ed.inspector'].map(load));
 const K=R.kw,get=(m,k)=>m?.get(K(k),null),ev=(...kv)=>R.hashMap(...kv),key=k=>ev(K('type'),K('key'),K('key'),k);
 function session(){let fr=F.d_single(M.d_boot('notes\n','notes.bl.org'));return {
  get fr(){return fr;},send(e){fr=F.d_handle(fr,e);return this;},
@@ -62,4 +62,21 @@ test('pooled workers expose actual actor owners under the reporting browser reso
  assert.equal(get(actors[1],'parent'),get(actors[0],'id'));
  assert.ok(actors.every(r=>get(r,'remote')===true));
  assert.ok(actors.every(r=>get(r,'source')==='spikes/pelagic/actor/prepare.bl'));
+});
+
+test('generic inspector is independent, bounds trees and retains ended selection',()=>{
+ const s=session(),before=F.d_focused(s.fr);s.use(Inspector.d_bl_package);
+ s.cmd('(ed/layout "inspector")');assert.equal(get(F.d_render(s.fr),'layout'),'inspector');
+ const view=Inspector.d_view(F.d_focused(s.fr));assert.equal(get(view,'sections').toArray().length,5);
+ s.cmd('(ed/unuse "inspector")');assert.equal(get(F.d_render(s.fr),'layout'),'single');
+ assert.equal(get(F.d_focused(s.fr),'text'),get(before,'text'));
+ const row=(id,parent)=>ev(K('id'),id,K('parent'),parent,K('title'),id);
+ const rows=R.vecFromArray([row('root',null),row('child','root'),row('grandchild','child')]);
+ const collapsed=R.hashSet('root');
+ assert.deepEqual(Inspector.d_tree(rows,collapsed).toArray().map(r=>get(r,'id')),['root']);
+ assert.equal(get(Inspector.d_selection(rows,'ended'),'available'),false);
+ const cycle=Inspector.d_tree(R.vecFromArray([row('a','b'),row('b','a')]),R.hashSet()).toArray();
+ assert.ok(cycle.every(r=>get(r,'cycle')===true));
+ const many=R.vecFromArray(Array.from({length:1000},(_,i)=>row(String(i),null)));
+ assert.equal(Inspector.d_tree(many,R.hashSet()).toArray().length,512);
 });
