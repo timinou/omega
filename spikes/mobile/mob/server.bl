@@ -1,34 +1,6 @@
-; Real project files, independent durable task/buffer state, no demo seeding.
-(ns mob.server
-  (:require [omega.env :as env] [omega.task :as task] [omega.llm :as llm]
-            [omega.cli :as cli] [omega.codemode :as cm] [omega.ed.providers :as pv]
-            [bl-ed.serve :as serve] [place.model :as place] [place.server :as places]
-            [links.model :as link] [links.server :as links]
-            [buffer.model :as buffer] [buffer.server :as buffers]
-            [ws.desk-server :as desk]))
-
+; Compatibility entry; application ownership and all world setup live in Omega.
+(ns mob.server (:require [pelagic.launch :as launch]))
 (defn launch [project state port home]
-  (when-not (File/dir? project) (throw (ex-info "Project directory does not exist." {})))
-  (when (= port 8790) (throw (ex-info "Use a separate mobile port." {})))
-  (let [e (env/open {:path (str state "/db") :schema (vec (concat place/schema link/schema buffer/schema))})
-        home-file (first (filter (fn [name] (File/regular? (str project "/" name)))
-                                 ["AGENTS.md" "README.md" "README.org"]))
-        _ (place/put! e (cond-> {:id "project" :name (Path/basename project) :root project}
-                         home-file (assoc :home {:path home-file})))
-        server (buffer/start! e)
-        provider (llm/from-env project)
-        sys (task/start-system e {:step (llm/step provider) :tools cm/tools :root project
-                                  :files (buffer/port server) :system-prompt cli/SYSTEM-PROMPT})
-        _ (task/recover! sys)
-        opts {:state (str state "/ed") :task-context (fn [path cwd] (places/context sys path cwd))}
-        base (pv/providers sys opts)
-        r (serve/start! {:port port :root project :web (str home "/vendor/bl-ed/web")
-                         :providers (merge base (places/providers sys) (links/providers sys)
-                                           (buffers/providers sys server) (desk/providers sys (get base "task")))
-                         :intents (merge (pv/intents sys opts) (places/intents sys)
-                                         (links/intents sys) (buffers/intents sys server))})]
-    (println (str "Real project: " project))
-    (println (str "Mobile state: " state))
-    (println (str "Model: " (:model provider) " (configured via project .env / process environment)"))
-    (println (str "Phone UI: " (:url r) "?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile"))
-    (receive :never nil)))
+  (when-not (= (Path/expand project) (Path/expand home))
+    (throw (ex-info "Attach other directories as places with bin/omega attach DIR." {})))
+  (launch/dev! ["--preset" "pocket" "--live" "--db" (str state "/db") "--port" (str port)]))

@@ -75,7 +75,7 @@
                                      folder {:path (str "work:" (subs folder 7) "/" address)}
                                      place {:place place :path address}
                                      :else {:path address})
-                            id (str (or task place) "-" (name kind) "-" (mod (hash (pr-str to)) 100000000))]
+                            id (str (or task place) "-" (name kind) "-" (omega/digest (pr-str to)))]
                         (if (= "" address) (c/message ed "Reference cancelled.")
                           (c/effect ed {:kind :intent :intent "links/put"
                                         :args {:text (pr-str {:id id :from from :kind kind :to to})} :then :desk-linked}))))))))))))

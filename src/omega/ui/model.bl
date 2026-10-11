@@ -34,7 +34,9 @@
   (let [id (:task/id m)
         last-at (max (last-trace-at traces id) (or (:task/at m) 0))
         st (:task/status m)
-        my-asks (filter (fn [a] (= id (:from a))) asks)]
+        ;; Keep message history, but a closed task cannot act on an answer.
+        my-asks (when-not (contains? #{:done :failed :cancelled} st)
+                  (filter (fn [a] (= id (:from a))) asks))]
     {:id id
      :title (or (:task/title m) id)
      :goal (:task/goal m)

@@ -19,19 +19,51 @@ const title=m=>(m?.text.split('\n')[0]||'').replace(/^#\+TITLE:\s*/i,'');
 const empty=(heading,copy)=>`<div class="empty"><span class="empty-icon">${icon('work')}</span><h2>${esc(heading)}</h2><p>${esc(copy)}</p></div>`;
 
 export function createHost(api){
- const models=new Map(),mounts=new Map(),messageOrder=new Map();let messageSequence=0; let disposed=false,probeTimer,probeAbort,probing=false,composing=false;
+ const models=new Map(),mounts=new Map(),messageOrder=new Map(),positions=new Map(),history=[],queries=new Map();let messageSequence=0; let disposed=false,probeTimer,probeAbort,probing=false,composing=false;
  const css=document.createElement('link');css.rel='stylesheet';css.href=new URL('style.css',import.meta.url);css.dataset.mobileResource='';document.head.append(css);
- const priorTitle=document.title;document.title='Omega · Work, wherever';
+ const priorTitle=document.title;document.title='Omega · Pocket';
  document.documentElement.classList.add('omega-mobile');
  const send=(pane,event)=>api.dispatch({...event,pane});
  const rail=()=>models.get('rail')||{},task=()=>models.get('task')||{},file=()=>models.get('file')||{};
  const shell=()=>rail().state||{};
+ const readerModel=()=>shell().screen==='task'&&(shell().tab||'conversation')==='conversation'&&task().path&&!task().path.startsWith('task:')&&task().path!=='desk:welcome'?task():file();
+ const prompt=()=>[...models.entries()].find(([,m])=>m.minibuf);
  const nav=(screen,path)=>{for(const pane of ['rail','task','file'])send(pane,{type:'mobile/clear'});send('rail',{type:'mobile/nav',screen,path});};
  const tab=(name,path,block)=>send('rail',{type:'mobile/tab',tab:name,path,block,dirty:file().dirty,'current-file':file().path});
+ const openDocument=(path,goto)=>{if(!path)return;if(file().dirty&&path!==file().path){send('rail',{type:'mobile/document',path,dirty:true,'current-file':file().path});return;}if(file().path&&file().path!==path&&file().path!=='desk:welcome')history.push(file().path);send('rail',{type:'mobile/document',path,goto});};
  const modal=value=>send('rail',{type:'mobile/modal',value});
  const command=(pane,name,row)=>send(pane,row==null?{type:'command',command:name}:{type:'mobile/row-command',name,row});
  const online=()=>shell().connection?.online===true;
- const connection=()=>`<button class="connection ${online()?'':'offline'}" data-act="host"><i></i>${online()?'Host connected':'Reconnecting'}</button>`;
+ // Local composition belongs to this browser tab and this durable world.
+ // A task's creation fact prevents a reused ID inheriting an older draft.
+ let draftKey=null,draftCache={},draftAbort;const restored=new Set(),restoring=new Set();
+ function saveDraft(t,text){
+  if(!draftKey||t.path!=='task:'+t.data?.['task-id']||t.data?.['task-at']==null)return;
+  if(text)draftCache[t.path]={at:t.data['task-at'],text};else delete draftCache[t.path];
+  try{sessionStorage.setItem(draftKey,JSON.stringify(draftCache));}catch{}
+ }
+ function syncDraft(){
+  const t=task(),at=t.data?.['task-at'];if(!draftKey||at==null||t.path!=='task:'+t.data?.['task-id'])return;
+  const id=t.path+':'+at;
+  if(!restored.has(id)){
+   restored.add(id);const cached=draftCache[t.path];
+   if(cached?.at===at&&typeof cached.text==='string'&&cached.text&&!t.draft){restoring.add(id);send('task',{type:'mobile/draft',text:cached.text});return;}
+  }
+  if(restoring.has(id)&&!t.draft)return;
+  restoring.delete(id);saveDraft(t,t.draft||'');
+ }
+ async function restoreDrafts(){
+  if(disposed)return;
+  draftAbort=new AbortController();const timeout=setTimeout(()=>draftAbort.abort(),5000);
+  try{
+   const r=await fetch('/api/doc?path=launch:identity',{signal:draftAbort.signal,cache:'no-store'}),j=await r.json(),identity=JSON.parse(j.text);
+   if(disposed||!r.ok||!j.ok||!identity.db)return;
+   draftKey='omega.pocket.drafts:'+JSON.stringify([identity.root,identity.db,identity.live]);
+   try{const cached=JSON.parse(sessionStorage.getItem(draftKey)||'{}');if(cached&&typeof cached==='object'&&!Array.isArray(cached))draftCache=cached;}catch{}
+   syncDraft();render();
+  }catch{}finally{clearTimeout(timeout);}
+ }
+ const connection=()=>`<button class="connection ${online()?'':'offline'}" data-act="host"><i></i><span class="sr-only">${online()?'Host connected':'Reconnecting'}</span></button>`;
  const placeChoices=()=>{
   const rows=rail().objects||[];
   const current=rows.filter(o=>o.type==='desk/scope'&&o.place);return current.length?current:(shell().places||[]);
@@ -39,12 +71,13 @@ export function createHost(api){
  function work(){
   const r=rail(),os=r.objects||[],tasks=os.filter(o=>o.type==='omega/task'),needs=tasks.filter(o=>o.ask),active=tasks.filter(o=>!o.ask&&!['done','failed','cancelled'].includes(o.status)),done=tasks.filter(o=>['done','failed','cancelled'].includes(o.status));
   const scope=os.find(o=>o.type==='desk/scope'&&o.active)?.title||'All places';
-  const card=o=>`<button class="task-card ${o.ask?'attention':''}" data-act="open-task" data-path="task:${esc(o.key)}"><div class="card-meta"><span class="tag ${o.ask?'peach':['done'].includes(o.status)?'sage':'lilac'}">${o.ask?'●':'◌'} ${esc(status(o))}</span><span class="place-label">${esc(o.place||'Unplaced')}</span></div><h2>${esc(o.title||o.goal)}</h2><p>${esc(o.summary||o.goal)}</p><div class="card-foot"><span>${o.ask?'Answer to keep this moving':'Open conversation'}</span>${icon('arrow')}</div></button>`;
+  const card=o=>`<button class="task-card ${o.ask?'attention':''} ${esc(o.status)}" data-act="open-task" data-path="task:${esc(o.key)}" aria-label="${esc(o.title||o.goal)} · ${esc(status(o))}"><div class="card-meta"><span class="state-dot ${o.ask?'peach':o.status==='done'?'sage':'lilac'}" aria-hidden="true"></span><span class="place-label">${esc(o.place||'')}</span></div><h2>${esc(o.title||o.goal)}</h2><p>${esc(o.summary||o.goal)}</p></button>`;
   const group=(label,items,cls='')=>items.length?`<section class="task-group"><div class="section-label ${cls}">${label}<span>${items.length}</span></div>${items.map(card).join('')}</section>`:'';
-  return `<div class="eyebrow">YOUR WORK, WITH YOU</div><div class="heading-row"><h1>Good to go<span class="accent">.</span></h1>${btn(icon('plus'),'new','round primary','aria-label="New task"')}</div><p class="lede">A little attention. Then back to your day.</p><div class="scope-row">${btn(icon('places')+esc(scope)+'<span class="chevron">⌄</span>','scope','scope')}${btn(icon('filter'),'scope','icon-button','aria-label="Filter by place"')}</div>${group('Needs your attention',needs,'attention-label')}${group('Moving along',active)}${group('Recently finished',done)}${tasks.length?'':empty('Room for something new','Choose a place and give your agent a goal.')}`;
+  return `<div class="heading-row"><h1>Work</h1>${btn(icon('plus'),'new','round primary','aria-label="New task"')}</div><div class="scope-row">${btn(icon('places')+esc(scope)+'<span class="chevron">⌄</span>','scope','scope')}${btn(icon('filter'),'scope','icon-button','aria-label="Filter by place"')}</div>${group('Attention',needs,'attention-label')}${group('Active',active)}${group('Recent',done)}${tasks.length?'':empty('No tasks','Choose a place to start.')}`;
  }
  function taskScreen(){
   const t=task(),d=t.data||{},s=shell(),which=s.tab||'conversation';
+  if(which==='conversation'&&t.path&&!t.path.startsWith('task:')&&t.path!=='desk:welcome')return reader(t,'task');
   if((s['task-path']&&t.path!==s['task-path']&&which==='conversation')||(d.desk!=='task'&&which==='conversation'))return empty('Opening your task…','The conversation will appear here.');
   const home=d.home,artifact=(d.artifacts||[]).find(a=>a.kind!=='home')||home||(file().path?.startsWith('work:')?{path:file().path}:null);
   const tabs=[['conversation','Conversation'],['plan','Plan'],['changes','Changes']].map(([id,label])=>btn(label,'tab-'+id,`tab ${which===id?'selected':''}`,`aria-selected="${which===id}" role="tab"`)).join('');
@@ -52,13 +85,13 @@ export function createHost(api){
   if(which==='conversation'){
    body='';
    const question=(t.objects||[]).find(o=>o.type==='omega/msg');
-   if(question)body+=`<section class="question-card"><div class="eyebrow">A MOMENT OF YOUR ATTENTION</div><h3>${esc(question.message||d.ask||'Your agent has a question.')}</h3><div class="answer-row">${btn(icon('check')+'Yes','yes','primary',(!online()||t.state?.pending)?'disabled':'')}${btn('No','no','secondary',(!online()||t.state?.pending)?'disabled':'')}${btn('Write an answer','answer','text-button')}</div></section>`;
+   if(question)body+=`<section class="question-card"><h3>${esc(question.message||d.ask||'Question')}</h3><div class="answer-row">${btn(icon('check')+'Yes','yes','primary',(!online()||t.state?.pending)?'disabled':'')}${btn('No','no','secondary',(!online()||t.state?.pending)?'disabled':'')}${btn('Answer','answer','text-button')}</div></section>`;
    body+=conversation(t);
-   if(d['task-result'])body+=`<section class="result-card"><div class="eyebrow">${esc(d['task-status'])}</div><p>${esc(d['task-result'])}</p></section>`;
+   if(d['task-result'])body+=`<section class="result-card ${d['task-status']==='failed'?'failed':''}"><p>${esc(d['task-result'])}</p>${btn('Read','read-result','text-button')}</section>`;
   }else if(s['file-path']&&file().path!==s['file-path'])body=empty('Opening working text…','Your document stays safe while this view opens.');
   else if(which==='plan')body=artifactView(file(),home,artifact);
   else body=changesView(file(),artifact);
-  return `<div class="task-context"><span>${icon('places')}${esc(d.place)}</span><span class="tag ${d.ask?'peach':finished(d)?'sage':'lilac'}">${esc(d.ask?'Needs you':d['task-status'])}</span></div><h1 class="task-title">${esc(d['task-title']||(which!=='conversation'?title(file()):title(t)))}</h1><div class="tabs" role="tablist" aria-label="Task views">${tabs}</div><div class="task-body">${body}</div>${which==='conversation'?composer(t):''}`;
+  return `<div class="task-context"><span>${icon('places')}${esc(d.place)}</span><span class="tag ${d.ask?'peach':d['task-status']==='failed'?'error':finished(d)?'sage':'lilac'}"><span class="sr-only">${esc(d.ask?'Needs you':d['task-status'])}</span></span></div><h1 class="task-title">${esc(d['task-title']||(which!=='conversation'?title(file()):title(t)))}</h1><div class="tabs" role="tablist" aria-label="Task views">${tabs}</div><div class="task-body">${body}</div>${which==='conversation'?composer(t):''}`;
  }
  function conversation(t){
   // Provider source stays inspectable. Source syntax is only styled here;
@@ -85,12 +118,12 @@ export function createHost(api){
  }
  function composer(t){
   const d=t.data||{},pending=t.state?.pending;
-  return `<form class="composer" data-form="reply"><label class="sr-only" for="mobile-reply">${finished(d)?'Follow-up goal':'Instruction to agent'}</label><textarea id="mobile-reply" data-field="reply" rows="2" placeholder="${finished(d)?'What’s next in this place?':'A thought, an answer, a new direction…'}">${esc(t.draft)}</textarea><div class="composer-foot"><span>${pending?'Sending to host…':!online()?'Offline · your draft stays here':finished(d)?'Follow-up in '+esc(d.place):'Send to this task'}</span>${btn(icon('send'),'send','send-button',`aria-label="${finished(d)?'Start follow-up':'Send instruction'}" ${!online()||pending?'disabled':''}`)}</div></form>`;
+  return `<form class="composer" data-form="reply"><label class="sr-only" for="mobile-reply">${finished(d)?'Follow-up goal':'Instruction to agent'}</label><textarea id="mobile-reply" data-field="reply" rows="2" placeholder="${finished(d)?'Follow-up…':'Reply…'}">${esc(t.draft)}</textarea><div class="composer-foot"><span>${pending?'Sending to host…':!online()?'Offline · draft retained':finished(d)?esc(d.place):''}</span>${btn(icon('send'),'send','send-button',`aria-label="${finished(d)?'Start follow-up':'Send instruction'}" ${!online()||pending?'disabled':''}`)}</div></form>`;
  }
  function artifactView(f,home,artifact){
   if(!home&&!artifact)return empty('No plan linked yet','Use References in Actions to inspect this task’s context.');
-  if(f['read-only']&&f.path!=='desk:welcome')return browseDocument(f);
-  if(!f.path?.startsWith('work:'))return empty('Opening working text…','Your actual document, at the task’s home.');
+  if(!f.path||f.path==='desk:welcome')return empty('Opening…','');
+  if(f['read-only']||!f.path.startsWith('work:'))return reader();
   const lines=f.text.split('\n');
   const document=lines.map((l,row)=>{
    if(/^#\+TITLE:/i.test(l))return `<h2>${esc(l.replace(/^#\+TITLE:\s*/i,''))}</h2>`;
@@ -115,35 +148,80 @@ export function createHost(api){
  function places(){
   const r=rail(),os=(r.objects||[]).filter(o=>['workspace/place','workspace/folder','workspace/file'].includes(o.type));
   const detail=r.path?.startsWith('place:')||r.path?.startsWith('folder:');
-  return `<div class="eyebrow">CONTEXT THAT TRAVELS</div><h1>${detail?esc(title(r)):'Your places<span class="accent">.</span>'}</h1><p class="lede">${detail?'Tasks, text and conventions belong here.':'A home for every thread of work.'}</p>${detail?btn('‹ All places','places','text-button'):''}<div class="place-list">${os.map(o=>`<button class="place-card" data-act="${o.type==='workspace/file'?'open-file':'open-place'}" data-path="${esc(o.key)}"><span class="place-icon">${icon(o.type==='workspace/file'?'file':'places')}</span><span><strong>${esc(o.title||o.name||(r.text.split('\n')[o.row]||o.key).replace(/^[*▸\s]+/,''))}</strong><small>${esc(o.type==='workspace/place'?'Working place':o.type==='workspace/folder'?'Folder':'Working text')}</small></span>${icon('arrow')}</button>`).join('')}</div>${detail?`<div class="place-actions">${btn('View tasks here','place-tasks','primary')}${btn(icon('plus')+'New task here','new','secondary')}</div><details class="source-details"><summary>Folders & inherited settings</summary><pre>${esc(r.text)}</pre></details>`:''}`;
+  return `<h1>${detail?esc(title(r)):'Places'}</h1>${detail?btn('‹ All places','places','text-button'):''}<div class="place-list">${os.map(o=>`<button class="place-card" data-act="${o.type==='workspace/file'?'open-file':'open-place'}" data-path="${esc(o.key)}"><span class="place-icon">${icon(o.type==='workspace/file'?'file':'places')}</span><span><strong>${esc(o.title||o.name||(r.text.split('\n')[o.row]||o.key).replace(/^[*▸\s]+/,''))}</strong><small>${esc(o.type==='workspace/place'?'':o.type==='workspace/folder'?'':'')}</small></span>${icon('arrow')}</button>`).join('')}</div>${detail?`<div class="place-actions">${btn('Tasks','place-tasks','primary')}${btn(icon('plus')+'New task','new','secondary')}</div><details class="source-details"><summary>Folders & inherited settings</summary><pre>${esc(r.text)}</pre></details>`:''}`;
  }
- function host(){return `<div class="eyebrow">YOUR MACHINE, YOUR WORK</div><h1>Close at hand<span class="accent">.</span></h1><p class="lede">Your agents work on the host. You can step away.</p><section class="host-card"><span class="host-illustration">${icon('host')}</span><h2>${esc(location.hostname)}</h2><span class="tag ${online()?'sage':'peach'}">${online()?'● Connected':'○ Reconnecting'}</span><p>${location.protocol==='https:'?'HTTPS connection':'Local development connection'}</p>${btn('Check connection','reconnect','secondary')}</section><section class="note-card"><h3>Take it with you</h3><p>Connect this phone to your Tailscale network, then open the host’s private HTTPS address.</p><p>Keep the host awake while work is running.</p></section><div class="section-label">ABOUT THIS SPIKE</div><p class="fine-print">Real places, tasks and shared text. The isolated demo uses a scripted agent for its two board tasks. Replies stay with their task while you navigate; browser reloads clear unsent drafts.</p>${btn('Return to bl·ed','unload','text-button')}`;}
+ function host(){return `<h1>Machine</h1><section class="host-card"><span class="host-illustration">${icon('host')}</span><h2>${esc(location.hostname)}</h2><span role="status">${online()?'Connected':'Reconnecting'}</span>${btn('Reconnect','reconnect','secondary')}</section>${btn('Live image','machine','sheet-option')}${btn('Commands','commands','sheet-option')}${btn('Return to bl·ed','unload','sheet-option')}`;}
+ function inline(text){
+  const pattern=/\[\[([^\]]+)\](?:\[([^\]]+)\])?\]|\[([^\]]+)\]\(([^)]+)\)/g;let out='',at=0;
+  for(const m of text.matchAll(pattern)){out+=esc(text.slice(at,m.index));const path=m[1]||m[4],label=m[2]||m[3]||path;out+=btn(esc(label),'document-link','text-button',`data-path="${esc(path)}"`);at=m.index+m[0].length;}
+  return out+esc(text.slice(at));
+ }
+ function reader(f=file(),pane='file'){
+  const lines=(f.text||'').split('\n'),query=queries.get(f.path)||'',selected=shell().selection;
+  const headings=lines.flatMap((l,row)=>/^(\*+|#{1,6}) /.test(l)?[{row,label:l.replace(/^(\*+|#{1,6}) /,'')}]:[]);
+  const objects=(f.objects||[]).filter(o=>o.type==='bl/ns'||o.type==='bl/var'||o.type.startsWith('workspace/')||o.type==='omega/task');
+  const rows=lines.map((l,row)=>{
+   const attrs=`data-row="${row}" data-pane="${pane}" class="reader-line ${query&&l.toLowerCase().includes(query.toLowerCase())?'match':''} ${selected?.path===f.path&&row>=selected.start&&row<selected.end?'passage':''}"`;
+   if(/^#\+TITLE:/i.test(l))return `<h1 ${attrs}>${esc(l.replace(/^#\+TITLE:\s*/i,''))}</h1>`;
+   if(/^(\*+|#{1,6}) /.test(l))return `<h2 ${attrs}>${inline(l.replace(/^(\*+|#{1,6}) /,''))}</h2>`;
+   return `<p ${attrs}>${inline(l)||'&nbsp;'}</p>`;
+  }).join('');
+  return `<div class="reader-tools">${btn(icon('back'),'document-back','icon-button',`aria-label="Back" data-pane="${pane}"`)}${btn('Outline','outline','text-button')}${btn('Ask','ask-passage','text-button',selected?.path===f.path?'':'disabled')}${!f['read-only']?btn(f.state?.editing?'Read':'Edit','edit-mode','text-button',`data-pane="${pane}"`):''}</div><form data-form="search" class="reader-search"><input type="search" data-field="search" data-path="${esc(f.path)}" aria-label="Find in document" placeholder="Find…" value="${esc(query)}"/>${btn('Next','find-next','text-button')}</form>${objects.length?`<div class="place-list">${objects.map(o=>btn(esc(o.label||o.key),'document-object','sheet-option',`data-pane="${pane}" data-path="${esc(o.type==='omega/task'?'task:'+o.key:o.key)}" ${o.type.startsWith('bl/')?`data-command="bl/open" data-row="${o.row}"`:''}`)).join('')}</div>`:''}<article class="document reader" data-pane="${pane}" aria-label="Document">${f.state?.editing&&!f['read-only']?`<textarea aria-label="Document source" class="source-editor" data-field="file" data-pane="${pane}">${esc(f.text)}</textarea>`:rows}</article>${f.dirty?`<div class="publish-bar">${btn('Publish','publish','primary',`data-pane="${pane}" ${online()?'':'disabled'}`)}</div>`:''}<details class="source-details"><summary>${esc(f.path)}</summary><pre>${esc(f.revision)}</pre></details>`;
+ }
+
  function sheet(){
   const s=shell(),value=s.modal,t=task(),d=t.data||{},r=rail();
+  const pending=prompt();
+  if(pending){const [pane,m]=pending,mb=m.minibuf;return `<div class="scrim" data-act="dismiss"><section class="sheet" role="dialog" aria-modal="true" aria-label="Editor prompt">${btn(icon('close'),'dismiss','sheet-close','aria-label="Cancel prompt"')}<form data-form="prompt" data-pane="${esc(pane)}"><label for="editor-prompt">${esc(mb.prompt)}</label><input id="editor-prompt" data-field="prompt" data-pane="${esc(pane)}" value="${esc(mb.text)}" autocomplete="off"/><button class="primary full" type="submit">Enter</button></form></section></div>`;}
   if(!value)return '';
   let content='';
-  if(value==='scope')content=`<h2>Where are we working?</h2><p>Include tasks from a place and its subplaces.</p>${btn('All places','scope-choice','sheet-option','data-path="workspace:all"')}${placeChoices().map(o=>btn(icon('places')+esc(o.title),'scope-choice','sheet-option',`data-path="${esc(o.key)}"`)).join('')}`;
+  if(value==='scope')content=`<h2>Places</h2>${btn('All places','scope-choice','sheet-option','data-path="workspace:all"')}${placeChoices().map(o=>btn(icon('places')+esc(o.title),'scope-choice','sheet-option',`data-path="${esc(o.key)}"`)).join('')}`;
   if(value==='new'){
    const field=s.new||{},selected=field.place||r.data?.place||placeChoices()[0]?.place;
-   content=`<div class="eyebrow">SOMETHING TO MOVE FORWARD</div><h2>Start a little work.</h2><form data-form="new"><label for="new-place">Working place</label><select id="new-place" data-field="new-place">${placeChoices().map(o=>`<option value="${esc(o.place)}" ${o.place===selected?'selected':''}>${esc(o.title)}</option>`).join('')}</select><label for="new-goal">What would you like done?</label><textarea id="new-goal" data-field="new-goal" rows="4" placeholder="Describe the outcome you have in mind…">${esc(field.goal)}</textarea><p class="fine-print">The task uses this place’s working directory and settings.</p><button class="primary full" type="submit" ${!online()||s.creating?'disabled':''}>${s.creating?'Starting…':'Start task '+icon('arrow')}</button></form>`;
+   content=`<h2>New task</h2>${s.selection?`<blockquote>${esc(s.selection.text)}</blockquote>`:''}<form data-form="new"><label for="new-place">Place</label><select id="new-place" data-field="new-place">${placeChoices().map(o=>`<option value="${esc(o.place)}" ${o.place===selected?'selected':''}>${esc(o.title)}</option>`).join('')}</select><label for="new-goal">Goal</label><textarea id="new-goal" data-field="new-goal" rows="4" placeholder="Goal…">${esc(field.goal)}</textarea><button class="primary full" type="submit" ${!online()||s.creating?'disabled':''}>${s.creating?'Starting…':'Start task '+icon('arrow')}</button></form>`;
   }
-  if(value==='actions')content=`<h2>A little more control.</h2>${btn(icon('places')+'Working folder','folder','sheet-option')}${btn(icon('file')+'Working file','working-file','sheet-option')}${btn('References','references','sheet-option')}${btn('Inspect task source','source','sheet-option')}${!finished(d)?btn('Cancel task','cancel-task','sheet-option danger'):''}`;
-  if(value==='cancel')content=`<h2>Cancel this task?</h2><p>The task will stop. Its conversation and accepted edits remain.</p>${btn('Keep working','dismiss','secondary')}${btn('Cancel task','confirm-cancel','primary',online()?'':'disabled')}`;
+  if(value==='actions')content=`<h2>Task</h2><p><code>${esc(d.cwd)}</code></p>${btn(icon('places')+'Working folder','folder','sheet-option')}${btn(icon('file')+'Working file','working-file','sheet-option')}${d.home?btn(esc(d.home.path),'origin','sheet-option'):''}${btn('References','references','sheet-option')}${btn('Commands','commands','sheet-option')}${btn('Inspect task source','source','sheet-option')}${!finished(d)?btn('Cancel task','cancel-task','sheet-option danger'):''}`;
+  if(value==='cancel')content=`<h2>Cancel this task?</h2>${btn('Keep working','dismiss','secondary')}${btn('Cancel task','confirm-cancel','primary',online()?'':'disabled')}`;
   if(value==='source')content=`<h2>Task source</h2><pre class="inspect-source">${esc(t.text)}</pre>`;
+  if(value==='outline')content=`<h2>Outline</h2>${(readerModel().text||'').split('\n').flatMap((l,row)=>/^(\*+|#{1,6}) /.test(l)?[btn(esc(l.replace(/^(\*+|#{1,6}) /,'')),'heading','sheet-option',`data-row="${row}"`)]:[]).join('')}`;
+  if(value==='commands')content=`<h2>Commands</h2><label for="command-pane">Pane</label><select id="command-pane" data-field="command-pane">${['rail','task','file'].map(p=>`<option ${p===(s['command-pane']||'file')?'selected':''}>${p}</option>`).join('')}</select><form data-form="open"><label for="open-address">Open</label><input id="open-address" data-field="address" placeholder="bl: or a document address"/><button class="secondary" type="submit">Open</button></form><form data-form="eval"><label for="eval-code">Lisp</label><textarea id="eval-code" data-field="eval-code" placeholder="(+ 1 2)">${esc(s['eval-code']||'')}</textarea><button class="secondary" name="target" value="editor" type="submit">Editor</button><button class="secondary" name="target" value="machine" type="submit">Machine</button></form>${(s['eval-result']||models.get(s['command-pane']||'file')?.message)?`<pre role="status">${esc(s['eval-result']||models.get(s['command-pane']||'file')?.message)}</pre>`:''}<label for="command-query">Find</label><input id="command-query" data-field="command-query" value="${esc(s['command-query']||'')}"/>${(models.get(s['command-pane']||'file')?.commands||[]).filter(c=>(c.name+' '+c.doc).toLowerCase().includes((s['command-query']||'').toLowerCase())).map(c=>btn(esc(c.name),'run-command','sheet-option',`data-name="${esc(c.name)}" title="${esc(c.doc)}"`)).join('')}`;
   return `<div class="scrim" data-act="dismiss"><section class="sheet" role="dialog" aria-modal="true" aria-label="${esc(value)}"><div class="sheet-handle"></div>${btn(icon('close'),'dismiss','sheet-close','aria-label="Close dialog"')}${content}</section></div>`;
  }
+ let rendering=false,renderQueued=false;
  function render(){
-  if(composing)return;
+  if(disposed||composing)return;
+  if(rendering){renderQueued=true;return;}
+  rendering=true;
+  try{renderNow();}
+  finally{rendering=false;if(renderQueued){renderQueued=false;queueMicrotask(render);}}
+ }
+ function renderNow(){
   const root=mounts.get('rail')?.root;if(!root)return;
   const s=shell(),screen=s.screen||'work',which=s.tab||'conversation',t=task();
   const fingerprint=JSON.stringify([...models.values()]);if(root._fingerprint===fingerprint)return;root._fingerprint=fingerprint;
+  const reading=readerModel();
+  const readerKey=JSON.stringify([screen,reading.path,reading.text,reading.state?.editing,s.modal]);
+  const selection=window.getSelection(),anchor=selection?.anchorNode;
+  // Preserve the browser's range and selection handles while the package
+  // records the passage. Replacing this DOM would also break native Copy.
+  if(!selection?.isCollapsed&&root._readerKey===readerKey&&root.contains(anchor)&&
+     (anchor?.nodeType===1?anchor:anchor?.parentElement)?.closest('.reader-line')){
+   const selected=s.selection;
+   for(const line of root.querySelectorAll('.reader-line'))line.classList.toggle('passage',selected?.path===reading.path&&+line.dataset.row>=selected.start&&+line.dataset.row<selected.end);
+   const ask=root.querySelector('[data-act="ask-passage"]');if(ask)ask.disabled=selected?.path!==reading.path;
+   const connection=root.querySelector('.connection');connection?.classList.toggle('offline',!online());
+   if(connection)connection.querySelector('.sr-only').textContent=online()?'Host connected':'Reconnecting';
+   const work=root.querySelector('.bottom-nav [data-act="work"]'),needs=(rail().objects||[]).some(o=>o.ask),dot=work?.querySelector('.nav-dot');
+   if(needs&&work&&!dot)work.insertAdjacentHTML('beforeend','<b class="nav-dot"></b>');else if(!needs)dot?.remove();return;
+  }
   const active=document.activeElement,field=active?.dataset.field,start=active?.selectionStart,end=active?.selectionEnd;
-  const oldScroll=root.querySelector('.mobile-scroll')?.scrollTop||0;
-  const viewKey=screen+':'+(screen==='task'?which+':'+(which==='conversation'?t.path:file().path):rail().path);
+  const oldScroll=root.querySelector('.mobile-scroll')?.scrollTop||0;if(root._viewKey)positions.set(root._viewKey,oldScroll);
+  const viewKey=screen+':'+(screen==='document'?file().path:screen==='task'?which+':'+(which==='conversation'?t.path:file().path):rail().path);
   const noticeOrder=[...models.entries()].sort(([a],[b])=>(messageOrder.get(b)||0)-(messageOrder.get(a)||0)).map(([,m])=>m.message);
   const message=noticeOrder.filter(Boolean).find(x=>/unsaved|discard|overlap|not sent|could not|not published|retained|reverted|received by host|Published shared|Publish the file|Choose a place|Write an instruction/i.test(x));
-  root.innerHTML=`<div class="mobile-app"><header class="mobile-header">${screen==='task'?btn(icon('back')+'Work','work','back-button'):'<a class="wordmark" href="#" data-act="work"><span class="omega-mark">ω</span> omega<span class="wordmark-note"> / pocket</span></a>'}${screen==='task'?btn(icon('dots'),'actions','icon-button','aria-label="Task actions"'):connection()}</header><main class="mobile-scroll"><div class="mobile-content">${screen==='task'?taskScreen():screen==='places'?places():screen==='host'?host():work()}</div></main>${message?`<div class="mobile-notice" role="status">${esc(message)}</div>`:''}<nav class="bottom-nav" aria-label="Main navigation">${[['work','Work'],['places','Places'],['host','Host']].map(([id,label])=>btn(icon(id)+`<span>${label}</span>`+(id==='work'?(rail().objects||[]).some(o=>o.ask)?'<b class="nav-dot"></b>':'':''),id,`nav-item ${screen===id||id==='work'&&screen==='task'?'active':''}`,screen===id?'aria-current="page"':'')).join('')}</nav>${sheet()}</div>`;
-  root.querySelector('.mobile-scroll').scrollTop=root._viewKey===viewKey?oldScroll:0;root._viewKey=viewKey;
+  root.innerHTML=`<div class="mobile-app"><header class="mobile-header">${screen==='task'?btn(icon('back')+'Work','work','back-button'):'<a class="wordmark" href="#" data-act="work"><span class="omega-mark">ω</span> omega<span class="wordmark-note"> / pocket</span></a>'}<div>${btn('⌘','commands','icon-button','aria-label="Commands"')}${screen==='task'?btn(icon('dots'),'actions','icon-button','aria-label="Task actions"'):connection()}</div></header><main class="mobile-scroll"><div class="mobile-content">${screen==='document'?reader():screen==='task'?taskScreen():screen==='places'?places():screen==='host'?host():work()}</div></main>${message?`<div class="mobile-notice" role="status">${esc(message)}</div>`:''}<nav class="bottom-nav" aria-label="Main navigation">${[['work','Work'],['places','Places'],['host','Host']].map(([id,label])=>btn(icon(id)+`<span>${label}</span>`+(id==='work'?(rail().objects||[]).some(o=>o.ask)?'<b class="nav-dot"></b>':'':''),id,`nav-item ${screen===id||id==='work'&&screen==='task'?'active':''}`,screen===id?'aria-current="page"':'')).join('')}</nav>${sheet()}</div>`;
+  root.querySelector('.mobile-scroll').scrollTop=positions.get(viewKey)||0;root._viewKey=viewKey;
+  root._readerKey=readerKey;
   if(field){const el=root.querySelector(`[data-field="${field}"]`);if(el){el.focus({preventScroll:true});if(typeof start==='number'&&el.setSelectionRange)el.setSelectionRange(start,end);}}
  }
  function handle(event){
@@ -156,9 +234,9 @@ export function createHost(api){
    case 'places':nav('places','places:');break;
    case 'host':nav('host');break;
    case 'scope':modal('scope');break;
-   case 'new':modal('new');break;
+   case 'new':send('rail',{type:'mobile/selection',selection:null});modal('new');break;
    case 'actions':modal('actions');break;
-   case 'dismiss':modal(null);break;
+   case 'dismiss':{const p=prompt();if(p)send(p[0],{type:'key',key:'Escape'});else modal(null);break;}
    case 'scope-choice':modal(null);nav('work',el.dataset.path);break;
    case 'open-task':nav('task',el.dataset.path);break;
    case 'open-place':nav('places',el.dataset.path);break;
@@ -170,16 +248,28 @@ export function createHost(api){
    case 'no':send('task',{type:'mobile/send',answer:'no'});break;
    case 'answer':mounts.get('rail').root.querySelector('[data-field="reply"]')?.focus();break;
    case 'send':send('task',{type:'mobile/send'});break;
-   case 'publish':command('file','mobile/publish');break;
+   case 'publish':command(el.dataset.pane||'file','mobile/publish');break;
    case 'start-block':command('file','eval-cell',Number(el.dataset.row));break;
    case 'browse':if(el.dataset.path.startsWith('task:'))nav('task',el.dataset.path);else tab('plan',el.dataset.path);break;
    case 'toggle':command('file','desk/toggle',Number(el.dataset.row));break;
    case 'undo':command('file','buffers/undo',Number(el.dataset.row));break;
-   case 'edit-mode':send('file',{type:'mobile/edit-mode'});break;
+   case 'edit-mode':send(el.dataset.pane||'file',{type:'mobile/edit-mode'});break;
    case 'folder':modal(null);tab('plan',d.folder);break;
    case 'working-file':modal(null);tab('plan',artifact?.path);break;
-   case 'references':modal(null);tab('plan','links:task/'+d['task-id']);break;
-   case 'open-file':nav('task');tab('plan',el.dataset.path);break;
+   case 'references':modal(null);openDocument('links:task/'+d['task-id']);break;
+   case 'open-file':openDocument(el.dataset.path);break;
+   case 'document-link':{const source=models.get(el.closest('.reader')?.dataset.pane)||file();let path=el.dataset.path;if(/^https?:/.test(path)){window.open(path,'_blank','noopener');break;}path=path.replace(/^file:/,'');if(!/^[a-z-]+:/i.test(path)&&source.path?.startsWith('work:'))path=source.path.slice(0,source.path.lastIndexOf('/')+1)+path;openDocument(path);break;}
+   case 'document-object':if(el.dataset.command)command(el.dataset.pane||'file',el.dataset.command,Number(el.dataset.row));else if(el.dataset.path.startsWith('task:'))nav('task',el.dataset.path);else openDocument(el.dataset.path);break;
+   case 'document-back':if(el.dataset.pane==='task'){nav('task',shell()['task-path']);break;}if(history.length){const path=history.pop();send('rail',{type:'mobile/document',path,dirty:file().dirty,'current-file':file().path});}else nav('places','places:');break;
+   case 'outline':modal('outline');break;
+   case 'heading':{const row=el.dataset.row;modal(null);mounts.get('rail').root.querySelector(`.reader-line[data-row="${row}"]`)?.scrollIntoView({block:'start'});break;}
+   case 'find-next':{const root=mounts.get('rail').root,matches=[...root.querySelectorAll('.reader-line.match')],scroll=root.querySelector('.mobile-scroll');(matches.find(x=>x.offsetTop>scroll.scrollTop+40)||matches[0])?.scrollIntoView({block:'start'});break;}
+   case 'ask-passage':modal('new');break;
+   case 'read-result':openDocument(task().path);break;
+   case 'origin':modal(null);openDocument(d.home?.path);break;
+   case 'machine':openDocument('bl:');break;
+   case 'commands':modal('commands');break;
+   case 'run-command':modal(null);command(shell()['command-pane']||'file',el.dataset.name);break;
    case 'source':modal('source');break;
    case 'cancel-task':modal('cancel');break;
    case 'confirm-cancel':send('task',{type:'mobile/cancel'});modal(null);break;
@@ -187,8 +277,15 @@ export function createHost(api){
    case 'unload':command('rail','mobile/unload');break;
   }
  }
- function input(event){const e=event.target,f=e.dataset.field;if(f==='reply')send('task',{type:'mobile/draft',text:e.value});if(f==='file')send('file',{type:'mobile/edit',text:e.value});if(f?.startsWith('new-'))send('rail',{type:'mobile/new-field',field:f.slice(4),value:e.value});}
- function submit(event){const form=event.target.closest('form');if(!form)return;event.preventDefault();if(!online())return;if(form.dataset.form==='reply')send('task',{type:'mobile/send'});if(form.dataset.form==='new')send('rail',{type:'mobile/create',place:form.querySelector('select').value,goal:form.querySelector('textarea').value});}
+ function input(event){const e=event.target,f=e.dataset.field;if(f==='prompt')send(e.dataset.pane,{type:'mobile/prompt',text:e.value});if(f==='search'){queries.set(e.dataset.path||file().path,e.value);const root=mounts.get('rail')?.root;if(root)root._fingerprint=null;render();}if(['command-pane','command-query','eval-code'].includes(f))send('rail',{type:'mobile/field',field:f,value:e.value});if(f==='reply'){send('task',{type:'mobile/draft',text:e.value});saveDraft(task(),e.value);}if(f==='file')send(e.dataset.pane||'file',{type:'mobile/edit',text:e.value});if(f?.startsWith('new-'))send('rail',{type:'mobile/new-field',field:f.slice(4),value:e.value});}
+ function submit(event){const form=event.target.closest('form');if(!form)return;event.preventDefault();
+  if(form.dataset.form==='search'){handle({target:form.querySelector('[data-act="find-next"]'),preventDefault(){}});return;}
+  if(form.dataset.form==='prompt'){send(form.dataset.pane,{type:'key',key:'Enter'});return;}
+  if(form.dataset.form==='open'){modal(null);openDocument(form.querySelector('input').value.trim());return;}
+  if(form.dataset.form==='eval'){const text=form.querySelector('textarea').value;if(event.submitter?.value==='machine')send('rail',{type:'mobile/machine-eval',text});else send(shell()['command-pane']||'file',{type:'mobile/eval',text});return;}
+  if(!online())return;if(form.dataset.form==='reply')send('task',{type:'mobile/send'});if(form.dataset.form==='new')send('rail',{type:'mobile/create',place:form.querySelector('select').value,goal:form.querySelector('textarea').value});}
+ function passage(){const selected=window.getSelection();if(!selected||selected.isCollapsed)return;const node=n=>(n?.nodeType===1?n:n?.parentElement)?.closest('.reader-line');const a=node(selected.anchorNode),b=node(selected.focusNode);if(!a||!b||a.dataset.pane!==b.dataset.pane)return;const source=models.get(a.dataset.pane)||file();const start=Math.min(+a.dataset.row,+b.dataset.row),end=Math.max(+a.dataset.row,+b.dataset.row)+1;send('rail',{type:'mobile/selection',selection:{path:source.path,rev:source.revision,start,end,text:source.text.split('\n').slice(start,end).join('\n')}});}
+
  async function probe(){
   if(disposed||probing)return;probing=true;probeAbort=new AbortController();const timeout=setTimeout(()=>probeAbort.abort(),5000);
   try{const r=await fetch('/api/doc?path=desk:welcome',{signal:probeAbort.signal,cache:'no-store'}),j=await r.json();if(!disposed)send('rail',{type:'mobile/connection',online:r.ok&&j.ok===true,checked:Date.now()});}
@@ -196,11 +293,11 @@ export function createHost(api){
   finally{clearTimeout(timeout);probing=false;}
  }
  const network=()=>probe();window.addEventListener('online',network);window.addEventListener('offline',network);
- probeTimer=setInterval(probe,8000);queueMicrotask(probe);
- return {mount(root){let role;const click=e=>{e.stopPropagation();handle(e);},onInput=e=>input(e),onSubmit=e=>submit(e);root.addEventListener('click',click);root.addEventListener('input',onInput);root.addEventListener('change',onInput);root.addEventListener('submit',onSubmit);
+ probeTimer=setInterval(probe,8000);queueMicrotask(probe);queueMicrotask(restoreDrafts);
+ return {mount(root){let role;const click=e=>{e.stopPropagation();handle(e);},onInput=e=>input(e),onSubmit=e=>submit(e);root.addEventListener('pointerup',passage);root.addEventListener('click',click);root.addEventListener('input',onInput);root.addEventListener('change',onInput);root.addEventListener('submit',onSubmit);
   // The editor's global keyboard sink must not swallow native mobile fields.
   const compositionStart=()=>{composing=true;},compositionEnd=e=>{composing=false;input(e);render();};root.addEventListener('compositionstart',compositionStart);root.addEventListener('compositionend',compositionEnd);
-  const stop=e=>e.stopPropagation();root.addEventListener('keydown',stop);root.addEventListener('beforeinput',stop);
-  return {update(model){role=model.role;if(models.get(role)?.message!==model.message)messageOrder.set(role,++messageSequence);models.set(role,model);mounts.set(role,{root});render();},dispose(){if(mounts.get(role)?.root===root)mounts.delete(role);root.removeEventListener('click',click);root.removeEventListener('input',onInput);root.removeEventListener('change',onInput);root.removeEventListener('submit',onSubmit);root.removeEventListener('compositionstart',compositionStart);root.removeEventListener('compositionend',compositionEnd);root.removeEventListener('keydown',stop);root.removeEventListener('beforeinput',stop);root.replaceChildren();}};},
- dispose(){disposed=true;clearInterval(probeTimer);probeAbort?.abort();window.removeEventListener('online',network);window.removeEventListener('offline',network);css.remove();document.documentElement.classList.remove('omega-mobile');document.title=priorTitle;models.clear();mounts.clear();}};
+  const stop=e=>{e.stopPropagation();if(e.key==='Escape'&&prompt()){e.preventDefault();send(prompt()[0],{type:'key',key:'Escape'});}};root.addEventListener('keydown',stop);root.addEventListener('beforeinput',stop);
+  return {update(model){role=model.role;if(models.get(role)?.message!==model.message)messageOrder.set(role,++messageSequence);models.set(role,model);mounts.set(role,{root});if(role==='task')syncDraft();render();},dispose(){if(mounts.get(role)?.root===root)mounts.delete(role);root.removeEventListener('pointerup',passage);root.removeEventListener('click',click);root.removeEventListener('input',onInput);root.removeEventListener('change',onInput);root.removeEventListener('submit',onSubmit);root.removeEventListener('compositionstart',compositionStart);root.removeEventListener('compositionend',compositionEnd);root.removeEventListener('keydown',stop);root.removeEventListener('beforeinput',stop);root.replaceChildren();}};},
+ dispose(){disposed=true;clearInterval(probeTimer);probeAbort?.abort();draftAbort?.abort();window.removeEventListener('online',network);window.removeEventListener('offline',network);css.remove();document.documentElement.classList.remove('omega-mobile');document.title=priorTitle;models.clear();mounts.clear();positions.clear();history.length=0;queries.clear();restored.clear();restoring.clear();}};
 }

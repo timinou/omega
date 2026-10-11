@@ -1,0 +1,351 @@
+
+FILE spikes/mobile/test/drive.test.mjs
+✔ mobile is a removable layer and a real frame layout, with no user table mutation (110.311425ms)
+✔ drafts stay keyed to tasks and navigation leaves the conversation editor untouched (8.715529ms)
+✔ send uses the existing task intent, blocks duplicates and preserves drafts on failure (7.320125ms)
+✔ quick answers keep a composed reply; successful text sends clear only the submitted draft (8.996179ms)
+✔ completed task follow-up carries its actual place and frozen directory (4.223466ms)
+✔ mobile file input participates in the shared-buffer draft protocol and read-only guards (11.512641ms)
+✔ dirty file navigation keeps its current tab and exposes a publication message (2.872114ms)
+✔ task creation from a place document validates against the retained place choices (5.971176ms)
+✔ document navigation and explicit passage retain their address, revision and anchor (4.871149ms)
+✔ command discovery includes core and package commands without shared table mutation (8.958418ms)
+✔ first editor eval can resume when the language arrives (7.412589ms)
+✔ native prompts expose data and submit through the existing editor (12.839909ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 217.156052
+RESULT 0
+
+FILE spikes/workspace/test/drive.test.mjs
+✔ Alt+h/l moves spatially, clamps, and does not emit host IO (130.973355ms)
+✔ pane focus preserves a command draft and an insert draft (87.834788ms)
+✔ spatial focus skips passive view panes (37.609677ms)
+✔ task references in writable source drive the linked task pane (34.638235ms)
+✔ a task block sends cwd and stable home anchor through the existing intent (17.63789ms)
+✔ g H returns to a task home by current source anchor (21.285618ms)
+✔ home arrival matches the complete block ID after surrounding source moves (7.846378ms)
+✔ workspace unload removes its layout, commands and keys in every pane (59.773713ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 445.475258
+RESULT 0
+
+FILE spikes/workspace/test/place-drive.test.mjs
+✔ parent uses provider context and requests a normal editor visit (40.139484ms)
+✔ place attachment submits a plain map as a host intent (5.910552ms)
+✔ place home forwards an anchor and unloading is exact (24.661543ms)
+✔ new work names its selected place so inherited cwd defaults can resolve (5.845048ms)
+✔ unuse cancels the package-owned prompt and preserves a foreign draft (5.680387ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 98.959227
+RESULT 0
+
+FILE spikes/workspace/test/buffer-drive.test.mjs
+✔ typing in a shared file sends an unpublished draft through an intent (42.478702ms)
+✔ remote disjoint text preserves local draft, mode and command draft (35.105808ms)
+✔ overlapping refresh retains local text and does not repeatedly emit invalid drafts (6.564046ms)
+✔ publish never substitutes a stale remote revision to force overwrite (5.270834ms)
+✔ merged save acknowledgement installs returned text while preserving in-flight typing (20.257075ms)
+✔ change inspection and operation undo use ordinary visits and intents (6.985212ms)
+✔ accepted disjoint merges commute; same-point insertions refuse (4.250447ms)
+✔ unloading removes draft transport and leaves editor text intact (14.297682ms)
+✔ a conflict acknowledgement retains the original publication base (3.296897ms)
+✔ unload and page leave release draft resources as host effects (18.054266ms)
+✔ frame-wide unload collects cleanup from every pane before collapse (40.032683ms)
+✔ manual resolution requires explicit confirmation and the chosen remote revision (5.552697ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 219.721828
+RESULT 0
+
+FILE spikes/workspace/test/links-drive.test.mjs
+✔ references use place metadata or selected task identity (22.94924ms)
+✔ add submits a data map through the existing minibuffer and unloading is exact (19.544831ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 68.007654
+RESULT 0
+
+FILE spikes/workspace/test/desk-drive.test.mjs
+✔ rail presents provider objects as cards rather than raw task rows (128.785754ms)
+✔ DWIM movement visits the next visible object, skipping header source rows (78.481363ms)
+✔ Enter scopes a place and typing a goal creates a task without schema syntax (8.538615ms)
+✔ presentation is a removable layer and source inspection preserves text (27.242207ms)
+✔ desk has two populated panes, selection previews without stealing rail focus (13.427548ms)
+✔ new-task result targets main without replacing the scoped rail (21.458635ms)
+✔ a checklist is presented but toggles its actual editable source (37.287047ms)
+✔ artifact expansion retains the rail and task; closing refuses a local draft (104.890156ms)
+✔ context actions are package contributions; a later definition overrides and unload is exact (26.759426ms)
+✔ menu dispatches named commands and reference prompts produce data without replacing a draft (50.417394ms)
+✔ guided subplace creation inherits its parent and removal cancels an owned prompt (33.186844ms)
+✔ folder task creation carries the actual directory and headings wrap without modifying source (42.259467ms)
+✔ a keyboard checklist toggle participates in the shared-buffer draft protocol (31.465073ms)
+✔ starting without a place asks for a valid place before the goal, with no hard-coded default (18.491983ms)
+✔ checkbox edits only the heading state and leaves TODO words in its title and prose intact (14.696655ms)
+✔ a reply draft becomes a scoped follow-up when its task finishes (26.423151ms)
+✔ source inspection renders the task org text and a busy command prompt blocks pointer edits (20.393814ms)
+✔ relative task references resolve in the actual nested working folder (4.937755ms)
+✔ long artifact prose wraps by pane width and remains raw while editing (11.955398ms)
+✔ rail opening and task creation target the retained conversation beside a file (9.957525ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 786.037876
+RESULT 0
+
+FILE spikes/dwim/test/drive.test.mjs
+✔ dwim package shape: commands + command keys (counts and describe-key keep working) (74.556271ms)
+✔ immediate use/unuse is exact: no adopt, user tables and pkg-state untouched (13.683281ms)
+✔ command unload removes dwim's own state and falls back to raw source motion (91.274393ms)
+✔ j/k step visible source rows: a folded section is one step, nested folds respected (113.444922ms)
+✔ counts: 3j == j j j, and the source topology is the same either way (50.086429ms)
+✔ boundaries clamp: no wrap at the first/last visible row (60.619732ms)
+✔ goal column survives short rows and reversal; invalidated by horizontal/click/text/doc (145.682093ms)
+✔ normal heading h: collapse, then h goes to the parent (12.023797ms)
+✔ normal heading l: expand retaining nested folds, then enter first visible content; leaf no-op (21.126127ms)
+✔ ordinary prose h/l stay character motion; insert mode types h j k l literally (55.889698ms)
+✔ select-mode j/k keep the anchor, including across a hidden folded span (28.990819ms)
+✔ select-mode h/l are character motion, not fold mutation (16.884947ms)
+✔ multiple heads keep their own columns; the primary is retained (6.256075ms)
+✔ duplicate heads on one heading do not double-toggle (11.62294ms)
+✔ a huge folded section: j lands on the destination and M.render actually draws it (20.520043ms)
+✔ user bindings win over package bindings (22.21308ms)
+✔ explicit dwim commands are discoverable through the palette (32.821344ms)
+✔ ed.view/source-rows: folds hide bodies; nested and sibling folds merge correctly (9.799406ms)
+✔ ed.view/visible-rows: the viewport in source rows, fold-aware (7.851057ms)
+✔ ed.view/reveal: keeps the head in visible space, idempotent, never mutates folds/sels (9.315513ms)
+✔ ed.view/rows: latest provider first, nil declines, empty vector is accepted (10.639793ms)
+✔ present provides a navigation topology that replaces source rows, and declines for text (11.519835ms)
+✔ present rail: j steps task to task and the frame link fires exactly one visit (both load orders) (46.821233ms)
+✔ present conversation: pinned on open, and typed j on the composer is a draft, not dwim (200.804272ms)
+✔ present conversation: folded presentation exposes visible source rows and j lands on one (210.614119ms)
+✔ frame-wide packages: unuse in one pane removes dwim from every pane (31.521579ms)
+✔ off-topology movement enters the first task and returns to a hidden heading (27.036088ms)
+✔ a click at the current clamped head resets the remembered goal (8.503319ms)
+✔ a simultaneous parent collapse reveals another head on its representative (11.792661ms)
+✔ the pure BL contract also runs in the JS target (26.057069ms)
+✔ present reveal keeps a visible wrapped source row and reveals the next row idempotently (15.455247ms)
+✔ presentations that do not use source folds decline outline h/l (49.11798ms)
+✔ all fold combinations agree with the original visibility predicate and reversible j/k (863.67796ms)
+✔ counted horizontal actions equal repeated commands and stay in normal-mode policy (27.136507ms)
+✔ normal h/l use the visible heading when Tab hides the source head (13.469808ms)
+✔ rail counts and multiple heads use the navigation policy in either package load order (47.115018ms)
+✔ omega outline honors an explicit fold even while the cursor focuses its heading (75.877927ms)
+✔ oversized counts stop when every selection is stationary (12.950978ms)
+✔ source topology memo ignores attention but invalidates folds and row count (4.906216ms)
+✔ rail navigation reuses its read-derived rows and follows a refreshed object index (15.475526ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2608.300078
+RESULT 0
+
+FILE spikes/present/test/scroll.test.mjs
+✔ opening a task shows the latest, pinned, with the cursor off the composer (122.512537ms)
+✔ an update while pinned keeps the end in view; a new turn scrolls in (88.674233ms)
+✔ an update while you read does not move what you see (106.549951ms)
+✔ an update ABOVE what you read moves the row, not the picture (79.535524ms)
+✔ scrolling by a fraction of a row is exact; the next row peeks in at the bottom (41.212792ms)
+✔ scrolling down to the end re-pins; a key moves from what is on screen (29.968476ms)
+✔ resizing a pinned conversation keeps its latest body and docked composer (36.833932ms)
+✔ a cursor left off-screen cannot make the first pinned motion jump to history (70.28761ms)
+✔ a multiline composer draft survives refresh and resize without losing tail-follow (21.192823ms)
+✔ fractional reading position survives repeated updates and a narrow resize (48.952338ms)
+✔ frame consumers reuse one presentation model for the same immutable editor (29.367972ms)
+✔ presentation model memo retains a bounded number of editor snapshots (25.205912ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 768.220337
+RESULT 0
+
+FILE vendor/bl-ed/test/omega.test.mjs
+✔ C-Enter on a task block asks the world to open a task, then writes the reference (97.960239ms)
+✔ the reference row is drawn as a live card; the text stays the reference (59.409556ms)
+✔ y on a card answers its question; y elsewhere still yanks (49.554534ms)
+✔ C-Enter again: same body focuses, an edited body refines, a finished task reopens (159.180675ms)
+✔ a reference the world wrote (no digest) is adopted on C-Enter, not refined (18.535675ms)
+✔ a finished task's reference is rewritten once with its summary (17.190454ms)
+✔ visiting a read-only view: objects get their keys, edits are refused, C-o goes back (59.199099ms)
+✔ a refreshed read-only view keeps the cursor; a refreshed dirty file keeps your text (39.036401ms)
+✔ a refresh of a read-only view keeps what you are typing in the minibuffer (18.59124ms)
+✔ space a n opens a homeless task through the minibuffer (16.325752ms)
+✔ ordinary cells still evaluate (C-Enter falls through to eval-cell) (10.026595ms)
+✔ a refresh of a read-only view keeps your place: text above moves the row, the cursor follows its object (37.015895ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 647.058471
+RESULT 0
+
+FILE vendor/bl-ed/test/pkg.test.mjs
+✔ a used package adds keys and commands; unuse removes exactly them (70.987691ms)
+✔ a package intercepts before the core, reacts after it, adopts visited documents (21.057257ms)
+✔ ed/use asks the host for the module (an effect); a failed load is a message (22.12847ms)
+✔ package observers see completed module installation and failed loads (5.425767ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 182.299015
+RESULT 0
+
+FILE vendor/bl-ed/test/host.test.mjs
+✔ latest visit wins: an older slow answer never overwrites a newer one (7.524861ms)
+✔ a stale ERROR is dropped; the newest request's error is shown (1.967816ms)
+✔ superseded requests are aborted (0.578873ms)
+✔ a background refresh never supersedes a foreground visit, nor lands on another path (3.609336ms)
+✔ a visit supersedes an in-flight refresh of the same pane (2.506483ms)
+✔ a disposed pane's answer is dropped (2.077453ms)
+✔ memoFrame renders once per frame value (1.284866ms)
+✔ language: sync hooks never return a Promise; honest status, retry after failure (14.990861ms)
+✔ awaitLanguage: answers ready once; failure carries the message; a vanished pane gets nothing (4.879115ms)
+✔ easing is elapsed-time based: 60/120/144 Hz settle alike and cover the distance (4.130901ms)
+✔ one 60 Hz frame covers the former 32 % (1.189116ms)
+✔ reduced motion and trackpad deltas apply directly, with no easing (2.934301ms)
+✔ wheel vs trackpad classification (1.056695ms)
+✔ pane disposal: apply→false drops the glide; drop() cancels the frame (1.587669ms)
+✔ packageUrl: bare names resolve under ./pkg (0.897855ms)
+✔ task navigation preserves package and theme bootstrap parameters on reload (5.004752ms)
+✔ presentation actions accept command names, including qualified keywords, without executable text (3.829422ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 92.152862
+RESULT 0
+
+FILE vendor/bl-ed/test/drive.test.mjs
+✔ normal-mode motions: hjkl, w selects a word, counts (121.960555ms)
+✔ insert mode types, Escape returns, undo/redo round-trip (71.799304ms)
+✔ multiple cursors: C adds a cursor below, typing goes to both (46.811163ms)
+✔ x selects lines; d deletes and yanks; p pastes (34.946507ms)
+✔ org navigation: ]h [h g u ]b (92.583545ms)
+✔ structural form motion inside a cell (84.042566ms)
+✔ paredit-style: wrap and raise (32.91472ms)
+✔ the command line evaluates Beam Lisp against the live editor (57.082862ms)
+✔ the command line is the real language: macros, defn, destructuring, threading (114.407311ms)
+✔ split cells: a local cell runs in the page; a beam cell becomes an effect (55.763059ms)
+✔ the palette finds and runs commands by fuzzy name (34.624048ms)
+✔ describe-key explains a binding (6.413582ms)
+✔ search: / n N * with smart-case and wrap (14.798637ms)
+✔ dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans (12.510005ms)
+✔ save is an effect, not a side effect (8.711772ms)
+✔ an eval reload keeps the cursor and is one undo step (8.104496ms)
+✔ render model: segments, problems, status (5.431347ms)
+✔ incremental structure == full derive, over random typing in real documents (12720.282725ms)
+✔ round trip: every repo .bl.org is reproduced byte-for-byte (170.024594ms)
+✔ deferred language: Enter keeps the draft, one effect, replays once on ready (3.965729ms)
+✔ deferred language: Escape or an edit cancels the parked run (2.830856ms)
+✔ deferred language: a failed load keeps the draft and says so; Enter retries (2.739924ms)
+✔ deferred language: a local cell keeps its text and resumes once; edits cancel stale results (7.95358ms)
+✔ named command events use normal command lookup and retain the read-only guard (1.954781ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13737.417201
+RESULT 0
+
+FILE vendor/bl-ed/test/frame.test.mjs
+✔ one pane is today's bl-ed: the frame renders exactly ed.main/render (76.53106ms)
+✔ ed/layout arranges the window: the current editor is kept, other panes fetch their docs (32.902607ms)
+✔ a :select link: moving onto an object visits it in the linked pane (as an effect) (34.563063ms)
+✔ effects are tagged by pane; an answer for one pane changes only that pane (21.181832ms)
+✔ space w w cycles focus over editor panes only; space w o keeps the focused editor (59.285151ms)
+✔ a view pane draws from the pane it views, through the package's :views (18.698743ms)
+✔ (ed/layout nil) and unknown layouts (20.169129ms)
+✔ packages are frame-wide: unuse in one pane removes it everywhere, and its layout (15.952868ms)
+✔ boot layout without a command line: F.arrange(fr, layouts[name]) is what ed/layout does (19.434632ms)
+✔ events for a pane that left (a late host answer) leave the frame untouched (21.518087ms)
+✔ a frame reuses unchanged pane models while another editor moves (19.035118ms)
+✔ reconfigure retains named editors and blocks discarded text and prompt drafts (5.662864ms)
+✔ source candidates keep an existing context or retain main when adding the first aside (3.433384ms)
+✔ visit and focus candidates choose the existing pane and protect its file and prompt drafts (6.965184ms)
+✔ a package that arranges the window on :use keeps the effects its :adopt emitted, tagged to the kept pane (1.490726ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 378.207371
+RESULT 0
+
+FILE vendor/bl-ed/test/serve-cold.test.mjs
+✔ a cold packaged server resolves virtual paths and serves changing task documents (21394.967832ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 21412.203422
+RESULT 0
+
+FILE vendor/bl-ed/test/document-packages.test.mjs
+✔ file-local package declaration accepts installed names, orders dependencies and excludes executable/remote references (2.765983ms)
+✔ explicit unload is respected across refreshes until explicitly used again (0.348849ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 17.634463
+RESULT 0

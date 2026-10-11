@@ -1,6 +1,7 @@
 ; A phone surface over retained, ordinary editors. No alternate task engine.
 (ns mob.main (:require [ed.core :as c] [ed.docs :as docs] [ed.text :as t]
-                       [ed.main :as m] [ed.pkg :as pkg] [ed.keymap :as km] [buffer.main :as buffers]))
+                       [ed.main :as m] [ed.pkg :as pkg] [ed.keymap :as km]
+                       [ed.commands :as cmds] [buffer.main :as buffers]))
 (def phone
   {:name "mobile" :doc "Phone workbench with retained work, conversation and working-text editors."
    :panes [{:id :rail :doc "workspace:all" :width [:ch 0]}
@@ -45,7 +46,11 @@
       (:creating (state ed)) ed
       (or (not known?) (blank? goal)) (c/message ed "Choose a place and write a goal.")
       :else (-> ed (put :creating true)
-                (c/effect {:kind :intent :intent "task/open" :args {:goal goal :title (first (split goal "\n")) :path (str "place:" id)} :then :mobile-created})))))
+                (c/effect {:kind :intent :intent "task/open"
+                           :args (cond-> {:goal goal :title (first (split goal "\n")) :path (str "place:" id)}
+                                   (:selection (state ed))
+                                   (assoc :selection (:selection (state ed)) :path (get-in (state ed) [:selection :path]) :cwd (str "@" id)))
+                           :then :mobile-created})))))
 (defn choose-tab [ed ev]
   (if (and (:dirty ev) (:path ev) (not= (:path ev) (:current-file ev)))
     (c/message ed "Publish the file before opening another document. Your edits are retained.")
@@ -55,9 +60,18 @@
 (defn event [ed ev]
   (case (:type ev)
     :mobile/nav (navigate ed ev)
+    :mobile/document (if (and (:dirty ev) (not= (:path ev) (:current-file ev)))
+                       (c/message ed "Publish the file before opening another document. Your edits are retained.")
+                       (-> ed (put :screen "document") (put :file-path (:path ev))
+                           (visit-pane :file (:path ev) (:goto ev))))
+    :mobile/selection (put ed :selection (:selection ev))
+    :mobile/eval (m/eval-command (assoc ed :mode :command :minibuf {:kind :eval :prompt ":" :text (:text ev)}) (:text ev))
+    :mobile/prompt (assoc-in (assoc ed :awaiting nil) [:minibuf :text] (:text ev))
     :mobile/tab (choose-tab ed ev)
     :mobile/clear (assoc ed :message nil)
     :mobile/modal (put ed :modal (:value ev))
+    :mobile/field (put ed (keyword (:field ev)) (:value ev))
+    :mobile/machine-eval (c/effect ed {:kind :intent :intent "world/eval" :args {:code (:text ev)} :then :mobile-evaluated})
     :mobile/new-field (assoc-in ed [:pkg-state "mobile" :new (:field ev)] (:value ev))
     :mobile/create (create-task ed ev)
     :mobile/draft (assoc-in ed [:pkg-state "mobile" :drafts (:path ed)] (:text ev))
@@ -70,6 +84,8 @@
     nil))
 (defn after [old ed ev]
   (cond
+    (and (= :intent-result (:type ev)) (= :mobile-evaluated (:then ev)))
+    (put ed :eval-result (if (:ok? ev) (get-in ev [:data :result]) (:message ev)))
     (and (= :doc (:type ev)) (starts-with? (str (:path ed)) "workspace:"))
     (put ed :places (vec (filter (fn [o] (and (= "desk/scope" (:type o)) (:place o))) (objects ed))))
     (and (= :intent-result (:type ev)) (= :mobile-sent (:then ev)))
@@ -85,7 +101,7 @@
     (and (= :intent-result (:type ev)) (= :mobile-created (:then ev)))
     (let [ed (put ed :creating false)]
       (if (:ok? ev)
-        (-> ed (put :modal nil) (put :new nil) (put :screen "task") (put :tab "conversation") (put :task-path (get-in ev [:data :path]))
+        (-> ed (put :modal nil) (put :new nil) (put :selection nil) (put :screen "task") (put :tab "conversation") (put :task-path (get-in ev [:data :path]))
             (visit-pane :task (get-in ev [:data :path]) nil))
         (c/message ed (str "Could not start: " (:message ev)))))
     :else ed))
@@ -93,7 +109,10 @@
   {:package "mobile" :role role :path (:path ed) :text (t/to-string (:text ed))
    :objects (objects ed) :data (task-data ed) :state (state ed)
    :draft (draft ed) :dirty (c/dirty? ed) :read-only (docs/read-only? ed)
-   :cursor (first (c/cursor ed)) :message (:message ed) :revision (get-in ed [:doc :rev])})
+   :cursor (first (c/cursor ed)) :message (:message ed) :revision (get-in ed [:doc :rev])
+   :minibuf (when (:minibuf ed) (select-keys (:minibuf ed) [:kind :prompt :text :sel]))
+   :commands (mapv (fn [[name spec]] {:name (subs (pr-str name) 1) :doc (:doc spec)})
+               (sort-by first (merge cmds/table (pkg/commands ed) (:user-commands ed))))})
 (def bl-package
   {:name "mobile" :doc "Touch-first remote workbench: attention, places, retained conversations and actual working text."
    :requires ["present" "workspace" "places" "references" "buffers" "workbench"]

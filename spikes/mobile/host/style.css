@@ -72,3 +72,22 @@
 @media(min-width:700px){.mobile-app {border-left:1px solid var(--m-line);border-right:1px solid var(--m-line)}.mobile-header {padding-left:42px;padding-right:42px}.mobile-content {padding:35px 55px}.task-card {padding:22px}.mobile-app h1 {font-size:45px}.bottom-nav {padding-left:90px;padding-right:90px}.sheet {max-width:580px;margin:auto;border-radius:24px;padding:30px;max-height:85%}.scrim {align-items:center}.mobile-app .task-title {font-size:36px}.composer {bottom:8px}}
 @media(max-width:360px){.mobile-content {padding:20px 18px}.mobile-header {padding:16px 18px}.wordmark-note {display:none}.mobile-app h1 {font-size:34px}.tabs {gap:17px}.answer-row .text-button {margin-left:0}.mobile-app .task-title {font-size:27px}}
 @media(prefers-reduced-motion:reduce){.mobile-app * {transition:none!important;scroll-behavior:auto!important}}
+/* State is carried by placement, weight and a rule; words remain task content. */
+.mobile-app .state-dot {width:8px;height:8px;border-radius:50%;display:inline-block;background:#a798bc}
+.mobile-app .attention .state-dot {background:#b2825e}
+.mobile-app .done .state-dot {background:#7c946d}
+.mobile-app .task-card.attention {border-left:3px solid #b2825e}
+.mobile-app .task-card.failed {border-left:3px solid #a76153}
+.mobile-app .task-card.done h2 {font-weight:400;color:var(--m-muted)}
+.mobile-app .reader-tools {display:flex;align-items:center;gap:16px;position:sticky;top:-1px;background:var(--m-bg);z-index:1}
+.mobile-app .reader-search {display:flex;gap:10px;margin-bottom:18px}
+.mobile-app input {width:100%;min-width:0;min-height:44px;border:1px solid var(--m-line);border-radius:10px;padding:10px;background:var(--m-paper);color:var(--m-ink)}
+.mobile-app .reader {user-select:text;-webkit-user-select:text}
+.mobile-app .reader p {white-space:pre-wrap;margin:4px 0;min-height:1.4em}
+.mobile-app .reader-line {scroll-margin-top:65px}
+.mobile-app .reader-line.match {background:var(--m-peach)}
+.mobile-app .reader-line.passage {background:var(--m-lilac);border-left:2px solid #a798bc;padding-left:8px}
+.mobile-app .reader h2 {font-size:20px;margin-top:30px}
+.mobile-app blockquote {border-left:2px solid #a798bc;padding-left:12px;max-height:180px;overflow:auto;font-size:13px;white-space:pre-wrap}
+
+.mobile-app .tag.error,.mobile-app .result-card.failed {background:#f4e0db;border-color:#d7a99b;color:#945e4f}

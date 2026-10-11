@@ -11,10 +11,11 @@
  (let [f (:frontend manifest)]
   (when-not (and (= 1 (:version f)) (string? (:entry f))
                 (vector? (:roots f)) (every? string? (:roots f))
-                (map? (:loader f)) (string? (get-in f [:loader :host])))
+                (or (nil? (:loader f))
+                    (and (map? (:loader f)) (string? (get-in f [:loader :host])))))
    (throw (ex-info "Unsupported frontend declaration" {:package (:name manifest)})))
   (doseq [path (:roots f)] (relative! path))
-  (relative! (get-in f [:loader :host]))
+  (when-let [host (get-in f [:loader :host])] (relative! host))
   (doseq [asset (:assets f)] (relative! (:from asset)) (relative! (:to asset)))
   f))
 (defn manifests [root names]
@@ -34,4 +35,5 @@
 (defn loader [manifest]
  (let [f (declaration! manifest)]
   (str "export {d_bl_package as package} from '../out/" (:entry f) ".mjs';\n"
-       "export {createHost} from './" (get-in f [:loader :host]) "';\n")))
+       (when-let [host (get-in f [:loader :host])]
+         (str "export {createHost} from './" host "';\n")))))

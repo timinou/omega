@@ -1,0 +1,193 @@
+#+title: Pocket in the shared Omega world
+#+status: COMPLETE — trusted-computer MVP verified
+#+date: 2026-10-10
+#+depends: PLAN-016; Omega d28376c; Beam Lisp d5363326
+
+* Basis
+Session 01a11cd1-ad80-7141-99c7-f9718d1f7da5 completed at
+2026-10-10 22:39:52 UTC. Its final implementation is committed as d28376c.
+This plan begins after that completion and reuses the resulting runner.
+
+Inspected: root env.bl, omega.dev, omega.ed.main, omega.packages,
+omega.frontend, Pocket's server/build scripts, and workspace models.
+The other session's recorded release proof establishes shared host acquisition,
+independent editor sessions, cleanup, same-port realm restart, immutable frontend
+generations and package use/unuse. Those tests were run by that session, not
+rerun for this planning pass. See:
+- [[file:../../research/shared-development.bl.org][Implementation and commands]]
+- [[file:../../spikes/pelagic/proof/consolidated-release/summary.json][Final release results]]
+
+Before implementation, inspection identified these gaps:
+- mob.server/launch opens a separate durable store and task system.
+- mobile/build.sh compiles and copies into vendor/bl-ed/web.
+- The common host opens its store before creating the task system; it does not
+  yet install Pocket's place/link/buffer schemas or buffer-backed file port.
+- Package backend profiles customize tasks; they are not a world-service
+  initialization hook. Reuse that profile mechanism for its existing purpose.
+- bl-ed already watches document revisions and reports publish conflicts.
+  Sharing a VM alone does not prove two-device refresh or concurrent editing.
+
+* 1. Join the existing launch path
+Keep root env.bl as the declaration and omega.dev/acquire! as the owner.
+Add Pocket as a package/layout preset of that host. A proposed =bl pocket=
+task delegates to the same entry as =bl omega.dev=; the exact task name is a
+convenience, not another runtime. Preserve the existing explicit live/offline
+choice; a durable working host must not silently reuse an in-memory demo.
+
+Use one configured world store for tasks, places, references and buffers.
+Attach project directories as places in that world; selecting another project
+changes task context, not the world or application realm.
+
+Move the existing Pocket backend setup into the common host lifecycle:
+1. Install the existing place/link/buffer schema when opening the world.
+2. Start the buffer service before creating the task system; give tasks its
+   existing file port so agent edits and editor drafts share buffer history.
+3. Install workspace providers and intents against that same system. Preserve
+   context resolution for task/open, including package-profile task creation.
+4. Recover tasks once. Stop admission and owned requests/work, then close buffer
+   resources and storage in their dependency order through the host owner.
+
+Use the smallest startup seam needed in omega.ed.main. Keep place.*, links.*,
+buffer.* and ws.* as the domain implementations. No extra service manager,
+device ownership system or per-package world.
+
+Declare Pocket and its required editor packages in the existing packages/*.edn
+frontend metadata. Build their union with omega.frontend and the existing
+immutable publisher. Replace mobile's installer and separate live launcher
+with delegation to root tasks. Audit bin/omega and bin/omega-ui as remaining
+independent backend starts; route their supported task operations to the common
+world before retiring duplicate startup paths. Preserve caller working directory.
+Isolated test runners and portable demo exports keep their own intended roles.
+
+Existing Pocket and project stores may contain different history. Inventory
+them read-only before choosing the authoritative store for live use. Preserve
+the others; if history must be combined, specify and test an offline import
+with entity-reference and ID remapping. Do not copy databases over each other.
+No live store or enabled service is changed as part of this plan.
+
+Accept: desktop, phone and shell operations reach the same task IDs, facts and
+buffers. Repeated launches reuse one host. Opening or closing a view has no
+effect on other devices' tasks. Trusted Tailscale access reaches this host.
+
+* 2. Context is ordinary world data
+Use the existing vocabulary:
+| Value | Meaning |
+|-------+---------|
+| Place | Name, optional parent, directory, home document and settings |
+| Task | Goal, saved working directory, place and originating document/block |
+| Reference | An input, output or background document/block attached to work |
+| Session | Open panes, focus, navigation history, cursor and reading position |
+
+The task's working directory and home document are independent. For example,
+a block in a planning document can start work in another attached repository.
+Opening a place does not steer a running task or change its saved directory.
+
+Starting a task from a document retains its origin. Attach a selected passage
+deliberately, with its document revision and anchor so later edits cannot change
+what the model was given. A reference is navigable context; the model's request
+contains the material actually resolved for that turn. Do not make every open
+pane an implicit prompt input.
+
+Tasks, answers, documents and references are shared. Session navigation can
+differ across devices. A phone reconnects to the same task; there is no device
+handoff or "continue here" action. Resume interrupted model execution only
+through the existing recovery semantics, without replaying uncertain effects.
+
+* 3. Everyday interactions
+Implement these as documents, pure bl-ed packages, layouts and contextual
+overlays over the same commands. Pocket retains full live-image/evaluation
+access and the command interface; phone controls are additional entry points.
+
+| View | Interactions |
+|------+--------------|
+| Work | Browse places/tasks, find unresolved questions, start work |
+| Task | Read activity, answer, steer/cancel, inspect changes, open results |
+| Document | Outline, search, follow links, select, edit/publish, return |
+| Context overlay | Inspect directory, origin and input/output references |
+| Command overlay | Discover relevant actions and inspect/evaluate live Lisp |
+
+Reading must work independently of a conversation: open a long result, navigate
+headings, select a passage, ask/start work about it, follow a reference, and
+return to the retained reading position. Keep drafts when navigating or losing
+connectivity. Surface a real publish conflict without overwriting either edit.
+
+Attention is a projection of existing tasks, asks and results. Answering on
+one device updates the unresolved item on the other. Define shared resolution
+separately from any per-human seen/snoozed state before adding those features.
+External notifications can follow once attention behavior is proven in-app.
+
+Follow guidelines.bl.org: use placement, typography, spacing and restrained
+visual accents to convey kind, emphasis and state. Keep copy minimal; retain
+necessary errors and accessible labels. Discoverability comes from visible
+contextual actions and a consistent command overlay. Visual refinement belongs
+to the later UI pass; this pass defines behavior and its proof.
+
+Connectors supply addressable documents/objects and existing intent operations
+that can be attached as references. Reuse the current provider and intent
+contracts. Native phone/desktop hosts can later add share/open/notification
+affordances around the same world. Nix/Foundry packaging follows the working
+root launch declaration. Security design, new connector infrastructure and a
+replacement network protocol are outside this trusted-computer MVP.
+
+* 4. Implementation order and proof
+First pin the failing integration behavior, then make it pass:
+1. Add Pocket and dependencies to the shared frontend graph; load/unuse them
+   through the real editor without a separate installer or render loop.
+2. Join schemas, buffer services, task context and providers to the shared host;
+   expose the Pocket preset and eliminate the duplicate mobile world startup.
+3. Verify task launch/manage, document reading and cross-device refresh. Fix
+   generic transport/revision gaps in Beam Lisp/bl-ed rather than Pocket.
+4. Finish launch cleanup and document exact start/stop/Tailscale commands.
+   Record remaining UI choices for the visual-design session.
+
+Use disposable offline worlds and scripted models. Never write the live world
+on port 8790 or change live services for proof. Test two separate browser
+contexts at desktop and phone sizes, not just two panes in one editor:
+- Start from either client; the same task, ask, answer and result appear on both.
+- Answer the same ask from both clients; the established intent semantics
+  resolve it once without starting duplicate work.
+- Disconnect/reconnect or suspend the phone during execution; tasks continue
+  on the host and revisions converge without changing the other client's focus.
+- Edit a document while the other client or agent changes it; retain the draft
+  and expose the revision conflict rather than losing either version.
+- Read a long result, navigate its outline/references and return; preserve
+  reading position. Verify task origin, cwd and explicit passage attachment.
+- Close/unuse Pocket on one client; preserve the other client's world access.
+- Repeat launch, stop and restart; prove durable history survives and all owned
+  buffer/task/listener resources close. Use temporary durable stores for this.
+
+Drive the interface directly. Capture real-editor used/unuse screenshots,
+package contract tests, green vendor drive tests and unchanged presentation
+equivalence. Record vendored changes in VENDOR.md. Distinguish tests run for
+Pocket from inherited runner evidence. No performance claim without matched
+measurements; the runner already has a working warm path.
+
+* Implementation record
+The implementation follows the four clusters above. The shared host now owns
+places, references, attributed buffers and task-context resolution. Pocket is a
+root task and immutable frontend preset; compatibility launchers delegate to it.
+The shell is an HTTP client of that world. No live service or store was changed.
+
+Document reading, checked selection snapshots, the command/prompt overlay and
+trusted machine evaluation are implemented. Reply resolution is idempotent;
+task admission failures become terminal facts. Closed tasks retain their history
+without offering an actionable question. Browser reply drafts survive tab reload
+and native text selection remains usable for Copy.
+
+The actual root-launch browser test exposed a Beam Lisp supervisor gap: an OTP
+supervisor started children in its own environment rather than the child spec's
+owning environment. Upstream commits df06ff03 and b7837470 fix conveyance and
+publish its regenerated bootstrap floor. The supervisor ABI and conveyance tests
+pass 137 assertions; =bl seed --check= verifies the generated floor.
+
+Current operating instructions: [[file:../../research/pocket-shared-world.bl.org]].
+This pass's exact test results and real-editor screenshots are recorded at
+[[file:../../spikes/mobile/proof/shared-world/]]. The proof remains isolated from
+the active world and legacy Pocket listener. Native app refinement, external
+notifications, additional connectors and Foundry/Nix remain the later adapters
+specified in this plan.
+
+Final proof: 37 backend files / 947 assertions; 186 editor tests; 137 upstream
+supervisor assertions; 36 unchanged presentation variants; all nine two-client
+browser scenarios and the actual root launch/restart gate pass. The final browser
+run reports zero JavaScript errors. See the proof summary and operating notes.

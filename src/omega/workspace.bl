@@ -1,0 +1,68 @@
+; World capabilities shared by every editor and shell client. No UI ownership.
+(ns omega.workspace
+  (:require [place.model :as place] [place.server :as places]
+            [links.model :as link] [links.server :as links]
+            [buffer.model :as buffer] [buffer.server :as buffers]
+            [ws.desk-server :as desk] [omega.ed.providers :as pv]
+            [bl-ed.serve :as serve] [clojure.string :as str]
+            [omega.env :as env] [harness]))
+(def schema (vec (concat place/schema link/schema buffer/schema)))
+(defn start! [e root]
+  ;; Only bootstrap an empty mount table. Existing place names and homes belong
+  ;; to the world, including after a durable restart.
+  (when (empty? (place/all e))
+    (let [home (first (filter (fn [name] (File/regular? (str root "/" name)))
+                       ["AGENTS.md" "README.md" "README.org"]))]
+      (place/put! e (cond-> {:id "project" :name (Path/basename root) :root root}
+                     home (assoc :home {:path home})))))
+  (buffer/start! e))
+(defn stop! [server]
+  (when (and server (Process/alive? server)) (GenServer/stop server)) :ok)
+(declare providers)
+(defn- selection [value]
+  ;; HTTP keywordizes the intent's outer map only; internal callers use keywords.
+  (into {} (map (fn [[k v]] [(if (keyword? k) k (keyword k)) v]) value)))
+(defn options [sys server opts]
+  (let [base (assoc (select-keys opts [:state]) :task-context (fn [path cwd] (places/context sys path cwd)))
+        cfg {:root (:root sys) :providers (providers sys server base)}]
+    (assoc base
+      :prepare-task
+      (fn [args]
+        (when (str/blank? (str (:goal args))) (throw (ex-info "Write a goal." {})))
+        (if-let [value (:selection args)]
+          (let [s (selection value) d (serve/read-doc cfg (:path s))
+                lines (str/split (or (:text d) "") "\n")
+                start (:start s) end (:end s)]
+            (when-not (and (nil? (:error d)) (= (:rev s) (:rev d))
+                          (integer? start) (integer? end) (<= 0 start) (< start end) (<= end (count lines))
+                          (= (:text s) (str/join "\n" (subvec (vec lines) start end))))
+              (throw (ex-info "The passage changed; select it again. Your goal is retained." {})))
+            (assoc args :selection s :path (:path s)
+              :title (or (:title args) (first (str/split (str (:goal args)) "\n")))
+              :goal (str (:goal args) "\n\nSelected passage from " (:path s) " (revision " (:rev s)
+                         ", lines " (inc start) "–" end "):\n" (:text s))))
+          args))
+      :task-opened
+      (fn [id args]
+        (when-let [s (:selection args)]
+          (link/put! (:env sys) {:id (str id "-input") :from {:task id} :kind :input
+                                 :to (select-keys s [:path :rev :start :end :text])}))))))
+(defn providers [sys server opts]
+  (let [base (pv/providers sys opts)]
+    (merge base (places/providers sys) (links/providers sys)
+           (buffers/providers sys server) (desk/providers sys (get base "task")))))
+(defn evaluate! [sys code]
+  (when (or (not (string? code)) (str/blank? code)) (throw (ex-info "Write a Lisp expression." {})))
+  (let [ns (str "omega.w." (env/world (:env sys)) ".human")]
+    (global/trans (tuple (tuple :omega/human-eval (env/world (:env sys))) (erlang/self))
+      (fn []
+        (BeamLisp.Env/intern ns "world" sys)
+        (try
+          (let [r (harness/eval-cell {:ns ns :root (:root sys) :path "pocket"}
+                    (str "(ns " ns " (:require [omega.task] [omega.env]))\n" code) 120000)]
+            (if (:error r) {:ok false :message (:error r)}
+              {:result (str (:stdout r) (:value r))}))
+          (finally (BeamLisp.Env/undefine_var ns "world")))))))
+(defn intents [sys server]
+  (assoc (merge (places/intents sys) (links/intents sys) (buffers/intents sys server))
+    "world/eval" (fn [{:keys [code]}] (evaluate! sys code))))

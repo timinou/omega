@@ -1,12 +1,5 @@
-#!/bin/bash
-# bin/omega — run one omega task from the shell. See src/omega/cli.bl for flags.
-#   bin/omega --offline "look around"        no network: a scripted model
-#   bin/omega "add a hello.txt saying hi"    live: Sonnet 5.5 via localhost:8080
+#!/usr/bin/env bash
+# Shell operations address the shared Omega host; caller cwd is task context.
+set -euo pipefail
 ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
-ENTRY=$(mktemp --suffix=.bl)
-trap 'rm -f "$ENTRY"' EXIT
-printf '(ns omega.main (:require [omega.cli :as cli]))\n(cli/main)\n' > "$ENTRY"
-# bl's stdout is a pipe here (the filter below), so it cannot see the TTY: pass it on.
-[ -t 1 ] && [ -z "${NO_COLOR:-}" ] && export FORCE_COLOR=1
-set -o pipefail  # the exit code is the VM's, not the output filter's
-OMEGA_HOME="$ROOT" "$ROOT/bin/bl" run "$ENTRY" -- --root "$PWD" "$@" 2>&1 | grep --line-buffered -v '^bl-stage-hosts:' | sed -u -e '/^:ok$/d' -e '/^nil$/d'
+exec python3 "$ROOT/scripts/omega-client.py" "$@"

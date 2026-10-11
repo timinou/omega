@@ -84,14 +84,21 @@
   (env/tx! e [[:db/add (env/eid e :msg/id msg-id) :msg/read true]])
   :ok)
 
+(declare reply-to)
 (defn reply!
-  "Answer message `msg-id` on behalf of its recipient. Returns the reply's id."
+  "Answer on behalf of the recipient. First answer wins across clients and
+   delivery retries; return that reply's id. Resolution is shared world data."
   ([e msg-id text] (reply! e msg-id text nil))
   ([e msg-id text data]
-   (let [m (msg-view e (env/pull e MSG-PULL (env/eid e :msg/id msg-id)))
-         rid (send! e {:from (:to m) :to (:from m) :kind :reply :text text :data data :re msg-id})]
-     (mark-read! e msg-id)
-     rid)))
+   (global/trans (tuple (tuple :omega/reply (env/world e) msg-id) (erlang/self))
+     (fn []
+       (when-not (env/eid e :msg/id msg-id) (throw (ex-info "Unknown message." {:msg msg-id})))
+       (if-let [prior (reply-to e msg-id)]
+         (do (mark-read! e msg-id) (:id prior))
+         (let [m (msg-view e (env/pull e MSG-PULL (env/eid e :msg/id msg-id)))
+               rid (send! e {:from (:to m) :to (:from m) :kind :reply :text text :data data :re msg-id})]
+           (mark-read! e msg-id)
+           rid))))))
 
 (defn reply-to
   "The reply to message `msg-id`, or nil if none has arrived."

@@ -67,3 +67,47 @@ test('task creation from a place document validates against the retained place c
  ed=event(ed,'mobile/create',{place:'omega',goal:'A goal from place details'});
  const fx=effects(ed).at(-1);assert.equal(g(fx,'intent'),'task/open');assert.equal(g(g(fx,'args'),'path'),'place:omega');
 });
+
+test('document navigation and explicit passage retain their address, revision and anchor',()=>{
+ let ed=boot();
+ ed=event(ed,'mobile/document',{path:'work:project/long.org'});
+ assert.equal(g(U.d_state(ed),'screen'),'document');
+ assert.equal(g(effects(ed).at(-1),'pane'),K('file'));
+ assert.equal(g(effects(ed).at(-1),'path'),'work:project/long.org');
+ ed=event(ed,'mobile/selection',{selection:map({path:'work:project/long.org',rev:'4',start:12,end:14,text:'Two lines'})});
+ assert.equal(g(g(U.d_state(ed),'selection'),'rev'),'4');
+ ed=ed.assoc(K('doc'),map({data:map({place:'project'})}));
+ ed=event(ed,'mobile/create',{place:'project',goal:'Explain this passage'});
+ const args=g(effects(ed).at(-1),'args');assert.equal(g(args,'cwd'),'@project');
+ assert.equal(g(args,'path'),'work:project/long.org');assert.equal(g(g(args,'selection'),'rev'),'4');
+});
+
+test('command discovery includes core and package commands without shared table mutation',()=>{
+ const ed=boot(),model=U.d_model(ed,'rail');
+ const commands=g(model,'commands').toArray();
+ assert.ok(commands.some(c=>g(c,'name')==='mobile/publish'));
+ assert.ok(commands.some(c=>g(c,'name')==='eval-cell'));
+});
+
+test('first editor eval can resume when the language arrives',()=>{
+ const previous=globalThis.BL_HOST['eval-ed'];
+ try {
+  globalThis.BL_HOST['eval-ed']=()=>map({'pending?':true});
+  let ed=event(boot(),'mobile/eval',{text:'(+ 1 2)'});
+  assert.equal(g(ed,'mode'),K('command'));
+  assert.equal(g(g(ed,'minibuf'),'text'),'(+ 1 2)');
+  assert.equal(g(g(ed,'awaiting'),'kind'),K('command'));
+  globalThis.BL_HOST['eval-ed']=()=>map({text:'3'});
+  ed=event(ed,'language-ready',{token:g(g(ed,'awaiting'),'token')});
+  assert.equal(g(ed,'message'),'3');assert.equal(g(ed,'mode'),K('normal'));
+ } finally {globalThis.BL_HOST['eval-ed']=previous;}
+});
+
+test('native prompts expose data and submit through the existing editor',()=>{
+ let ed=boot().assoc(K('mode'),K('command')).assoc(K('minibuf'),map({kind:K('prompt'),prompt:'Reference',text:'',submit:(ed,text)=>ed.assoc(K('message'),text)}));
+ assert.equal(g(g(U.d_model(ed,'task'),'minibuf'),'prompt'),'Reference');
+ ed=event(ed,'mobile/prompt',{text:'work:project/note.org'});
+ ed=event(ed,'key',{key:'Enter'});
+ assert.equal(g(ed,'message'),'work:project/note.org');
+ assert.equal(g(ed,'minibuf'),null);
+});

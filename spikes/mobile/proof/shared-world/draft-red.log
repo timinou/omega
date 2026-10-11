@@ -1,0 +1,20 @@
+node:internal/modules/run_main:111
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: a reply survives host recreation in the same tab
++ actual - expected
+
++ ''
+- 'Keep this reply'
+
+    at file:///home/user/code/undefine/omega/spikes/mobile/test/host-browser.mjs:31:9 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: '',
+  expected: 'Keep this reply',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v26.11.1

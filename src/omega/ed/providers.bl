@@ -346,22 +346,25 @@
   ([sys] (intents sys {}))
   ([sys opts]
    {"task/open"
-    (fn [{:keys [goal title path block scope cwd]}]
-      (let [goal (str/trim (str goal))]
+    (fn [args]
+      (let [args (if-let [prepare (:prepare-task opts)] (prepare args) args)
+            {:keys [goal title path block scope cwd selection]} args
+            goal (str/trim (str goal))]
         (if (str/blank? goal)
           {:ok false :message "a task needs a goal (the block's text)"}
           (let [base (or (:root sys) (File/cwd!))
                 context (when-let [resolve (:task-context opts)] (resolve path cwd))
                 wd (or (:cwd context) (if-let [resolve (:working-directory opts)] (resolve path cwd)
                      (Path/expand (or cwd (when (and path (not (str/includes? path ":"))) (Path/dirname (Path/expand path base))) base) base)))
-                origin (when (and path block) {:path path :block block})
+                origin (when (and path (or block selection)) {:path path :block block})
                 id (task/open! sys (cond-> {:goal goal :title title :cwd wd :home origin :place (:place context)}
                                     (seq scope) (assoc :scope (if (string? scope) (vec (str/split scope " ")) (vec scope)))))
                 home (if (and path block) {:path path :block block} {:path "omega:scratch" :block id})]
             (when-not origin
               (env/tx! (:env sys) [[:db/add (env/eid (:env sys) :task/id id) :task/home-path (:path home)]
                                   [:db/add (env/eid (:env sys) :task/id id) :task/home-block (:block home)]]))
-            (when-not (and path block)
+            (when-let [opened (:task-opened opts)] (opened id args))
+            (when-not origin
               (scratch-append! sys opts (str "\n* " (r/one-line goal 70) "\n#+begin_task :id " id "\n" goal "\n#+end_task\n#+RESULTS: " id "\n: " (reference {:id id}) "\n")))
             {:id id :path (str "task:" id)}))))
     "task/say" (fn [{:keys [id text]}] (task/say! sys id (str text) "human:me") {})

@@ -4,6 +4,19 @@
 
 (defn- fresh [] (let [t (atom 0)] (env/open {:clock (fn [] (swap! t inc))})))
 
+(deftest repeated-device-answers-resolve-one-message-once
+  (let [e (fresh)]
+    (try
+      (actor/ensure! e "task" :task) (actor/ensure! e "human:me" :human)
+      (let [ask (actor/send! e {:from "task" :to "human:me" :kind :ask :text "Proceed?"})
+            first (actor/reply! e ask "yes")
+            retry (actor/reply! e ask "no")]
+        (is (= first retry))
+        (is (= 1 (count (actor/messages e "task"))))
+        (is (= "yes" (:text (actor/reply-to e ask)))))
+      (is (try (actor/reply! e "missing" "yes") false (catch _ true)))
+      (finally (env/close! e)))))
+
 (deftest a-message-is-a-fact-in-the-inbox
   (let [e (fresh)]
     (actor/ensure! e "t-1" :task)

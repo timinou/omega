@@ -1,0 +1,39 @@
+ω
+omega
+/ pocket
+⌘
+Host connected
+Outline
+Ask
+Read
+Next
+Publish
+work:test/shared.bl.org
+Not published: Edits overlap; both versions are retained. Your draft is retained; resolve before publishing.
+Work
+Places
+Host
+node:internal/modules/run_main:111
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
++ [
++   "Failed to set the 'innerHTML' property on 'Element': The node to be removed is no longer a child of this node. Perhaps it was moved in a 'blur' event handler?"
++ ]
+- []
+
+    at file:///home/user/code/undefine/omega/spikes/mobile/test/shared-browser.mjs:113:9 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: [
+    "Failed to set the 'innerHTML' property on 'Element': The node to be removed is no longer a child of this node. Perhaps it was moved in a 'blur' event handler?"
+  ],
+  expected: [],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v26.11.1

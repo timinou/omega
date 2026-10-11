@@ -5,7 +5,7 @@
 (defn- read-state [path]
  (if (File/regular? path) (edn/read-string (File/read! path)) {:active #{} :tasks {}}))
 (defn registry [home root opts]
- (let [path (str root "/.omega/packages.edn")]
+ (let [path (or (:package-state opts) (str root "/.omega/packages.edn"))]
   {:home home :root root :path path :state (atom (read-state path)) :cache (atom {}) :opts opts}))
 (defn- locked [r f]
  (global/trans (tuple (tuple :omega/packages (:root r)) (erlang/self)) f))
@@ -95,7 +95,9 @@
      (map (fn [nm] {:name nm :editor nm :doc "Shared editor package. Any external service must be configured separately."
                     :backend false :active (active? r nm) :editor-only true})
       (remove names editors)))))}))
-(defn intents [r sys]
+(defn intents
+ ([r sys] (intents r sys (:opts r)))
+ ([r sys opts]
  {"package/catalog" (fn [_] (catalog r))
   "package/use" (fn [args] (use! r (:name args)))
   "package/unuse" (fn [args] (unuse! r (:name args)))
@@ -110,8 +112,8 @@
    (if-let [nm (:package args)]
     (do (when-not (active? r nm) (throw (ex-info (str "Enable " nm " before opening a task") {})))
      (when-not (:backend (manifest r nm)) (throw (ex-info "This package has no research task profile" {})))
-     ((get (pv/intents (system r sys nm)) "task/open") args))
-    ((get (pv/intents sys) "task/open") args)))})
+     ((get (pv/intents (system r sys nm) opts) "task/open") args))
+    ((get (pv/intents sys opts) "task/open") args)))}))
 (defn provider [r]
  {:read (fn [nm _]
   (if (= nm "catalog")

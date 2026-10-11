@@ -9,6 +9,20 @@
 (defn- system [step]
   (task/start-system (env/open) {:step step :tools cm/tools :root "/tmp"}))
 
+(deftest an-executor-admission-failure-is-visible-and-does-not-poison-shutdown
+  (let [base (system (fn [_] (loop/say "unused")))
+        limited (elem (DynamicSupervisor/start_link (list (tuple :strategy :one_for_one) (tuple :max_children 0))) 1)
+        sys (assoc base :sup limited)]
+    (try
+      (let [id (task/open! sys {:goal "cannot start"})]
+        (is (= :failed (:status (task/await sys id 20))))
+        (is (includes? (:result (task/view sys id)) "max_children"))
+        (is (= {} @(:executors sys)))
+        (is (= :ok (task/stop-system! sys))))
+      (finally
+        (when (Process/alive? limited) (erlang/unlink limited) (Supervisor/stop limited))
+        (task/stop-system! base)))))
+
 (deftest a-prompt-becomes-a-task-that-answers-and-goes-idle
   (let [sys (system (loop/scripted [(loop/say "hello back")]))
         id (task/open! sys {:goal "say hello"})

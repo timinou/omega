@@ -1,0 +1,199 @@
+{
+  "workspace": {
+    "data": {
+      "count": 4,
+      "desk": "rail",
+      "place": null,
+      "scope": "all"
+    },
+    "objects": [
+      {
+        "active": true,
+        "depth": 0,
+        "key": "workspace:all",
+        "row": 4,
+        "title": "All places",
+        "type": "desk/scope"
+      },
+      {
+        "active": false,
+        "depth": 1,
+        "key": "workspace:project",
+        "place": "project",
+        "row": 5,
+        "title": "omega",
+        "type": "desk/scope"
+      },
+      {
+        "active": false,
+        "depth": 1,
+        "key": "workspace:test",
+        "place": "test",
+        "row": 6,
+        "title": "Test",
+        "type": "desk/scope"
+      },
+      {
+        "active": false,
+        "depth": 1,
+        "key": "workspace:work-f2ba5f42",
+        "place": "work-f2ba5f42",
+        "row": 7,
+        "title": "work",
+        "type": "desk/scope"
+      },
+      {
+        "artifacts": [
+          {
+            "block": "t-25",
+            "kind": "home",
+            "label": "Plan / home",
+            "path": "omega:scratch"
+          }
+        ],
+        "ask": null,
+        "cwd": "/tmp/omega-pocket-proof-6dpmwudd/work",
+        "folder": "folder:work-f2ba5f42",
+        "goal": "Shell work",
+        "home": {
+          "block": "t-25",
+          "path": "omega:scratch"
+        },
+        "key": "t-25",
+        "place": "work-f2ba5f42",
+        "row": 9,
+        "status": "running",
+        "summary": "Shell work",
+        "title": "Shell work",
+        "type": "omega/task"
+      },
+      {
+        "artifacts": [
+          {
+            "block": null,
+            "kind": "input",
+            "label": "long.bl.org",
+            "path": "work:test/long.bl.org"
+          }
+        ],
+        "ask": null,
+        "cwd": "/tmp/omega-pocket-proof-6dpmwudd/work",
+        "folder": "folder:test",
+        "goal": "Explain selected text\n\nSelected passage from work:test/long.bl.org (revision 0, lines 4\u20134):\nSelected words for the model.",
+        "home": {
+          "block": null,
+          "path": "work:test/long.bl.org"
+        },
+        "key": "t-19",
+        "place": "test",
+        "row": 11,
+        "status": "cancelled",
+        "summary": "Waiting for your answer.",
+        "title": "Explain selected text",
+        "type": "omega/task"
+      },
+      {
+        "artifacts": [
+          {
+            "block": null,
+            "kind": "input",
+            "label": "long.bl.org",
+            "path": "work:test/long.bl.org"
+          },
+          {
+            "block": "t-10",
+            "kind": "home",
+            "label": "Plan / home",
+            "path": "omega:scratch"
+          }
+        ],
+        "ask": null,
+        "cwd": "/tmp/omega-pocket-proof-6dpmwudd/work",
+        "folder": "folder:test",
+        "goal": "Phone work",
+        "home": {
+          "block": "t-10",
+          "path": "omega:scratch"
+        },
+        "key": "t-10",
+        "place": "test",
+        "row": 12,
+        "status": "done",
+        "summary": "Offline run finished; you said: [reply from human:me] yes",
+        "title": "Phone work",
+        "type": "omega/task"
+      },
+      {
+        "artifacts": [
+          {
+            "block": "t-1",
+            "kind": "home",
+            "label": "Plan / home",
+            "path": "omega:scratch"
+          }
+        ],
+        "ask": null,
+        "cwd": "/tmp/omega-pocket-proof-6dpmwudd/work",
+        "folder": "folder:test",
+        "goal": "Desktop work",
+        "home": {
+          "block": "t-1",
+          "path": "omega:scratch"
+        },
+        "key": "t-1",
+        "place": "test",
+        "row": 13,
+        "status": "done",
+        "summary": "Offline run finished; you said: [reply from human:me] yes",
+        "title": "Desktop work",
+        "type": "omega/task"
+      },
+      {
+        "key": "hint",
+        "row": 14,
+        "type": "desk/hint"
+      }
+    ],
+    "ok": true,
+    "path": "workspace:all",
+    "readOnly": true,
+    "rev": "3772290552",
+    "text": "#+TITLE: Work\nYour tasks, in their places.\n\n* Places\nAll places\nomega\nTest\nwork\n* IN PROGRESS (1)\nt-25 \u00b7 running \u00b7 Shell work \u00b7 Shell work\n* RECENTLY FINISHED (3)\nt-19 \u00b7 cancelled \u00b7 Explain selected text \u00b7 Waiting for your answer.\nt-10 \u00b7 done \u00b7 Phone work \u00b7 Offline run finished; you said: [reply from human:me] yes\nt-1 \u00b7 done \u00b7 Desktop work \u00b7 Offline run finished; you said: [reply from human:me] yes\nn new task \u00b7 Enter open \u00b7 g f place\n",
+    "title": "workspace:all"
+  },
+  "identity": {
+    "objects": [],
+    "ok": true,
+    "path": "launch:identity",
+    "readOnly": true,
+    "rev": "{\"db\":\"/tmp/omega-pocket-proof-6dpmwudd/world/db\",\"frontend\":\"848027892cb07ccf1689a5b81dba18ee5346e5deb8a422ef7991c356a18491d5\",\"host\":\"7627d7a54918f819ef41cde3e67aef5968bc3ecd983421c9878952da0ddc9f52\",\"live\":false,\"port\":47537,\"root\":\"/home/user/code/undefine/omega\",\"routes\":{\"omega.localhost\":\"/?use=packages&file=package:catalog\",\"pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org\",\"spikes.pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org\"},\"schema\":\"omega.dev-session\",\"version\":1}",
+    "text": "{\"db\":\"/tmp/omega-pocket-proof-6dpmwudd/world/db\",\"frontend\":\"848027892cb07ccf1689a5b81dba18ee5346e5deb8a422ef7991c356a18491d5\",\"host\":\"7627d7a54918f819ef41cde3e67aef5968bc3ecd983421c9878952da0ddc9f52\",\"live\":false,\"port\":47537,\"root\":\"/home/user/code/undefine/omega\",\"routes\":{\"omega.localhost\":\"/?use=packages&file=package:catalog\",\"pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org\",\"spikes.pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org\"},\"schema\":\"omega.dev-session\",\"version\":1}",
+    "title": "launch:identity"
+  },
+  "machine": {
+    "ok": true,
+    "result": "{:env {:path \"/tmp/omega-pocket-proof-6dpmwudd/world/db\", :world \"w2660\"}, :tasks 4}"
+  },
+  "files": [
+    [
+      "version",
+      4
+    ],
+    [
+      "journals/0",
+      33554432
+    ],
+    [
+      "partitions/datoms/levels",
+      33
+    ],
+    [
+      "partitions/datoms/manifest",
+      7
+    ],
+    [
+      "partitions/datoms/config",
+      30
+    ]
+  ]
+}

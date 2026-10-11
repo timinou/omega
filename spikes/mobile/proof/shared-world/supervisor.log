@@ -1,0 +1,31 @@
+Running as unit: run-p3191419-i11557642.service
+
+Testing host.supervisor.test
+warning: Range.new/2 and first..last default to a step of -1 when last < first. Use Range.new(first, last, -1) or first..last//-1, or pass 1 if that was your intention
+  /tmp/beam-lisp-omega-supervisor/priv/host/supervisor.bl:335: BeamLisp.Supervisor.pool/5
+  anonymous fn/1 in BeamLisp.Ns.Fn.M1154."pure-cases"/1
+  BeamLisp.Ns.Fn.M1187.obs/1
+  (elixir 1.20.4) lib/enum.ex:1725: Enum."-map/2-lists^map/1-1-"/2
+  (elixir 1.20.4) lib/enum.ex:1725: Enum."-map/2-lists^map/1-1-"/2
+
+warning: Range.new/2 and first..last default to a step of -1 when last < first. Use Range.new(first, last, -1) or first..last//-1, or pass 1 if that was your intention
+  /tmp/beam-lisp-omega-supervisor/priv/host/supervisor.bl:335: BeamLisp.HostSupervisorProbe.pool/5
+  anonymous fn/1 in BeamLisp.Ns.Fn.M1154."pure-cases"/1
+  BeamLisp.Ns.Fn.M1187.obs/1
+  (elixir 1.20.4) lib/enum.ex:1725: Enum."-map/2-lists^map/1-1-"/2
+  (elixir 1.20.4) lib/enum.ex:1725: Enum."-map/2-lists^map/1-1-"/2
+
+
+Testing supervisor-convey-test
+── ward: warm isolated test run ──
+
+  ✓ host.supervisor.test  133 passed
+  ✓ supervisor-convey-test  4 passed
+
+  2 file(s) passed, 0 failed, 0 incoherent
+  ✓ all green
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 15.552s
+             CPU time consumed: 14.974s
+                   Memory peak: 332.6M (swap: 0B)

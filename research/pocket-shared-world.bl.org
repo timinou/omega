@@ -1,0 +1,122 @@
+#+title: Pocket — one Omega world
+#+date: 2026-10-11
+
+* Start and connect
+Run from Omega's checkout:
+#+begin_src sh
+bin/bl pocket -- --live
+bin/bl omega.dev -- --live
+bin/bl omega.stop
+#+end_src
+The first command starts the realm-owned host. Later commands open another view
+of the same world. Pocket, the package catalog, PELAGIC, desktop browser and shell
+use one task system, store and buffer service. Closing a browser does not stop work.
+=bin/bl omega.watch= offers immutable frontend candidates; navigate to a candidate
+to adopt changed frontend code. After backend, root-manifest or build-tool edits,
+run =bin/bl realm restart=, then launch the same preset, mode and store again.
+This reopens Omega's realm while preserving the shared VM and other projects.
+
+Without =--live=, launches use a scripted model and memory. For an isolated,
+durable scripted world, use =--db /tmp/pocket-check/db --port 8892=. Always pass
+the same mode, store and port when opening another preset. An incompatible host
+is refused before any mutation. =--db= chooses the existing store directly;
+no launcher copies, replaces or merges a database.
+
+The live model uses Omega's existing direct LLM adapter, configured through the
+checkout's .env or process environment. For direct Anthropic set
+=OMEGA_BASE_URL=https://api.anthropic.com=, =ANTHROPIC_API_KEY= and =OMEGA_MODEL=.
+The existing local proxy configuration remains supported. Pocket has no Codex
+process, session or account dependency.
+
+On a computer already connected to Tailscale:
+#+begin_src sh
+spikes/mobile/tailscale.sh 8812 --enable
+spikes/mobile/connect.sh 8812
+#+end_src
+The first command explicitly enables the existing private HTTPS listener on
+8443, forwarding to loopback. The second prints the phone URL and makes a QR.
+Connect the phone to the same tailnet and open that URL. Keep the computer awake.
+These are user setup commands; implementation tests do not change Tailscale.
+
+* Work and context
+=bin/omega "goal"= opens work in the shared host and returns its task address.
+The caller's directory is attached as a place and saved as the task's directory.
+It does not open a second task engine. Useful shell operations:
+#+begin_src sh
+bin/omega attach /absolute/path/to/repository
+bin/omega list
+bin/omega read task:t-1
+bin/omega answer msg-2 yes
+bin/omega say t-1 "Check the failing test first"
+bin/omega steer t-1 "Use the simpler implementation"
+bin/omega cancel t-1
+#+end_src
+Use =--url= or =OMEGA_URL= for another host address; =--no-start= requires an
+existing host. =--offline= starts/requires a scripted host. A shell goal is
+asynchronous; read it from any client to follow its progress.
+
+A place names a directory, optional parent, home and settings. A task saves its
+place, actual directory and origin. References attach inputs, outputs and context.
+A session owns its panes, focus, reading position and unsent text. Reply drafts
+survive reload in the same browser tab, scoped to the durable world and task's
+creation fact. Browsing a
+place on the phone never changes a running task's directory or desktop focus.
+
+Pocket exposes Work, Places, documents, task actions and Commands. Read documents
+independently of conversations: outline, find, follow a reference, return.
+Select rendered text and choose Ask to start work in the selected place. Selection
+snaps to the touched source lines. The host checks the document revision and text
+before opening work, stores an input reference with the snapshot, and puts that
+same snapshot into the model's goal. Stale selections open no task and keep the goal.
+Open panes are never implicit prompt input.
+
+Commands runs existing core/package commands in a chosen pane. Open accepts an
+ordinary provider address, including =bl:= for the live image. Editor evaluates
+against the editor API; Machine evaluates trusted Lisp in a world-specific human
+namespace, with =world= bound to the actual task-system map. This is full trusted
+VM access. Both clients see the same machine and task data.
+Machine definitions are live image state; save reusable code in Lisp sources
+before restarting the realm.
+
+Unresolved questions derive from existing task messages. First answer wins;
+concurrent answers and retries return the same reply ID. Completion and resolution
+are shared. Seen/snoozed state and external notifications are not introduced.
+
+Shared-buffer edits retain attribution and history. A conflicting publication
+keeps the draft and accepted server text. Resolve deliberately through the buffer
+commands. Closing/unusing Pocket removes only that view and its host resources.
+
+* Existing stores and launch compatibility
+Read-only inventory on this machine found an active =omega-pocket.service= using
+=spikes/mobile/live.sh= and a separate
+=~/.local/state/omega-pocket/0a15d6a7189e/db= store. The checkout also has =.omega/db=.
+No live store was opened, copied or changed for this work; the service was not
+stopped or restarted. Histories are not assumed to be identical.
+
+=live.sh= now delegates to the same root task in foreground mode and explicitly
+preserves its original store path. This keeps systemd's process ownership intact
+on its next deliberate restart. To adopt that store in the shared realm, stop the
+legacy service first, then launch:
+#+begin_src sh
+bin/bl pocket -- --live --db /home/user/.local/state/omega-pocket/0a15d6a7189e/db
+#+end_src
+Other launchers must use that same store and mode. An occupied legacy listener
+will be refused; running worlds are never silently switched. Other repositories
+are attached as places. Combining histories would require an offline importer
+with reference remapping and its own proof; this change preserves both histories.
+
+=bin/omega-ui= delegates to Pocket. =spikes/mobile/build.sh= delegates to the shared
+immutable frontend build. =mob.server= delegates to the root launch policy.
+=bin/bl-ed= normally joins the shared live host; its explicit =--offline= /
+=--memory= mode remains the foreground testing entry. Portable PELAGIC exports
+and explicit workspace demos retain their separate, isolated purpose.
+
+* Proof
+Tests use separate browser contexts, a private BL runtime, temporary project files
+and a temporary durable store. They never send requests to port 8790 or the active
+legacy Pocket service. Results, used/unuse screenshots and commands are recorded
+in =spikes/mobile/mobile.bl.md= and =spikes/mobile/proof/shared-world/=.
+
+This completes the trusted-computer workflow. Native app shells, external
+notification delivery, new service connectors and Nix/Foundry deployment remain
+later adapters around this world; they do not introduce another task authority.

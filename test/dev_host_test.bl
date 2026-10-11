@@ -20,12 +20,16 @@
       (is (string? (get-in a [:route :generation])))
       (is (some (fn [claim] (= root (:root claim))) (ports/list-claims)))
       (is (= (:listener a) (:listener b)))
+      (is (= (:buffers a) (:buffers b)))
+      (is (Process/alive? (:buffers a)))
       (is (= (:sup (:sys a)) (:sup (:sys b))))
       (is (Process/alive? (:listener a)))
       (is (Process/alive? (:sup (:sys a))))
       (dev/stop! root)
       (is (not (some (fn [claim] (= root (:root claim))) (ports/list-claims))))
       (is (not (Process/alive? (:listener a))))
+      (is (not (Process/alive? (:buffers a))))
+      (is (not (File/exists? (:state a))))
       (let [ref (erlang/monitor :process (:sup (:sys a)))]
        (is (= :stopped (receive [:DOWN seen :process _ _] :when (= ref seen) :stopped
                                (after 5000 :timeout))))))))

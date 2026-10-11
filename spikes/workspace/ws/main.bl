@@ -27,7 +27,7 @@
   (let [p (:path ed)]
     (if (starts-with? p "work:")
       (let [s (subs p 5) parts (split s "/")]
-        (docs/visit ed (str "folder:" (join "/" (drop-last parts)))))
+        (docs/visit ed (str "folder:" (join "/" (butlast parts)))))
       (docs/visit ed "places:"))))
 
 (def commands

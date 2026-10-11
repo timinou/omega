@@ -203,10 +203,14 @@
 
 (defn- start-executor! [sys id]
   (let [spec (BeamLisp.Supervisor/server id executor [sys id] {:restart :temporary})
-        r (DynamicSupervisor/start_child (:sup sys) spec)
-        pid (elem r 1)]
-    (swap! (:executors sys) assoc id pid)
-    pid))
+        r (DynamicSupervisor/start_child (:sup sys) spec)]
+    (if (and (erlang/is_tuple r) (>= (erlang/tuple_size r) 2)
+             (= :ok (elem r 0)) (erlang/is_pid (elem r 1)))
+      (let [pid (elem r 1)]
+        (swap! (:executors sys) assoc id pid)
+        pid)
+      (do (finish! sys id {:status :failed :error (str "Executor could not start: " (pr-str r))})
+          nil))))
 
 (defn- slug [goal]
   (let [s (lower-case (Regex/replace (Regex/compile! "[^A-Za-z0-9]+") goal "-"))

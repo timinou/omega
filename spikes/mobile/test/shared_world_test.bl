@@ -1,0 +1,66 @@
+(ns pocket-shared-world-test
+  (:require [omega.ed.main :as host] [omega.env :as env] [omega.task :as task]
+            [omega.loop :as loop] [omega.workspace :as workspace] [omega.packages :as packages]
+            [place.model :as place] [buffer.model :as buffer]
+            [pelagic.build :as build] [pelagic.launch :as launch]))
+
+(deftest pocket-belongs-to-the-shared-frontend-and-launcher
+  (is (= "pocket" (:preset (launch/options ["--preset" "pocket"] 8892))))
+  (is (String/contains? (launch/preset-url 8892 "pocket") "layout=mobile"))
+  (is (every? (set (map :name (build/package-manifests)))
+        ["mobile" "present" "dwim" "workspace" "places" "references" "buffers" "workbench"])))
+
+(deftest common-host-owns-places-context-and-agent-buffer-history
+  (let [root (str (System/tmp_dir!) "/pocket-world-" (System/unique_integer (list :positive)))
+        _ (File/mkdir_p! root)
+        _ (File/write! (str root "/note.org") "Original\n")
+        h (host/start! {:root root :port 8892 :memory? true :offline? true
+                       :step (loop/scripted [(loop/call-tool "eval" {:code "(write \"note.org\" \"Agent edit\\n\")\n(done \"Saved\")"} "write")])})]
+    (try
+      (is (= root (place/root (place/all (:env h)) "project")))
+      (is (some? (get-in h [:sys :files])))
+      (let [intents (merge (workspace/intents (:sys h) (:buffers h)) (packages/intents (:packages h) (:sys h)))
+            opened ((get intents "task/open") {:goal "Write note" :path "place:project"})
+            id (:id opened)]
+        (is (= "2" (:result ((get intents "world/eval") {:code "(+ 1 1)"}))))
+        (is (= "1" (:result ((get intents "world/eval") {:code "(count (omega.task/all world))"}))))
+        ((get intents "world/eval") {:code "(def pocket-proof 41)"})
+        (is (= "42" (:result ((get intents "world/eval") {:code "(inc pocket-proof)"}))))
+        (is (map? (task/await (:sys h) id 30000)))
+        (is (= "project" (:place (task/view (:sys h) id))))
+        (is (= root (:cwd (task/view (:sys h) id))))
+        (is (= "Agent edit\n" (File/read! (str root "/note.org"))))
+        (is (= 1 (count (buffer/operations (:env h) (str root "/note.org")))))
+        (is (not (File/exists? (str root "/.omega/ed"))))
+        (swap! (:state (:packages h)) update :active conj "atlas")
+        (swap! (:cache (:packages h)) assoc "atlas" {:step (fn [_] (loop/say "Profile")) :tools []})
+        (let [profile-id (:id ((get intents "task/open") {:package "atlas" :goal "Profile task" :path "place:project"}))]
+          (task/await (:sys h) profile-id 10000)
+          (is (= "project" (:place (task/view (:sys h) profile-id))))
+          (is (= root (:cwd (task/view (:sys h) profile-id))))))
+      (finally (host/stop! h) (File/rm_rf! root)))))
+
+(deftest selected-context-is-a-snapshot-and-stale-context-opens-no-task
+  (let [root (str (System/tmp_dir!) "/pocket-selection-" (System/unique_integer (list :positive)))
+        _ (File/mkdir_p! root) _ (File/write! (str root "/long.bl.org") "* Heading\nSelected words\nMore text\n")
+        h (host/start! {:root root :port 8892 :memory? true :offline? true :step (loop/scripted [(loop/say "Read")])})]
+    (try
+      (let [open (get (packages/intents (:packages h) (:sys h)) "task/open")
+            ;; File document revisions use the shared server's text hash.
+            s {:path "long.bl.org" :rev (bl-ed.serve/text-rev (File/read! (str root "/long.bl.org")))
+               :start 1 :end 2 :text "Selected words"}
+            id (:id (open {:goal "Explain" :cwd "@project" :selection s}))]
+        (is (map? (task/await (:sys h) id 30000)))
+        (is (String/contains? (:goal (task/view (:sys h) id)) "Selected words"))
+        (is (= "long.bl.org" (get-in (task/view (:sys h) id) [:home :path])))
+        (is (= "project" (:place (task/view (:sys h) id))))
+        (File/write! (str root "/long.bl.org") "Changed\n")
+        (is (= "Selected words" (get-in (first (links.model/all (:env h) {:task id})) [:to :text])))
+        (is (try (open {:goal "Explain" :cwd "@project" :selection s}) false (catch _ true)))
+        (is (= 1 (count (task/all (:sys h))))))
+      (finally (host/stop! h) (File/rm_rf! root)))))
+
+(deftest offline-tasks-do-not-consume-each-others-model-script
+  (let [step (host/offline-model)
+        request {:messages [{:role :user :content [{:type :text :text "A goal"}]}]}]
+    (is (= (step request) (step request)))))

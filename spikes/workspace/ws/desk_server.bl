@@ -53,7 +53,7 @@
                                 :label (Path/basename (:path (:to m))) :kind (name (:kind m))})
                        (sort-by (fn [m] [(if (= :output (:kind m)) 0 1) (:id m)]) refs))
         home (:home t)]
-    {:desk "task" :task-id id :task-title (:title t) :task-status (name (:status t)) :task-result (:result t)
+    {:desk "task" :task-id id :task-at (:at t) :task-title (:title t) :task-status (name (:status t)) :task-result (:result t)
      :ask (some-> (model/task-rows e [id]) first :asks first :text)
      :place (:place t) :cwd (:cwd t) :folder (folder-address sys t) :home home
      :artifacts (reduce (fn [out a] (if (some (fn [old] (and (= (:path old) (:path a)) (= (:block old) (:block a)))) out)

@@ -32,6 +32,6 @@ resolved=()
 for arg in "$@"; do resolved+=("$(abs "$arg")"); done
 cd "$ROOT" || exit 2
 case "$cmd" in
-  run|test|eval|check) exec "$BL" "${policy[@]}" "$cmd" -p "$ROOT/src" -p "$ROOT/vendor/bl-ed/src" "${resolved[@]}" ;;
+  run|test|eval|check) exec "$BL" "${policy[@]}" "$cmd" -p "$ROOT/src" -p "$ROOT/vendor/bl-ed/src" -p "$ROOT/spikes/workspace" -p "$ROOT/spikes/pelagic" "${resolved[@]}" ;;
   *) exec "$BL" "${policy[@]}" "$cmd" "${resolved[@]}" ;;
 esac

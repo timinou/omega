@@ -2,13 +2,10 @@
 ; editor's server share the pinned beam-lisp, so omega's documents and intents
 ; are plain function calls (no bridge process, no .omega/url).
 ;
-;   bin/bl-ed                       live model, documents under the cwd
-;   bin/bl-ed --offline             a scripted model (no network), for trying it
-;   flags: --root DIR  --port N (default 8790)  --db DIR | --memory
-;
-; It starts the task system exactly as bin/omega-ui does (same store, same
-; recovery), adds bl-ed.serve with omega's providers and intents, and prints
-; the URL. The page is vendor/bl-ed/web (built by bin/bl-ed build).
+; The root env.bl tasks acquire this host through omega.dev. Pocket and other
+; editor presets are views over its world, task system and buffer service.
+; bin/bl-ed normally joins that host; --offline/--memory retains a separate
+; foreground entry for disposable tests. Frontends are immutable build outputs.
 
 (ns omega.ed.main
   (:require [omega.env :as env]
@@ -21,6 +18,8 @@
             [omega.packages :as packages]
             [omega.ext :as ext]
             [omega.artifacts :as artifacts]
+            [omega.workspace :as workspace]
+            [buffer.model :as buffer]
             [bl-ed.serve :as serve]
             [bl-ed.image :as image]))
 
@@ -28,34 +27,45 @@
   "A scripted model that does a little real work, asks one question, and
    closes: enough to see every part of the slice without a network."
   []
-  (loop/scripted
-    [(loop/call-tool "eval" {:code "(trace :finding \".\" \"looked at the goal\")\n(println (ls))"} "tu-1")
-     (loop/call-tool "eval" {:code "(send \"human:me\" :ask \"Shall I go ahead?\")"} "tu-2")
-     (loop/say "Waiting for your answer.")
-     (fn [req] (loop/call-tool "eval" {:code (str "(done \"Offline run finished; you said: "
-                                                   (clojure.string/replace (str (get-in (last (:messages req)) [:content 0 :text])) "\"" "'")
-                                                   "\")")} "tu-3"))]))
+  (fn [req]
+    (let [stage (count (filter (fn [m] (= :assistant (:role m))) (:messages req)))]
+      (case stage
+        0 (loop/call-tool "eval" {:code "(trace :finding \".\" \"looked at the goal\")\n(println (ls))"} "tu-1")
+        1 (loop/call-tool "eval" {:code "(send \"human:me\" :ask \"Shall I go ahead?\")"} "tu-2")
+        2 (loop/say "Waiting for your answer.")
+        (loop/call-tool "eval" {:code (str "(done \"Offline run finished; you said: "
+             (clojure.string/replace (str (get-in (last (:messages req)) [:content 0 :text])) "\"" "'")
+             "\")")} "tu-3")))))
 
 (defn start!
   "Start the world and the editor. opts {:root :port :web :offline? :db :memory? :step :tools :system-prompt :max-steps
    :intent-factory :providers :extensions [ext …] :dev?}.
    Returns {:url :sys :env}."
   [opts]
-  (let [root (or (:root opts) (File/cwd!))
+  (let [root (Path/expand (or (:root opts) (File/cwd!)))
         home (or (System/get_env "OMEGA_HOME") (File/cwd!))
         db (when-not (or (:memory? opts) (and (:offline? opts) (nil? (:db opts)))) (env/db-path root (:db opts)))
-        e (if db (env/open-durable! db) (env/open))
-        acquired (atom nil) pinned (atom nil) generations (atom {})]
+        e (if db (env/open-durable! db {:schema workspace/schema}) (env/open {:schema workspace/schema}))
+        state (or (:state opts) (if db (str (Path/dirname db) "/ed")
+                                    (str (System/tmp_dir!) "/omega-ed-" (System/pid) "-" (env/world e))))
+        ephemeral-state? (and (nil? db) (nil? (:state opts)))
+        opts (assoc opts :state state :package-state
+               (or (:package-state opts) (if db (str (Path/dirname db) "/packages.edn")
+                                             (str state "/packages.edn"))))
+        acquired (atom nil) workspace-owner (atom nil) pinned (atom nil) generations (atom {})]
     (try
-      (let [step (or (:step opts) (if (:offline? opts) (offline-model) (llm/step (llm/from-env home))))
+      (let [server (workspace/start! e root)
+        _ (reset! workspace-owner server)
+        step (or (:step opts) (if (:offline? opts) (offline-model) (llm/step (llm/from-env home))))
         sys (task/start-system e (merge (select-keys opts [:max-steps :token-budget :dev?])
-                                  {:step step :tools (or (:tools opts) cm/tools) :root root
+                                  {:step step :tools (or (:tools opts) cm/tools) :root root :files (buffer/port server)
                                    :system-prompt (or (:system-prompt opts) cli/SYSTEM-PROMPT)}))
         _ (reset! acquired sys)
         ;; extensions go in BEFORE recovery and serving: executors copy the
         ;; system they start with (omega.task/start-system)
         sys (if (seq (:extensions opts)) (ext/install sys (:extensions opts)) sys)
-        registry (packages/registry home root opts)
+        context-opts (workspace/options sys server opts)
+        registry (packages/registry home root (merge opts context-opts))
         interrupted (task/recover! sys (fn [id] (packages/recover-system registry sys id)))
         web (or (:web opts) (str home "/vendor/bl-ed/web"))
         ;; bl: shows THIS VM's image — omega itself, live (a project's target
@@ -65,18 +75,19 @@
         r (serve/start! {:port (or (:port opts) 8790) :root root :web web
                          :landing-pages (:landing-pages opts) :generations generations
                          :providers (merge (:providers opts)
-                                           (assoc (pv/providers sys) "bl" (:provider img) "package" (packages/provider registry)))
-                         :intents (merge (pv/intents sys) (:intents img)
+                                           (assoc (workspace/providers sys server context-opts) "bl" (:provider img) "package" (packages/provider registry)))
+                         :intents (merge (pv/intents sys context-opts) (workspace/intents sys server) (:intents img)
                                    (when-let [factory (:intent-factory opts)] (factory sys))
-                                   (packages/intents registry sys))})]
+                                   (packages/intents registry sys context-opts))})]
     (when db (println (str "omega: tasks are kept in " db (when (seq interrupted) (str " · interrupted: " (clojure.string/join " " interrupted))))))
-    (assoc r :sys sys :env e :db db :packages registry :frontend-pin @pinned :generations generations))
+    (assoc r :sys sys :env e :db db :buffers server :state state :ephemeral-state? ephemeral-state? :packages registry :frontend-pin @pinned :generations generations))
       (catch error
         ;; Readiness is transactional: a failed listener must not leave a task
         ;; supervisor or storage owner behind when the service is retried.
         (try
           (when @acquired (task/stop-system! @acquired))
-          (finally (try (env/close! e) (finally (artifacts/unpin! @pinned)))))
+          (finally (try (workspace/stop! @workspace-owner)
+                     (finally (try (env/close! e) (finally (when ephemeral-state? (File/rm_rf! state)) (artifacts/unpin! @pinned)))))))
         (throw error)))))
 
 (defn stop!
@@ -86,10 +97,12 @@
   (try (serve/stop! host)
     (finally
       (try (task/stop-system! (:sys host))
-        (finally (try (env/close! (:env host))
+        (finally (try (workspace/stop! (:buffers host))
+          (finally (try (env/close! (:env host))
                    (finally
+                     (when (:ephemeral-state? host) (File/rm_rf! (:state host)))
                      (doseq [[_ generation] @(:generations host)] (artifacts/unpin! (:pin generation)))
-                     (artifacts/unpin! (:frontend-pin host))))))))
+                     (artifacts/unpin! (:frontend-pin host))))))))))
   :ok)
 
 (defn admit-frontend!

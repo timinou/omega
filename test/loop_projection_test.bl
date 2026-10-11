@@ -54,6 +54,9 @@
 (deftest task-rows-match-snapshot-rows
   (let [sys (sys-of) e (:env sys) a (tid! sys "a") b (tid! sys "b")]
     (task/await sys a 5000) (task/await sys b 5000)
+    ;; An actionable ask belongs to an open task; the default model above
+    ;; fails unknown goals, so seed its projection state explicitly.
+    (task/set-status! sys a :waiting)
     (env/tx! e [{:db/id -1 :task/id "bare"}])
     (actor/ensure! e "human:me" :human)
     (actor/send! e {:from a :to "human:me" :kind :ask :text "q?"})

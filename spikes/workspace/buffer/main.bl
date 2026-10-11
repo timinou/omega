@@ -2,7 +2,7 @@
 ; intent; overlap keeps local text and blocks accidental overwrite.
 (ns buffer.main (:require [buffer.merge :as m] [ed.core :as c] [ed.text :as t]
                          [ed.docs :as docs] [ed.keymap :as km]))
-(defn shared? [ed] (true? (get-in ed [:doc :data :buffer])))
+(defn shared? [ed] (= true (get-in ed [:doc :data :buffer])))
 (defn draft [ed]
   (c/effect (assoc-in ed [:pkg-state "buffers" :drafted-path] (:path ed)) {:kind :intent :intent "buffer/draft"
                 :args {:path (:path ed) :base (get-in ed [:doc :rev]) :text (t/to-string (:text ed))}}))

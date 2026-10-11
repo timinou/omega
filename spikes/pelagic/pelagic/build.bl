@@ -4,11 +4,12 @@
             [pelagic.actor-build :as actors] [pelagic.artifact :as artifact]
             [omega.frontend :as frontend] [omega.artifacts :as artifacts]))
 
-(def compiler "d5363326")
+(def compiler "b7837470")
 (defn home []
   (Path/expand ".." (Path/dirname (BeamLisp.Loader/source_path "pelagic.build"))))
 (defn root [] (Path/expand "../.." (home)))
-(defn package-manifests [] (frontend/manifests (root) ["pelagic" "packages" "atlas"]))
+(defn package-manifests [] (frontend/manifests (root)
+  ["pelagic" "packages" "atlas" "present" "dwim" "workspace" "places" "references" "buffers" "workbench" "mobile"]))
 (defn assembly [] (frontend/assembly (root) (package-manifests)))
 (defn manifest-inputs []
   [(package-manifests)
@@ -59,6 +60,9 @@
      (sources (str (root) "/spikes/packages"))
      (sources (str (root) "/spikes/present"))
      (sources (str (root) "/spikes/atlas"))
+     (sources (str (root) "/spikes/mobile"))
+     (sources (str (root) "/spikes/workspace"))
+     (sources (str (root) "/spikes/dwim"))
      ; Package output is generated, not a source dependency.
      (filter (fn [entry] (not (starts-with? (first entry) (str (root) "/vendor/bl-ed/web/pkg/"))))
              (sources (str (root) "/vendor/bl-ed/web")))])))
@@ -66,6 +70,7 @@
   (artifact/sha256 (json/encode [(sources (str (root) "/src"))
                                (sources (str (root) "/vendor/bl-ed/src"))
                                (sources (str (root) "/packages"))
+                               (sources (str (root) "/spikes/workspace"))
                                (File/read! (str (root) "/env.bl"))])))
 (defn- replace! [stage output marker] (artifacts/publish! stage output marker))
 (defn artifact-valid? [output identity]

@@ -1,0 +1,7 @@
+{:name "mobile" :editor "mobile" :editor-only true :layout "mobile"
+ :doc "Pocket: tasks, places, documents and the live Omega machine."
+ :entry "workspace:all"
+ :frontend {:version 1 :entry "mob.main"
+  :roots ["vendor/bl-ed" "spikes/workspace" "spikes/mobile"]
+  :host ["eval-ed" "eval-cells"] :loader {:host "mobile/host.mjs"}
+  :assets [{:from "spikes/mobile/host" :to "pkg/mobile" :suffixes [".mjs" ".css"]}]}}

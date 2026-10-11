@@ -1,0 +1,41 @@
+{
+  "status": "passed",
+  "runtimeCommit": "b78374703d81",
+  "runtimeRelease": "e684413d",
+  "frontend": "848027892cb07ccf1689a5b81dba18ee5346e5deb8a422ef7991c356a18491d5",
+  "compiledGraph": "83ddb7a99f7701f65bd98f407e1918269bca22b9401528f6b66253159661c1db",
+  "backendFiles": 37,
+  "backendAssertions": 947,
+  "editorTests": 186,
+  "supervisorAssertions": 137,
+  "presentationVariants": 36,
+  "browser": {
+    "checks": [
+      "desktop task, same ID, shared answer/result, concurrent answer resolves once",
+      "phone task, disconnected view, host continues, retained reply, revision convergence",
+      "native overlay drives the existing multi-step reference prompt",
+      "editor Lisp loads and evaluates through the ordinary command API",
+      "long document outline, search, follow/back reading position, explicit checked passage and cwd",
+      "cancel closes the task and removes its actionable question",
+      "shared buffer revisions, overlapping drafts retained, stale publication refused",
+      "machine evaluation sees the shared task world",
+      "exact mobile unuse on desktop preserves phone and host world"
+    ],
+    "browserErrors": []
+  },
+  "launch": {
+    "oneSharedVm": true,
+    "presetsReuseWorld": true,
+    "modeMismatchRefused": true,
+    "shellCwdPreserved": true,
+    "durableTasksPlacesAndBufferHistory": true,
+    "listenerCloses": true,
+    "liveWorldUntouched": true
+  },
+  "legacyService": {
+    "active": true,
+    "mainPid": 1787,
+    "unchanged": true
+  },
+  "scope": "scripted models, real root launcher, independent desktop and phone browser contexts, private runtime, temporary durable store; no live model API, physical phone or Tailscale mutation"
+}

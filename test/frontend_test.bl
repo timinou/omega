@@ -1,4 +1,7 @@
 (ns omega.frontend-test (:require [omega.frontend :as frontend]))
+(deftest pure-editor-packages-need-no-dom-host
+ (let [m {:name "pure" :frontend {:version 1 :entry "pure.main" :roots ["vendor/bl-ed"]}}]
+  (is (= "export {d_bl_package as package} from '../out/pure.main.mjs';\n" (frontend/loader m)))))
 (deftest package-frontend-assembly-is-declarative
  (let [root (File/cwd!) packages (frontend/manifests root ["pelagic" "packages"])
        a (frontend/assembly root packages)]

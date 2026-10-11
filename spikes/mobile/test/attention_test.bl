@@ -1,0 +1,7 @@
+(ns pocket-attention-test (:require [omega.ui.model :as model]))
+
+(deftest closed-tasks-do-not-offer-an-actionable-question
+  (let [question {:id "m-1" :from "t-1" :text "Proceed?"}]
+    (doseq [status [:done :failed :cancelled]]
+      (is (= [] (:asks (model/task-row nil {:task/id "t-1" :task/status status} [] [question] 0)))))
+    (is (= [question] (:asks (model/task-row nil {:task/id "t-1" :task/status :waiting} [] [question] 0))))))

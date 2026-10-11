@@ -1,0 +1,13 @@
+node:internal/modules/run_main:111
+    triggerUncaughtException(
+    ^
+
+page.evaluate: NotFoundError: Failed to set the 'innerHTML' property on 'Element': The node to be removed is no longer a child of this node. Perhaps it was moved in a 'blur' event handler?
+    at Object.update (http://127.0.0.1:37735/host.mjs:294:203)
+    at window.update (eval at evaluate (:290:30), <anonymous>:6:68)
+    at eval (eval at evaluate (:290:30), <anonymous>:3:59)
+    at UtilityScript.evaluate (<anonymous>:292:16)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)
+    at /home/user/code/undefine/omega/spikes/mobile/test/host-browser.mjs:32:13
+
+Node.js v26.11.1

@@ -84,6 +84,18 @@
         (is (includes? r "OMEGA_MAX_TOKENS"))
         (is (not (includes? r "sk-ant-secret")))))))
 
+(deftest direct-api-keeps-omegas-identity-and-provider-configuration
+  (let [root (env-root! "OMEGA_BASE_URL=https://api.anthropic.com\nOMEGA_MODEL=test-model\nANTHROPIC_API_KEY=test-key\n")]
+    (try
+      (let [p (llm/from-env root)
+            body (llm/anthropic-body p {:system "Omega" :messages []})]
+        (is (= "https://api.anthropic.com" (:base-url p)))
+        (is (= "test-key" (:api-key p)))
+        (is (= "test-model" (:model body)))
+        (is (nil? (:identity p)))
+        (is (= ["Omega"] (mapv :text (:system body)))))
+      (finally (File/rm_rf! root)))))
+
 (deftest a-cut-off-tool-input-streams-into-an-empty-input-not-a-crash
   (let [sse (omega.llm.sse/response
              (reduce omega.llm.sse/fold omega.llm.sse/empty-acc

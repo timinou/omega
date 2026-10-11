@@ -18,15 +18,20 @@
                      (throw (ex-info "--port requires an integer from 1024 to 65535" {})))
                    (recur (drop 2 xs) (assoc result :port port)))
         "--preset" (let [preset (second xs)]
-                     (when-not (contains? #{"pelagic" "spikes" "packages"} preset)
-                       (throw (ex-info "--preset requires pelagic, spikes or packages" {})))
+                     (when-not (contains? #{"pelagic" "spikes" "packages" "pocket"} preset)
+                       (throw (ex-info "--preset requires pelagic, spikes, packages or pocket" {})))
                      (recur (drop 2 xs) (assoc result :preset preset)))
         "--live" (recur (rest xs) (assoc result :live? true))
+        "--db" (let [path (second xs)]
+                   (when (or (nil? path) (starts-with? path "--"))
+                     (throw (ex-info "--db requires a store directory" {})))
+                   (recur (drop 2 xs) (assoc result :db (Path/expand path (build/root)))))
         (throw (ex-info (str "Unknown launch option: " (first xs)) {}))))))
 (defn studio-url [port]
   (str "http://localhost:" port "/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org"))
 (defn preset-url [port preset]
   (case preset
+    "pocket" (str "http://localhost:" port "/?use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile&file=workspace:all")
     "packages" (str "http://localhost:" port "/?use=packages&file=package:catalog")
     "spikes" (str "http://localhost:" port "/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org")
     (studio-url port)))
@@ -34,7 +39,9 @@
   ; The dynamic provider proves the host mode and document root, not just assets.
   (json/encode {:schema "omega.dev-session" :version 1 :root (build/root)
                 :host (build/host-fingerprint)
-                :frontend (File/read! (str web "/.inputs")) :live (:live? opts) :port (:port opts) :routes (:routes opts)}))
+                :frontend (File/read! (str web "/.inputs")) :live (:live? opts)
+                :db (or (:db opts) (when (:live? opts) (str (build/root) "/.omega/db")))
+                :port (:port opts) :routes (:routes opts)}))
 (defn- http-get [port path]
   (Application/ensure_all_started :inets)
   (try
@@ -76,7 +83,7 @@
       :start (do
                (let [host (dev/acquire! expected {:root (build/root) :web web :port port :dev? true
                               :hosts (vec (keys (:routes opts))) :landing-pages (:routes opts)
-                              :offline? (not (:live? opts)) :memory? (not (:live? opts))
+                              :offline? (not (:live? opts)) :memory? (and (not (:live? opts)) (nil? (:db opts))) :db (:db opts)
                               :providers {"launch" {:read (fn [_ _] {:text expected :rev expected :read-only? true})}}})]
                (println (str "Omega development host" (if (:live? opts) " (live)" " (offline development)") ": " (preset-url (:port host) (:preset opts)))))
                (when (seq (:routes opts))

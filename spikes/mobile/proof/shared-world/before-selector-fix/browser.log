@@ -1,0 +1,50 @@
+Work
+⌘
+test
+done
+Desktop work
+Conversation
+Plan
+Changes
+Y
+You
+
+Desktop work
+
+Agent step · execution details
+Agent step · execution details
+ω
+Agent
+
+Waiting for your answer.
+
+Y
+You
+
+[reply from human:me] yes
+
+Agent step · execution details
+
+Offline run finished; you said: [reply from human:me] yes
+
+Read
+Follow-up goal
+test
+Work
+Places
+Host
+node:internal/modules/run_main:111
+    triggerUncaughtException(
+    ^
+
+locator.waitFor: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('[data-pane="phone"]').getByText('Offline run finished').first() to be visible
+    59 × locator resolved to hidden <pre>#+begin_src beam-lisp :id t-1/8 :ns omega.task.t-…</pre>
+
+    at waitText (/home/user/code/undefine/omega/spikes/mobile/test/shared-browser.mjs:23:75)
+    at /home/user/code/undefine/omega/spikes/mobile/test/shared-browser.mjs:36:21 {
+  name: 'TimeoutError'
+}
+
+Node.js v26.11.1
