@@ -63,7 +63,7 @@ try{
  await openDocument(b,'work:test/long.bl.org');await click(b,'outline');
  await ui(b).locator('[data-act="heading"]').filter({hasText:'Section 18'}).click();
  const scroll=await ui(b).locator('.mobile-scroll').evaluate(x=>x.scrollTop);assert.ok(scroll>1000,scroll);
- await ui(b).locator('[data-field="search"]').fill('needle');await click(b,'find-next');
+ await click(b,'find');await ui(b).locator('[data-field="search"]').fill('needle');await click(b,'find-next');
  assert.ok(await ui(b).locator('.reader-line.match').count()>0);
  await ui(b).locator('[data-act="document-link"]').first().click();await waitText(b,'Linked document');await click(b,'document-back');
  await b.waitForFunction(()=>blEd.F.d_editor(blEd.frame(),blEd.K('file')).get(blEd.K('path'))==='work:test/long.bl.org');

@@ -10,9 +10,8 @@ bin/bl omega.stop
 ```
 
 [Launch, Tailscale, context and existing-store adoption](../../research/pocket-shared-world.bl.org)
-contains the complete operating instructions. The existing Pocket service and
-both existing stores were left intact. Its compatibility entry preserves the
-original store path on a deliberate restart.
+contains the complete operating instructions. The shared launcher preserves the original durable store; independent stores
+remain separate.
 
 ## Behavior
 
@@ -34,8 +33,9 @@ original store path on a deliberate restart.
   and accepted history; it never overwrites a conflicting revision silently.
 
 Copy stays short. Placement, weight, rules and restrained accents carry state;
-errors and accessible labels remain explicit. Native app refinement belongs to
-its later pass.
+errors and accessible labels remain explicit. The browser surface shares the editor’s theme tokens, structured document
+spans and retained task facts. Physical-device validation remains a separate
+proof requirement.
 
 ## Package contract
 
@@ -53,6 +53,20 @@ The root immutable frontend graph contains this package and its dependencies.
 `spikes/mobile/build.sh` delegates to that build; it no longer installs into the
 vendored editor. The explicit temporary workspace demo remains a separate test
 entry. No vendored-editor changes were needed in this integration.
+
+## Touch workbench
+
+The approved usage review is implemented in the same package: stable DOM
+reconciliation; world-scoped drafts and reading/navigation state; compact tasks
+and typed full execution evidence; native place attachment/settings and directory
+browsing; recent/pinned buffers; source-mapped reading; typed questions and local
+attention triage; attributed file review with guarded undo; contextual command
+search and a retained world REPL. Files separates home, input and output roles.
+Reading live task references does not manufacture unpublished source edits.
+
+[Touch journey screenshots and receipt](proof/touch-workbench/README.org) include
+real bl-ed use and unuse. [Issue-by-issue acceptance](proof/touch-workbench/acceptance.org)
+maps the 54-point review to behavior and tests. The proof uses isolated worlds.
 
 ## Current proof
 

@@ -1,0 +1,349 @@
+
+Testing pocket-shared-world-test
+
+15:41:36.169 [info] Running #Function<3.26476774/2 in BeamLisp.Ns.Fn.M2700.serve/1> with Bandit 1.12.4 at 127.0.0.1:8892 (http)
+
+15:41:39.549 [info] Running #Function<3.26476774/2 in BeamLisp.Ns.Fn.M2700.serve/1> with Bandit 1.12.4 at 127.0.0.1:8892 (http)
+
+Testing pocket-attention-test
+
+Testing actor-test
+
+Testing task-test
+
+Testing omega.frontend-test
+
+Testing omega.dev-host-test
+
+15:41:46.843 [info] Running #Function<3.26476774/2 in BeamLisp.Ns.Fn.M2700.serve/1> with Bandit 1.12.4 at 127.0.0.1:41529 (http)
+
+15:41:47.100 [error] Running #Function<3.26476774/2 in BeamLisp.Ns.Fn.M2700.serve/1> with Bandit 1.12.4 at http failed, port 41631 already in use
+── ward: warm isolated test run ──
+
+  ✓ pocket-shared-world-test  31 passed
+  ✓ pocket-attention-test  4 passed
+  ✓ actor-test  15 passed
+  ✓ task-test  37 passed
+  ✓ omega.frontend-test  15 passed
+  ✓ omega.dev-host-test  26 passed
+
+  6 file(s) passed, 0 failed, 0 incoherent
+  ✓ all green
+✔ mobile is a removable layer and a real frame layout, with no user table mutation (17.450235ms)
+✔ drafts stay keyed to tasks and navigation leaves the conversation editor untouched (1.258046ms)
+✔ send uses the existing task intent, blocks duplicates and preserves drafts on failure (0.934996ms)
+✔ quick answers keep a composed reply; successful text sends clear only the submitted draft (0.959362ms)
+✔ completed task follow-up carries its actual place and frozen directory (1.003956ms)
+✔ mobile file input participates in the shared-buffer draft protocol and read-only guards (2.333216ms)
+✔ dirty file navigation keeps its current tab and exposes a publication message (0.491739ms)
+✔ task creation from a place document validates against the retained place choices (0.424302ms)
+✔ document navigation and explicit passage retain their address, revision and anchor (0.577922ms)
+✔ command discovery includes core and package commands without shared table mutation (1.307218ms)
+✔ first editor eval can resume when the language arrives (0.594021ms)
+✔ native prompts expose data and submit through the existing editor (1.713586ms)
+✔ reading a task home does not manufacture unpublished edits when a task completes (1.253066ms)
+✔ long goals retain their complete instruction under a compact editable title (0.66204ms)
+✔ running task instructions steer the current turn (0.444119ms)
+✔ place form invokes the existing place intent as ordinary data (0.527025ms)
+✔ Files index clears an earlier file target without discarding that editor (0.340723ms)
+✔ clearing a local cwd setting restores inheritance (0.390597ms)
+✔ a newly visited document opens in reading mode without changing the retained editor text (1.594992ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 159.623271
+host browser: retained replies, task identity, native selection, disposal passed
+✔ typing in a shared file sends an unpublished draft through an intent (10.249727ms)
+✔ remote disjoint text preserves local draft, mode and command draft (9.947837ms)
+✔ overlapping refresh retains local text and does not repeatedly emit invalid drafts (2.510051ms)
+✔ publish never substitutes a stale remote revision to force overwrite (2.02789ms)
+✔ merged save acknowledgement installs returned text while preserving in-flight typing (3.159467ms)
+✔ change inspection and operation undo use ordinary visits and intents (0.798147ms)
+✔ accepted disjoint merges commute; same-point insertions refuse (0.514692ms)
+✔ unloading removes draft transport and leaves editor text intact (2.058708ms)
+✔ a conflict acknowledgement retains the original publication base (0.854624ms)
+✔ unload and page leave release draft resources as host effects (3.286737ms)
+✔ frame-wide unload collects cleanup from every pane before collapse (7.395717ms)
+✔ manual resolution requires explicit confirmation and the chosen remote revision (0.787286ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 49.294874
+✔ rail presents provider objects as cards rather than raw task rows (13.631744ms)
+✔ DWIM movement visits the next visible object, skipping header source rows (9.252764ms)
+✔ Enter scopes a place and typing a goal creates a task without schema syntax (1.815628ms)
+✔ presentation is a removable layer and source inspection preserves text (5.585669ms)
+✔ desk has two populated panes, selection previews without stealing rail focus (1.764943ms)
+✔ new-task result targets main without replacing the scoped rail (1.696303ms)
+✔ a checklist is presented but toggles its actual editable source (5.402753ms)
+✔ artifact expansion retains the rail and task; closing refuses a local draft (15.690652ms)
+✔ context actions are package contributions; a later definition overrides and unload is exact (3.246461ms)
+✔ menu dispatches named commands and reference prompts produce data without replacing a draft (7.392861ms)
+✔ guided subplace creation inherits its parent and removal cancels an owned prompt (3.301835ms)
+✔ folder task creation carries the actual directory and headings wrap without modifying source (4.943165ms)
+✔ a keyboard checklist toggle participates in the shared-buffer draft protocol (4.187578ms)
+✔ starting without a place asks for a valid place before the goal, with no hard-coded default (1.225144ms)
+✔ checkbox edits only the heading state and leaves TODO words in its title and prose intact (1.77398ms)
+✔ a reply draft becomes a scoped follow-up when its task finishes (3.986679ms)
+✔ source inspection renders the task org text and a busy command prompt blocks pointer edits (4.646105ms)
+✔ relative task references resolve in the actual nested working folder (1.15419ms)
+✔ long artifact prose wraps by pane width and remains raw while editing (3.277139ms)
+✔ rail opening and task creation target the retained conversation beside a file (2.527593ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 108.848482
+✔ Alt+h/l moves spatially, clamps, and does not emit host IO (19.813428ms)
+✔ pane focus preserves a command draft and an insert draft (14.735759ms)
+✔ spatial focus skips passive view panes (4.417803ms)
+✔ task references in writable source drive the linked task pane (2.472008ms)
+✔ a task block sends cwd and stable home anchor through the existing intent (1.520141ms)
+✔ g H returns to a task home by current source anchor (3.090276ms)
+✔ home arrival matches the complete block ID after surrounding source moves (1.305215ms)
+✔ workspace unload removes its layout, commands and keys in every pane (9.427534ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 67.484686
+✔ references use place metadata or selected task identity (7.854273ms)
+✔ add submits a data map through the existing minibuffer and unloading is exact (6.364449ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 24.434104
+✔ parent uses provider context and requests a normal editor visit (10.266809ms)
+✔ place attachment submits a plain map as a host intent (1.129684ms)
+✔ place home forwards an anchor and unloading is exact (3.829773ms)
+✔ new work names its selected place so inherited cwd defaults can resolve (0.755316ms)
+✔ unuse cancels the package-owned prompt and preserves a foreign draft (0.585866ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 21.457012
+✔ dwim package shape: commands + command keys (counts and describe-key keep working) (14.419772ms)
+✔ immediate use/unuse is exact: no adopt, user tables and pkg-state untouched (1.774411ms)
+✔ command unload removes dwim's own state and falls back to raw source motion (15.490614ms)
+✔ j/k step visible source rows: a folded section is one step, nested folds respected (18.014721ms)
+✔ counts: 3j == j j j, and the source topology is the same either way (9.897432ms)
+✔ boundaries clamp: no wrap at the first/last visible row (8.187202ms)
+✔ goal column survives short rows and reversal; invalidated by horizontal/click/text/doc (22.068136ms)
+✔ normal heading h: collapse, then h goes to the parent (2.369204ms)
+✔ normal heading l: expand retaining nested folds, then enter first visible content; leaf no-op (4.784676ms)
+✔ ordinary prose h/l stay character motion; insert mode types h j k l literally (7.816772ms)
+✔ select-mode j/k keep the anchor, including across a hidden folded span (5.245576ms)
+✔ select-mode h/l are character motion, not fold mutation (3.598626ms)
+✔ multiple heads keep their own columns; the primary is retained (1.27086ms)
+✔ duplicate heads on one heading do not double-toggle (2.376468ms)
+✔ a huge folded section: j lands on the destination and M.render actually draws it (4.72298ms)
+✔ user bindings win over package bindings (3.903722ms)
+✔ explicit dwim commands are discoverable through the palette (7.932671ms)
+✔ ed.view/source-rows: folds hide bodies; nested and sibling folds merge correctly (1.386989ms)
+✔ ed.view/visible-rows: the viewport in source rows, fold-aware (1.099997ms)
+✔ ed.view/reveal: keeps the head in visible space, idempotent, never mutates folds/sels (1.703066ms)
+✔ ed.view/rows: latest provider first, nil declines, empty vector is accepted (2.044721ms)
+✔ present provides a navigation topology that replaces source rows, and declines for text (2.272061ms)
+✔ present rail: j steps task to task and the frame link fires exactly one visit (both load orders) (9.364245ms)
+✔ present conversation: pinned on open, and typed j on the composer is a draft, not dwim (28.685753ms)
+✔ present conversation: folded presentation exposes visible source rows and j lands on one (40.450251ms)
+✔ frame-wide packages: unuse in one pane removes dwim from every pane (7.887636ms)
+✔ off-topology movement enters the first task and returns to a hidden heading (9.807271ms)
+✔ a click at the current clamped head resets the remembered goal (2.487106ms)
+✔ a simultaneous parent collapse reveals another head on its representative (1.603418ms)
+✔ the pure BL contract also runs in the JS target (6.997895ms)
+✔ present reveal keeps a visible wrapped source row and reveals the next row idempotently (3.109011ms)
+✔ presentations that do not use source folds decline outline h/l (13.209777ms)
+✔ all fold combinations agree with the original visibility predicate and reversible j/k (198.57905ms)
+✔ counted horizontal actions equal repeated commands and stay in normal-mode policy (9.6318ms)
+✔ normal h/l use the visible heading when Tab hides the source head (3.216614ms)
+✔ rail counts and multiple heads use the navigation policy in either package load order (13.765166ms)
+✔ omega outline honors an explicit fold even while the cursor focuses its heading (17.726146ms)
+✔ oversized counts stop when every selection is stationary (2.87012ms)
+✔ source topology memo ignores attention but invalidates folds and row count (1.511445ms)
+✔ rail navigation reuses its read-derived rows and follows a refreshed object index (1.858159ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 530.673807
+✔ opening a task shows the latest, pinned, with the cursor off the composer (17.790748ms)
+✔ an update while pinned keeps the end in view; a new turn scrolls in (10.63784ms)
+✔ an update while you read does not move what you see (14.113253ms)
+✔ an update ABOVE what you read moves the row, not the picture (13.549008ms)
+✔ scrolling by a fraction of a row is exact; the next row peeks in at the bottom (8.237166ms)
+✔ scrolling down to the end re-pins; a key moves from what is on screen (8.060843ms)
+✔ resizing a pinned conversation keeps its latest body and docked composer (6.081185ms)
+✔ a cursor left off-screen cannot make the first pinned motion jump to history (16.2242ms)
+✔ a multiline composer draft survives refresh and resize without losing tail-follow (4.747415ms)
+✔ fractional reading position survives repeated updates and a narrow resize (8.034553ms)
+✔ frame consumers reuse one presentation model for the same immutable editor (6.504374ms)
+✔ presentation model memo retains a bounded number of editor snapshots (5.799713ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 130.062135
+✔ file-local package declaration accepts installed names, orders dependencies and excludes executable/remote references (1.138009ms)
+✔ explicit unload is respected across refreshes until explicitly used again (0.131849ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8.293753
+✔ normal-mode motions: hjkl, w selects a word, counts (21.816741ms)
+✔ insert mode types, Escape returns, undo/redo round-trip (9.484422ms)
+✔ multiple cursors: C adds a cursor below, typing goes to both (8.689761ms)
+✔ x selects lines; d deletes and yanks; p pastes (7.918133ms)
+✔ org navigation: ]h [h g u ]b (13.589293ms)
+✔ structural form motion inside a cell (18.536817ms)
+✔ paredit-style: wrap and raise (9.888364ms)
+✔ the command line evaluates Beam Lisp against the live editor (15.909966ms)
+✔ the command line is the real language: macros, defn, destructuring, threading (26.134596ms)
+✔ split cells: a local cell runs in the page; a beam cell becomes an effect (17.877412ms)
+✔ the palette finds and runs commands by fuzzy name (19.035669ms)
+✔ describe-key explains a binding (3.337462ms)
+✔ search: / n N * with smart-case and wrap (7.737352ms)
+✔ dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans (5.996815ms)
+✔ save is an effect, not a side effect (2.973356ms)
+✔ an eval reload keeps the cursor and is one undo step (3.370134ms)
+✔ render model: segments, problems, status (1.865834ms)
+✔ incremental structure == full derive, over random typing in real documents (4990.654193ms)
+✔ round trip: every repo .bl.org is reproduced byte-for-byte (104.15085ms)
+✔ deferred language: Enter keeps the draft, one effect, replays once on ready (2.855622ms)
+✔ deferred language: Escape or an edit cancels the parked run (1.949201ms)
+✔ deferred language: a failed load keeps the draft and says so; Enter retries (1.475286ms)
+✔ deferred language: a local cell keeps its text and resumes once; edits cancel stale results (4.380763ms)
+✔ named command events use normal command lookup and retain the read-only guard (1.188544ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5308.929702
+✔ one pane is today's bl-ed: the frame renders exactly ed.main/render (25.31575ms)
+✔ ed/layout arranges the window: the current editor is kept, other panes fetch their docs (15.729726ms)
+✔ a :select link: moving onto an object visits it in the linked pane (as an effect) (9.945833ms)
+✔ effects are tagged by pane; an answer for one pane changes only that pane (4.545344ms)
+✔ space w w cycles focus over editor panes only; space w o keeps the focused editor (11.863845ms)
+✔ a view pane draws from the pane it views, through the package's :views (6.574265ms)
+✔ (ed/layout nil) and unknown layouts (8.820318ms)
+✔ packages are frame-wide: unuse in one pane removes it everywhere, and its layout (7.467262ms)
+✔ boot layout without a command line: F.arrange(fr, layouts[name]) is what ed/layout does (4.684607ms)
+✔ events for a pane that left (a late host answer) leave the frame untouched (4.953615ms)
+✔ a frame reuses unchanged pane models while another editor moves (7.342036ms)
+✔ reconfigure retains named editors and blocks discarded text and prompt drafts (2.619918ms)
+✔ source candidates keep an existing context or retain main when adding the first aside (1.830597ms)
+✔ visit and focus candidates choose the existing pane and protect its file and prompt drafts (3.17161ms)
+✔ a package that arranges the window on :use keeps the effects its :adopt emitted, tagged to the kept pane (0.544308ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 127.433731
+✔ latest visit wins: an older slow answer never overwrites a newer one (1.938391ms)
+✔ a stale ERROR is dropped; the newest request's error is shown (0.251355ms)
+✔ superseded requests are aborted (0.136227ms)
+✔ a background refresh never supersedes a foreground visit, nor lands on another path (0.160934ms)
+✔ a visit supersedes an in-flight refresh of the same pane (0.159171ms)
+✔ a disposed pane's answer is dropped (0.128843ms)
+✔ memoFrame renders once per frame value (0.119385ms)
+✔ language: sync hooks never return a Promise; honest status, retry after failure (4.127185ms)
+✔ awaitLanguage: answers ready once; failure carries the message; a vanished pane gets nothing (0.39157ms)
+✔ easing is elapsed-time based: 60/120/144 Hz settle alike and cover the distance (0.475788ms)
+✔ one 60 Hz frame covers the former 32 % (0.093026ms)
+✔ reduced motion and trackpad deltas apply directly, with no easing (0.098326ms)
+✔ wheel vs trackpad classification (0.078508ms)
+✔ pane disposal: apply→false drops the glide; drop() cancels the frame (0.136968ms)
+✔ packageUrl: bare names resolve under ./pkg (0.1378ms)
+✔ task navigation preserves package and theme bootstrap parameters on reload (0.267996ms)
+✔ presentation actions accept command names, including qualified keywords, without executable text (0.342667ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12.826312
+✔ C-Enter on a task block asks the world to open a task, then writes the reference (10.619566ms)
+✔ the reference row is drawn as a live card; the text stays the reference (6.253841ms)
+✔ y on a card answers its question; y elsewhere still yanks (6.785695ms)
+✔ C-Enter again: same body focuses, an edited body refines, a finished task reopens (17.837456ms)
+✔ a reference the world wrote (no digest) is adopted on C-Enter, not refined (2.470035ms)
+✔ a finished task's reference is rewritten once with its summary (1.514721ms)
+✔ visiting a read-only view: objects get their keys, edits are refused, C-o goes back (11.950379ms)
+✔ a refreshed read-only view keeps the cursor; a refreshed dirty file keeps your text (7.821902ms)
+✔ a refresh of a read-only view keeps what you are typing in the minibuffer (3.538642ms)
+✔ space a n opens a homeless task through the minibuffer (2.916147ms)
+✔ ordinary cells still evaluate (C-Enter falls through to eval-cell) (1.892855ms)
+✔ a refresh of a read-only view keeps your place: text above moves the row, the cursor follows its object (4.369381ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 89.168577
+✔ a used package adds keys and commands; unuse removes exactly them (17.885287ms)
+✔ a package intercepts before the core, reacts after it, adopts visited documents (4.466826ms)
+✔ ed/use asks the host for the module (an effect); a failed load is a message (3.056742ms)
+✔ package observers see completed module installation and failed loads (0.573103ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 34.766417
+✔ a cold packaged server resolves virtual paths and serves changing task documents (11351.277115ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11362.906357
+spikes/dwim/test/outline.bl.org {:bad [], :variants 6}
+vendor/bl-ed/web/welcome.bl.org {:bad [], :variants 11}
+vendor/bl-ed/web/split-demo.bl.org {:bad [], :variants 8}
+spikes/present/web/welcome.bl.org {:bad [], :variants 11}

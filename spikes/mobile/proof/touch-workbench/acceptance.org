@@ -1,0 +1,52 @@
+#+title: Pocket touch workbench — acceptance map
+#+date: 2026-10-11
+
+The approved inventory is research/pocket-ux-review-2026-10-11.org. This receipt
+covers the browser/editor workbench; physical devices and native OS integrations
+are outside this browser proof. The package remains mob.main/bl-package.
+
+| Issues | Implemented behavior | Evidence |
+|--------+----------------------+----------|
+| 01–03, 06–07 | Reconcile keyed DOM; preserve disclosures, unfinished fields, task/new drafts, native ranges; contain modal focus and restore it | host-browser.mjs, touch-browser.mjs |
+| 04–05 | World-scoped session route/scroll; explicit URL; reload and browser Back | touch-browser.mjs |
+| 08 | Reading cards does not invoke terminal source rewrite; writable edits still guard navigation/publication | drive.test.mjs, shared-browser.mjs |
+| 09–16 | Shared snow/espresso/text/code roles, matte rules, 6px surfaces, compact chrome, dark metadata, 44px controls | screenshots; style.css |
+| 17–19 | Compact title with editable creation field; complete goal in its message; composer outside scrolling content | drive.test.mjs, touch-browser.mjs |
+| 20–23 | Canonical typed turns; structured prose/lists/code; stable meaningful tool rows and complete recorded tool results with Copy | host-browser.mjs, touch-browser.mjs |
+| 24–25 | Working/Answered/Recent distinction preserves backend states; running instructions steer, idle instructions reply, terminal instructions start follow-up | drive.test.mjs, shared-browser.mjs |
+| 26, 43 | Files index separates roles; home is explicit and block-anchored; Changes only targets actual work files | host-browser.mjs, touch-browser.mjs |
+| 27–29 | Add place form invokes place/put; directory browsing and host validation; existing command/Lisp route remains available | shared_world_test.bl, touch-browser.mjs |
+| 30–33 | Display names, current/recent defaults, actual cwd/context, parent/home/cwd settings with inheritance, pinned/recent places in Buffers | shared_world_test.bl, touch-browser.mjs |
+| 34–37 | Source-mapped paragraphs, heading depth, canonical editor block spans, code, tables and links on the main reading surface | host-browser.mjs, touch-browser.mjs |
+| 38–39 | Invoked search with count, Previous/Next; sticky reader controls and outline | touch-browser.mjs |
+| 40, 52–53 | Work/Places/Buffers; Machine pinnable, retained REPL and world namespace; compact Connection destination | touch-browser.mjs |
+| 41–42 | Context peek shows resolved directory/settings and explicit passage address/revision; sticky Ask/Copy retain native selection; server rejects stale snapshots | shared_world_test.bl, host-browser.mjs, shared-browser.mjs |
+| 44–46 | Real offered choices or ordinary Answer; chronological question plus attention anchor; personal read/snooze queue per browser tab | host.mjs, touch-browser.mjs |
+| 47–48 | Affected file list, actor/kind/revision, unified before/after review, exact operation preview, ID-stable guarded undo | buffer_test.bl, touch-browser.mjs |
+| 49–51 | Focused search first; contextual common commands and human labels, technical aliases; contextual target with optional override | host-browser.mjs, shared-browser.mjs |
+| 54 | Decorative drag handle removed | host.mjs, screenshots |
+
+* Boundaries
+Personal view state, drafts, pins, snooze and REPL history belong to this browser
+tab and durable world, in sessionStorage. Task/turn/place/buffer facts belong to
+the host and converge across devices. Clearing browser storage clears local
+view history. There is no new task authority and no cross-device handoff action.
+
+The reader uses the editor's canonical structural spans for document source
+blocks. The host text renderer escapes all source/model text and formats common
+Markdown/Org prose, headings, lists, tables, links and code. Arbitrary embedded
+HTML is deliberately displayed as text. Recorded tool output is shown in full;
+this cannot recover text the tool itself did not record.
+
+Changes is attributed shared-buffer history, not a Git diff. Undo retains the
+existing backend's revision/overlap safeguards. Home, plan, input and output
+remain distinct; a scratch home is not presented as an inferred plan.
+
+Directory browsing is over the trusted server filesystem and attaches existing
+directories. Parent changes use the form's explicit directory; an empty local
+cwd restores inheritance. Other config keys survive form edits.
+
+This proof uses Chromium touch emulation and independent desktop/phone contexts.
+It does not establish Safari/physical keyboard, VoiceOver/TalkBack, app suspension,
+network handover or native notification behavior. Native wrappers, push and OS
+selection-menu integrations remain later platform work, as in the approved review.

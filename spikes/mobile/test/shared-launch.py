@@ -13,6 +13,7 @@ from urllib.request import urlopen, Request
 ROOT = Path(__file__).resolve().parents[3]
 PROOF = ROOT / 'spikes/mobile/proof/shared-world'
 PROOF.mkdir(parents=True, exist_ok=True)
+(PROOF/'launch.log').write_text('')
 with socket.socket() as sock:
     sock.bind(('127.0.0.1', 0))
     port = sock.getsockname()[1]
@@ -22,6 +23,7 @@ with tempfile.TemporaryDirectory(prefix='omega-pocket-proof-') as temp:
     work.mkdir()
     (work / 'long.bl.org').write_text('#+TITLE: Long document\n\n* Section 1\nSelected words for the model.\n\n' + ''.join(f'\n* Section {i}\n' + ''.join(f'Paragraph {j}: a document for reading across devices.\n' for j in range(16)) for i in range(2, 25)) + '\nThe needle is here.\n[[work:test/linked.bl.org][Follow reference]]\n')
     (work / 'linked.bl.org').write_text('#+TITLE: Linked document\n\nReturn to the retained reading position.\n')
+    (work / 'review.bl.org').write_text('First line\nOriginal detail\nLast line\n')
     (work / 'shared.bl.org').write_text('Original shared text\n')
     runtime = Path(temp) / 'runtime'
     runtime.mkdir(mode=0o700)
@@ -65,6 +67,8 @@ with tempfile.TemporaryDirectory(prefix='omega-pocket-proof-') as temp:
         assert mismatch.returncode == 2 and 'scripted' in mismatch.stderr
         with (PROOF/'browser.log').open('w') as output:
             subprocess.run(['node', str(ROOT/'spikes/mobile/test/shared-browser.mjs')], cwd=ROOT, env={**env, 'POCKET_TEST_URL': base, 'POCKET_TEST_ROOT': str(work)}, check=True, timeout=300, stdout=output, stderr=subprocess.STDOUT)
+        with (PROOF/'touch-browser.log').open('w') as output:
+            subprocess.run(['node', str(ROOT/'spikes/mobile/test/touch-browser.mjs')], cwd=ROOT, env={**env, 'POCKET_TEST_URL': base, 'POCKET_TEST_ROOT': str(work)}, check=True, timeout=300, stdout=output, stderr=subprocess.STDOUT)
         cli = subprocess.run([str(ROOT/'bin/omega'), '--no-start', '--offline', '--url', base, '--root', str(work), '--json', 'Shell work'], cwd=work, env=env, check=True, capture_output=True, text=True)
         opened = json.loads(cli.stdout)
         task_doc = doc(opened['path'])

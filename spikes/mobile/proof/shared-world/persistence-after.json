@@ -1,7 +1,7 @@
 {
   "workspace": {
     "data": {
-      "count": 4,
+      "count": 5,
       "desk": "rail",
       "place": null,
       "scope": "all"
@@ -17,33 +17,91 @@
       },
       {
         "active": false,
+        "cwd": "/tmp/omega-pocket-proof-6uwemmgq/work",
+        "depth": 1,
+        "key": "workspace:design",
+        "place": "design",
+        "root": "/tmp/omega-pocket-proof-6uwemmgq/work",
+        "row": 5,
+        "settings": {
+          "cwd": {
+            "from": "design",
+            "value": "."
+          }
+        },
+        "title": "Design",
+        "type": "desk/scope"
+      },
+      {
+        "active": false,
+        "cwd": "/home/user/code/undefine/omega",
         "depth": 1,
         "key": "workspace:project",
         "place": "project",
-        "row": 5,
+        "root": "/home/user/code/undefine/omega",
+        "row": 6,
+        "settings": {},
         "title": "omega",
         "type": "desk/scope"
       },
       {
         "active": false,
+        "cwd": "/tmp/omega-pocket-proof-6uwemmgq/work",
         "depth": 1,
         "key": "workspace:test",
         "place": "test",
-        "row": 6,
+        "root": "/tmp/omega-pocket-proof-6uwemmgq/work",
+        "row": 7,
+        "settings": {},
         "title": "Test",
         "type": "desk/scope"
       },
       {
         "active": false,
+        "cwd": "/tmp/omega-pocket-proof-6uwemmgq/work",
         "depth": 1,
-        "key": "workspace:work-f2ba5f42",
-        "place": "work-f2ba5f42",
-        "row": 7,
+        "key": "workspace:work-c51d396b",
+        "place": "work-c51d396b",
+        "root": "/tmp/omega-pocket-proof-6uwemmgq/work",
+        "row": 8,
+        "settings": {},
         "title": "work",
         "type": "desk/scope"
       },
       {
         "artifacts": [
+          {
+            "block": "t-34",
+            "kind": "home",
+            "label": "Plan / home",
+            "path": "omega:scratch"
+          }
+        ],
+        "ask": "Shall I go ahead?",
+        "cwd": "/tmp/omega-pocket-proof-6uwemmgq/work",
+        "folder": "folder:work-c51d396b",
+        "goal": "Shell work",
+        "home": {
+          "block": "t-34",
+          "path": "omega:scratch"
+        },
+        "key": "t-34",
+        "place": "work-c51d396b",
+        "place-name": "work",
+        "row": 10,
+        "status": "idle",
+        "summary": "Shall I go ahead?",
+        "title": "Shell work",
+        "type": "omega/task"
+      },
+      {
+        "artifacts": [
+          {
+            "block": null,
+            "kind": "output",
+            "label": "review.bl.org",
+            "path": "work:design/review.bl.org"
+          },
           {
             "block": "t-25",
             "kind": "home",
@@ -51,20 +109,21 @@
             "path": "omega:scratch"
           }
         ],
-        "ask": "Shall I go ahead?",
-        "cwd": "/tmp/omega-pocket-proof-6dpmwudd/work",
-        "folder": "folder:work-f2ba5f42",
-        "goal": "Shell work",
+        "ask": null,
+        "cwd": "/tmp/omega-pocket-proof-6uwemmgq/work",
+        "folder": "folder:design",
+        "goal": "Read the complete project brief and tell me what is important. This prompt should remain in its own message without taking over the header.",
         "home": {
           "block": "t-25",
           "path": "omega:scratch"
         },
         "key": "t-25",
-        "place": "work-f2ba5f42",
-        "row": 9,
-        "status": "idle",
-        "summary": "Shall I go ahead?",
-        "title": "Shell work",
+        "place": "design",
+        "place-name": "Design",
+        "row": 12,
+        "status": "done",
+        "summary": "Offline run finished; you said: [reply from human:me] Yes, go ahead",
+        "title": "Read the brief",
         "type": "omega/task"
       },
       {
@@ -77,7 +136,7 @@
           }
         ],
         "ask": null,
-        "cwd": "/tmp/omega-pocket-proof-6dpmwudd/work",
+        "cwd": "/tmp/omega-pocket-proof-6uwemmgq/work",
         "folder": "folder:test",
         "goal": "Explain selected text\n\nSelected passage from work:test/long.bl.org (revision 0, lines 4\u20134):\nSelected words for the model.",
         "home": {
@@ -86,7 +145,8 @@
         },
         "key": "t-19",
         "place": "test",
-        "row": 11,
+        "place-name": "Test",
+        "row": 13,
         "status": "cancelled",
         "summary": "Waiting for your answer.",
         "title": "Explain selected text",
@@ -108,7 +168,7 @@
           }
         ],
         "ask": null,
-        "cwd": "/tmp/omega-pocket-proof-6dpmwudd/work",
+        "cwd": "/tmp/omega-pocket-proof-6uwemmgq/work",
         "folder": "folder:test",
         "goal": "Phone work",
         "home": {
@@ -117,7 +177,8 @@
         },
         "key": "t-10",
         "place": "test",
-        "row": 12,
+        "place-name": "Test",
+        "row": 14,
         "status": "done",
         "summary": "Offline run finished; you said: [reply from human:me] yes",
         "title": "Phone work",
@@ -133,7 +194,7 @@
           }
         ],
         "ask": null,
-        "cwd": "/tmp/omega-pocket-proof-6dpmwudd/work",
+        "cwd": "/tmp/omega-pocket-proof-6uwemmgq/work",
         "folder": "folder:test",
         "goal": "Desktop work",
         "home": {
@@ -142,7 +203,8 @@
         },
         "key": "t-1",
         "place": "test",
-        "row": 13,
+        "place-name": "Test",
+        "row": 15,
         "status": "done",
         "summary": "Offline run finished; you said: [reply from human:me] yes",
         "title": "Desktop work",
@@ -150,15 +212,15 @@
       },
       {
         "key": "hint",
-        "row": 14,
+        "row": 16,
         "type": "desk/hint"
       }
     ],
     "ok": true,
     "path": "workspace:all",
     "readOnly": true,
-    "rev": "2963514288",
-    "text": "#+TITLE: Work\nYour tasks, in their places.\n\n* Places\nAll places\nomega\nTest\nwork\n* NEEDS YOU (1)\nt-25 \u00b7 idle \u00b7 Shell work \u00b7 Shall I go ahead?\n* RECENTLY FINISHED (3)\nt-19 \u00b7 cancelled \u00b7 Explain selected text \u00b7 Waiting for your answer.\nt-10 \u00b7 done \u00b7 Phone work \u00b7 Offline run finished; you said: [reply from human:me] yes\nt-1 \u00b7 done \u00b7 Desktop work \u00b7 Offline run finished; you said: [reply from human:me] yes\nn new task \u00b7 Enter open \u00b7 g f place\n",
+    "rev": "1432124944",
+    "text": "#+TITLE: Work\nYour tasks, in their places.\n\n* Places\nAll places\nDesign\nomega\nTest\nwork\n* NEEDS YOU (1)\nt-34 \u00b7 idle \u00b7 Shell work \u00b7 Shall I go ahead?\n* RECENTLY FINISHED (4)\nt-25 \u00b7 done \u00b7 Read the brief \u00b7 Offline run finished; you said: [reply from human:me] Yes, go ahead\nt-19 \u00b7 cancelled \u00b7 Explain selected text \u00b7 Waiting for your answer.\nt-10 \u00b7 done \u00b7 Phone work \u00b7 Offline run finished; you said: [reply from human:me] yes\nt-1 \u00b7 done \u00b7 Desktop work \u00b7 Offline run finished; you said: [reply from human:me] yes\nn new task \u00b7 Enter open \u00b7 g f place\n",
     "title": "workspace:all"
   },
   "identity": {
@@ -166,13 +228,14 @@
     "ok": true,
     "path": "launch:identity",
     "readOnly": true,
-    "rev": "{\"db\":\"/tmp/omega-pocket-proof-6dpmwudd/world/db\",\"frontend\":\"848027892cb07ccf1689a5b81dba18ee5346e5deb8a422ef7991c356a18491d5\",\"host\":\"7627d7a54918f819ef41cde3e67aef5968bc3ecd983421c9878952da0ddc9f52\",\"live\":false,\"port\":47537,\"root\":\"/home/user/code/undefine/omega\",\"routes\":{\"omega.localhost\":\"/?use=packages&file=package:catalog\",\"pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org\",\"spikes.pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org\"},\"schema\":\"omega.dev-session\",\"version\":1}",
-    "text": "{\"db\":\"/tmp/omega-pocket-proof-6dpmwudd/world/db\",\"frontend\":\"848027892cb07ccf1689a5b81dba18ee5346e5deb8a422ef7991c356a18491d5\",\"host\":\"7627d7a54918f819ef41cde3e67aef5968bc3ecd983421c9878952da0ddc9f52\",\"live\":false,\"port\":47537,\"root\":\"/home/user/code/undefine/omega\",\"routes\":{\"omega.localhost\":\"/?use=packages&file=package:catalog\",\"pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org\",\"spikes.pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org\"},\"schema\":\"omega.dev-session\",\"version\":1}",
+    "rev": "{\"db\":\"/tmp/omega-pocket-proof-6uwemmgq/world/db\",\"frontend\":\"17e0f4ab4f1c6b43e477840f0aa3eaf4e3cad81ee55167b22c81736a7a024cc3\",\"host\":\"e307c8b815408a9c4c3170dd4d30c41bb300fe8a3ee4a7d4cbebb254782d7e03\",\"live\":false,\"port\":38361,\"root\":\"/home/user/code/undefine/omega\",\"routes\":{\"omega.localhost\":\"/?use=packages&file=package:catalog\",\"pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org\",\"spikes.pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org\"},\"schema\":\"omega.dev-session\",\"version\":1}",
+    "text": "{\"db\":\"/tmp/omega-pocket-proof-6uwemmgq/world/db\",\"frontend\":\"17e0f4ab4f1c6b43e477840f0aa3eaf4e3cad81ee55167b22c81736a7a024cc3\",\"host\":\"e307c8b815408a9c4c3170dd4d30c41bb300fe8a3ee4a7d4cbebb254782d7e03\",\"live\":false,\"port\":38361,\"root\":\"/home/user/code/undefine/omega\",\"routes\":{\"omega.localhost\":\"/?use=packages&file=package:catalog\",\"pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org\",\"spikes.pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org\"},\"schema\":\"omega.dev-session\",\"version\":1}",
     "title": "launch:identity"
   },
   "machine": {
+    "namespace": "omega.w.w6714.human",
     "ok": true,
-    "result": "{:env {:path \"/tmp/omega-pocket-proof-6dpmwudd/world/db\", :world \"w6298\"}, :tasks 4}"
+    "result": "{:env {:path \"/tmp/omega-pocket-proof-6uwemmgq/world/db\", :world \"w6714\"}, :tasks 5}"
   },
   "files": [
     [

@@ -17,7 +17,7 @@ if [ -z "${BLED_ROOT:-}" ]; then
   done
 fi
 : "${BLED_ROOT:?Set BLED_ROOT to the pinned Beam Lisp source tree.}"
-bin/bl test spikes/mobile/test/shared_world_test.bl spikes/mobile/test/attention_test.bl test/actor_test.bl test/task_test.bl test/frontend_test.bl test/dev_host_test.bl
+bin/bl --cold test spikes/mobile/test/shared_world_test.bl spikes/mobile/test/attention_test.bl test/actor_test.bl test/task_test.bl test/frontend_test.bl test/dev_host_test.bl
 node --test spikes/mobile/test/drive.test.mjs
 node spikes/mobile/test/host-browser.mjs
 for test in spikes/workspace/test/*drive*.mjs spikes/dwim/test/drive.test.mjs spikes/present/test/scroll.test.mjs vendor/bl-ed/test/*.test.mjs; do

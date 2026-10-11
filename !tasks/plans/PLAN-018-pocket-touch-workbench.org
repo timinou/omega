@@ -6,16 +6,16 @@ User approved the complete 54-point review and autonomous implementation with
 incremental commits and browser proof. Scope and acceptance criteria:
 [[file:../../research/pocket-ux-review-2026-10-11.org]].
 
-* TODO Interaction continuity
+* DONE Interaction continuity
 Stable DOM identities, disclosures, unfinished fields, new-task drafts,
 world-scoped session restore, browser navigation, modal focus and dirty guard.
-* TODO Shared visual language and task presentation
+* DONE Shared visual language and task presentation
 Omega tokens, type, touch geometry, structured text, compact titles, canonical
 answers, useful execution rows, turn status, responsive composer.
-* TODO Places, context and buffers
+* DONE Places, context and buffers
 Native attachment/settings, server directory browsing, explicit context,
 correct defaults, named places, recent/pinned buffers and places.
-* TODO Reading, review, attention and machine
+* DONE Reading, review, attention and machine
 Structured source-mapped reader, find/outline, passage selection, artifacts,
 attributed unified review and guarded undo, personal attention, contextual
 command search and retained live-machine REPL.
@@ -27,3 +27,7 @@ preserving the live store. Record physical-device limits explicitly.
 
 No test writes port 8790. Implementation proofs use isolated worlds and files.
 No new task authority, editor implementation or shared-table mutation.
+
+Proof is green: 193 editor/package tests, 36 presentation variants, root/workspace
+backend and delta checks, two-client and touch journeys, durable restart.
+Live adoption pending; proof: spikes/mobile/proof/touch-workbench/README.org.
