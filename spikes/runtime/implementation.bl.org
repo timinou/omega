@@ -48,7 +48,7 @@ were run afterward. The final clean release is 070720a3 / 3bc51aa2: all 67 Omega
 assertions pass. Its shared frontend passes 68 Pelagic, 75 vendored editor and
 four Runtime package drive tests. The unchanged presentation checker passes
 11 welcome and 12 Pelagic variants (a temporary printStr export alias adapts
-only its legacy diagnostic formatter). Twelve real-browser lifecycle checks
+only its legacy diagnostic formatter). Fourteen real-browser lifecycle checks
 pass in a private offline memory world, including Pocket at phone width.
 
 The actual Worker test performs 100 lease cycles and two complete 1024-row
@@ -83,3 +83,15 @@ The populated upstream observation benchmark measured 172 ms → 0.64 ms P95 for
 128 rows, using direct lowering of the same checked BL projection. That excludes
 DOM and physical audio/video output. Measurements and artifact hashes are in
 Beam Lisp's docs/proof/runtime-observation/ directory.
+
+* Reading while the system changes
+The host now uses the generic DOM-only =web/dom-patch.mjs= leaf from vendored
+bl-ed. Stable resource keys retain controls across samples; keyed reordering
+restores focus, and user-opened timing details stay open. Live-sample proof also
+checks scroll preservation. Removed resources are removed from the DOM.
+
+The final browser artifact is
+=bf1fb82399a9c04a0b7b9c496daa23bb6252c5a217f10b500fb328aa0d266359=.
+Its asset-only rebuild reused the checked BL graph in 1.9 seconds. Fourteen
+private-browser checks pass with no page errors. This is incremental painting,
+not the completed generic inspector/domain-contribution extraction.

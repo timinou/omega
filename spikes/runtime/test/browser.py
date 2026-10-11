@@ -38,6 +38,18 @@ with tempfile.TemporaryDirectory(prefix='omega-runtime-proof-') as temp:
     page.get_by_role('treeitem').filter(has_text='BEAM · PID').wait_for(timeout=30000)
     for name in ['Ownership','Active work','Health & timing','Builds & revisions','Selected item']:assert page.get_by_role('heading',name=name,exact=True).is_visible()
     checked('all five sections render live backend ownership')
+    assert page.evaluate('''async () => {
+      const {patchHTML}=await import(new URL('dom-patch.mjs',location.href));
+      const fixture=document.createElement('div');document.body.append(fixture);
+      try {
+        patchHTML(fixture,'<button data-key="a">A</button><details data-key="b"><summary>B</summary></details>');
+        const a=fixture.firstChild,b=fixture.lastChild;a.focus();b.open=true;
+        patchHTML(fixture,'<details data-key="b"><summary>Updated</summary></details><button data-key="a">Changed</button>');
+        if(fixture.firstChild!==b||fixture.lastChild!==a||!b.open||document.activeElement!==a||a.textContent!=='Changed')return false;
+        patchHTML(fixture,'<p>Removed</p>');return !a.isConnected&&!b.isConnected&&fixture.childNodes.length===1;
+      } finally {fixture.remove();}
+    }''')
+    checked('generic DOM leaf retains keyed identity/focus on reorder and removes obsolete nodes')
     page.get_by_role('button',name='Start actor probe',exact=True).click()
     page.get_by_role('button',name='Cancel',exact=True).wait_for(timeout=10000)
     page.get_by_role('button',name='Cancel',exact=True).click()
@@ -73,6 +85,17 @@ with tempfile.TemporaryDirectory(prefix='omega-runtime-proof-') as temp:
     page.get_by_role('treeitem').filter(has_text='Reported peer tab').wait_for(timeout=15000)
     page.get_by_text('pelagic · reported peer',exact=True).wait_for(timeout=15000)
     checked('another live PELAGIC tab reports package workers and timing')
+    # Sampling must update values without replacing focused controls/details.
+    page.evaluate("""() => {const root=document.querySelector('[data-pane="observatory"] .view-body').shadowRoot;
+      window.retainedDetail=root.querySelector('details');window.retainedDetail.open=true;
+      window.retainedButton=root.querySelector('[data-action="refresh"]');window.retainedButton.focus();
+      window.retainedScroll=root.host;window.retainedScroll.scrollTop=40;
+      window.retainedScrollTop=window.retainedScroll.scrollTop;}""")
+    page.wait_for_timeout(2200)
+    assert page.evaluate("""() => {const root=document.querySelector('[data-pane="observatory"] .view-body').shadowRoot;
+      return window.retainedDetail.isConnected&&window.retainedDetail.open&&root.activeElement===window.retainedButton
+        &&window.retainedScroll.isConnected&&window.retainedScroll.scrollTop===window.retainedScrollTop;}""")
+    checked('sampling preserves focused controls, open details and ownership scroll')
     page.screenshot(path=str(PROOF/'used.png'),full_page=True)
     page.get_by_role('button',name='Open source',exact=True).click()
     page.wait_for_function('window.blEd.state().get(window.blEd.K("path"))==="runtime:source/src/omega/runtime.bl"')

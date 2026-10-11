@@ -383,3 +383,9 @@ compiled in the same frontend graph. Runtime and Pelagic manifests request that
 namespace explicitly. The editor remains the existing vendored bl-ed package;
 this change does not move it into Beam Lisp. Generic actor ownership stays in
 upstream runtime records, rather than this browser resource collector.
+
+`web/dom-patch.mjs` is a DOM-only keyed reconciliation leaf, first used by the
+Runtime host. It preserves unchanged elements and user-opened details while
+updating attributes/text. It imports no Omega/editor model and creates no
+listeners, timers or state registry. Runtime's real-browser proof checks focus,
+open details and ownership scroll across live samples.

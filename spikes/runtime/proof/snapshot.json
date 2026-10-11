@@ -1,20 +1,20 @@
 {
   "backend": {
     "build": {
-      "current": "8d20c422d16167f47d969615868860d0758afa84b65d946c30896704fc3b5e78",
+      "current": "bf1fb82399a9c04a0b7b9c496daa23bb6252c5a217f10b500fb328aa0d266359",
       "generations": [
         {
-          "id": "8d20c422d16167f47d969615868860d0758afa84b65d946c30896704fc3b5e78",
+          "id": "bf1fb82399a9c04a0b7b9c496daa23bb6252c5a217f10b500fb328aa0d266359",
           "pinned": true,
-          "url": "/generations/8d20c422d16167f47d969615868860d0758afa84b65d946c30896704fc3b5e78/"
+          "url": "/generations/bf1fb82399a9c04a0b7b9c496daa23bb6252c5a217f10b500fb328aa0d266359/"
         }
       ],
       "watch": {
         "attempt": 1,
         "candidate": {
-          "generation": "8d20c422d16167f47d969615868860d0758afa84b65d946c30896704fc3b5e78",
-          "path": "/generations/8d20c422d16167f47d969615868860d0758afa84b65d946c30896704fc3b5e78/",
-          "url": "http://127.0.0.1:39019/generations/8d20c422d16167f47d969615868860d0758afa84b65d946c30896704fc3b5e78/"
+          "generation": "bf1fb82399a9c04a0b7b9c496daa23bb6252c5a217f10b500fb328aa0d266359",
+          "path": "/generations/bf1fb82399a9c04a0b7b9c496daa23bb6252c5a217f10b500fb328aa0d266359/",
+          "url": "http://127.0.0.1:32919/generations/bf1fb82399a9c04a0b7b9c496daa23bb6252c5a217f10b500fb328aa0d266359/"
         },
         "error": null,
         "status": "ready"
@@ -22,15 +22,15 @@
     },
     "jobs": [
       {
-        "cancel-at": -576460734512,
-        "cancel-ms": 24,
-        "elapsed-ms": 82,
-        "finished": -576460734488,
-        "id": "#Reference<0.3197886742.268697601.250167>",
+        "cancel-at": -576460737332,
+        "cancel-ms": 25,
+        "elapsed-ms": 262,
+        "finished": -576460737307,
+        "id": "#Reference<0.3593500447.786433.229994>",
         "kind": "probe",
-        "progress": 3,
+        "progress": 9,
         "source": "src/omega/runtime.bl",
-        "started": -576460734570,
+        "started": -576460737569,
         "status": "cancelled",
         "title": "Inspector actor probe"
       }
@@ -47,27 +47,27 @@
     "members": [
       {
         "available": true,
-        "id": "#PID<0.1457.0>",
+        "id": "#PID<0.1439.0>",
         "kind": "process",
-        "memory": 109720,
+        "memory": 89056,
         "message_queue_len": 0,
         "owner": "runtime-prototype-proof",
-        "reductions": 24691,
+        "reductions": 28906,
         "role": "private-work-owner",
-        "since": 1791751910,
+        "since": 1791752258,
         "status": "waiting",
         "title": "private-work-owner"
       },
       {
         "available": true,
-        "id": "#PID<0.2087.0>",
+        "id": "#PID<0.2069.0>",
         "kind": "process",
         "memory": 230664,
         "message_queue_len": 0,
         "owner": "runtime-prototype-proof",
-        "reductions": 2724,
+        "reductions": 2783,
         "role": "service",
-        "since": 1791751913,
+        "since": 1791752260,
         "status": "waiting",
         "title": "service"
       }
@@ -86,43 +86,43 @@
       "resources": [
         {
           "available": true,
-          "id": "#PID<0.1457.0>",
+          "id": "#PID<0.1439.0>",
           "kind": "process",
-          "memory": 109720,
+          "memory": 89056,
           "message_queue_len": 0,
           "owner": "runtime-prototype-proof",
-          "reductions": 24691,
+          "reductions": 28906,
           "role": "private-work-owner",
-          "since": 1791751910,
+          "since": 1791752258,
           "status": "waiting",
           "title": "private-work-owner"
         },
         {
           "available": true,
-          "id": "#PID<0.2087.0>",
+          "id": "#PID<0.2069.0>",
           "kind": "process",
           "memory": 230664,
           "message_queue_len": 0,
           "owner": "runtime-prototype-proof",
-          "reductions": 2724,
+          "reductions": 2783,
           "role": "service",
-          "since": 1791751913,
+          "since": 1791752260,
           "status": "waiting",
           "title": "service"
         }
       ],
-      "sampled-at": 1791751914352,
+      "sampled-at": 1791752262518,
       "schema": "bl.runtime.observation.v1",
       "scope": {
-        "epoch": "#Reference<0.3197886742.268697601.200068>",
+        "epoch": "#Reference<0.3593500447.786433.194178>",
         "realm": "runtime-prototype-proof",
-        "runtime": "beam-1828563"
+        "runtime": "beam-1905798"
       },
-      "sequence": 3,
+      "sequence": 4,
       "services": [
         {
-          "id": "[:omega-frontend-watch \"/tmp/omega-runtime-proof-cfs70z15/world\"]",
-          "pid": "#PID<0.2087.0>",
+          "id": "[:omega-frontend-watch \"/tmp/omega-runtime-proof-13tzaaw0/world\"]",
+          "pid": "#PID<0.2069.0>",
           "status": "live"
         }
       ],
@@ -131,9 +131,9 @@
       "total": 2,
       "truncated": false,
       "vm": {
-        "id": "beam-1828563",
-        "memory": 1507989048,
-        "pid": "1828563",
+        "id": "beam-1905798",
+        "memory": 1507645992,
+        "pid": "1905798",
         "processes": 424
       }
     },
@@ -143,34 +143,34 @@
       "members": 2,
       "title": "runtime-prototype-proof"
     },
-    "sampled-at": 1791751914353,
+    "sampled-at": 1791752262519,
     "schema": "omega.runtime.v1",
     "scope": "This Omega world and its project realm; browser reports are separate",
     "services": [
       {
-        "id": "[:omega-frontend-watch \"/tmp/omega-runtime-proof-cfs70z15/world\"]",
-        "pid": "#PID<0.2087.0>",
+        "id": "[:omega-frontend-watch \"/tmp/omega-runtime-proof-13tzaaw0/world\"]",
+        "pid": "#PID<0.2069.0>",
         "status": "live"
       }
     ],
     "vm": {
-      "id": "beam-1828563",
-      "memory": 1507989048,
-      "pid": "1828563",
+      "id": "beam-1905798",
+      "memory": 1507645992,
+      "pid": "1905798",
       "processes": 424
     },
     "world": {
-      "root": "/tmp/omega-runtime-proof-cfs70z15/world",
+      "root": "/tmp/omega-runtime-proof-13tzaaw0/world",
       "source": "src/omega/ed/main.bl"
     }
   },
   "browser": [
     {
-      "at": 1791751913876,
+      "at": 1791752262514,
       "resources": [],
       "schema": "bl.runtime.observation.v1",
-      "sequence": 1,
-      "session": "ae5ecf9a-652f-477f-84dc-f0f6bdc3cef5",
+      "sequence": 2,
+      "session": "92dcb5a7-fadb-4374-b1ab-edbaa1323d62",
       "target": "javascript"
     }
   ]
