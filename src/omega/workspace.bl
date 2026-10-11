@@ -61,7 +61,7 @@
           (let [r (harness/eval-cell {:ns ns :root (:root sys) :path "pocket"}
                     (str "(ns " ns " (:require [omega.task] [omega.env]))\n" code) 120000)]
             (if (:error r) {:ok false :message (:error r)}
-              {:result (str (:stdout r) (:value r))}))
+              {:namespace ns :result (str (:stdout r) (:value r))}))
           (finally (BeamLisp.Env/undefine_var ns "world")))))))
 (defn intents [sys server]
   (assoc (merge (places/intents sys) (links/intents sys) (buffers/intents sys server))

@@ -1,6 +1,6 @@
 ; Domain documents remain plain text plus typed provider objects.
 (ns ws.desk-server
-  (:require [omega.task :as task] [omega.env :as env] [omega.ui.model :as model] [place.model :as place] [links.model :as link]
+  (:require [omega.task :as task] [omega.loop :as loop] [omega.env :as env] [omega.ui.model :as model] [place.model :as place] [links.model :as link]
             [bl-ed.serve :as serve] [clojure.string :as str]))
 (defn- emit [d text object]
   (cond-> (update d :lines conj text) object (update :objects conj (assoc object :row (count (:lines d))))))
@@ -18,13 +18,13 @@
         d (emit d "* Places" nil)
         d (emit d "All places" {:type "desk/scope" :key "workspace:all" :title "All places" :active all? :depth 0})
         d (reduce (fn [d [id p]] (emit d (:name p) {:type "desk/scope" :key (str "workspace:" id) :place id :title (:name p)
-                                                  :active (= scope id) :depth (inc (dec (count (place/ancestors places id))))}))
+                                                  :root (place/root places id) :settings (place/settings places id) :active (= scope id) :depth (inc (dec (count (place/ancestors places id))))}))
                   d (sort-by (fn [[id _]] (str/join "/" (map :id (reverse (place/ancestors places id))))) places))
         d (reduce (fn [d [label rs]]
                     (if (empty? rs) d
                       (reduce (fn [d r] (emit d (str (:id r) " · " (name (:status r)) " · " (:title r) " · " (or (some-> (:asks r) first :text) (:result r) (:goal r)))
                         {:type "omega/task" :key (:id r) :title (:title r) :goal (:goal r) :status (name (:status r))
-                         :place (:place r) :home (:home r) :cwd (:cwd r) :folder (folder-address sys r) :artifacts (:artifacts (task-context sys (:id r)))
+                         :place-name (get-in places [(:place r) :name]) :place (:place r) :home (:home r) :cwd (:cwd r) :folder (folder-address sys r) :artifacts (:artifacts (task-context sys (:id r)))
                          :ask (some-> (:asks r) first :text)
                          :summary (or (some-> (:asks r) first :text) (:result r) (:goal r))}))
                         (emit d (str "* " label " (" (count rs) ")") nil) rs))) d groups)
@@ -54,8 +54,9 @@
                        (sort-by (fn [m] [(if (= :output (:kind m)) 0 1) (:id m)]) refs))
         home (:home t)]
     {:desk "task" :task-id id :task-at (:at t) :task-title (:title t) :task-status (name (:status t)) :task-result (:result t)
+     :turns (loop/turns sys id) :questions (vec (or (some-> (model/task-rows e [id]) first :asks) []))
      :ask (some-> (model/task-rows e [id]) first :asks first :text)
-     :place (:place t) :cwd (:cwd t) :folder (folder-address sys t) :home home
+     :place-name (get-in (place/all e) [(:place t) :name]) :place (:place t) :cwd (:cwd t) :folder (folder-address sys t) :home home
      :artifacts (reduce (fn [out a] (if (some (fn [old] (and (= (:path old) (:path a)) (= (:block old) (:block a)))) out)
                                    out (conj out a))) []
                        (concat artifacts (changed-files sys t) (when home [(assoc home :label "Plan / home" :kind "home")])))}))

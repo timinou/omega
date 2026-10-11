@@ -1,7 +1,7 @@
 (ns pocket-shared-world-test
   (:require [omega.ed.main :as host] [omega.env :as env] [omega.task :as task]
             [omega.loop :as loop] [omega.workspace :as workspace] [omega.packages :as packages]
-            [place.model :as place] [buffer.model :as buffer]
+            [place.model :as place] [place.server :as places] [ws.desk-server :as desk] [buffer.server :as changes] [buffer.model :as buffer]
             [pelagic.build :as build] [pelagic.launch :as launch]))
 
 (deftest pocket-belongs-to-the-shared-frontend-and-launcher
@@ -31,6 +31,11 @@
         (is (= root (:cwd (task/view (:sys h) id))))
         (is (= "Agent edit\n" (File/read! (str root "/note.org"))))
         (is (= 1 (count (buffer/operations (:env h) (str root "/note.org")))))
+        (is (seq (:turns (desk/task-context (:sys h) id))))
+        (is (= (Path/basename root) (:place-name (desk/task-context (:sys h) id))))
+        (is (= root (:root (first (:objects (places/tree-doc (:sys h)))))))
+        (is (= "Agent edit" (:new (first (:objects (changes/changes-doc (:sys h) "work:project/note.org"))))))
+        (is (= root (get-in (places/directory-doc root) [:data :directory])))
         (is (not (File/exists? (str root "/.omega/ed"))))
         (swap! (:state (:packages h)) update :active conj "atlas")
         (swap! (:cache (:packages h)) assoc "atlas" {:step (fn [_] (loop/say "Profile")) :tools []})
