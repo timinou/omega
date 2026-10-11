@@ -59,3 +59,28 @@ Frontend =17e0f4ab4f1c6b43e477840f0aa3eaf4e3cad81ee55167b22c81736a7a024cc3=.
 Backend/editor/presentation checks and the final root launch/browser/persistence
 run are separate recorded check groups. The corrected touch driver explicitly
 selects a review file rather than depending on an asynchronous default selection.
+
+The final compiled package was also copied into the editor's generated
+=web/out= and =web/pkg= directories; all 19 default-path Pocket drive tests pass.
+
+* Live adoption
+The verified frontend is active through =bin/bl pocket -- --live --db …=,
+in user service =omega-pocket-touch-20261011.service=. The existing model
+service remains active. The shared VM and other realms were retained.
+
+[[https://interface.tailcb5318.ts.net:8443/?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile][Open Pocket over Tailscale]].
+
+Original store: =/home/user/.local/state/omega-pocket/0a15d6a7189e/db=.
+Backup taken while the host was stopped: =db.pre-touch-20261011= beside it.
+This store remains separate from =.omega/db= and all test fixtures.
+
+[[file:adoption.json][Adoption receipt]] records the exact frontend, store and five retained
+task identities. A read-only browser pass used the actual Tailscale HTTPS URL
+with valid TLS, viewed Work/Places and an existing live-model task, and left an
+execution disclosure open across nine seconds of probes. No new live test task,
+file edit, evaluation, reply or undo was issued. Zero JavaScript page errors.
+
+- [[file:live-work.png][Live Work]] and [[file:live-places.png][live Places]].
+- [[file:live-execution.png][Live expanded execution]] and [[file:live-response.png][live structured response]].
+
+These are Chromium touch-emulation screenshots, not physical-device proof.

@@ -1,5 +1,5 @@
 #+title: PLAN-018 — Pocket touch workbench
-#+status: In progress
+#+status: Complete
 #+date: 2026-10-11
 
 User approved the complete 54-point review and autonomous implementation with
@@ -19,7 +19,7 @@ correct defaults, named places, recent/pinned buffers and places.
 Structured source-mapped reader, find/outline, passage selection, artifacts,
 attributed unified review and guarded undo, personal attention, contextual
 command search and retained live-machine REPL.
-* TODO Proof and adoption
+* DONE Proof and adoption
 Red/green regressions, backend and package contracts, real-editor browser
 scenarios and screenshots, vendor drive tests, unchanged presentation check,
 use/unuse proof. Build immutable candidate and activate approved result while
@@ -30,4 +30,9 @@ No new task authority, editor implementation or shared-table mutation.
 
 Proof is green: 193 editor/package tests, 36 presentation variants, root/workspace
 backend and delta checks, two-client and touch journeys, durable restart.
-Live adoption pending; proof: spikes/mobile/proof/touch-workbench/README.org.
+Activated frontend 17e0f4ab4f1c6b43e477840f0aa3eaf4e3cad81ee55167b22c81736a7a024cc3
+through the root BL launcher, preserving the original live store and all five
+existing task IDs. Tailscale HTTPS and the model service are healthy. Read-only
+live browser checks and screenshots passed with zero JavaScript page errors.
+The stopped-store backup is db.pre-touch-20261011 beside the original store.
+Proof: spikes/mobile/proof/touch-workbench/README.org and adoption.json.
