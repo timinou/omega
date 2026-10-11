@@ -1,0 +1,27 @@
+(ns pelagic.creative-test (:require [pelagic.take :as take] [pelagic.explore :as explore]
+                                  [pelagic.performance :as performance]))
+(deftest takes-retain-source-and-checkpoint-order
+ (let [state (:current (performance/initial))
+       initial (take/create {:state state} {:source "λ"} {:beat 8} {:assets []})
+       changed (assoc-in state [:config :space] 0.6)
+       captured (take/append initial {:kind "active" :beat 12 :state changed})]
+  (is (= "λ" (get-in (take/check captured) [:document :source])))
+  (is (= 0.6 (get-in (take/final-session captured) [:state :config :space])))
+  (is (= 4 (:relative-beat (first (take/timeline captured)))))
+  (is (includes? (take/fork-source captured) "av/commit"))
+  (is (thrown? (take/check (assoc captured :bytes -1))))
+  (is (thrown? (take/check (assoc-in captured [:events 0 :sequence] 9))))))
+(deftest capture-bounds-are-explicit
+ (let [initial (take/create {} {} {} {})
+       full (reduce (fn [t n] (take/append t {:kind "control" :beat n})) initial (range 513))]
+  (is (= 512 (count (:events full))))
+  (is (= false (:reproducible full)))
+  (is (thrown? (take/check full)))))
+(deftest explore-is-bounded-seeded-and-does-not-edit-its-base
+ (let [state (:current (performance/initial)) choices (explore/candidates state 37 4)]
+  (is (= choices (explore/candidates state 37 4)))
+  (is (= 4 (count choices)))
+  (is (every? (fn [choice] (= state (:base choice))) choices))
+  (is (= 4 (count (set (map (fn [choice] (get-in choice [:variation :seed])) choices)))))
+  (is (thrown? (explore/candidates state 37 9)))
+  (is (thrown? (explore/candidates state -1 4)))))

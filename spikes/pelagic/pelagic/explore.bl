@@ -3,8 +3,8 @@
 (ns pelagic.explore)
 (defn next-seed [seed] (mod (* (inc seed) 48271) 2147483647))
 (defn candidates [state seed size]
-  (when-not (and (integer? seed) (<= 0 seed) (< seed 2147483647)
-                (integer? size) (<= 1 size) (<= size 8))
+  (when-not (and (int? seed) (<= 0 seed) (< seed 2147483647)
+                (int? size) (<= 1 size) (<= size 8))
     (throw "Explore needs an integer seed and 1–8 alternatives"))
   (loop [remaining size current seed result []]
     (if (zero? remaining) result

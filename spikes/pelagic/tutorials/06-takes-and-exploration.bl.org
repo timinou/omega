@@ -1,0 +1,50 @@
+#+title: Capture, fork, and explore a performance
+#+status: BL model verified; browser workflow acceptance in progress
+
+* Make one change safely
+Start Pelagic with =bl pelagic.dev= from the project root. Choose PERFORM, edit
+the source below, then AUDITION CODE. The quiet monitor previews the proposed
+state while the active performance keeps running. COMMIT AT BAR accepts it;
+DISCARD PREVIEW leaves the active revision alone.
+#+begin_src beam-lisp
+(av/variation {:seed 37 :density 0.7 :transpose -7})
+#+end_src
+
+* Capture a reproducible state timeline
+CAPTURE TAKE records the starting document, session, transport, asset references,
+and subsequent state/controller checkpoints. FINISH TAKE closes capture.
+SAVE TAKE exports the manifest. REPLAY restores the starting session and queues
+its checkpoints by their captured musical beat. Imported sample assets remain
+content-addressed references; another machine must relink those assets.
+The manifest is bounded to 512 events and 2 MiB. An overflow is explicitly
+incomplete and cannot be presented as a reproducible take.
+
+FORK SOURCE turns the final captured state into an editable =av/commit= block
+in the real editor. This is one undoable edit. Audition the fork before committing.
+A take manifest is distinct from the audiovisual WebM recording; both can be
+kept together, but a recording is not an editable performance account.
+
+* Explore from a fixed base
+Enter a seed and choose EXPLORE. Four alternatives derive deterministically
+from that seed and the current revision. Choose one to audition it. Generate
+again after changing the active state: a stale exploration cannot commit over
+an intervening edit. Save a snapshot before a longer exploration if you want a
+named return point.
+
+The core of exploration is ordinary pure BL, not another browser randomizer:
+#+begin_src beam-lisp
+(require '[pelagic.explore :as explore])
+(explore/candidates {:variation {:seed 37}} 37 4)
+#+end_src
+Metadata generation is bounded to eight small alternatives; expensive score
+preparation remains owned work in the shared actor worker. Actor turns and
+playback reserve admission protect audio from preparation bursts.
+
+* Inspect the source models
+- [[file:../pelagic/take.bl][take.bl]] validates, bounds, forks and projects the beat timeline.
+- [[file:../pelagic/explore.bl][explore.bl]] derives alternatives without changing the base.
+- [[file:../test/creative_test.bl][creative_test.bl]] checks UTF-8 source retention, event order,
+  overflow refusal, deterministic seeds and bounds. Fifteen assertions pass.
+
+Browser recordings, usability results and remaining limitations belong to the
+milestone-7B report; this walkthrough does not claim those checks have passed.

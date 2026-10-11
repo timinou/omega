@@ -10,22 +10,32 @@
    :provenance provenance :events [] :bytes 0 :reproducible true})
 (defn append [take event]
   (if-not (:reproducible take) take
-    (let [size (count (pr-str event)) total (+ (:bytes take) size)]
+    (let [event (assoc event :sequence (count (:events take)))
+          size (erlang/byte_size (pr-str event)) total (+ (:bytes take) size)]
       (if (or (>= (count (:events take)) max-events) (> total max-bytes))
         (assoc take :reproducible false :omitted "Capture exceeded the event/source budget")
-        (-> take (update :events conj (assoc event :sequence (count (:events take))))
+        (-> take (update :events conj event)
                  (assoc :bytes total))))))
 (defn check [take]
-  (when-not (and (= schema (:schema take)) (= version (:version take))
-                (map? (:base take)) (map? (:document take)) (vector? (:events take))
-                (<= (count (:events take)) max-events) (<= (:bytes take) max-bytes))
+  (when-not (and (map? take) (= schema (:schema take)) (= version (:version take))
+                (map? (:base take)) (map? (:document take)) (map? (:transport take))
+                (map? (:provenance take)) (vector? (:events take))
+                (int? (:bytes take)) (<= 0 (:bytes take)) (<= (:bytes take) max-bytes)
+                (<= (count (:events take)) max-events)
+                (every? (fn [event] (and (map? event) (string? (:kind event))
+                                        (erlang/is_number (:beat event)) (<= 0 (:beat event)))) (:events take)))
     (throw "Unsupported or malformed take"))
   (when-not (:reproducible take) (throw "Take capture is incomplete; export its recording as a partial take"))
+  (doseq [index (range (count (:events take)))]
+    (when-not (= index (:sequence (nth (:events take) index)))
+      (throw "Take events are out of sequence")))
+  (when (> (erlang/byte_size (pr-str take)) max-bytes)
+    (throw "Take payload exceeds its byte budget"))
   take)
 (defn final-session [take]
   (check take)
   (reduce (fn [session event]
-            (if (= "active" (:kind event)) (assoc session :state (:state event)) session))
+            (if (contains? #{"active" "control"} (:kind event)) (assoc session :state (:state event)) session))
           (:base take) (:events take)))
 (defn fork-source [take]
   (let [session (final-session take) state (:state session)
@@ -38,3 +48,14 @@
          "Edit the state below, then audition it before committing. Audio assets\n"
          "remain content-addressed references in the companion take manifest.\n\n"
          "#+begin_src beam-lisp\n(av/commit " (pr-str {:quantize :bar :edits edits}) ")\n#+end_src\n")))
+
+(defn replay-events
+  "Ordered state checkpoints at beats relative to the captured transport."
+  [take]
+  (check take)
+  (vec (filter (fn [event] (= "active" (:kind event))) (:events take))))
+(defn timeline [take]
+  (check take)
+  (let [start (get-in take [:transport :beat] 0)]
+    (vec (map (fn [event] (assoc event :relative-beat (max 0 (- (:beat event) start))))
+              (filter (fn [event] (contains? #{"active" "control"} (:kind event))) (:events take))))))
