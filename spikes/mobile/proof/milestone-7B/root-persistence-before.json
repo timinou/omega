@@ -1,0 +1,262 @@
+{
+  "workspace": {
+    "data": {
+      "count": 5,
+      "desk": "rail",
+      "place": null,
+      "scope": "all"
+    },
+    "objects": [
+      {
+        "active": true,
+        "depth": 0,
+        "key": "workspace:all",
+        "row": 4,
+        "title": "All places",
+        "type": "desk/scope"
+      },
+      {
+        "active": false,
+        "cwd": "/tmp/omega-pocket-proof-69asbcil/work",
+        "depth": 1,
+        "key": "workspace:design",
+        "place": "design",
+        "root": "/tmp/omega-pocket-proof-69asbcil/work",
+        "row": 5,
+        "settings": {
+          "cwd": {
+            "from": "design",
+            "value": "."
+          }
+        },
+        "title": "Design",
+        "type": "desk/scope"
+      },
+      {
+        "active": false,
+        "cwd": "/home/user/code/undefine/omega",
+        "depth": 1,
+        "key": "workspace:project",
+        "place": "project",
+        "root": "/home/user/code/undefine/omega",
+        "row": 6,
+        "settings": {},
+        "title": "omega",
+        "type": "desk/scope"
+      },
+      {
+        "active": false,
+        "cwd": "/tmp/omega-pocket-proof-69asbcil/work",
+        "depth": 1,
+        "key": "workspace:test",
+        "place": "test",
+        "root": "/tmp/omega-pocket-proof-69asbcil/work",
+        "row": 7,
+        "settings": {},
+        "title": "Test",
+        "type": "desk/scope"
+      },
+      {
+        "active": false,
+        "cwd": "/tmp/omega-pocket-proof-69asbcil/work",
+        "depth": 1,
+        "key": "workspace:work-8cf0e4e3",
+        "place": "work-8cf0e4e3",
+        "root": "/tmp/omega-pocket-proof-69asbcil/work",
+        "row": 8,
+        "settings": {},
+        "title": "work",
+        "type": "desk/scope"
+      },
+      {
+        "artifacts": [
+          {
+            "block": "t-34",
+            "kind": "home",
+            "label": "Plan / home",
+            "path": "omega:scratch"
+          }
+        ],
+        "ask": "Shall I go ahead?",
+        "cwd": "/tmp/omega-pocket-proof-69asbcil/work",
+        "folder": "folder:work-8cf0e4e3",
+        "goal": "Shell work",
+        "home": {
+          "block": "t-34",
+          "path": "omega:scratch"
+        },
+        "key": "t-34",
+        "place": "work-8cf0e4e3",
+        "place-name": "work",
+        "row": 10,
+        "status": "idle",
+        "summary": "Shall I go ahead?",
+        "title": "Shell work",
+        "type": "omega/task"
+      },
+      {
+        "artifacts": [
+          {
+            "block": null,
+            "kind": "output",
+            "label": "review.bl.org",
+            "path": "work:design/review.bl.org"
+          },
+          {
+            "block": "t-25",
+            "kind": "home",
+            "label": "Plan / home",
+            "path": "omega:scratch"
+          }
+        ],
+        "ask": null,
+        "cwd": "/tmp/omega-pocket-proof-69asbcil/work",
+        "folder": "folder:design",
+        "goal": "Read the complete project brief and tell me what is important. This prompt should remain in its own message without taking over the header.",
+        "home": {
+          "block": "t-25",
+          "path": "omega:scratch"
+        },
+        "key": "t-25",
+        "place": "design",
+        "place-name": "Design",
+        "row": 12,
+        "status": "done",
+        "summary": "Offline run finished; you said: [reply from human:me] Yes, go ahead",
+        "title": "Read the brief",
+        "type": "omega/task"
+      },
+      {
+        "artifacts": [
+          {
+            "block": null,
+            "kind": "input",
+            "label": "long.bl.org",
+            "path": "work:test/long.bl.org"
+          }
+        ],
+        "ask": null,
+        "cwd": "/tmp/omega-pocket-proof-69asbcil/work",
+        "folder": "folder:test",
+        "goal": "Explain selected text\n\nSelected passage from work:test/long.bl.org (revision 0, lines 4\u20134):\nSelected words for the model.",
+        "home": {
+          "block": null,
+          "path": "work:test/long.bl.org"
+        },
+        "key": "t-19",
+        "place": "test",
+        "place-name": "Test",
+        "row": 13,
+        "status": "cancelled",
+        "summary": "Waiting for your answer.",
+        "title": "Explain selected text",
+        "type": "omega/task"
+      },
+      {
+        "artifacts": [
+          {
+            "block": null,
+            "kind": "input",
+            "label": "long.bl.org",
+            "path": "work:test/long.bl.org"
+          },
+          {
+            "block": "t-10",
+            "kind": "home",
+            "label": "Plan / home",
+            "path": "omega:scratch"
+          }
+        ],
+        "ask": null,
+        "cwd": "/tmp/omega-pocket-proof-69asbcil/work",
+        "folder": "folder:test",
+        "goal": "Phone work",
+        "home": {
+          "block": "t-10",
+          "path": "omega:scratch"
+        },
+        "key": "t-10",
+        "place": "test",
+        "place-name": "Test",
+        "row": 14,
+        "status": "done",
+        "summary": "Offline run finished; you said: [reply from human:me] yes",
+        "title": "Phone work",
+        "type": "omega/task"
+      },
+      {
+        "artifacts": [
+          {
+            "block": "t-1",
+            "kind": "home",
+            "label": "Plan / home",
+            "path": "omega:scratch"
+          }
+        ],
+        "ask": null,
+        "cwd": "/tmp/omega-pocket-proof-69asbcil/work",
+        "folder": "folder:test",
+        "goal": "Desktop work",
+        "home": {
+          "block": "t-1",
+          "path": "omega:scratch"
+        },
+        "key": "t-1",
+        "place": "test",
+        "place-name": "Test",
+        "row": 15,
+        "status": "done",
+        "summary": "Offline run finished; you said: [reply from human:me] yes",
+        "title": "Desktop work",
+        "type": "omega/task"
+      },
+      {
+        "key": "hint",
+        "row": 16,
+        "type": "desk/hint"
+      }
+    ],
+    "ok": true,
+    "path": "workspace:all",
+    "readOnly": true,
+    "rev": "1432124944",
+    "text": "#+TITLE: Work\nYour tasks, in their places.\n\n* Places\nAll places\nDesign\nomega\nTest\nwork\n* NEEDS YOU (1)\nt-34 \u00b7 idle \u00b7 Shell work \u00b7 Shall I go ahead?\n* RECENTLY FINISHED (4)\nt-25 \u00b7 done \u00b7 Read the brief \u00b7 Offline run finished; you said: [reply from human:me] Yes, go ahead\nt-19 \u00b7 cancelled \u00b7 Explain selected text \u00b7 Waiting for your answer.\nt-10 \u00b7 done \u00b7 Phone work \u00b7 Offline run finished; you said: [reply from human:me] yes\nt-1 \u00b7 done \u00b7 Desktop work \u00b7 Offline run finished; you said: [reply from human:me] yes\nn new task \u00b7 Enter open \u00b7 g f place\n",
+    "title": "workspace:all"
+  },
+  "identity": {
+    "objects": [],
+    "ok": true,
+    "path": "launch:identity",
+    "readOnly": true,
+    "rev": "{\"db\":\"/tmp/omega-pocket-proof-69asbcil/world/db\",\"frontend\":\"5ef2ea33444ee6ea84226506e3efdde364b0e0dc805f8780a0d92feaa659547b\",\"host\":\"fe44402e0279a18f5db81d8fa6e45bb8594ca3c74bab653fc3e3d77261df9085\",\"live\":false,\"port\":45443,\"root\":\"/home/user/code/undefine/omega\",\"routes\":{\"omega.localhost\":\"/?use=packages&file=package:catalog\",\"pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org\",\"spikes.pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org\"},\"schema\":\"omega.dev-session\",\"version\":1}",
+    "text": "{\"db\":\"/tmp/omega-pocket-proof-69asbcil/world/db\",\"frontend\":\"5ef2ea33444ee6ea84226506e3efdde364b0e0dc805f8780a0d92feaa659547b\",\"host\":\"fe44402e0279a18f5db81d8fa6e45bb8594ca3c74bab653fc3e3d77261df9085\",\"live\":false,\"port\":45443,\"root\":\"/home/user/code/undefine/omega\",\"routes\":{\"omega.localhost\":\"/?use=packages&file=package:catalog\",\"pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org\",\"spikes.pelagic.dev\":\"/?use=pelagic&layout=pelagic&file=spikes/pelagic/tutorials/00-start.bl.org\"},\"schema\":\"omega.dev-session\",\"version\":1}",
+    "title": "launch:identity"
+  },
+  "machine": {
+    "namespace": "omega.w.w3244.human",
+    "ok": true,
+    "result": "{:env {:path \"/tmp/omega-pocket-proof-69asbcil/world/db\", :world \"w3244\"}, :tasks 5}"
+  },
+  "files": [
+    [
+      "version",
+      4
+    ],
+    [
+      "journals/0",
+      33554432
+    ],
+    [
+      "partitions/datoms/levels",
+      33
+    ],
+    [
+      "partitions/datoms/manifest",
+      7
+    ],
+    [
+      "partitions/datoms/config",
+      30
+    ]
+  ]
+}
