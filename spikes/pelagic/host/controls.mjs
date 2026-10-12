@@ -54,7 +54,7 @@ export function performanceControls(shadow,api){
   else if(x.dataset.variation)send({kind:'variation',values:{[x.dataset.variation]:+x.value}});
   else if(x.hasAttribute('data-layer'))send({kind:'layer',name:x.value||null,mix:.3});
   else if(x.hasAttribute('data-snapshots')&&x.value)await api.request({kind:'recall',name:x.value});
-  else if(x.hasAttribute('data-open-take')&&x.files[0])await api.replay(JSON.parse(await x.files[0].text()));
+  else if(x.hasAttribute('data-open-take')&&x.files[0]){if(x.files[0].size>2097152)throw new Error('Take exceeds 2 MiB');await api.replay(JSON.parse(await x.files[0].text()));}
   else if(x.hasAttribute('data-open-session')&&x.files[0])await api.load(JSON.parse(await x.files[0].text()));
  }));
  return {update(model,stats){

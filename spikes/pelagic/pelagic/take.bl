@@ -18,10 +18,11 @@
                  (assoc :bytes total))))))
 (defn check [take]
   (when-not (and (map? take) (= schema (:schema take)) (= version (:version take))
-                (map? (:base take)) (map? (:document take)) (map? (:transport take))
+                (map? (:base take)) (map? (get-in take [:base :state])) (map? (:document take)) (map? (:transport take))
                 (map? (:provenance take)) (vector? (:events take))
                 (erlang/is_number (get-in take [:transport :beat]))
                 (erlang/is_number (get-in take [:transport :audioTime]))
+                (<= 0 (get-in take [:transport :beat])) (<= 0 (get-in take [:transport :audioTime]))
                 (int? (:bytes take)) (<= 0 (:bytes take)) (<= (:bytes take) max-bytes)
                 (<= (count (:events take)) max-events)
                 (every? (fn [event] (and (map? event) (string? (:kind event))
@@ -33,6 +34,10 @@
   (doseq [index (range (count (:events take)))]
     (when-not (= index (:sequence (nth (:events take) index)))
       (throw "Take events are out of sequence")))
+  (reduce (fn [previous event]
+            (when (or (< (:audioTime event) (:audioTime previous)) (< (:beat event) (:beat previous)))
+              (throw "Take clock moved backwards"))
+            event) (:transport take) (:events take))
   (when (> (erlang/byte_size (pr-str take)) max-bytes)
     (throw "Take payload exceeds its byte budget"))
   take)
