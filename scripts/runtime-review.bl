@@ -1,0 +1,42 @@
+; A read-only evidence viewer. Reuse the native HTTP/static leaves; no world.
+(ns omega.runtime-review (:require [web]))
+
+(defn- port [args]
+  (let [value (cond
+                (empty? args) 8820
+                (and (= 2 (count args)) (= "--port" (first args)))
+                (erlang/binary_to_integer (second args))
+                :else (throw (ex-info "Use bl runtime.review -- --port N" {})))]
+    (when-not (<= 1024 value 65535)
+      (throw (ex-info "Review port must be between 1024 and 65535" {})))
+    value))
+
+(defn- router [root]
+  (let [static (Plug.Static/init
+                 (list (tuple :at "/") (tuple :from root)
+                       (tuple :content_types {"org" "text/plain; charset=utf-8"})))
+        roots ["/!tasks/reports/runtime-cutover/" "/spikes/runtime/proof/"
+               "/spikes/pelagic/proof/" "/spikes/mobile/proof/"]]
+    (fn [conn]
+      (cond
+        (= "/" (web/path conn))
+        (web/redirect conn "/!tasks/reports/runtime-cutover/index.html")
+
+        (and (contains? #{"get" "head"} (web/method conn))
+             (not-any? #{"." ".."} (erlang/map_get :path_info conn))
+             (or (some #(starts-with? (web/path conn) %) roots)
+                 (contains? #{"/spikes/runtime/inspector.bl.org" "/spikes/pelagic/pelagic.bl.md"
+                              "/spikes/mobile/mobile.bl.md" "/spikes/pelagic/tutorials/06-takes-and-exploration.bl.org"}
+                            (web/path conn))))
+        (let [response (Plug.Static/call conn static)]
+          (if (erlang/map_get :halted response) response (web/text response 404 "Not found")))
+
+        :else (web/text conn 404 "Not found")))))
+
+(let [p (port (vec (BeamLisp/argv)))
+      result (web/serve {:port p :ip (tuple 127 0 0 1) :log :off
+                         :plug (router (BeamLisp/cwd))})]
+  (when-not (= :ok (elem result 0)) (throw (ex-info "Review listener failed" {:result result})))
+  (println (str "Runtime cutover review: http://localhost:" p "/"))
+  (try (receive :stop nil)
+       (finally (Supervisor/stop (elem result 1)))))
