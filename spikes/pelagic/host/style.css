@@ -23,3 +23,11 @@
 .performance-controls button:disabled {opacity:.5}
 @media(prefers-reduced-motion:reduce){button{transition:none}}
 @media(max-width:640px){.performance-row button,.performance-row select,.creative-workflows .file-label{min-height:44px}.performance-controls{padding:8px}.audition-strip{padding:10px}}
+
+@media(max-width:640px){
+ .visual{min-height:180px;flex:none;height:180px}
+ .header{padding:8px 12px!important}.edition{letter-spacing:.08em}
+ .caption{left:16px;bottom:14px}.caption h1{font-size:23px}
+ .visual-actions{right:10px;top:10px}.corner{display:none}
+ .transport{padding:8px;gap:6px}.decks{grid-template-columns:1fr}
+}

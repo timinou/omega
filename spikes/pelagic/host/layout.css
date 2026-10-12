@@ -1,0 +1,7 @@
+/* Owned by a mounted Pelagic view; exact unuse removes this stylesheet. */
+@media(max-width:700px){
+ #panes:has(>.view-host>[data-pelagic-stage]):not(:has(>[data-pane="observatory"])){
+  grid-template-columns:minmax(0,1fr)!important;
+  grid-template-rows:minmax(110px,1fr) minmax(0,4fr);
+ }
+}

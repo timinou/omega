@@ -66,6 +66,7 @@ export function performanceControls(shadow,api){
  $('.revision').textContent=stats.phase+' · REV '+model.revision+(stats.targetBeat!==undefined?' → BEAT '+stats.targetBeat:'');
   $('.audition-state').textContent=stats.audition?(stats.audition.current?(stats.audition.status==='playing'?'◉ AUDITION · QUIET MONITOR':'◷ PREVIEW READY'):'◷ STALE PREVIEW'):'NO PREVIEW';
   container.querySelector('.audition-strip').classList.toggle('previewing',!!stats.audition);
+  $('[data-open-take]').disabled=stats.take==='capturing';
   $('[data-capture]').disabled=!model.playing&&stats.take!=='capturing';
   $('[data-capture]').textContent=stats.take==='capturing'?'■ FINISH TAKE':'● CAPTURE TAKE';
   $('[data-capture]').classList.toggle('active',stats.take==='capturing');
