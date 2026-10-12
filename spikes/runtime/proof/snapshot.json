@@ -1,20 +1,20 @@
 {
   "backend": {
     "build": {
-      "current": "42929e6b531a035be78eadac93d4fca15dacdae28772827c4fa1d971991f2c55",
+      "current": "0c319df07b1632e35d7fde0ad086437d8affa62e3c25a7426186ffa279c41596",
       "generations": [
         {
-          "id": "42929e6b531a035be78eadac93d4fca15dacdae28772827c4fa1d971991f2c55",
+          "id": "0c319df07b1632e35d7fde0ad086437d8affa62e3c25a7426186ffa279c41596",
           "pinned": true,
-          "url": "/generations/42929e6b531a035be78eadac93d4fca15dacdae28772827c4fa1d971991f2c55/"
+          "url": "/generations/0c319df07b1632e35d7fde0ad086437d8affa62e3c25a7426186ffa279c41596/"
         }
       ],
       "watch": {
         "attempt": 1,
         "candidate": {
-          "generation": "42929e6b531a035be78eadac93d4fca15dacdae28772827c4fa1d971991f2c55",
-          "path": "/generations/42929e6b531a035be78eadac93d4fca15dacdae28772827c4fa1d971991f2c55/",
-          "url": "http://127.0.0.1:41045/generations/42929e6b531a035be78eadac93d4fca15dacdae28772827c4fa1d971991f2c55/"
+          "generation": "0c319df07b1632e35d7fde0ad086437d8affa62e3c25a7426186ffa279c41596",
+          "path": "/generations/0c319df07b1632e35d7fde0ad086437d8affa62e3c25a7426186ffa279c41596/",
+          "url": "http://127.0.0.1:57437/generations/0c319df07b1632e35d7fde0ad086437d8affa62e3c25a7426186ffa279c41596/"
         },
         "error": null,
         "status": "ready"
@@ -22,15 +22,15 @@
     },
     "jobs": [
       {
-        "cancel-at": -576460732442,
-        "cancel-ms": 5,
-        "elapsed-ms": 55,
-        "finished": -576460732437,
-        "id": "#Reference<0.3997039998.1354760193.78580>",
+        "cancel-at": -576460729976,
+        "cancel-ms": 21,
+        "elapsed-ms": 160,
+        "finished": -576460729955,
+        "id": "#Reference<0.3685542212.42991618.212048>",
         "kind": "probe",
-        "progress": 1,
+        "progress": 5,
         "source": "src/omega/runtime.bl",
-        "started": -576460732492,
+        "started": -576460730115,
         "status": "cancelled",
         "title": "Inspector actor probe"
       }
@@ -47,27 +47,27 @@
     "members": [
       {
         "available": true,
-        "id": "#PID<0.1439.0>",
+        "id": "#PID<0.2065.0>",
         "kind": "process",
-        "memory": 89056,
+        "memory": 39728,
         "message_queue_len": 0,
         "owner": "runtime-prototype-proof",
-        "reductions": 24139,
+        "reductions": 27384,
         "role": "private-work-owner",
-        "since": 1791756746,
+        "since": 1791768552,
         "status": "waiting",
         "title": "private-work-owner"
       },
       {
         "available": true,
-        "id": "#PID<0.2069.0>",
+        "id": "#PID<0.2728.0>",
         "kind": "process",
         "memory": 230664,
         "message_queue_len": 0,
         "owner": "runtime-prototype-proof",
-        "reductions": 2724,
+        "reductions": 3510,
         "role": "service",
-        "since": 1791756749,
+        "since": 1791768554,
         "status": "waiting",
         "title": "service"
       }
@@ -78,6 +78,10 @@
         "payloads": "not collected",
         "resources": 128
       },
+      "query": {
+        "examined": 2,
+        "indexed": true
+      },
       "realm": {
         "id": "runtime-prototype-proof",
         "members": 2,
@@ -86,43 +90,43 @@
       "resources": [
         {
           "available": true,
-          "id": "#PID<0.1439.0>",
+          "id": "#PID<0.2065.0>",
           "kind": "process",
-          "memory": 89056,
+          "memory": 39728,
           "message_queue_len": 0,
           "owner": "runtime-prototype-proof",
-          "reductions": 24139,
+          "reductions": 27384,
           "role": "private-work-owner",
-          "since": 1791756746,
+          "since": 1791768552,
           "status": "waiting",
           "title": "private-work-owner"
         },
         {
           "available": true,
-          "id": "#PID<0.2069.0>",
+          "id": "#PID<0.2728.0>",
           "kind": "process",
           "memory": 230664,
           "message_queue_len": 0,
           "owner": "runtime-prototype-proof",
-          "reductions": 2724,
+          "reductions": 3510,
           "role": "service",
-          "since": 1791756749,
+          "since": 1791768554,
           "status": "waiting",
           "title": "service"
         }
       ],
-      "sampled-at": 1791756751935,
+      "sampled-at": 1791768558585,
       "schema": "bl.runtime.observation.v1",
       "scope": {
-        "epoch": "#Reference<0.3997039998.1354760193.42248>",
+        "epoch": "#Reference<0.3685542212.43253761.185972>",
         "realm": "runtime-prototype-proof",
-        "runtime": "beam-2910299"
+        "runtime": "beam-1415390"
       },
-      "sequence": 3,
+      "sequence": 4,
       "services": [
         {
-          "id": "[:omega-frontend-watch \"/tmp/omega-runtime-proof-o3wa96cm/world\"]",
-          "pid": "#PID<0.2069.0>",
+          "id": "[:omega-frontend-watch \"/tmp/omega-runtime-proof-iqybxbsj/world\"]",
+          "pid": "#PID<0.2728.0>",
           "status": "live"
         }
       ],
@@ -131,9 +135,9 @@
       "total": 2,
       "truncated": false,
       "vm": {
-        "id": "beam-2910299",
-        "memory": 1509302440,
-        "pid": "2910299",
+        "id": "beam-1415390",
+        "memory": 1508360728,
+        "pid": "1415390",
         "processes": 425
       }
     },
@@ -143,34 +147,34 @@
       "members": 2,
       "title": "runtime-prototype-proof"
     },
-    "sampled-at": 1791756751936,
+    "sampled-at": 1791768558587,
     "schema": "omega.runtime.v1",
     "scope": "This Omega world and its project realm; browser reports are separate",
     "services": [
       {
-        "id": "[:omega-frontend-watch \"/tmp/omega-runtime-proof-o3wa96cm/world\"]",
-        "pid": "#PID<0.2069.0>",
+        "id": "[:omega-frontend-watch \"/tmp/omega-runtime-proof-iqybxbsj/world\"]",
+        "pid": "#PID<0.2728.0>",
         "status": "live"
       }
     ],
     "vm": {
-      "id": "beam-2910299",
-      "memory": 1509302440,
-      "pid": "2910299",
+      "id": "beam-1415390",
+      "memory": 1508360728,
+      "pid": "1415390",
       "processes": 425
     },
     "world": {
-      "root": "/tmp/omega-runtime-proof-o3wa96cm/world",
+      "root": "/tmp/omega-runtime-proof-iqybxbsj/world",
       "source": "src/omega/ed/main.bl"
     }
   },
   "browser": [
     {
-      "at": 1791756751546,
+      "at": 1791768558556,
       "resources": [],
       "schema": "bl.runtime.observation.v1",
-      "sequence": 1,
-      "session": "c72ce3cf-d78f-4f7d-9ec3-dc4320564d78",
+      "sequence": 3,
+      "session": "23030aad-e790-4ddb-849c-584384ba6486",
       "target": "javascript"
     }
   ]
