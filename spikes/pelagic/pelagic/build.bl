@@ -4,7 +4,7 @@
             [pelagic.actor-build :as actors] [pelagic.artifact :as artifact]
             [omega.frontend :as frontend] [omega.artifacts :as artifacts]))
 
-(def compiler "070720a3")
+(def compiler "71638f46")
 (defn home []
   (Path/expand ".." (Path/dirname (BeamLisp.Loader/source_path "pelagic.build"))))
 (defn root [] (Path/expand "../.." (home)))
@@ -95,8 +95,10 @@
 (defn graph-input? [path]
   ; Launch programs cannot affect the browser graph. Compiler/build/actor
   ; helpers remain conservative inputs until upstream reports all dependencies.
-  (not (contains? #{"/pelagic/launch.bl" "/dev.bl" "/frontend.bl" "/local-task.bl" "/bundle.bl" "/watch.bl"}
-    (when (starts-with? path (home)) (subs path (count (home)))))))
+  (and (not (starts-with? path (str (home) "/tutorials/")))
+       (not (contains? #{(str (home) "/live-set.bl.org") (str (home) "/demo.bl.org")} path))
+       (not (contains? #{"/pelagic/launch.bl" "/dev.bl" "/frontend.bl" "/local-task.bl" "/bundle.bl" "/watch.bl"}
+    (when (starts-with? path (home)) (subs path (count (home))))))))
 (defn graph-fingerprint []
   (let [entries (mapcat sources (:paths (assembly)))]
     (artifact/sha256 (json/encode [(compiler-identity) (manifest-inputs)
