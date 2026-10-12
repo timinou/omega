@@ -188,3 +188,19 @@ Run `spikes/pelagic/build.sh --local` to invoke the root `env.bl` bundle task.
 It packages this same editor/package with the browser compiler and local document
 storage, for static hosting and offline reload. See [local compilation](local.bl.md)
 for setup, native BL browser interop and the static-browser proof.
+
+
+## Runtime cutover and creative review
+
+[Five recorded workflows and applied visual audit](proof/milestone-7B/report.html)
+shows the real editor with Pelagic used and [after unuse](proof/milestone-7B/after-unuse.png).
+[Safe audition with monitor audio](proof/milestone-7B/audition/safe-audition.webm)
+uses the separate preview voice before an explicit bar-boundary commit.
+[Measurements](proof/milestone-6/report.html) retain the paired raw samples and limits.
+[Walkthrough](../../!tasks/reports/runtime-cutover/README.bl.org) explains ownership,
+compiler evidence and the shared server/static package graph.
+
+The contract gates include the package drive suite, the vendored editor suite,
+and the unchanged default-presentation equivalence checker. Their logs are
+retained in [milestone 6](proof/milestone-6/). The recorded browser scenarios use
+private disposable worlds or static hosting; they never write to port 8790.

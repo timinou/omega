@@ -13,6 +13,15 @@ bin/bl omega.stop
 contains the complete operating instructions. The shared launcher preserves the original durable store; independent stores
 remain separate.
 
+## Recorded usage review
+
+[Interactive Pocket journeys](proof/milestone-7B/report.html) show the real package
+in desktop, narrow and short layouts, with [after-unuse evidence](proof/milestone-7B/13-unused.png).
+The private root-task launch proof exercises shared VM/world reuse, concurrent
+clients, durable restart and guarded document undo. The visual audit removes
+stale question/summary presentation from terminal tasks without changing their
+source history. [Walkthrough](../../!tasks/reports/runtime-cutover/07B-review.bl.org).
+
 ## Behavior
 
 - Work projects unresolved questions, active work and completed tasks from shared
