@@ -113,7 +113,7 @@ const restored=new Set(),restoring=new Set();
    body+=conversation(t)+questionMarkup;
    const result=d['task-result'];if(result&&!d.turns?.some(turn=>(turn.content||[]).some(block=>block.type==='text'&&block.text?.includes(result))))body+=`<article class="message outcome"><div class="message-who">Outcome</div>${rich(result)}</article>`;
    if(d['task-status']==='running')body+='<div class="turn-status" role="status">Working<span aria-hidden="true"> ···</span></div>';
-   else if(d['task-status']==='idle')body+='<div class="turn-status">Answered</div>';
+   else if(d['task-status']==='idle'&&!question)body+='<div class="turn-status">Answered</div>';
    else if(finished(d))body+=`<div class="turn-status">${esc(d['task-status'])}</div>`;
   }else if(s['file-path']&&file().path!==s['file-path'])body=empty('Opening…','');
   else if(which==='plan')body=artifactList(d)+((s['file-path']&&file().path===s['file-path'])?artifactView(file(),home,artifact):'');

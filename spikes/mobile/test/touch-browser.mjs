@@ -39,7 +39,7 @@ try{
  await ui.locator('[data-field="new-title"]').fill('Read the brief');
  await ui.locator('[data-field="new-goal"]').fill('Read the complete project brief and tell me what is important. This prompt should remain in its own message without taking over the header.');
  await ui.locator('form[data-form="new"] button[type="submit"]').click();await ui.getByRole('heading',{name:'Read the brief',exact:true}).waitFor();
- await ui.locator('.question-card').waitFor();const taskPath=await p.evaluate(()=>blEd.F.d_editor(blEd.frame(),blEd.K('task')).get(blEd.K('path')));
+ await ui.locator('.question-card').waitFor();assert.equal(await ui.locator('.turn-status').filter({hasText:'Answered'}).count(),0,'an unresolved question is not answered');const taskPath=await p.evaluate(()=>blEd.F.d_editor(blEd.frame(),blEd.K('task')).get(blEd.K('path')));
  assert.equal((await doc(taskPath)).data.cwd,root);assert.equal((await doc(taskPath)).data['place-name'],'Design');
  assert.equal(await ui.locator('.task-title').evaluate(e=>e.getBoundingClientRect().height)<70,true);
  assert.equal(await ui.locator('.result-card').count(),0);assert.equal(await ui.locator('[data-act="yes"],[data-act="no"]').count(),0);
