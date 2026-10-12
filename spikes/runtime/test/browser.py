@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='omega-runtime-proof-') as temp:
     time.sleep(.1)
    with sync_playwright() as p:
     browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM','/home/user/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome'),args=['--no-sandbox','--autoplay-policy=no-user-gesture-required'])
-    context=browser.new_context(viewport={'width':1600,'height':1100},accept_downloads=True)
+    context=browser.new_context(viewport={'width':1600,'height':1100},accept_downloads=True,**({'record_video_dir':str(PROOF/'review-raw'),'record_video_size':{'width':1600,'height':1100}} if os.environ.get('RUNTIME_REVIEW_VIDEO') else {}))
     page=context.new_page();page.on('pageerror',lambda e:report['errors'].append(str(e)))
     page.goto(base+'?use=inspector&layout=inspector&file=notes.bl.org')
     page.get_by_role('heading',name='Owned work, in view').wait_for(timeout=90000)
@@ -48,7 +48,8 @@ with tempfile.TemporaryDirectory(prefix='omega-runtime-proof-') as temp:
     page.get_by_role('heading',name='Owned work, in view').wait_for(timeout=90000)
     page.get_by_role('treeitem').filter(has_text='BEAM · PID').wait_for(timeout=30000)
     for name in ['Ownership','Active work','Health & timing','Builds & revisions','Selected item']:assert page.get_by_role('heading',name=name,exact=True).is_visible()
-    checked('all five sections render live backend ownership')
+    page.get_by_text('Compiler evidence · source-bound, conservative',exact=True).wait_for(timeout=15000)
+    checked('all five sections render live backend ownership and immutable compiler evidence')
     assert page.evaluate('''async () => {
       const {patchHTML}=await import(new URL('dom-patch.mjs',location.href));
       const fixture=document.createElement('div');document.body.append(fixture);
@@ -145,7 +146,9 @@ with tempfile.TemporaryDirectory(prefix='omega-runtime-proof-') as temp:
     assert pocket.evaluate('document.querySelectorAll(\'link[href$="/runtime/layout.css"]\').length===0')
     assert pocket.get_by_role('button',name='Runtime inspector',exact=True).is_visible()
     checked('Pocket entry and unload retain all three editors')
-    assert not report['errors'],report['errors'];context.close();browser.close()
+    assert not report['errors'],report['errors'];video=page.video;context.close();
+    if video:video.save_as(str(PROOF/'inspector-review.webm'))
+    browser.close()
   finally:
    if host.poll() is None:
     os.killpg(host.pid,signal.SIGTERM)

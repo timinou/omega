@@ -1,6 +1,6 @@
 #+title: Runtime cutover inventory
 #+date: 2026-10-11
-#+status: Working inventory; measurement matrix incomplete
+#+status: Production cutover implemented; final browser/measurement acceptance in progress
 
 * Baselines
 The isolated Omega tree starts at 4ebeae5; upstream starts at 03388121. Initial
@@ -34,10 +34,10 @@ so disposing session A must preserve session B's leases. Browser peer reports
 carry descriptive data only; they do not extend native realm authority.
 
 * Execution and logic audit
-- Current ordinary JS lowering and js.actor are still separate execution
-  backends. They share canonical persistent values and callback boundaries.
-  Full actor-profile consolidation remains a real compiler task; it cannot be
-  checked off merely because conversion/value tests pass.
+- Ordinary JS namespaces, evaluation and actor bundles use js.emit, actor/module.mjs
+  and the same host frame kernel. The duplicate actor emitter/prelude, numeric gate,
+  projection emitter and remote-map are deleted (upstream b410b1da). Imported receive
+  resolves the caller’s existing process kernel (71638f46), preserving its mailbox.
 - system.suspension proves non-suspension over checked IR. Unknown calls fail
   closed. Immutable host state/self reads are admitted; writes, critical sections
   and suspension/scheduler entrypoints remain excluded for callback evidence.
@@ -46,8 +46,9 @@ carry descriptive data only; they do not extend native realm authority.
 - runtime.observation keeps active history before completed rows; proc.work
   bounds admission separately. Durable accepted effects still use existing
   proc.admission/queue, rather than this discardable private-work API.
-- Native rows are bounded on output but vm.owner membership enumeration is not
-  yet paged. Delta/loss semantics and broader discipline display are unfinished.
+- Native owner queries are paged before process projection (a7d140a7). Bounded
+  subscriptions carry sequence/loss/resync metadata (34e41a54). Compiler evidence
+  records source provenance and conservative non-suspension (48546571).
 
 * Superseded implementations
 | Implementation | Disposition |
@@ -58,8 +59,8 @@ carry descriptive data only; they do not extend native realm authority.
 | Omega collector-only tests | moved/strengthened upstream |
 | Inspector-owned browser interval | replaced by owned upstream subscription |
 | Pelagic independent preparation spawn | switched to explicit owned actor spawn |
-| Application-specific inspector models/layout variants | not yet extracted into generic package + adapters |
-| Default/direct versus actor compiler execution paths | unresolved consolidation dependency |
+| Application-specific inspector models/layout variants | replaced by ed.inspector plus rtview.presentation adapters (6ec5ed2) |
+| Default/direct versus actor compiler execution paths | removed: one common emitter and frame kernel (b410b1da, 71638f46) |
 | Existing canonical native-value host leaves | retained: shared ABI, not duplicate language semantics |
 | compute-worker physical Worker lease pool | retained: real thread/resource boundary, not a second actor scheduler |
 | Omega editor packaging inside vendored bl-ed | retained by explicit user scope |

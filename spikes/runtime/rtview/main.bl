@@ -39,6 +39,8 @@
 (defn adopt [ed] (if (= (:path ed) "runtime:overview") (open ed) ed))
 (defn intercept [ed ev]
  (case (:type ev)
+  :runtime/evidence (put ed :evidence (:data ev))
+  :runtime/evidence-error (put ed :evidence-error (:message ev))
   :runtime/open (open ed (or (:layout ev) "runtime"))
   :runtime/close (if (:return (state ed)) (close ed) (assoc ed :frame/layout :none))
   :runtime/refresh (if (:paused (state ed)) ed (refresh ed))

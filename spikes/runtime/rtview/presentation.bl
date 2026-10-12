@@ -60,7 +60,13 @@
              (if (seq resources) (map resource-health resources)
                [(text "No package timing reports yet. Open PELAGIC in another tab on this origin.")])))
     (section "builds" "Builds & revisions"
-     (concat [{:type "metrics" :rows [["Serving" (short (:current build))] ["Watcher" (get-in build [:watch :status] "not running")]]}
+     (concat [{:type "metrics" :rows [["Compiler" (short (get-in s [:evidence :compiler]))]
+                                      ["Evidence namespaces" (if (:evidence s) (count (get-in s [:evidence :namespaces])) "Unavailable")]]}
+              (when (:evidence-error s) (text (str "Compiler evidence unavailable: " (:evidence-error s))))
+              (when (:evidence s) {:type "details" :label "Compiler evidence · source-bound, conservative"
+                 :blocks [(text "Non-suspension is inferred from checked ANF. Purity, termination and deadlines remain unknown.")
+                          (json (get-in s [:evidence :namespaces (keyword (or (:namespace selected) "pelagic.performance"))]))]})
+              {:type "metrics" :rows [["Serving" (short (:current build))] ["Watcher" (get-in build [:watch :status] "not running")]]}
               (when (get-in build [:watch :error]) (text (str "Held: " (get-in build [:watch :error]))))
               (when-let [candidate (get-in build [:watch :candidate])]
                (actions [(action "Open candidate" :runtime/candidate {:url (:path candidate)})]))
