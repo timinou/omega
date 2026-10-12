@@ -1,5 +1,5 @@
 #+title: What the latency measurements establish
-#+status: Recorded software measurements; final root launch verification pending
+#+status: Final pinned native, server, local, browser and Worker acceptance recorded
 
 * Reproduce
 Use the optional local generation printed by build/local!, then run from Omega:
@@ -25,17 +25,18 @@ also runs unrelated services; these measurements are not a lab isolation study.
 * Recorded ranges across five trials
 | Reader | Heartbeat P95 ms | Frame P95 ms | Export ms | Missed scheduler events |
 |--------+------------------+--------------+-----------+-------------------------|
-| absent | 10.6–14.3 | 16.7–16.8 | 36.6–61.8 | 0 |
-| paused | 11.4–14.9 | 16.7–33.3 | 43.9–74.1 | 0 |
-| active | 12.5–15.6 | 16.8–33.3 | 46.2–59.6 | 0 |
+| absent | 8.9–16.6 | 16.7–16.8 | 21.0–61.7 | 0 |
+| paused | 8.7–11.9 | 16.7–16.8 | 31.2–38.3 | 0 |
+| active | 9.1–14.0 | 16.7–16.8 | 28.3–40.0 | 0 |
 Heartbeat includes the timer's requested 8 ms period; it is not response latency.
 RAF includes display cadence. Scheduler misses are application counters, not
 physical audio underrun measurements. No acoustic/display latency was measured.
-The 33.3 ms frame tail remains a focused follow-up, as authorized; it does not
-waive any ownership or language-semantic failure.
+The earlier 71638f46 baseline reached 33.3 ms frame P95. The final run
+reached 16.8 ms. Different runs on a shared development host do not establish
+a causal improvement; the raw baseline remains available.
 
-The graphics Worker's retained rolling frame P95 is 53–71 ms across these
-trials, while its reported graphics work P95 is 0.5 ms. These are rolling domain
+The graphics Worker's retained rolling frame P95 is 30–37 ms across these
+trials, while its reported graphics work P95 is 0.3–0.3 ms. These are rolling domain
 counters, not per-trial compositor or physical-output measurements. Their clock,
 queueing and headless rendering behavior need separate profiling; the main-page
 RAF result must not hide this slower graphics cadence.
@@ -49,12 +50,33 @@ No forced reset and no retained Worker remain after cleanup. Final-owner unload
 also retires a resetting Worker after acknowledgment, preserving a live peer.
 
 * Build evidence
-The clean pinned compiler is 71638f46, installed as 649a5355. Its one-time clean
-release build took 8 min 7 s. The full editor/language/package graph plus local
-bundle/ZIP took 3 min 6 s. Subsequent asset/tutorial changes reuse that graph and
-complete in roughly 3–4 s including cold VM startup. Root tasks reuse immutable
-generations and one shared VM; local remains optional packaging, not another
-implementation. Native cache tests retain conservative unknown dependencies.
+The final clean compiler pin is =25f5e799=, installed as =7e72e86a=.
+Its one-time clean release build took 9 min 18 s. The final full graph and local
+ZIP build took 3 min 9 s; reuse of that graph plus local/ZIP work took 1.636 s.
+An asset-only frontend refresh took 1.471 s. Cold root-task startup with a new
+conservative full graph took 206.430 s; that is not a warm-launch result.
+Root tasks reuse immutable generations and one shared VM. Unknown dependencies
+remain conservative. Local is optional packaging of the same implementation.
+The final local/browser and Worker benchmarks use generation =84ef8d29…=;
+recordings retain their own actual source-bound generations.
+
+* Dense canonical actor projection — an explicit regression
+Five fresh Node processes each read 128 projected rows from 129 actors, after
+20 warmups, with 100 measured queries. Query P95 ranges from 52.8 to 67.5 ms.
+The 8 ms heartbeat P95 ranges from 24.0 to 28.8 ms, with maximum gaps
+133.0–165.7 ms. Heartbeat covers import, bootstrap, warmup and measured work;
+its maximum cannot be attributed only to the measured query. Raw samples,
+fixture/compiler identity and canonical host hashes are retained.
+
+The earlier 0.64 ms figure belongs to the removed experimental direct projection
+emitter. It is not the final canonical kernel's performance. A separate initial
+uninstrumented diagnostic reached 101.4 ms query P95 and is also retained;
+it is not paired with the instrumented runs. Correct consolidation is complete,
+but this dense workload misses 16 ms substantially. Profile common-core/frame
+dispatch and root scheduling slices in a dedicated latency session. Preserve
+one execution model; do not revive the deleted emitter as a fast fallback.
+
+[[file:../../../spikes/pelagic/proof/milestone-6/populated-kernel.json][Five raw dense-projection runs]]
 
 * What to investigate next
 Profile the frame tail under export and observation, separating main-thread
@@ -75,9 +97,9 @@ question: a task executor could not resolve =omega.actor/sense-inbox= after a
 DynamicSupervisor started it from an older environment. A focused upstream
 regression reproduced the ownership loss. The fix captures the child-spec
 creator's bindings and reuses them through OTP restart, restoring the caller's
-bindings afterward. Five focused assertions pass, including a real killed-child
-restart. The final root-task/browser rerun is recorded separately; a focused
-unit pass alone is not acceptance of the normal launch path.
+bindings afterward. The strengthened regression has ten assertions covering source and installed
+host, including a real killed-child restart. The actual final root-task/browser
+journey also passes; focused unit results alone were not accepted as proof.
 [[file:../../../spikes/pelagic/proof/milestone-6/root-before-supervisor-fix.log][Original failing journey]] ·
 [[file:../../../spikes/pelagic/proof/milestone-6/supervisor-context.log][Focused regression]]
 
@@ -88,3 +110,24 @@ and installed host, ten assertions passing. This distinguishes a language fix
 from successfully shipping that fix. The final launch results use the new
 =25f5e799= pin; earlier failed releases are retained as regression evidence.
 [[file:../../../spikes/pelagic/proof/milestone-6/supervisor-context-shipped.log][Source and installed-host regression]]
+
+* Final acceptance and provenance
+131 native Omega assertions, 80 editor/Runtime Node tests, 69 Pelagic Node
+contracts and 20 Pocket drive tests pass. The unchanged presentation checker
+passes 11 welcome and 12 Pelagic variants. Actual browser acceptance covers
+15 inspector checks, 15 offline/local checks, five creative workflows, Pocket,
+the shared root launcher and two independently audible server/frontend sessions.
+Worker proof repeats 100 leases, two 1024-row scores, crash/reacquire and final
+zero retained Workers. Cancellation P95 is 4.2 ms; heartbeat P95 is 5.1 ms.
+
+The clean release provenance includes matching seeded/installed supervisor
+bytes. Main-workspace browser proofs also include pre-existing concurrent
+Pocket/workspace changes; those source changes are not part of these commits.
+Software probes report no physical underrun/output latency. GPU timing is
+unavailable in this headless run and the silent onset probe collected no samples.
+The broader workload matrix, isolated inspector DOM overhead, total Worker CPU,
+and real-device latency are measured follow-ups, not completed guarantees.
+
+[[file:../../../spikes/pelagic/proof/milestone-6/pool-final/pool.json][Final physical Worker proof]] ·
+[[file:../../../spikes/pelagic/proof/milestone-6/local-final/report.json][Final offline browser proof]] ·
+[[file:release-provenance.json][Clean pinned release provenance]]

@@ -1,5 +1,5 @@
 #+title: Creative workflows and Pocket — review notebook
-#+status: Pelagic browser acceptance recorded; Pocket recording pending
+#+status: Final Pelagic and Pocket browser journeys recorded; visual audit applied
 
 * Open the real instrument
 From Omega's root use =bl pelagic.dev=. =bl spikes.pelagic.dev= opens the first
@@ -53,20 +53,50 @@ physical speaker/display latency; no browser recording certifies 16 ms output.
 | Final unuse retains an idle Worker | retire after acknowledged cancellation; preserve live peers | focused pool test and offline reload/unuse |
 
 * Recorded timing, with limits
-Fifteen trials retain raw heartbeat/frame samples, five per absent/paused/active
-upstream browser subscription. The active reader heartbeat P95 range is
-12.5–15.6 ms; absent is 10.6–14.3 ms. Both report zero missed scheduler events.
-Frame P95 reaches 33.3 ms in some paused and active trials. This needs a focused
-rendering/CPU investigation; it does not certify physical audio/video latency.
-The graphics Worker's retained rolling frame P95 is 53–71 ms across these
-trials, while its reported graphics work P95 is 0.5 ms. These are rolling domain
-counters, not per-trial compositor or physical-output measurements. Their clock,
-queueing and headless rendering behavior need separate profiling; the main-page
-RAF result must not hide this slower graphics cadence.
-
-These trials measure sampling without inspector DOM. The private browser layout
-checks separately exercise live DOM retention and companion engine identity.
+The final fifteen counterbalanced trials report zero missed scheduler events.
+Active-reader heartbeat P95 is 9.1–14.0 ms; page-frame P95 is 16.7–16.8 ms.
+These trials measure sampling without inspector DOM. Separate private browser
+journeys exercise actual DOM retention and companion engine identity.
+Dense canonical projection is slower: query P95 is 52.8–67.5 ms across five
+runs. Graphics cadence and physical speaker/display output remain separate
+latency investigations. No recording certifies a 16 ms physical response.
+[[file:06-measurements.bl.org][Protocol, final ranges, baseline and limitations]]
 
 [[file:../../../spikes/pelagic/proof/milestone-7B/report.html][Pelagic recording and images]] ·
 [[file:../../../spikes/pelagic/proof/milestone-7B/audition/safe-audition.webm][Safe audition with monitor audio]] ·
 [[file:../../../spikes/pelagic/proof/milestone-6/report.html][Raw measurements and protocol]]
+
+* Pocket audit, applied
+The recorded journey opens a place, restores a draft, answers a real task
+question, follows a generated file, previews and safely undoes an operation,
+reads with outline/find/history, reloads retained Machine state, and unloads the
+package. It checks 320×740, 390×500 and desktop geometry with browser touch
+emulation. This is not a physical-phone acceptance claim.
+
+| Finding | Change | Evidence |
+|---------+--------+----------|
+| Cancelled task still asks for an answer | pure task projection clears terminal question presentation and stale waiting summary | before-narrow.png / 10-narrow.png |
+| Open question says Answered | unresolved question suppresses the idle completion footer | before-awaiting-question.png / 03-conversation.png |
+| Native task cannot resolve its namespace after supervision | upstream creator-context capture survives child restart; matching host seed shipped | source/installed-host regression and root launch |
+
+The existing placement, typography and hierarchy carry the task state. These
+changes remove misleading presentation rather than add explanatory paragraphs.
+The final browser assertion checks that an unresolved question has no Answered
+footer. The two-client launch journey also verifies exactly-once answers,
+conflict preservation, durable restart and listener shutdown.
+
+[[file:../../../spikes/mobile/proof/milestone-7B/report.html][Pocket screenshots and journey video]] ·
+[[file:../../../spikes/mobile/proof/milestone-7B/root-launch.json][Shared-world launch proof]]
+
+* Provenance and review boundary
+The upstream release is a clean commit-pinned build. Browser proofs in the main
+Omega workspace also exercise existing concurrent Pocket/workspace edits; those
+source edits are preserved and excluded from this work's commits. Each recording
+retains its actual immutable frontend generation. Later documentation-only
+rebuilds do not relabel an older recording as a new generation.
+
+All five creative workflows and Pocket have actual browser recordings. Review
+this evidence before widening the scope. Focused latency work remains separate:
+the unified dense actor projection exceeds 16 ms, and graphics clock/queueing
+and physical device output need dedicated measurement. See the measurements
+walkthrough for the final repeated runs and their limits.

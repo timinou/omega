@@ -1,0 +1,40 @@
+Running as unit: run-p1547797-i30908582.service
+PELAGIC: reusing compiled frontend
+PELAGIC: reusing compiled frontend
+PELAGIC: reusing compiled frontend
+PELAGIC: reusing standalone generation
+PELAGIC demo: /home/user/code/undefine/omega/spikes/pelagic/dist/pelagic-local.zip
+
+Testing omega.runtime-test
+
+Testing omega.frontend-test
+
+Testing omega.frontend-watch-test
+
+Testing omega.artifacts-test
+Frontend build in progress; waiting for its publication
+
+Testing pelagic.creative-test
+
+Testing pelagic.build-cache-test
+── ward: warm isolated test run ──
+
+  ✓ omega.runtime-test  52 passed
+  ✓ omega.frontend-test  15 passed
+  ✓ omega.frontend-watch-test  18 passed
+  ✓ omega.artifacts-test  16 passed
+  ✓ pelagic.creative-test  20 passed
+  ✓ pelagic.build-cache-test  10 passed
+
+  6 file(s) passed, 0 failed, 0 incoherent
+  ✓ all green
+js-actors: compiling /home/user/.local/share/drop/7e72e86a/lib/beam_lisp-0.1.0/priv/lib/js/actor/runtime.bl
+js-actors: compiling /tmp/bl-cutover-populated-observation/bench.bl
+js-actors: retained 72/204 definitions
+:native-gates-and-populated-fixture-ready
+:ok
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 29.607s
+             CPU time consumed: 30.609s
+                   Memory peak: 523.4M (swap: 0B)

@@ -1,0 +1,171 @@
+{
+  "crashRecovery": {
+    "nativeWorkerError": "Uncaught Error: owned-worker-failure-proof",
+    "healthyReacquire": true,
+    "activeLeases": 0
+  },
+  "cycles": 100,
+  "completeScores": 2,
+  "scoreRows": 1024,
+  "observed": {
+    "id": 1,
+    "generation": "/pkg/pelagic/prepare-worker.mjs",
+    "scope": "pooled worker",
+    "available": true,
+    "ageMs": 3.0999999940395355,
+    "snapshot": {
+      "limits": {
+        "payloads": "not collected",
+        "resources": 128
+      },
+      "resources": [
+        {
+          "id": [
+            "pid",
+            2,
+            0
+          ],
+          "kind": "actor",
+          "links": 0,
+          "message_queue_len": 0,
+          "owner": null,
+          "status": "running"
+        },
+        {
+          "id": [
+            "pid",
+            2,
+            103
+          ],
+          "kind": "actor",
+          "links": 0,
+          "message_queue_len": 0,
+          "owner": [
+            "pid",
+            2,
+            0
+          ],
+          "status": "waiting"
+        },
+        {
+          "id": [
+            "pid",
+            2,
+            104
+          ],
+          "kind": "actor",
+          "links": 0,
+          "message_queue_len": 0,
+          "owner": [
+            "pid",
+            2,
+            0
+          ],
+          "status": "waiting"
+        }
+      ],
+      "runnable": 0,
+      "schema": "bl.runtime.observation.v1",
+      "scope": {
+        "runtime": 2
+      },
+      "target": "javascript-actor",
+      "total": 3,
+      "truncated": false
+    }
+  },
+  "pooled": {
+    "workers": 1,
+    "active": 0,
+    "resetting": 0,
+    "created": 1,
+    "forced": 0,
+    "actors": [
+      {
+        "id": 1,
+        "generation": "/pkg/pelagic/prepare-worker.mjs",
+        "scope": "pooled worker",
+        "available": true,
+        "ageMs": 19.5,
+        "snapshot": {
+          "limits": {
+            "payloads": "not collected",
+            "resources": 128
+          },
+          "resources": [
+            {
+              "id": [
+                "pid",
+                2,
+                0
+              ],
+              "kind": "actor",
+              "links": 0,
+              "message_queue_len": 0,
+              "owner": null,
+              "status": "running"
+            },
+            {
+              "id": [
+                "pid",
+                2,
+                103
+              ],
+              "kind": "actor",
+              "links": 0,
+              "message_queue_len": 0,
+              "owner": [
+                "pid",
+                2,
+                0
+              ],
+              "status": "waiting"
+            },
+            {
+              "id": [
+                "pid",
+                2,
+                104
+              ],
+              "kind": "actor",
+              "links": 0,
+              "message_queue_len": 0,
+              "owner": [
+                "pid",
+                2,
+                0
+              ],
+              "status": "waiting"
+            }
+          ],
+          "runnable": 0,
+          "schema": "bl.runtime.observation.v1",
+          "scope": {
+            "runtime": 2
+          },
+          "target": "javascript-actor",
+          "total": 3,
+          "truncated": false
+        }
+      }
+    ]
+  },
+  "final": {
+    "workers": 0,
+    "active": 0,
+    "resetting": 0,
+    "created": 3,
+    "forced": 0,
+    "actors": []
+  },
+  "cancelP50Ms": 4.0999999940395355,
+  "cancelP95Ms": 4.200000017881393,
+  "cancelP99Ms": 4.200000017881393,
+  "cancelMaxMs": 4.399999976158142,
+  "heartbeatP50Ms": 5,
+  "heartbeatP95Ms": 5.100000023841858,
+  "heartbeatP99Ms": 5.100000023841858,
+  "heartbeatMaxMs": 5.300000011920929,
+  "digest": "d77e635fea215911aed99b5304c885febfbdbc4542b6f3d0f8d064db90c3ed8b",
+  "independentSessions": true
+}
