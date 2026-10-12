@@ -14,7 +14,10 @@
 (defn- router [root]
   (let [static (Plug.Static/init
                  (list (tuple :at "/") (tuple :from root)
-                       (tuple :content_types {"org" "text/plain; charset=utf-8"})))
+                       (tuple :content_types {})))
+        text-static (Plug.Static/init
+                      (list (tuple :at "/") (tuple :from root)
+                            (tuple :content_types false)))
         roots ["/!tasks/reports/runtime-cutover/" "/spikes/runtime/proof/"
                "/spikes/pelagic/proof/" "/spikes/mobile/proof/"]]
     (fn [conn]
@@ -28,7 +31,13 @@
                  (contains? #{"/spikes/runtime/inspector.bl.org" "/spikes/pelagic/pelagic.bl.md"
                               "/spikes/mobile/mobile.bl.md" "/spikes/pelagic/tutorials/06-takes-and-exploration.bl.org"}
                             (web/path conn))))
-        (let [response (Plug.Static/call conn static)]
+        (let [text? (or (ends-with? (web/path conn) ".org")
+                        (ends-with? (web/path conn) ".md"))
+              response (if text?
+                         (Plug.Static/call
+                           (web/resp-header conn "content-type" "text/plain; charset=utf-8")
+                           text-static)
+                         (Plug.Static/call conn static))]
           (if (erlang/map_get :halted response) response (web/text response 404 "Not found")))
 
         :else (web/text conn 404 "Not found")))))
