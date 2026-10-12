@@ -1,6 +1,28 @@
 #+title: Beam Lisp runtime observability — complete upstream cutover
-#+status: IN_PROGRESS
+#+status: CUTOVER_COMPLETE_THROUGH_7B
 #+date: 2026-10-11
+
+* Final reconciliation — 2026-10-12
+The authoritative completion ledger is [[file:PLAN-020-milestones-1-through-7B.bl.org][PLAN-020]].
+Its requested milestones 1–7 and 7B are complete and the work stops for review.
+The sections below preserve the original design checklist and historical
+checkpoints; unchecked items are not a current implementation status table.
+The production cutover, consumer migration, deletion audit, clean pinned
+release and real-browser review are complete. Mechanisms remain upstream;
+bl-ed stays vendored, and Omega/Pelagic retain domain meaning.
+
+The broader phase-6 workload matrix and pre-frozen observer budget were not
+completed as laboratory guarantees. Actual repeated trials, dense kernel raw
+samples and browser lifecycle/creative scenarios are recorded, with explicit
+limits. Focused latency/device work remains authorized follow-up: canonical
+128-row query P95 52.8–67.5 ms, graphics rolling frame P95 30–37 ms; physical
+speaker/display latency is unmeasured. Do not read historical 0.637 ms direct
+emitter results as current performance: that competing emitter was deleted.
+
+Clean runtime =25f5e799= / installed release =7e72e86a=. Review and tutorials:
+[[file:../reports/runtime-cutover/README.bl.org][Walkthrough]] ·
+[[file:../reports/runtime-cutover/index.html][Interactive review]] ·
+[[file:../reports/runtime-cutover/06-measurements.bl.org][Measurements and follow-ups]].
 
 * Purpose and completion contract
 Replace the Runtime observatory prototype's application-owned runtime machinery

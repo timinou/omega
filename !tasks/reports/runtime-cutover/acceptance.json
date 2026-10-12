@@ -1,0 +1,33 @@
+{
+  "schema": "omega.runtime.cutover.acceptance.v1",
+  "milestones": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "7B"
+  ],
+  "compiler": "25f5e799",
+  "release": "7e72e86a",
+  "localGeneration": "84ef8d293ff280095e7eaf9885759cf1f3500a83c2148798801fe5863c0fcee0",
+  "gates": {
+    "nativeOmegaAssertions": 131,
+    "editorRuntimeNodeTests": 80,
+    "pelagicNodeTests": 69,
+    "pocketDriveTests": 20,
+    "inspectorBrowserChecks": 15,
+    "localBrowserChecks": 15,
+    "pairedBrowserTrials": 15,
+    "denseKernelRuns": 5,
+    "workerLeaseCycles": 100,
+    "completeWorkerScores": 2,
+    "reviewBrowserTabs": 8
+  },
+  "physicalLatencyMeasured": false,
+  "latencyTargetMet": false,
+  "browserProvenance": "Main workspace includes pre-existing concurrent Pocket/workspace edits, preserved outside these implementation commits.",
+  "stop": "7B for user review"
+}

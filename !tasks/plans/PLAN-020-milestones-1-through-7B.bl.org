@@ -1,5 +1,5 @@
 #+title: Runtime consolidation through creative-workflow review
-#+status: IN_PROGRESS
+#+status: COMPLETE_THROUGH_7B
 
 * Authority and stop point
 User requests autonomous implementation of roadmap milestones 1–7, followed by
@@ -18,10 +18,10 @@ Never test against the live world on 8790. Preserve concurrent work.
 | 2 | bounded subscription changes/loss/resync; teardown/race matrix | complete; native and compiled consumer gates pass | upstream 34e41a54; 101 native assertions, 11 Node tests, delivery report |
 | 3 | ordinary JS and actor execution consolidation; semantic parity | complete; ordinary/imported receive and 461 kernel checks pass | upstream b410b1da, 48546571; javascript-actor-functions.bl.org |
 | 4 | compiler/logic evidence and provenance; negative fixtures | complete; native/Node evidence and pinned build verified | upstream 48546571; compiler-runtime-evidence.bl.org |
-| 5 | reusable bl-ed inspector plus domain contributions; standalone proof | drive gates pass on final pin; final browser recheck pending | spikes/runtime/inspector.bl.org; interactive report; 80/68/15 gates |
-| 6 | Pelagic integration and server/local acceptance | server/local/ZIP built; 15 local browser checks pass; paired benchmark running | |
-| 7 | five creative workflows demonstrated and verified | complete; five real UI workflows recorded, 3 replay activations verified | 27d58d1; tutorial 06 | |
-| 7B | manual Pelagic/Pocket use, visual audit applied, recordings and review report | Pelagic audit applied and recorded; Pocket/root-task retest pending | !tasks/reports/runtime-cutover/07B-review.bl.org | |
+| 5 | reusable inspector and thin domain providers; exact unload | complete; 80 editor/Runtime tests and 15 final browser checks | spikes/runtime/proof/inspector-report.html |
+| 6 | same-graph server/local, physical Worker pool and paired benchmarks | complete; 131 native assertions, 69 Pelagic tests, 15 local browser checks, 15 paired trials, 100 Worker cycles and two audible server sessions | spikes/pelagic/proof/milestone-6/report.html |
+| 7 | all five creative workflows exercised and recorded | complete; capture/replay/fork, safe audition, seeded exploration, revision source, shareable local bundle | spikes/pelagic/proof/milestone-7B/report.html |
+| 7B | actual Pelagic/Pocket use, applied visual audit and review | complete; Pocket journeys/root restart/20 drive tests, screenshots and recordings, eight-tab native review launcher tested | !tasks/reports/runtime-cutover/index.html |
 
 Every milestone includes .bl.org explanation/tutorial, a self-contained
 interactive evidence report (local HTML, linking recorded artifacts), and
@@ -48,3 +48,23 @@ Concurrent uncommitted Pocket/workspace changes stay outside our commits.
 
 Record each issue with scenario, before image, impact, change, after image and
 verification. Retest all five workflows and Pocket after applying the audit.
+
+* Final review boundary — 2026-10-12
+All requested milestones 1–7 and 7B are complete. Stop here for user review.
+No live-world writes. No competing legacy execution path retained. Current
+clean runtime pin =25f5e799= / release =7e72e86a=; optional final local generation
+=84ef8d293ff280095e7eaf9885759cf1f3500a83c2148798801fe5863c0fcee0=.
+Recordings retain their actual earlier immutable frontend identities.
+
+The original plan's broader performance matrix and pre-frozen overhead budget
+were not completed as lab guarantees. The accepted cutover records repeated
+paired playback/export trials, actual lifecycle/creative/browser scenarios and
+five dense kernel runs. Focused latency follow-ups are explicit: dense query
+P95 52.8–67.5 ms, graphics rolling frame P95 30–37 ms, no physical 16 ms claim.
+Total Worker CPU, isolated DOM overhead and physical-phone/output tests remain
+measurement work. Unknown compiler cost/purity/termination remain unknown.
+
+Concurrent main Pocket/workspace edits were exercised by browser proofs and
+preserved, not included in implementation commits. See release-provenance.json,
+06-measurements.bl.org and 07B-review.bl.org for guarantees and proof boundaries.
+Review =bl runtime.review= at http://localhost:8820/.

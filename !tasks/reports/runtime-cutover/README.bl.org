@@ -1,5 +1,5 @@
 #+title: One runtime, from ownership to performance
-#+status: Production mechanisms and creative workflows verified; final launch/Pocket review in progress
+#+status: Milestones 1–7 and 7B complete; recorded review ready
 
 * Open the recorded review
 Run =bl runtime.review= from Omega root, then open [[http://localhost:8820/][the review]].
@@ -97,3 +97,33 @@ final review. The exact final results belong to the linked recorded artifacts.
 [[file:../../../spikes/pelagic/tutorials/06-takes-and-exploration.bl.org][Creative showcase]] ·
 [[file:../../../spikes/pelagic/proof/milestone-7B/report.html][Pelagic review]] ·
 [[file:../../../spikes/mobile/proof/milestone-7B/report.html][Pocket review]]
+
+* Final acceptance, and what is deliberately still open
+The final clean upstream pin is =25f5e799= (release =7e72e86a=). Native Omega
+131 assertions, editor/Runtime 80 tests, Pelagic 69 tests and Pocket 20 drive
+tests pass. The unchanged presentation checker passes. Real browser acceptance
+covers the standalone inspector and companions, normal server/frontend, offline
+local bundle, shared root launch, all five creative workflows and Pocket. The
+review launcher itself passes all eight tabs, recorded images, table filtering,
+readable walkthroughs and video byte ranges, with no page errors.
+
+The consolidation removes competing production execution and observation paths.
+It does not meet the 16 ms target everywhere: dense canonical projection reaches
+52.8–67.5 ms P95. The final active-reader page heartbeat is 9.1–14.0 ms P95,
+while the graphics Worker's rolling cadence is 30–37 ms P95. These are different
+probes. Device audio/display latency is unmeasured. The next focused session
+should profile frame dispatch/root slices and graphics queues, then measure
+real devices; keep the single actor model throughout.
+
+[[file:06-measurements.bl.org][Measurements and exact limits]] ·
+[[file:deletion-audit.json][Deleted paths and final graph audit]] ·
+[[file:release-provenance.json][Clean release provenance]] ·
+[[file:report-browser.json][Review launcher browser acceptance]]
+
+To repeat the private review check with Python and Playwright installed:
+#+begin_src sh
+python3 '!tasks/reports/runtime-cutover/reproduce-review.py'
+#+end_src
+This owns a temporary read-only listener and closes it. No live world is used.
+Browser recordings include pre-existing concurrent Pocket/workspace edits in
+the main workspace; those source edits remain outside this work's commits.
