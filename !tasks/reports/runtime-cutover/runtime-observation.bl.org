@@ -109,7 +109,7 @@ through the existing direct JS emitter. Primitive map reads avoid dynamic
 callable dispatch; collection values remain canonical. The first isolated
 comparison measured 0.40 ms P95 and 4.69 ms P99 after specialization. A second
 sequential run measured 172 ms → 0.64 ms P95 (5.63 ms P99); artifacts and
-protocol are in [[file:proof/runtime-observation/environment.json][the measurement record]]. Host background load was not controlled.
+protocol are in [[file:upstream/environment.json][the measurement record]]. Host background load was not controlled.
 
 This is a closed trusted kernel projection, not permission for arbitrary
 non-suspending code to run without scheduling. A separate read/collection leaf
@@ -147,4 +147,21 @@ Run =test/js/check-observations.sh= from a source checkout for the focused
 sequential pipeline. Set =BL_OBSERVATION_BENCH=1= to include the populated
 projection benchmark. Apply the repository's usual memory cap to the script.
 Broader actor checks and the first pinned-release run are recorded in
-[[file:proof/runtime-observation/checks.bl.org][the verification record]].
+[[file:upstream/checks.bl.org][the verification record]].
+
+
+* Supervised work retains its namespace owner
+A DynamicSupervisor can exist before a session or project namespace. A
+=BeamLisp.Supervisor/server= spec captures its creator's environment token;
+=start_server= temporarily binds that token while starting the actual server.
+The new server then conveys those bindings through its ordinary init path.
+OTP restart reuses the same spec and therefore the same owner. The supervisor's
+own bindings are restored after start. Managed generation starts replace the
+captured wrapper with their admitted generation context rather than nesting two
+conflicting contexts. This is an opaque runtime capability, never inspector data.
+
+=test/bl/supervisor_context_test.bl= creates the supervisor first, defines a
+provider only in a forked environment, starts the child from outside that fork,
+and checks the value before and after a real killed-child restart. It also checks
+that the caller's context is unchanged. This regression arose from Omega's real
+root-task/Pocket launch, where a stale supervisor previously lost task callbacks.

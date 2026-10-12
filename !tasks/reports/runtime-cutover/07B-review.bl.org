@@ -58,6 +58,12 @@ upstream browser subscription. The active reader heartbeat P95 range is
 12.5–15.6 ms; absent is 10.6–14.3 ms. Both report zero missed scheduler events.
 Frame P95 reaches 33.3 ms in some paused and active trials. This needs a focused
 rendering/CPU investigation; it does not certify physical audio/video latency.
+The graphics Worker's retained rolling frame P95 is 53–71 ms across these
+trials, while its reported graphics work P95 is 0.5 ms. These are rolling domain
+counters, not per-trial compositor or physical-output measurements. Their clock,
+queueing and headless rendering behavior need separate profiling; the main-page
+RAF result must not hide this slower graphics cadence.
+
 These trials measure sampling without inspector DOM. The private browser layout
 checks separately exercise live DOM retention and companion engine identity.
 

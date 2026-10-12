@@ -1,0 +1,12 @@
+Running as unit: run-p833614-i30161601.service
+Traceback (most recent call last):
+  File "/home/user/code/undefine/omega/spikes/mobile/test/shared-launch.py", line 69, in <module>
+    subprocess.run(['node', str(ROOT/'spikes/mobile/test/shared-browser.mjs')], cwd=ROOT, env={**env, 'POCKET_TEST_URL': base, 'POCKET_TEST_ROOT': str(work)}, check=True, timeout=300, stdout=output, stderr=subprocess.STDOUT)
+  File "/home/user/.rye/py/cpython@3.12.3/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['node', '/home/user/code/undefine/omega/spikes/mobile/test/shared-browser.mjs']' returned non-zero exit status 1.
+          Finished with result: exit-code
+Main processes terminated with: code=exited, status=1/FAILURE
+               Service runtime: 1min 13.374s
+             CPU time consumed: 1min 56.598s
+                   Memory peak: 2.5G (swap: 0B)

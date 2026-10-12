@@ -34,6 +34,12 @@ physical audio underrun measurements. No acoustic/display latency was measured.
 The 33.3 ms frame tail remains a focused follow-up, as authorized; it does not
 waive any ownership or language-semantic failure.
 
+The graphics Worker's retained rolling frame P95 is 53–71 ms across these
+trials, while its reported graphics work P95 is 0.5 ms. These are rolling domain
+counters, not per-trial compositor or physical-output measurements. Their clock,
+queueing and headless rendering behavior need separate profiling; the main-page
+RAF result must not hide this slower graphics cadence.
+
 * Worker evidence
 The canonical compiled Worker completes two identical 1024-row scores, 100 lease
 reuse/cancel cycles and independent simultaneous sessions. A deliberate native
@@ -61,3 +67,16 @@ analyses exist; non-suspension alone must not choose a deadline or thread.
 [[file:../../../spikes/pelagic/proof/milestone-6/report.html][Interactive measurements]] ·
 [[file:../../../spikes/pelagic/proof/milestone-6/paired-observer.json][Raw samples]] ·
 [[file:../../../spikes/pelagic/proof/shared-compute/pool.json][Worker proof]]
+
+
+* Root launch regression discovered during acceptance
+The real Pocket root-task journey initially failed before presenting its first
+question: a task executor could not resolve =omega.actor/sense-inbox= after a
+DynamicSupervisor started it from an older environment. A focused upstream
+regression reproduced the ownership loss. The fix captures the child-spec
+creator's bindings and reuses them through OTP restart, restoring the caller's
+bindings afterward. Five focused assertions pass, including a real killed-child
+restart. The final root-task/browser rerun is recorded separately; a focused
+unit pass alone is not acceptance of the normal launch path.
+[[file:../../../spikes/pelagic/proof/milestone-6/root-before-supervisor-fix.log][Original failing journey]] ·
+[[file:../../../spikes/pelagic/proof/milestone-6/supervisor-context.log][Focused regression]]
