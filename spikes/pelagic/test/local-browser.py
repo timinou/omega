@@ -103,7 +103,7 @@ try:
   page.locator('#input-sink').focus();page.keyboard.press(':');page.keyboard.insert_text('(ed/unuse "pelagic")');page.keyboard.press('Enter')
   page.wait_for_function('!document.querySelector(".view-host")')
   assert page.evaluate('window.blEd.R.printStr(window.blEd.state().get(window.blEd.K("text"))).includes("Saved locally by the static bundle proof")')
-  assert page.evaluate('liveWorkers.size')==0
+  page.wait_for_function('liveWorkers.size===0',timeout=5000)
   page.screenshot(path=str(PROOF/'02-unused.png'));done('real ed/unuse removes stage and preserves source offline')
   assert not api,api
   assert not errors,errors

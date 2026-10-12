@@ -11,7 +11,7 @@ import {performanceControls} from './controls.mjs';
 import {SceneStage} from './scenes.mjs';
 import {createStage} from './render-stage.mjs';
 import {prepareScore} from './prepare.mjs';
-import {createPreparationWorker,preparationWorkers} from './compute-worker.mjs';
+import {createPreparationWorker,preparationWorkers,closeIdlePreparationWorkers} from './compute-worker.mjs';
 import {freezeGraph} from './score-wire.mjs';
 import * as Bridge from '../../out/pelagic.bridge.mjs';
 import {conversions,download,setText,audioContext,readText,createEvaluator,afterPaint,createScoreSource,audibleTime,createGraphicsWorker,continuePreparation,admitWork,exportWindow,playbackVoices} from './values.mjs';
@@ -585,7 +585,7 @@ export function createHost(api) {
     case 'deck':unlock();decks[e.args.deck].action(e.args.op,e.args.value);break;
     case 'record':await record();break;case 'export':await exportAudio();break;
     default:throw new Error('Unknown Pelagic effect '+e.op);}},
-    dispose(){unobserve();capturedTake=null;savedTake=null;explorations=[];replayQueue=[];disposed=true;++evaluation;stopAudition(true);scoreVoices.dispose();evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
+    dispose(){unobserve();capturedTake=null;savedTake=null;explorations=[];replayQueue=[];disposed=true;++evaluation;stopAudition(true);scoreVoices.dispose();closeIdlePreparationWorkers({whenDrained:true});evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
       for(const d of Object.values(decks))d.dispose();for(const job of offlineRenders)job.abort();offlineRenders.clear();audio?.dispose();ctx?.close();files.clear();handles.clear();pending=[];patterns.clear();for(const url of urls)URL.revokeObjectURL(url);
       for(const v of views)v.shader?.dispose();}
   };

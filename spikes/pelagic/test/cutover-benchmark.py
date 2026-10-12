@@ -29,6 +29,6 @@ try:
   }''')
   cpu_after={x['name']:x['value'] for x in cdp.send('Performance.getMetrics')['metrics']};result['pageCpuTotalsSeconds']={k:cpu_after[k]-cpu_before.get(k,0) for k in ['TaskDuration','ScriptDuration','LayoutDuration','RecalcStyleDuration'] if k in cpu_after};result['cpuScope']='Page renderer totals across all trials; excludes Worker processes and physical output. Per-trial JS heap is Chromium estimate.'
   assert not errors,errors
-  result['errors']=errors;result['description']='Five paired repetitions, counterbalanced absent/paused/active observer, warm score cache, continuous transport, one identical 0.25-second offline render per trial. Software clocks only.'
+  manifest=json.loads((OUT/'pelagic-build.json').read_text());result['artifact']={k:manifest[k] for k in ['compiler','inputs']};result['errors']=errors;result['description']='Five paired repetitions, counterbalanced absent/paused/active observer, warm score cache, continuous transport, one identical 0.25-second offline render per trial. Software clocks only.'
   (PROOF/'paired-observer.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps([{k:v for k,v in row.items() if k in ['repetition','mode','heartbeatP95','frameP95','missedDelta','exportMs','deliveries']} for row in result['rows']],indent=2));browser.close()
 finally:server.shutdown();server.server_close()

@@ -14,6 +14,7 @@ function send(record,data){
 }
 function idle(record){
  clearTimeout(record.idle);
+ if(!record.clients.size&&!record.resetting.size&&record.retire){end(record);return;}
  if(!record.clients.size&&!record.resetting.size)record.idle=setTimeout(()=>end(record),idleMilliseconds);
 }
 function connect(client,budget,url,factory){
@@ -44,7 +45,7 @@ function connect(client,budget,url,factory){
    }
   });
  }
- clearTimeout(record.idle);client.id=leaseId();client.record=record;record.clients.set(client.id,client);
+ record.retire=false;clearTimeout(record.idle);client.id=leaseId();client.record=record;record.clients.set(client.id,client);
  if(fresh){try{record.worker.postMessage({op:'init',budgetMs:budget});}catch(error){end(record,error);throw error;}}
  else if(record.ready)queueMicrotask(()=>{if(!client.closed)emit(client,'message',{data:{op:'ready'}});});
 }
@@ -89,4 +90,4 @@ export function preparationWorkers({observe=false}={}){
  return {workers:realms.size,active:[...realms.values()].reduce((n,r)=>n+r.clients.size,0),
          resetting:[...realms.values()].reduce((n,r)=>n+r.resetting.size,0),created,forced,actors};
 }
-export function closeIdlePreparationWorkers(){for(const r of realms.values())if(!r.clients.size&&!r.resetting.size)end(r);}
+export function closeIdlePreparationWorkers({whenDrained=false}={}){for(const r of realms.values())if(!r.clients.size){if(whenDrained){r.retire=true;idle(r);}else if(!r.resetting.size)end(r);}}

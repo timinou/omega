@@ -1,5 +1,5 @@
 #+title: Capture, fork, and explore a performance
-#+status: BL model verified; browser workflow acceptance in progress
+#+status: Native models and real creative controls verified
 
 * Make one change safely
 Start Pelagic with =bl pelagic.dev= from the project root. Choose PERFORM, edit
@@ -32,8 +32,9 @@ again after changing the active state: a stale exploration cannot commit over
 an intervening edit. Save a snapshot before a longer exploration if you want a
 named return point.
 
-The core of exploration is ordinary pure BL, not another browser randomizer:
-#+begin_src beam-lisp
+The core of exploration is ordinary pure BL. This reference example belongs
+to the native REPL; the live patch evaluator accepts the av/ editing API above.
+#+begin_src lisp
 (require '[pelagic.explore :as explore])
 (explore/candidates {:variation {:seed 37}} 37 4)
 #+end_src
@@ -47,5 +48,6 @@ playback reserve admission protect audio from preparation bursts.
 - [[file:../test/creative_test.bl][creative_test.bl]] checks UTF-8 source retention, event order,
   overflow refusal, deterministic seeds and bounds. The native contracts include clock offsets and malformed-state refusal.
 
-Browser recordings, usability results and remaining limitations belong to the
-milestone-7B report; this walkthrough does not claim those checks have passed.
+[[file:../proof/milestone-7B/report.html][Recorded creative workflows and audit]] include capture/replay/fork,
+safe audition, seeded exploration, revision source and the optional local bundle.
+The native model suite checks clocks, malformed state and bounded inputs.

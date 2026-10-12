@@ -26,11 +26,11 @@ try:
   page.evaluate('''()=>{const p=document.querySelector('.view-host .view-body').pelagic,engine=p.engine(),dest=engine.ctx.createMediaStreamDestination();engine.monitor.connect(dest);const recorder=new MediaRecorder(dest.stream,{mimeType:'audio/webm'}),chunks=[];recorder.ondataavailable=e=>chunks.push(e.data);recorder.start();window.reviewAudio={dest,engine,recorder,chunks};}''')
   # 1. Capture, change a controller, save, replay, fork and undo in the editor.
   page.locator('[data-capture]').click();page.wait_for_function(q+'.diagnostics().take==="capturing"')
-  page.locator('[data-control="filter"]').fill('1.2');page.wait_for_timeout(600);page.locator('[data-capture]').click();page.wait_for_function(q+'.diagnostics().take==="ready"')
+  page.locator('[data-control="filter"]').fill('1.2');page.wait_for_timeout(150);page.locator('[data-control="space"]').fill('0.5');page.wait_for_timeout(150);page.locator('[data-control="filter"]').fill('1.4');page.wait_for_timeout(300);page.locator('[data-capture]').click();page.wait_for_function(q+'.diagnostics().take==="ready"')
   take=page.evaluate(q+'.takeManifest()');assert take['version']==2 and take['reproducible'] and take['events'];report['takeEvents']=len(take['events'])
   with page.expect_download() as d:page.locator('[data-manifest]').click()
   d.value.save_as(str(PROOF/'captured-take.json'))
-  page.locator('[data-replay]').click();page.wait_for_function(q+'.events().some(e=>e.kind===\"take-replay\")');page.wait_for_function(q+'.diagnostics().replayRemaining===0',timeout=20000);shot(page,'take-replay')
+  page.locator('[data-replay]').click();page.wait_for_function(q+'.events().some(e=>e.kind===\"take-replay\")');page.wait_for_function(q+'.diagnostics().replayRemaining===0',timeout=20000);report['replayActivations']=page.evaluate(q+'.events().slice('+q+'.events().findLastIndex(e=>e.kind==="take-replay")+1).filter(e=>e.kind==="active").length');assert report['replayActivations']>=3,report;assert page.evaluate(q+'.config().filter')==1.4;shot(page,'take-replay')
   before=page.evaluate('window.blEd.R.printStr(window.blEd.state().get(window.blEd.K("text")))')
   page.locator('[data-fork]').click();page.wait_for_function('window.blEd.R.printStr(window.blEd.state().get(window.blEd.K("text"))).includes("forked take")');shot(page,'take-fork')
   page.locator('#input-sink').focus();page.keyboard.press('u');assert page.evaluate('window.blEd.R.printStr(window.blEd.state().get(window.blEd.K("text")))')==before

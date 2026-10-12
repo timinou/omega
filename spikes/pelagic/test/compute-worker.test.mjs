@@ -91,3 +91,13 @@ test('actor observations are demand-driven, bounded and never routed as lease wo
  a.terminate();await turn();closeIdlePreparationWorkers();
  assert.equal(preparationWorkers().actors.length,0);
 });
+
+test('final package unload retires a resetting worker after cancellation, preserving an active peer',async()=>{
+ const actual=new WorkerStub(),a=createPreparationWorker('unload',()=>actual),b=createPreparationWorker('unload',()=>actual);
+ a.postMessage({op:'init'});b.postMessage({op:'init'});await turn();
+ a.terminate();closeIdlePreparationWorkers({whenDrained:true});await turn();
+ assert.equal(actual.terminated,0);assert.equal(preparationWorkers().active,1);
+ b.terminate();closeIdlePreparationWorkers({whenDrained:true});
+ assert.equal(actual.terminated,0);await turn();
+ assert.equal(actual.terminated,1);assert.equal(preparationWorkers().workers,0);
+});
