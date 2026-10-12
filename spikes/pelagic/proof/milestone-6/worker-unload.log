@@ -1,0 +1,16 @@
+✔ 100 leases reuse one worker, isolate messages and reset to zero live owners (218.076922ms)
+✔ two sessions receive only their own job, and closing A leaves B intact (2.866002ms)
+✔ worker crash invalidates leases and permits a fresh owner (4.385682ms)
+✔ failed native postMessage retires the owner and releases its capacity (1.823284ms)
+✔ bounded admission includes clients waiting for cancellation acknowledgement (1.859401ms)
+✔ closing before worker readiness queues cancellation without poisoning another session (0.249702ms)
+✔ actor observations are demand-driven, bounded and never routed as lease work (2.657599ms)
+✔ final package unload retires a resetting worker after cancellation, preserving an active peer (2.522904ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 359.426733

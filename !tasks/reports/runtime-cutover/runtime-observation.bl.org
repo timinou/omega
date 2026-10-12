@@ -1,0 +1,150 @@
+#+title: Owned runtime observations — implementation and first walkthrough
+#+status: Runtime APIs and Omega consumer migration verified; full consolidation remains open
+
+* Who owns what?
+An observation describes a resource; it does not create ownership or grant an
+operation on that resource. Native membership comes from vm.owner. JavaScript
+actor membership comes from the actor runtime's process records. A browser
+resource registration represents an explicitly disposable non-actor resource.
+There is no observation scheduler or copy of the process registry.
+
+Native physical VM memory/process totals describe the whole BEAM instance.
+Realm membership describes just the captured project realm. These numbers have
+different scopes even when several realms share one VM. The trusted hosting
+process captures its scope before dispatching requests; callers cannot select a
+realm through an untrusted request parameter. Authentication remains the host's
+responsibility.
+
+* Read a native scope
+#+begin_src beam-lisp
+(ns observation.example (:require [vm.observation :as observation]))
+(def captured (observation/capture))
+(observation/snapshot captured 32)
+#+end_src
+
+Capture preserves the selected realm across request processes. With no realm,
+the projection covers only the capturing process. Rows expose status, memory
+(bytes), reductions and mailbox length, never mailbox contents. The envelope
+has a versioned schema, sequence, wall timestamp, runtime/epoch scope, resource
+count and truncation flag. A dead process can race a read; :available is false
+when its process_info is unavailable. Observing never starts a VM manager.
+
+Output cardinality is bounded at 128. Current native membership enumeration
+still allocates the realm's member list before truncation; it is not a paged
+registry query. This is a known performance limitation, not a hard CPU bound.
+
+* Run private speculative work
+#+begin_src beam-lisp
+(ns work.example (:require [proc.work :as work]))
+(def owner (work/start! {:max-active 2 :history 16}))
+(def job
+ (work/submit! owner {:title "Prepare a candidate" :generation "candidate-1"}
+  (fn [context]
+   (doseq [n (range 100)]
+    ((:checkpoint context))
+    ((:progress context) n)))))
+(work/snapshot owner)
+(work/cancel! owner (:id job))
+(work/stop! owner)
+#+end_src
+
+This is a standard proc server with linked private workers, not a durable queue
+or a second scheduler. Admission is bounded. Progress sends coalesce at 50 ms.
+Active jobs survive history pressure; completed history fills the remaining
+slots. Monotonic ordinals make retention deterministic even within one clock
+tick. Callback registrations transfer code lifetime to the worker; completion
+or death releases that ownership. Job snapshots omit executable values, PIDs,
+monitor references and cancellation timers.
+
+Cancellation asks the worker to stop at a checkpoint, then force-stops private
+work after one second. Repeated cancellation keeps the first deadline; finishing
+cancels its timer. This API is for discardable computation. Accepted shared
+side effects use existing proc.admission/queue contracts instead. An action
+that changes its process flags must preserve the worker ownership contract.
+
+* JavaScript actor projection
+The actor compiler exports observationSnapshot(limit). It calls the BL
+rt-observation function through the checked synchronous callback path. Reading
+immutable state/self is non-suspending; scheduler writes and critical/suspending
+entrypoints remain excluded. No author annotation overrides that proof.
+
+rt-spawn-owned records an explicit parent edge in existing process records.
+Owner death shuts down owned children through the existing death transaction;
+child death retracts its edge. Ordinary rt-spawn preserves independent lifetime.
+Snapshot identity is scoped to its issuing runtime, never a cancellation grant.
+
+* Observe browser resources from BL
+#+begin_src beam-lisp
+(ns ^:js browser.example (:require [js.observation :as observation]))
+(def dispose-resource
+ (observation/observe-package "example" (fn [] #js {:prepared 12})
+  #js {:cancel (fn [] nil)}))
+(def dispose-view
+ (observation/subscribe (fn [snapshots] (.log js/console snapshots))
+  #js {:interval 1000 :active (fn [] true)}))
+;; Dispose with the component/session that owns these handles.
+(dispose-view)
+(dispose-resource)
+#+end_src
+
+The browser hub is lazy: importing creates no channel or timer. It admits at
+most 32 registrations, 32 readers and 32 peer sessions. Resource data shares a
+96 KiB UTF-8 budget, leaving bounded space for unavailable rows and envelope
+metadata below the 128 KiB report limit; oversized
+or cyclic projections become unavailable rows. Error details are not exported.
+Peer messages are validated and capped at 128 KiB. Peer age uses a monotonic
+clock; the report timestamp is wall time. Peers expire after six seconds.
+
+Subscriptions own a reader and a coalescing timer, with an interval of 250 to
+60000 ms. An inactive predicate skips sampling; idempotent disposal retracts
+the timer and reader. The last local resource/reader closes the channel. Reader
+invoke accepts only a live local registration/action. Received IDs convey no
+remote action authority. BroadcastChannel peers are untrusted descriptive
+reports, not authenticated cross-project ownership.
+
+* Why direct projection matters
+A populated 129-actor fixture exposed 187 ms P95 to project 128 rows through
+per-expression actor frames. The projection now lowers the same checked BL ANF
+through the existing direct JS emitter. Primitive map reads avoid dynamic
+callable dispatch; collection values remain canonical. The first isolated
+comparison measured 0.40 ms P95 and 4.69 ms P99 after specialization. A second
+sequential run measured 172 ms → 0.64 ms P95 (5.63 ms P99); artifacts and
+protocol are in [[file:proof/runtime-observation/environment.json][the measurement record]]. Host background load was not controlled.
+
+This is a closed trusted kernel projection, not permission for arbitrary
+non-suspending code to run without scheduling. A separate read/collection leaf
+allowlist rejects effects even when they are non-suspending. The compiler also
+requires non-suspension evidence. Existing checked actor entry wrappers remain;
+ordinary actor scheduling/ownership is unchanged. General actor-profile
+consolidation is still open. The benchmark excludes native conversion, DOM and
+physical audio/video output; it establishes no physical latency guarantee.
+
+Creator lifetime and realm membership are now explicit for native private work:
+its controller monitors its creator, adopts its worker into the captured realm
+and stops private workers when the creator/owner exits.
+
+* Remaining integration
+Browser resource projections/subscriptions and Omega/Pelagic consumer migration
+are implemented. Delta/loss delivery, compiler discipline presentation, generic
+editor composition and full compiler consolidation remain separate steps. Neither a 16 ms latency guarantee nor full
+actor-profile consolidation follows from these initial APIs. The user-facing
+editor remains the existing bl-ed package in Omega.
+
+* Reproducible checks
+Native fixtures: test/bl/vm/observation_test.bl and test/bl/proc/work_test.bl.
+Current checkout toolchain: 18 native scope + 33 private work + 15 compiler
+suspension assertions pass. The compiled browser module passes nine Node tests;
+the compiled actor fixture checks owned death, independent spawn and synchronous
+bounded reads. Canonical value/callable and compiled-callback checks pass fourteen tests.
+Release 070720a3 builds cleanly as 3bc51aa2. Omega consumer commit 5263fe1 pins
+it and passes 67 runtime/frontend assertions, 68 Pelagic contracts, 75 vendored
+editor tests, four inspector drive tests and twelve private real-browser checks.
+The real Worker fixture passes 100 lease cycles, two complete scores and owned
+actor snapshots with independent sessions. Consumer evidence and walkthrough
+live under Omega spikes/runtime/ and spikes/pelagic/proof/shared-compute/.
+
+Run =test/js/check-observations.sh= from a source checkout for the focused
+sequential pipeline. Set =BL_OBSERVATION_BENCH=1= to include the populated
+projection benchmark. Apply the repository's usual memory cap to the script.
+Broader actor checks and the first pinned-release run are recorded in
+[[file:proof/runtime-observation/checks.bl.org][the verification record]].

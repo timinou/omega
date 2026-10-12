@@ -1,0 +1,91 @@
+#+title: One runtime, from ownership to performance
+#+status: Production mechanisms and creative workflows verified; final launch/Pocket review in progress
+
+* Start with the thing you want to use
+From Omega root, =bl pelagic.dev= opens the instrument. =bl runtime.dev= opens
+its ownership inspector. =bl pocket= opens Pocket. All three attach to the same
+project world and shared VM. Each browser session retains its own package state
+and immutable frontend generation. =bl spikes.pelagic.dev= starts the showcase;
+=bl pelagic.local= serves the optional static demo. Use the URL each task prints.
+
+[[file:index.html][Interactive milestone report]] · [[file:07B-review.bl.org][Creative walkthrough]]
+
+* 1 — See an owner without becoming it
+A native observation reads only its authorized realm membership, with limits
+applied before expensive process projection. Browser actor rows come from the
+actual actor records. Resource identity includes the issuing runtime and owner;
+a displayed identifier grants no control. Unavailable counters are explicit.
+[[file:runtime-observation.bl.org][Contract and examples]] · [[file:upstream/milestone-1/report.html][Evidence]]
+
+* 2 — Read changes without holding up work
+Owned subscriptions bound delivery and retained state. Slow consumers coalesce
+samples, record loss and resynchronize from the owner. Disposal, owner death and
+callback failure close their resources. Private speculative work is cancellable;
+accepted durable effects retain their existing admission/draining contract.
+[[file:upstream/milestone-2/report.html][Delivery and race evidence]]
+
+* 3 — One function machine
+Ordinary compiled namespaces, live evaluation and actor bundles use the common
+emitter and frame kernel. Direct calls retain canonical BL values. Crossing a
+namespace does not send a message or create a scheduler. A function containing
+receive uses the calling actor's mailbox. A real Worker boundary still requires
+messages and transfer, because it is a different JavaScript execution realm.
+[[file:javascript-actor-functions.bl.org][Function and interop walkthrough]] ·
+[[file:upstream/milestone-3/functions.html][Frame evidence]]
+
+* 4 — Know exactly what was proved
+The compiler derives conservative non-suspension through system.suspension over
+checked ANF and records source SHA and compiler provenance in evidence.json.
+Unknown higher-order/foreign calls stay unknown. Synchronous does not imply
+pure, cheap, terminating, worker-safe or a 16 ms deadline. Observation reads and
+sequence-stamped snapshots have distinct effect classifications. Actual work
+server transitions and cancellation/completion races are exercised with system.model.
+[[file:compiler-runtime-evidence.bl.org][Evidence tutorial]] · [[file:upstream/milestone-4/report.html][Acceptance]]
+
+* 5 — Make ownership visible
+The reusable ed.inspector package supplies a bounded ownership tree, stable
+selection and generic blocks. Omega adds world/jobs/build/source meaning;
+Pelagic adds preparation, audio and graphics counters. Keyed painting retains
+focus, scroll and open details. Companion layouts preserve the live instrument;
+unuse restores the editor and releases only the inspector's resources.
+[[file:../../../spikes/runtime/inspector.bl.org][Inspector walkthrough]] ·
+[[file:../../../spikes/runtime/proof/inspector-report.html][Real editor evidence]]
+
+* 6 — Exercise the same graph everywhere
+The server/frontend and optional static bundle compile the same package and
+actor kernel. Immutable generation publication refuses changing inputs. Asset
+and known tutorial edits reuse the checked BL graph; unknown dependencies remain
+conservative. Paired observer trials measure heartbeat/frame clocks, export,
+misses, renderer CPU and JS heap. Worker tests measure reuse, cancellation and
+session isolation. These are software measurements, not acoustic/display latency.
+[[file:../../../spikes/pelagic/proof/milestone-6/report.html][Measurements and protocol]]
+
+* Pelagic runtime pieces you can follow in the code
+- =pelagic.compute= gives the physical Worker pool realm-local lease identities
+  and admission bounds. Resetting leases count against capacity. Logical jobs
+  run as owned BL actors in =actor/prepare.bl=, with bounded turns and credits.
+- =pelagic.playback-js= contains reserve admission and clock calculations. Score
+  preparation, audition and export wait behind playback reserve automatically.
+  Application callers use the same APIs; they do not coordinate these budgets.
+- =pelagic.graph-js= and the existing graph schema prepare immutable native DSP
+  plans. The live and offline engines share schema/plan code, with native nodes
+  and buffers scoped to their actual audio context.
+- New edits supersede private evaluator work. Audition stages outside revision
+  history, prepares quietly and commits only against its unchanged base. A stale
+  preview cannot silently replace an intervening revision.
+- =pelagic.take= owns immutable capture bounds, validation, timeline and editable
+  forks. =pelagic.explore= owns deterministic bounded alternatives. Browser code
+  handles files, audio clocks and scheduling effects, rather than another model.
+- Final package unload cancels its leases and retires an empty physical Worker
+  after cancellation acknowledgment. A surviving session keeps its own leases.
+
+* 7 and 7B — Use it, audit it, then stop for review
+Capture/replay/fork, safe audition, seeded alternatives, revision source and
+shareable local packaging use the real editor. The browser scenarios retain
+screenshots, audio/video and raw results. Pocket covers places, task questions,
+files, guarded undo, reading, history and Machine. The audit changes hierarchy,
+action placement, type, touch/focus and misleading state before recording the
+final review. The exact final results belong to the linked recorded artifacts.
+[[file:../../../spikes/pelagic/tutorials/06-takes-and-exploration.bl.org][Creative showcase]] ·
+[[file:../../../spikes/pelagic/proof/milestone-7B/report.html][Pelagic review]] ·
+[[file:../../../spikes/mobile/proof/milestone-7B/report.html][Pocket review]]

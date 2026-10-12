@@ -14,14 +14,14 @@ Never test against the live world on 8790. Preserve concurrent work.
 * Completion ledger
 | Milestone | Work / acceptance | Status | Evidence |
 |-----------+-------------------+--------+----------|
-| 1 | bounded scoped query, identity/support contract, lifecycle/isolation audit | implemented; consumer pin pending | upstream a7d140a7, native query report |
-| 2 | bounded subscription changes/loss/resync; teardown/race matrix | implemented; consumer pin pending | upstream 34e41a54; 101 native assertions, 11 Node tests, delivery report |
-| 3 | ordinary JS and actor execution consolidation; semantic parity | canonical-link experiment verified; full cutover open | upstream 66f1213a; actor-canonical-cutover.bl.org |
-| 4 | compiler/logic evidence and provenance; negative fixtures | pending | |
-| 5 | reusable bl-ed inspector plus domain contributions; standalone proof | verified extraction; new upstream pin pending | spikes/runtime/inspector.bl.org; interactive report; 80/68/15 gates |
-| 6 | Pelagic integration and server/local acceptance | pending | |
-| 7 | five creative workflows demonstrated and verified | pending | |
-| 7B | manual Pelagic/Pocket use, visual audit applied, recordings and review report | pending | |
+| 1 | bounded scoped query, identity/support contract, lifecycle/isolation audit | complete; native and compiled consumer gates pass | upstream a7d140a7, native query report |
+| 2 | bounded subscription changes/loss/resync; teardown/race matrix | complete; native and compiled consumer gates pass | upstream 34e41a54; 101 native assertions, 11 Node tests, delivery report |
+| 3 | ordinary JS and actor execution consolidation; semantic parity | complete; ordinary/imported receive and 461 kernel checks pass | upstream b410b1da, 48546571; javascript-actor-functions.bl.org |
+| 4 | compiler/logic evidence and provenance; negative fixtures | complete; native/Node evidence and pinned build verified | upstream 48546571; compiler-runtime-evidence.bl.org |
+| 5 | reusable bl-ed inspector plus domain contributions; standalone proof | drive gates pass on final pin; final browser recheck pending | spikes/runtime/inspector.bl.org; interactive report; 80/68/15 gates |
+| 6 | Pelagic integration and server/local acceptance | server/local/ZIP built; 15 local browser checks pass; paired benchmark running | |
+| 7 | five creative workflows demonstrated and verified | complete; five real UI workflows recorded, 3 replay activations verified | 27d58d1; tutorial 06 | |
+| 7B | manual Pelagic/Pocket use, visual audit applied, recordings and review report | Pelagic audit applied and recorded; Pocket/root-task retest pending | !tasks/reports/runtime-cutover/07B-review.bl.org | |
 
 Every milestone includes .bl.org explanation/tutorial, a self-contained
 interactive evidence report (local HTML, linking recorded artifacts), and

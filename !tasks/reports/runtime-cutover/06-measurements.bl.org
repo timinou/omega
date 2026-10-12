@@ -1,0 +1,63 @@
+#+title: What the latency measurements establish
+#+status: Recorded software measurements; final root launch verification pending
+
+* Reproduce
+Use the optional local generation printed by build/local!, then run from Omega:
+#+begin_src sh
+PELAGIC_LOCAL_OUT=/absolute/path/to/local-generation python3 spikes/pelagic/test/cutover-benchmark.py
+PELAGIC_LOCAL_OUT=/absolute/path/to/local-generation python3 spikes/pelagic/test/compute-pool-browser.py
+#+end_src
+These scripts own temporary HTTP servers and browsers and close them afterward.
+They do not touch the world on 8790. The root-task proof uses private XDG state,
+a disposable store and a random port. No existing user realm is stopped.
+
+* Protocol
+The paired test warms the score and compiler, starts continuous transport and
+runs five repetitions per absent/paused/active upstream browser reader. Order
+is counterbalanced. Each trial has one second warmup, at least four seconds of
+measurement and an identical 0.25-second, 22050 Hz offline audio render. Raw
+heartbeat and RAF intervals are retained, plus export duration, scheduler misses,
+long-task deltas, per-trial estimated JS heap and aggregate renderer CPU. This
+measures upstream sampling without inspector DOM. Separate browser journeys
+verify the actual inspector DOM and companion layout. The development machine
+also runs unrelated services; these measurements are not a lab isolation study.
+
+* Recorded ranges across five trials
+| Reader | Heartbeat P95 ms | Frame P95 ms | Export ms | Missed scheduler events |
+|--------+------------------+--------------+-----------+-------------------------|
+| absent | 10.6–14.3 | 16.7–16.8 | 36.6–61.8 | 0 |
+| paused | 11.4–14.9 | 16.7–33.3 | 43.9–74.1 | 0 |
+| active | 12.5–15.6 | 16.8–33.3 | 46.2–59.6 | 0 |
+Heartbeat includes the timer's requested 8 ms period; it is not response latency.
+RAF includes display cadence. Scheduler misses are application counters, not
+physical audio underrun measurements. No acoustic/display latency was measured.
+The 33.3 ms frame tail remains a focused follow-up, as authorized; it does not
+waive any ownership or language-semantic failure.
+
+* Worker evidence
+The canonical compiled Worker completes two identical 1024-row scores, 100 lease
+reuse/cancel cycles and independent simultaneous sessions. A deliberate native
+Worker error after importing the compiled kernel is followed by healthy
+reacquisition. Cancellation P95 is 4.2 ms, main-thread heartbeat P95 5.1 ms.
+No forced reset and no retained Worker remain after cleanup. Final-owner unload
+also retires a resetting Worker after acknowledgment, preserving a live peer.
+
+* Build evidence
+The clean pinned compiler is 71638f46, installed as 649a5355. Its one-time clean
+release build took 8 min 7 s. The full editor/language/package graph plus local
+bundle/ZIP took 3 min 6 s. Subsequent asset/tutorial changes reuse that graph and
+complete in roughly 3–4 s including cold VM startup. Root tasks reuse immutable
+generations and one shared VM; local remains optional packaging, not another
+implementation. Native cache tests retain conservative unknown dependencies.
+
+* What to investigate next
+Profile the frame tail under export and observation, separating main-thread
+work, Worker queue/turn time, GPU submission and compositor cadence. Compare
+inspector DOM sampling with the upstream-reader trials. Then measure real
+speaker/display latency on the intended device before claiming a 16 ms result.
+Compiler cost/termination/purity fields remain explicitly unknown until stronger
+analyses exist; non-suspension alone must not choose a deadline or thread.
+
+[[file:../../../spikes/pelagic/proof/milestone-6/report.html][Interactive measurements]] ·
+[[file:../../../spikes/pelagic/proof/milestone-6/paired-observer.json][Raw samples]] ·
+[[file:../../../spikes/pelagic/proof/shared-compute/pool.json][Worker proof]]

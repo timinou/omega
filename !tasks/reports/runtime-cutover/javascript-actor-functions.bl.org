@@ -1,0 +1,90 @@
+#+title: One function machine for JavaScript namespaces
+#+status: Production cutover implemented; acceptance recorded
+
+* Start with an ordinary function
+#+begin_src beam-lisp
+(ns example)
+(defn sum [n]
+  (loop [left n result 0]
+    (if (zero? left) result (recur (dec left) (+ result left)))))
+#+end_src
+Build with =bl js build example=. JavaScript calls the exported function and
+receives its result synchronously. No actor annotation is needed. The compiled
+function also exposes the existing actor callable ABI: a scheduler runs exactly
+that function's generator factory with its own runtime and bounded turn budget.
+Calls from another compiled function use frames directly, without packing a
+message, converting values, or starting another scheduler.
+
+* What changed
+The ordinary namespace emitter and in-page evaluator now emit functions with
+=H.blFn= factories. Loops yield to the frame machine; tail calls replace their
+frame; other calls push frames. Literal/collection construction, patterns,
+interop expressions and compiled core links remain the ordinary compiler's.
+The adapter in =priv/lib/js/actor/module.mjs= supplies a host-result boundary.
+It contains no mailbox, runnable queue, collection algorithm or actor registry.
+
+JavaScript's fixed-arity callback convention still permits surplus callback
+arguments. The entry wrapper discards them; calls between BL functions retain
+strict arity selection. Multi-arity and variadic calls retain the BL ABI.
+A protected call remains a call frame until catch/finally has completed; tail
+replacement is emitted only when the function's return destination permits it.
+
+* Host results and actor turns
+A synchronous host entry drives the same machine to completion, with a finite
+50-million-step ceiling. Attempted suspension or exhaustion raises and runs a
+bounded cleanup reserve. This runtime check is not a compiler proof of
+non-suspension, purity, bounded time or termination. Explicit proven callback
+entrypoints continue to require system.suspension evidence.
+
+The module control context does not consume browser input. An actor invoking
+its exported factory supplies the actual actor runtime, preserving its caller's
+turn budget. A synchronous JS call does not create a schedulable process.
+
+* Evidence
+=test/bl/js_actor_module_test.bl= builds the fixture through public bl.js and
+runs five actual Node contracts: canonical collection/callback behavior,
+10,000 loop iterations split over turns, 10,000 non-tail recursive calls without
+JS stack overflow, 100,000 tail calls with fewer than ten retained frames, and
+catch behavior across a frame call.
+
+* Production kernel and package path
+The production =js.actor/build-one= now uses =js.emit= and the checked ordinary
+module manifest. The actor collection/exception prelude, custom ANF emitter,
+numeric emitter, callback projection emitter, profile switch and their
+experimental harnesses have been removed. The process/mailbox/table/supervisor
+kernel remains BL policy. Low-level host storage and control remain JS leaves.
+
+Receive selects a branch and bindings, then executes that branch in the caller's
+generator, preserving lexical recur and finally. Failing guards fall through.
+Typed catch recognizes canonical ExInfo. Reader spans and enclosing function
+identity reach logical frames; call-site objects are interned once per module.
+
+=research/js-actors/compiler.bl= builds demos through the production API.
+The historical split-placement experiment is available at commit =db7a3f86=;
+its old runtime-model assumptions are not a second supported compiler.
+The standalone numeric logic module remains research, without an actor emitter.
+
+Reproduce the production acceptance using a previously built ordinary fixture:
+#+begin_src sh
+./bin/bl test test/bl/js_actor_module_test.bl
+./bin/bl run research/js-actors/production-canonical-test.bl
+node /tmp/bl-production-canonical/out/canonical-production.mjs
+#+end_src
+The fixture location in that focused acceptance script is explicit. Real package
+builds supply their own manifest and relocatable base, as Pelagic does.
+The kernel/application acceptance records 461 checks, covering receive, guards,
+timeouts, errors/finally, source frames, monitors/links, tables and supervision.
+Ordinary compiled-core differential acceptance covers 369 BEAM/JS cases.
+
+* Imported functions keep the caller's process
+An ordinary compiled namespace may contain a receive function. Its emitted
+receive resolves the process kernel from the runtime supplied by the caller's
+frame machine. Calling it from an owned actor therefore uses the same mailbox,
+selective receive and owner; no message transport connects the two functions.
+A bare synchronous JavaScript entry has no process kernel and cannot receive.
+Top-level receive outside a function is refused at compilation.
+
+=research/js-actors/ordinary-owned-build.bl= imports such a namespace into the
+production actor package. The child waits in that ordinary function; its parent
+sends a value and checks the reply. Build the module fixture first, then run the
+build script and =node /tmp/bl-ordinary-owned/out/ordinary-owned.mjs=.

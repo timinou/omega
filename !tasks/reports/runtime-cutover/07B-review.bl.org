@@ -1,0 +1,66 @@
+#+title: Creative workflows and Pocket — review notebook
+#+status: Pelagic browser acceptance recorded; Pocket recording pending
+
+* Open the real instrument
+From Omega's root use =bl pelagic.dev=. =bl spikes.pelagic.dev= opens the first
+showcase. Both attach to the shared project world and reuse its immutable frontend.
+For a static demo use =bl pelagic.local=; that is optional packaging of the same
+editor/package graph, without a world API. Check the printed URL and generation.
+
+* Capture → fork → audition
+Choose PERFORM and evaluate the live set. CAPTURE TAKE starts an account of the
+current session and document. Move FILTER, then FINISH TAKE. SAVE TAKE exports
+the bounded manifest; REPLAY restores its base and clocked checkpoints. FORK
+SOURCE opens the final state as an editable av/commit block. One undo restores
+your previous source. Transport discontinuities or capture overflow invalidate
+reproducibility explicitly; recorded media can still be kept as a partial take.
+
+Choose AUDITION CODE to hear a quiet, separate monitor. The active model and its
+history do not change. DISCARD PREVIEW closes that monitor. COMMIT AT BAR adopts
+the proposal at a musical boundary. An intervening edit makes it stale.
+
+* Explore → navigate → share
+EXPLORE derives four choices from a seed and the current base. Selecting a choice
+previews it through the same safe audition path. It does not apply a variation.
+REVISION SOURCE brings back code that produced the active committed revision.
+A static bundle can be shared alongside a take manifest; imported audio remains
+content-addressed and must be relinked on a machine without those assets.
+
+* Inspect without interrupting the stage
+RUNTIME opens the companion layout. Ownership, Active work, Health & timing,
+Builds & revisions and Selected item share the reusable bl-ed inspector.
+Native resources follow their realm owners. Browser reports describe local
+owners and expiring peers; a peer report grants no remote control authority.
+Compiler evidence belongs to the immutable source generation. It is loaded once.
+
+* Visual audit
+The review checks discoverability, hierarchy, state, action placement, typography,
+contrast, touch targets, keyboard focus and recovery. Before/after images and
+recordings belong to the linked interactive report. Findings are applied before
+this review is marked complete. Software timing is reported separately from
+physical speaker/display latency; no browser recording certifies 16 ms output.
+
+* Pelagic audit, applied
+| Finding | Visual or behavioral change | Recorded check |
+|---------+-----------------------------+----------------|
+| Audition hidden inside diagnostics | visible monitor strip, bordered preview state, adjacent commit/discard | safe-audition.png and dedicated audio/video |
+| No creative entry points | grouped take controls and seeded alternatives | all five workflows, real buttons |
+| Tiny controls | readable type, 44 px touch targets, keyboard focus | desktop and narrow screenshots |
+| Narrow split unusable | full-width stacked source/stage, shorter visual, one deck column | before-narrow / pelagic-narrow-controls |
+| Capture failure traps the user | finish clears the active capture before validating | malformed/incomplete capture refuses; restart remains available |
+| Source link follows rejected/staged code | source changes on actual activation; take retains active-source provenance | committed source restoration |
+| Replay can lose intermediate checkpoints | queue distinct scheduled activations | three captured controls, three active checkpoints |
+| Final unuse retains an idle Worker | retire after acknowledged cancellation; preserve live peers | focused pool test and offline reload/unuse |
+
+* Recorded timing, with limits
+Fifteen trials retain raw heartbeat/frame samples, five per absent/paused/active
+upstream browser subscription. The active reader heartbeat P95 range is
+12.5–15.6 ms; absent is 10.6–14.3 ms. Both report zero missed scheduler events.
+Frame P95 reaches 33.3 ms in some paused and active trials. This needs a focused
+rendering/CPU investigation; it does not certify physical audio/video latency.
+These trials measure sampling without inspector DOM. The private browser layout
+checks separately exercise live DOM retention and companion engine identity.
+
+[[file:../../../spikes/pelagic/proof/milestone-7B/report.html][Pelagic recording and images]] ·
+[[file:../../../spikes/pelagic/proof/milestone-7B/audition/safe-audition.webm][Safe audition with monitor audio]] ·
+[[file:../../../spikes/pelagic/proof/milestone-6/report.html][Raw measurements and protocol]]
