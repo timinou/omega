@@ -1,8 +1,8 @@
 #+title: Runtime cutover inventory
 #+date: 2026-10-11
-#+status: Production cutover implemented; final browser/measurement acceptance in progress
+#+status: Production cutover integrated; final acceptance and provenance in PLAN-020
 
-* Baselines
+* Historical baselines
 The isolated Omega tree starts at 4ebeae5; upstream starts at 03388121. Initial
 source probes use Omega's b7837470 compiler pin. Current upstream checkout tests
 then pass under its rebuilt toolchain. Six implementation commits have been integrated into upstream main through
@@ -53,7 +53,7 @@ carry descriptive data only; they do not extend native realm authority.
 * Superseded implementations
 | Implementation | Disposition |
 |----------------+-------------|
-| omega.runtime worker/run/request! loop | removed in isolated consumer cutover |
+| omega.runtime worker/run/request! loop | removed; integrated into Omega |
 | omega.runtime process-row + process enumeration | replaced by vm.observation |
 | vendor/bl-ed/web/package-observations.mjs | removed; BL js.observation replaces it |
 | Omega collector-only tests | moved/strengthened upstream |
@@ -82,7 +82,23 @@ The real Worker fixture passes 100 reuse/cancel cycles and two complete scores,
 with independent sessions and actual owned actor snapshots. It leaves no Worker.
 Raw evidence is spikes/pelagic/proof/shared-compute/pool.json.
 
-Populated actor projection benchmark: 129 actors, 128 rows, 20 warm-up plus
+Historical experimental actor projection benchmark: 129 actors, 128 rows, 20 warm-up plus
 100 measured reads. P95 falls from 172.08248 ms to 0.636692 ms using checked
 closed-kernel direct lowering. Conversion, DOM and physical A/V are excluded.
 Raw samples and environment hashes live upstream under docs/proof/runtime-observation.
+
+
+* Final integration
+The numbered 1–7B ledger is
+[[file:../../!tasks/plans/PLAN-020-milestones-1-through-7B.bl.org][PLAN-020]].
+The root launcher, inspector and Pocket browser journeys pass against the
+=25f5e799= runtime pin. The installed supervisor retains namespace ownership
+through initial child start and restart; source and installed-host regressions
+both run. The release's host beam matches its committed seed byte-for-byte.
+
+[[file:../../!tasks/reports/runtime-cutover/README.bl.org][Walkthrough and ownership map]] ·
+[[file:../../!tasks/reports/runtime-cutover/deletion-audit.json][Source/generated-graph audit]] ·
+[[file:../../!tasks/reports/runtime-cutover/06-measurements.bl.org][Final measurement limits]]
+The historical projection timings above describe the retired experiment. Current
+canonical-kernel timings belong to the final measurement record; they must not
+be inferred from the old direct emitter.

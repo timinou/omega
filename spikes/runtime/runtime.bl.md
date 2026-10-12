@@ -69,3 +69,12 @@ Pelagic contributes physical worker/actor rows. The duplicate application-local
 renderer and stylesheet are removed. Read the [walkthrough](inspector.bl.org)
 and [interactive proof](proof/inspector-report.html). Standalone proof:
 [used](proof/inspector-used.png), [unuse](proof/inspector-unused.png).
+
+
+## Final pinned review
+
+The [interactive inspector report](proof/inspector-report.html) includes the
+actual [recorded journey](proof/inspector-review.webm), standalone used/unuse
+screenshots, Pelagic/Pocket companions and fifteen browser checks. Compiler
+evidence is loaded from the immutable generation, including source provenance
+and unknown properties. [Cutover walkthrough](../../!tasks/reports/runtime-cutover/README.bl.org).
