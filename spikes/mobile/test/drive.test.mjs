@@ -150,3 +150,11 @@ test('a newly visited document opens in reading mode without changing the retain
  ed=event(ed,'doc',{path:'work:project/b.org',text:'New document',rev:'1','read-only?':false,'visit?':true});
  assert.equal(g(U.d_state(ed),'editing'),false);assert.equal(g(U.d_model(ed,'file'),'text'),'New document');
 });
+
+test('closed work cannot advertise a stale question or waiting summary',()=>{
+ const row=map({type:'omega/task',status:'cancelled',ask:'old-question',summary:'Waiting for your answer.',goal:'Keep the goal'});
+ const shown=U.d_present_object(row);
+ assert.equal(g(shown,'ask'),null);assert.equal(g(shown,'summary'),'');
+ assert.equal(g(shown,'goal'),'Keep the goal');assert.equal(g(row,'ask'),'old-question');
+ assert.strictEqual(U.d_present_object(map({type:'note'})).get(K('type')),'note');
+});

@@ -6,10 +6,10 @@ import {homedir} from 'node:os';
 import path from 'node:path';
 const base=process.env.POCKET_TEST_URL,root=process.env.POCKET_TEST_ROOT;
 assert.ok(base&&root?.startsWith('/tmp/')&&!base.includes(':8790'));
-const proof=new URL('../proof/touch-workbench/',import.meta.url).pathname;mkdirSync(proof,{recursive:true});
+const proof=process.env.POCKET_REVIEW_PROOF||new URL('../proof/touch-workbench/',import.meta.url).pathname;mkdirSync(proof,{recursive:true});
 const cache=path.join(homedir(),'.cache/ms-playwright');
 const executablePath=process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE||readdirSync(cache).filter(x=>/^chromium-\d+$/.test(x)).sort((a,b)=>+b.split('-')[1]-+a.split('-')[1]).map(x=>path.join(cache,x,'chrome-linux64/chrome')).find(existsSync);
-const browser=await chromium.launch({headless:true,executablePath}),ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),p=await ctx.newPage(),errors=[],checks=[];
+const browser=await chromium.launch({headless:true,executablePath}),ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,...(process.env.POCKET_REVIEW_PROOF?{recordVideo:{dir:path.join(proof,'raw'),size:{width:390,height:844}}}:{})}),p=await ctx.newPage(),errors=[],checks=[];
 p.setDefaultTimeout(30000);p.on('pageerror',e=>errors.push(e.stack));
 const ui=p.locator('[data-pane="phone"]'),click=act=>ui.locator(`[data-act="${act}"]`).first().click();
 const doc=async address=>(await(await ctx.request.get(base+'/api/doc?path='+encodeURIComponent(address))).json());
@@ -89,4 +89,4 @@ try{
  checks.push('command search focus, unfinished address survives probe, narrow/short/desktop geometry');
  await click('host');await click('unload');await p.waitForFunction(()=>!document.documentElement.classList.contains('omega-mobile'));assert.equal(await p.locator('[data-mobile-resource]').count(),0);await shot('13-unused');
  assert.deepEqual(errors,[]);writeFileSync(path.join(proof,'browser.json'),JSON.stringify({frontend:process.env.POCKET_FRONTEND||JSON.parse((await doc('launch:identity')).text).frontend,task:taskPath,checks,contrast,errors,physicalDevice:false},null,2)+'\n');console.log(JSON.stringify({checks}));
-}catch(e){await shot('failure');console.error((await p.locator('body').innerText()).slice(-12000));throw e;}finally{await browser.close();}
+}catch(e){await shot('failure');console.error((await p.locator('body').innerText()).slice(-12000));throw e;}finally{const video=p.video();await ctx.close();if(video)await video.saveAs(path.join(proof,'pocket-journeys.webm'));await browser.close();}

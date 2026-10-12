@@ -14,6 +14,12 @@
 (defn state [ed] (or (get-in ed [:pkg-state "mobile"]) {}))
 (defn put [ed k v] (assoc-in ed [:pkg-state "mobile" k] v))
 (defn objects [ed] (vec (map second (sort-by first (:obj-index ed)))))
+(defn present-object [object]
+  (if (= "omega/task" (:type object))
+    (cond-> object
+      (contains? #{"done" "failed" "cancelled"} (:status object)) (assoc :ask nil)
+      (= "cancelled" (:status object)) (assoc :summary ""))
+    object))
 (defn task-data [ed] (get-in ed [:doc :data]))
 (defn draft [ed] (or (get-in ed [:pkg-state "mobile" :drafts (:path ed)]) ""))
 (defn visit-pane [ed pane path goto]
@@ -136,7 +142,7 @@
     :else ed)))
 (defn model [ed role]
   {:package "mobile" :role role :path (:path ed) :text (t/to-string (:text ed))
-   :objects (objects ed) :data (task-data ed) :state (state ed)
+   :objects (mapv present-object (objects ed)) :data (task-data ed) :state (state ed)
    :structure (:struct ed) :draft (draft ed) :dirty (and (not (docs/read-only? ed)) (c/dirty? ed)) :read-only (docs/read-only? ed)
    :cursor (first (c/cursor ed)) :message (:message ed) :revision (get-in ed [:doc :rev])
    :minibuf (when (:minibuf ed) (select-keys (:minibuf ed) [:kind :prompt :text :sel]))
