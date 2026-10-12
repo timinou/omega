@@ -1,0 +1,25 @@
+{
+  "schema": "omega.runtime.cutover.audit.v1",
+  "removed": {
+    "omega-browser-observation-registry": "vendor/bl-ed/web/package-observations.mjs",
+    "upstream-canonical-emitter-prototype": "research/js-actors/canonical-emitter-prototype.bl",
+    "upstream-common-emitter-prototype": "research/js-actors/common-emitter-prototype.bl",
+    "upstream-canonical-runtime-prototype": "research/js-actors/canonical-runtime-prototype.bl",
+    "upstream-module-prototype-test": "test/js/canonical-actor-prototype.test.mjs",
+    "upstream-module-prototype-launcher": "test/js/build-module-actor-prototype.bl"
+  },
+  "nativeProbeUses": "proc.work",
+  "runtimeAdapterSha256": "07727ab5c9f7c3542e5df714a12bdb6ceb53b152736ec01b36748d63c4463bd6",
+  "retainedBoundaries": [
+    "physical Worker lease pool",
+    "DOM/AudioContext/WebGL browser leaves",
+    "vendored editor by explicit scope"
+  ],
+  "productionGraphAudit": {
+    "compiler": "e10bdab8",
+    "inputs": "3f50b22f42632ff36056959c1f0aa6b8a2f6505b98c228d5eb5bb4cf2122044e",
+    "files": 261,
+    "supersededFiles": [],
+    "canonicalHostPresent": true
+  }
+}

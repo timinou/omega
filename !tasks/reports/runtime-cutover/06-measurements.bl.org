@@ -80,3 +80,11 @@ restart. The final root-task/browser rerun is recorded separately; a focused
 unit pass alone is not acceptance of the normal launch path.
 [[file:../../../spikes/pelagic/proof/milestone-6/root-before-supervisor-fix.log][Original failing journey]] ·
 [[file:../../../spikes/pelagic/proof/milestone-6/supervisor-context.log][Focused regression]]
+
+The next installed-release journey still failed: its SHA-authoritative seeded
+supervisor beam had not advanced with the source. The final bootstrap publication
+contains the matching host, and the stronger regression runs against both source
+and installed host, ten assertions passing. This distinguishes a language fix
+from successfully shipping that fix. The final launch results use the new
+=25f5e799= pin; earlier failed releases are retained as regression evidence.
+[[file:../../../spikes/pelagic/proof/milestone-6/supervisor-context-shipped.log][Source and installed-host regression]]

@@ -1,12 +1,20 @@
 #+title: One runtime, from ownership to performance
 #+status: Production mechanisms and creative workflows verified; final launch/Pocket review in progress
 
+* Open the recorded review
+Run =bl runtime.review= from Omega root, then open [[http://localhost:8820/][the review]].
+The viewer serves the committed evidence without a world or frontend build.
+Ctrl+C closes it. Use =bl runtime.review -- --port N= for another port.
+
 * Start with the thing you want to use
 From Omega root, =bl pelagic.dev= opens the instrument. =bl runtime.dev= opens
 its ownership inspector. =bl pocket= opens Pocket. All three attach to the same
 project world and shared VM. Each browser session retains its own package state
 and immutable frontend generation. =bl spikes.pelagic.dev= starts the showcase;
 =bl pelagic.local= serves the optional static demo. Use the URL each task prints.
+The default launch is the scripted demo. For the durable normal world use, for
+example, =bl pocket -- --live=, then use the same =--live= mode for the other
+entry points. =bl omega.stop= stops that world while retaining the shared VM.
 
 [[file:index.html][Interactive milestone report]] · [[file:07B-review.bl.org][Creative walkthrough]]
 
