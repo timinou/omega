@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """7B review: actual buttons in the real editor, isolated local bundle, video/audio."""
-import functools,http.server,threading,json,os,time,subprocess
+import functools,http.server,threading,json,os,time,subprocess,re
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1];OUT=Path(os.environ['PELAGIC_LOCAL_OUT'])
@@ -8,7 +8,7 @@ PROOF=Path(os.environ.get('PELAGIC_CREATIVE_PROOF',ROOT/'proof/milestone-7B'));P
 class Handler(http.server.SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
 server=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Handler,directory=str(OUT)));threading.Thread(target=server.serve_forever,daemon=True).start()
-report={'checks':[],'errors':[],'api':[]};q='document.querySelector(".view-host .view-body").pelagic'
+report={'passed':False,'checks':[],'errors':[],'api':[]};q='document.querySelector(".view-host .view-body").pelagic'
 def checked(name):report['checks'].append(name);print(name,flush=True)
 def source(page,text):
  page.evaluate('text=>{const {R,K,dispatch}=window.blEd;dispatch(R.hashMap(K("type"),K("pelagic/source"),K("source"),text));}',text)
@@ -61,5 +61,8 @@ try:
   page.evaluate('window.reviewEngine='+q+'.engine()');page.locator('#input-sink').focus();page.keyboard.press(':');page.keyboard.insert_text('(ed/unuse "pelagic")');page.keyboard.press('Enter');page.wait_for_function('window.reviewEngine.ctx.state==="closed"');shot(page,'after-unuse');checked('unuse closes owned audio/graphics/workers and retains source')
   assert not report['errors'],report['errors'];video=page.video;context.close();video.save_as(str(PROOF/'creative-workflows.webm'));browser.close()
   result=subprocess.run(['ffmpeg','-y','-ss',str(offset),'-i',str(PROOF/'creative-workflows.webm'),'-i',str(PROOF/'monitor.webm'),'-map','0:v','-map','1:a','-c:v','libvpx','-b:v','900k','-c:a','libopus','-shortest',str(PROOF/'creative-workflows-audio.webm')],capture_output=True,text=True);assert result.returncode==0,result.stderr
+  level=subprocess.run(['ffmpeg','-i',str(PROOF/'monitor.webm'),'-af','volumedetect','-f','null','-'],capture_output=True,text=True);peak=re.search(r'max_volume: (-?[0-9.]+) dB',level.stderr);assert peak and float(peak.group(1))>-80,level.stderr;report['recordedAudioPeakDb']=float(peak.group(1));report['passed']=True
+except Exception as error:
+ report['failure']=str(error);raise
 finally:
  server.shutdown();server.server_close();(PROOF/'creative-browser.json').write_text(json.dumps(report,indent=2)+'\n')

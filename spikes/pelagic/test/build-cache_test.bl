@@ -1,0 +1,21 @@
+(ns pelagic.build-cache-test (:require [pelagic.build :as build]))
+(deftest graph-document-exclusions-are-explicit
+ (let [home (build/home)]
+  (is (not (build/graph-input? (str home "/tutorials/06-takes-and-exploration.bl.org"))))
+  (is (not (build/graph-input? (str home "/live-set.bl.org"))))
+  (is (not (build/graph-input? (str home "/demo.bl.org"))))
+  (is (not (build/graph-input? (str home "/dev.bl"))))
+  (is (build/graph-input? (str home "/pelagic/compute.bl")))
+  (is (build/graph-input? (str home "/pelagic/build.bl")))
+  (is (build/graph-input? (str home "/unknown.bl.org")))))
+(deftest unknown-source-inputs-invalidate-the-checked-graph
+ (let [path (str (build/home) "/.graph-input-proof-" (System/unique_integer (list :positive)) ".bl")
+       before (build/graph-fingerprint)]
+  (try
+   (File/write! path "(ns graph-input-proof) (def value 1)\n")
+   (is (not= before (build/graph-fingerprint)))
+   (let [first (build/graph-fingerprint)]
+    (File/write! path "(ns graph-input-proof) (def value 2)\n")
+    (is (not= first (build/graph-fingerprint))))
+   (finally (File/rm! path)))
+  (is (= before (build/graph-fingerprint)))))
