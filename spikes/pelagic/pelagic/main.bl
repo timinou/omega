@@ -34,6 +34,8 @@
      (if (some (fn [name] (= name "runtime")) (pkg/names ed))
       (c/effect (assoc-in ed [:pkg-state "runtime" :return] "pelagic") {:kind :frame-layout :layout "runtime-pelagic" :keep {:main :origin}})
       (-> ed (assoc-in [:pkg-state "pelagic" :open-runtime] true) (c/effect {:kind :load-package :name "runtime"})))
+    (= :pelagic/capture (:type ev)) (send ed :capture {:source (t/to-string (:text ed)) :path (:path ed)})
+    (contains? #{:pelagic/fork :pelagic/source} (:type ev)) (c/replace-text ed (:source ev))
     (= :pelagic/request (:type ev)) (send ed :request (:request ev))
     (= :pelagic/control (:type ev)) (settings ed ev)
     (= :pelagic/sample (:type ev)) (send ed :sample ev)

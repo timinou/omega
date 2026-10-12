@@ -14,7 +14,8 @@ DISCARD PREVIEW leaves the active revision alone.
 CAPTURE TAKE records the starting document, session, transport, asset references,
 and subsequent state/controller checkpoints. FINISH TAKE closes capture.
 SAVE TAKE exports the manifest. REPLAY restores the starting session and queues
-its checkpoints by their captured musical beat. Imported sample assets remain
+its checkpoints by audio-clock offset, aligned to score steps. Transport jumps,
+pauses or scheduling loss mark the capture incomplete. Imported sample assets remain
 content-addressed references; another machine must relink those assets.
 The manifest is bounded to 512 events and 2 MiB. An overflow is explicitly
 incomplete and cannot be presented as a reproducible take.
@@ -44,7 +45,7 @@ playback reserve admission protect audio from preparation bursts.
 - [[file:../pelagic/take.bl][take.bl]] validates, bounds, forks and projects the beat timeline.
 - [[file:../pelagic/explore.bl][explore.bl]] derives alternatives without changing the base.
 - [[file:../test/creative_test.bl][creative_test.bl]] checks UTF-8 source retention, event order,
-  overflow refusal, deterministic seeds and bounds. Fifteen assertions pass.
+  overflow refusal, deterministic seeds and bounds. The native contracts include clock offsets and malformed-state refusal.
 
 Browser recordings, usability results and remaining limitations belong to the
 milestone-7B report; this walkthrough does not claim those checks have passed.

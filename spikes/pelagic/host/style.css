@@ -4,3 +4,22 @@
 .performance-controls{padding:7px 20px;border-bottom:1px solid #244047;flex-shrink:0;background:#0c1c22}.performance-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:4px 0}.performance-row button,.performance-row select{font-size:9px;padding:4px 7px}.performance-row span,.performance-row label{font-size:9px;color:#91b6b9}.performance-row input[type=range]{width:90px}.performance-row input[data-snapshot-name]{width:95px;background:#091619;border:1px solid #294044;color:#c1d7d6;font:inherit;padding:4px}.revision{margin-left:auto;color:#c6dfab!important}.performance-controls summary{font-size:9px;color:#789b9f;cursor:pointer;padding-top:3px}.diagnostics{font-size:9px;color:#8caeac;max-height:130px;overflow:auto}.visual{min-height:260px}.app:has(.performance-controls) .header{padding:10px 20px}
 
 .app.performing .timeline,.app.performing .transport label:has([data-control="scene"]){display:none}
+/* Creative workflow state sits beside its actions, outside diagnostics. */
+.audition-strip { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px; border:1px solid #40505d; border-radius:8px; background:#15212b; }
+.audition-strip.previewing { border-color:#e8b871; box-shadow:inset 4px 0 #e8b871; }
+.audition-state { font-size:11px; letter-spacing:.08em; color:#c4ced6; margin-right:auto; }
+.previewing .audition-state { color:#ffce8d; }
+.creative-workflows { border:1px solid #40505d; border-radius:8px; padding:12px; }
+.creative-workflows summary { font-size:11px; letter-spacing:.12em; margin-bottom:8px; }
+.alternatives { display:flex; flex-wrap:wrap; gap:6px; }
+.performance-controls button:focus-visible,.performance-controls input:focus-visible,.performance-controls select:focus-visible { outline:2px solid #ffce8d; outline-offset:3px; }
+@media(max-width:640px) { .performance-controls button,.performance-controls select { min-height:44px; } .audition-strip { gap:10px; } .audition-state { flex-basis:100%; } }
+
+.performance-row button,.performance-row select {font-size:11px;min-height:30px;padding:6px 9px}
+.performance-row span,.performance-row label,.performance-controls summary {font-size:11px}
+.performance-controls {padding:10px 16px}
+.audition-strip button {min-height:34px}
+.creative-workflows .file-label {display:inline-flex;align-items:center;min-height:34px;padding:6px 9px;border:1px solid #52767b;border-radius:4px;color:#c1dedc}
+.performance-controls button:disabled {opacity:.5}
+@media(prefers-reduced-motion:reduce){button{transition:none}}
+@media(max-width:640px){.performance-row button,.performance-row select,.creative-workflows .file-label{min-height:44px}.performance-controls{padding:8px}.audition-strip{padding:10px}}

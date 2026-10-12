@@ -20,10 +20,14 @@
   (when-not (and (map? take) (= schema (:schema take)) (= version (:version take))
                 (map? (:base take)) (map? (:document take)) (map? (:transport take))
                 (map? (:provenance take)) (vector? (:events take))
+                (erlang/is_number (get-in take [:transport :beat]))
+                (erlang/is_number (get-in take [:transport :audioTime]))
                 (int? (:bytes take)) (<= 0 (:bytes take)) (<= (:bytes take) max-bytes)
                 (<= (count (:events take)) max-events)
                 (every? (fn [event] (and (map? event) (string? (:kind event))
-                                        (erlang/is_number (:beat event)) (<= 0 (:beat event)))) (:events take)))
+                                        (erlang/is_number (:beat event)) (<= 0 (:beat event))
+                                        (erlang/is_number (:audioTime event)) (<= 0 (:audioTime event))
+                                        (or (not (contains? #{"active" "control"} (:kind event))) (map? (:state event))))) (:events take)))
     (throw "Unsupported or malformed take"))
   (when-not (:reproducible take) (throw "Take capture is incomplete; export its recording as a partial take"))
   (doseq [index (range (count (:events take)))]
@@ -49,13 +53,9 @@
          "remain content-addressed references in the companion take manifest.\n\n"
          "#+begin_src beam-lisp\n(av/commit " (pr-str {:quantize :bar :edits edits}) ")\n#+end_src\n")))
 
-(defn replay-events
-  "Ordered state checkpoints at beats relative to the captured transport."
-  [take]
-  (check take)
-  (vec (filter (fn [event] (= "active" (:kind event))) (:events take))))
 (defn timeline [take]
   (check take)
   (let [start (get-in take [:transport :beat] 0)]
-    (vec (map (fn [event] (assoc event :relative-beat (max 0 (- (:beat event) start))))
+    (vec (map (fn [event] (assoc event :relative-beat (max 0 (- (:beat event) start))
+                              :relative-time (max 0 (- (get event :audioTime 0) (get-in take [:transport :audioTime] 0)))))
               (filter (fn [event] (contains? #{"active" "control"} (:kind event))) (:events take))))))

@@ -2,12 +2,14 @@
                                   [pelagic.performance :as performance]))
 (deftest takes-retain-source-and-checkpoint-order
  (let [state (:current (performance/initial))
-       initial (take/create {:state state} {:source "λ"} {:beat 8} {:assets []})
+       initial (take/create {:state state} {:source "λ"} {:beat 8 :audioTime 10} {:assets []})
        changed (assoc-in state [:config :space] 0.6)
-       captured (take/append initial {:kind "active" :beat 12 :state changed})]
+       captured (take/append initial {:kind "active" :beat 12 :audioTime 12 :state changed})]
   (is (= "λ" (get-in (take/check captured) [:document :source])))
   (is (= 0.6 (get-in (take/final-session captured) [:state :config :space])))
   (is (= 4 (:relative-beat (first (take/timeline captured)))))
+  (is (= 2 (:relative-time (first (take/timeline captured)))))
+  (is (thrown? (take/check (assoc-in captured [:events 0 :state] nil))))
   (is (includes? (take/fork-source captured) "av/commit"))
   (is (thrown? (take/check (assoc captured :bytes -1))))
   (is (thrown? (take/check (assoc-in captured [:events 0 :sequence] 9))))))

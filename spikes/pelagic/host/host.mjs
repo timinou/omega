@@ -3,6 +3,8 @@ import {d_observe_package as observePackage} from '../../out/js.observation.mjs'
 import * as Score from '../../out/pelagic.score.mjs';
 import * as Performance from '../../out/pelagic.performance.mjs';
 import * as Audition from '../../out/pelagic.audition.mjs';
+import * as Takes from '../../out/pelagic.take.mjs';
+import * as Explore from '../../out/pelagic.explore.mjs';
 import {errorText} from './errors.mjs';
 import {LocalStore,LiveTake,validateSession} from './storage.mjs';
 import {performanceControls} from './controls.mjs';
@@ -30,11 +32,12 @@ export function createHost(api) {
   const store=new LocalStore();let lastTake=null,restoreGeneration=0,recordPreparing=false,lastEvaluation=null,evalCount=0;
   let model=Performance.d_initial(),active=plain(model.get(R.kw('current'))),scheduled=active,revision=null,mode='finite',pausedBeat=0,pausedTime=0,timeOrigin=0,evaluation=0;
   const ownedNamespaces=new Set();
+  let capturedTake=null,savedTake=null,lastSource=null,explorations=[],replayQueue=[],replayActivations=[];
   const preparationTurns=new Uint32Array(2001);let preparationTurnMax=0;
   const preparationP95=()=>{const total=preparationTurns.reduce((a,b)=>a+b,0);if(!total)return null;let count=0;for(let i=0;i<preparationTurns.length;i++){count+=preparationTurns[i];if(count>=total*.95)return i;}};
   const events=[],diagnostics={ticks:0,missed:0,late:[],frames:[],longTasks:0,compiles:[],frameHistogram:new Uint32Array(1001),av:[],handoff:[],activation:[],render:[],started:performance.now()};
   let lastFrame=0,syncing=false,avExpected=null,announcement=null;
-  const log=(kind,data={})=>{events.push({kind,audioTime:ctx?.currentTime||0,beat:current().beat,...data});if(events.length>4096)events.shift();};
+  const log=(kind,data={})=>{const event={kind,audioTime:ctx?.currentTime||0,beat:current().beat,...data};const {state,...compact}=event;if(typeof compact.source==='string')compact.source=compact.source.slice(0,12000);events.push(compact);if(events.length>4096)events.shift();if(capturedTake){capturedTake=Takes.d_append(capturedTake,toBL(event));if(['play','pause','stop','resync'].includes(kind))capturedTake=capturedTake.assoc(R.kw('reproducible'),false).assoc(R.kw('omitted'),'Transport changed or scheduling lost time during capture');}};
   const observer=globalThis.PerformanceObserver?new PerformanceObserver(list=>{diagnostics.longTasks+=list.getEntries().length;}):null;
   try{observer?.observe({type:'longtask'});}catch{}
   let evaluatorClient=createEvaluator(moduleURL('live-worker.mjs'));
@@ -70,7 +73,7 @@ export function createHost(api) {
     const old=current(),tempoChanged=values.bpm!==undefined&&values.bpm!==config.bpm;Object.assign(config,values);
     if(playing&&tempoChanged){timeOrigin=old.time;origin=ctx.currentTime;beatOrigin=old.beat;nextTime=ctx.currentTime+Math.max(0,nextStep/4-old.beat)*60/config.bpm;}
     if(soundChanged){audio?.configure(config);for(const d of Object.values(decks))d.configure();}
-    if(!syncing){++restoreGeneration;active={...active,config:{...config}};model=model.assoc(R.kw('current'),toBL(active));if(!revision)scheduled=active;}
+    if(!syncing){++restoreGeneration;active={...active,config:{...config}};model=model.assoc(R.kw('current'),toBL(active));if(!revision)scheduled=active;log('control',{values,state:active});}
 
   }
   function ack(phase){
@@ -94,7 +97,7 @@ export function createHost(api) {
     timeOrigin=playing?current().time-Math.max(0,ctx.currentTime-r.time):pausedTime;beatOrigin=r.beat;origin=r.time;config={...active.config};scheduled=active;patterns=new Map(Object.entries(active.patterns));
     revision=null;pending=[];if(r.audioChanged)audio?.configure(config,r.time);
     for(const v of views){v.shader?.setState?.(active,r.beat,r.time,r.id,playing);v.frozen=false;}
-    avExpected=r.time;log('active',{revision:r.id});announcement=r.id;if(!playing){ack('ACTIVE');announcement=null;}diagnostics.activation.push(performance.now()-activationStarted);if(diagnostics.activation.length>256)diagnostics.activation.shift();
+    if(r.source)lastSource=r.source;avExpected=r.time;log('active',{revision:r.id,state:active,source:r.source||lastSource});announcement=r.id;if(!playing){ack('ACTIVE');announcement=null;}diagnostics.activation.push(performance.now()-activationStarted);if(diagnostics.activation.length>256)diagnostics.activation.shift();
   }
   // Reserve native audio independently of the next editable musical boundary.
   const lookAhead=()=>4;
@@ -136,7 +139,7 @@ export function createHost(api) {
     const quantum=quantize==='beat'?1:quantize==='phrase'?16:4;
     const beat=playing?Performance.d_boundary(current().beat,quantum,1.15*config.bpm/60):pausedBeat;
     if(playing&&audioChanged&&nextStep/4>=beat){const target=origin+(beat-beatOrigin)*60/config.bpm;audio.cancelFrom(target);nextStep=Math.round(beat*4);nextTime=target;}
-    revision={id:value.pending.id,beat,state,assetChanges:assetChanges??inheritedAssets,originalAssetChanges:assetChanges??inheritedAssets,audioChanged,armed:!playing||!audioChanged,time:playing?origin+(beat-beatOrigin)*60/config.bpm:ctx?.currentTime||0};pending=[revision];
+    revision={id:value.pending.id,beat,state,assetChanges:assetChanges??inheritedAssets,originalAssetChanges:assetChanges??inheritedAssets,audioChanged,source,armed:!playing||!audioChanged,time:playing?origin+(beat-beatOrigin)*60/config.bpm:ctx?.currentTime||0};pending=[revision];
     if(playing&&!audioChanged)for(const v of views)v.shader?.armState?.(state,beat,revision.time,revision.id);
     log('queued',{revision:revision.id,targetBeat:beat,audioChanged});ack(playing&&!revision.armed?'QUEUED':'ARMED');
     if(!playing)applyRevision();return {ok:true,revision:value.pending.id,targetBeat:beat};
@@ -146,7 +149,7 @@ export function createHost(api) {
   function commitAudition(quantize='bar'){
     if(!auditionState)throw new Error('No staged audition');
     const candidate=Audition.d_commit(auditionState,model),source=auditionState.get(R.kw('source'));
-    const result=queueModel(candidate,quantize);stopAudition(true);log('audition-commit',{source});return result;
+    const result=queueModel(candidate,quantize,false,null,source);stopAudition(true);log('audition-commit',{source});return result;
   }
   function validateState(state){
     for(const [key,value] of Object.entries(defaults))if(typeof state.config[key]!==typeof value)throw new Error('Missing or invalid configuration '+key);
@@ -170,7 +173,14 @@ export function createHost(api) {
     for(const [key,lo,hi] of [['density',0,1],['transpose',-24,24],['seed',0,2147483646]])if(!Number.isFinite(state.variation[key])||state.variation[key]<lo||state.variation[key]>hi)throw new Error('Invalid variation '+key);
   }
   function schedule(){
-    if(!playing||disposed)return;const preparationStart=performance.now();applyRevision();diagnostics.ticks++;
+    if(!playing||disposed)return;const preparationStart=performance.now();applyRevision();
+    const reserved=scheduled;
+    while(replayActivations.length&&replayActivations[0].time<=ctx.currentTime){
+      const checkpoint=replayActivations.shift();model=model.assoc(R.kw('serial'),checkpoint.id).assoc(R.kw('pending'),toBL({id:checkpoint.id,state:checkpoint.state,history:'normal'}));
+      revision=checkpoint;applyRevision();
+    }
+    if(replayActivations.length)scheduled=reserved;
+    diagnostics.ticks++;
     if(nextTime<ctx.currentTime-.04){
       const skip=Math.ceil((ctx.currentTime-nextTime)/(60/scheduled.config.bpm/4));diagnostics.missed+=skip;
       log('resync',{skipped:skip});nextStep+=skip;nextTime+=skip*60/scheduled.config.bpm/4;
@@ -180,6 +190,11 @@ export function createHost(api) {
         revision.time=nextTime;revision.armed=true;scheduled=revision.state;
         for(const v of views)v.shader?.armState?.(scheduled,revision.beat,revision.time,revision.id);
         audio.configure(scheduled.config,nextTime);installAssets(revision,nextTime);ack('ARMED');log('armed',{revision:revision.id,time:nextTime});
+      }
+      while(replayQueue.length&&replayQueue[0].time<=nextTime){
+        const event=replayQueue.shift(),state=event.state,id=event.id;
+        const checkpoint={id,state,beat:event.beat,time:nextTime,armed:true,audioChanged:true,assetChanges:event.assetChanges,source:event.source};
+        replayActivations.push(checkpoint);scheduled=state;audio.configure(state.config,nextTime);installAssets(checkpoint,nextTime);
       }
       const i=nextStep,c=scheduled.config;
       const voices=scoreVoices(mode==='performance'?Performance.d_score_index(i):i);
@@ -198,7 +213,7 @@ export function createHost(api) {
     for(const d of Object.values(decks))if(d.buffer){d.offset=d.cue;d.play(origin);}
     clearInterval(timer);timer=setInterval(()=>{try{schedule();}catch(e){stop();notice(errorText(e),false);}},25);schedule();log('play',{mode});notice(continuous?'Continuous performance · audio clock locked':'Audio clock locked · 64 bars / four movements');
   }
-  function stop(){const position=current();pausedTime=position.time;pausedBeat=position.beat;playing=false;clearInterval(timer);timer=null;audio?.stop();for(const d of Object.values(decks))d.stop();}
+  function stop(){if(playing)log('stop');replayQueue=[];replayActivations=[];const position=current();pausedTime=position.time;pausedBeat=position.beat;playing=false;clearInterval(timer);timer=null;audio?.stop();for(const d of Object.values(decks))d.stop();}
   function pause(){pausedBeat=current().beat;stop();cancelRevision();nextStep=Math.ceil(pausedBeat*4);log('pause');}
   function resume(){const beat=pausedBeat,time=pausedTime;play(beat/4,mode==='performance');timeOrigin=time;pausedTime=time;log('resume');}
   function validatePlan(plan){
@@ -308,7 +323,7 @@ export function createHost(api) {
       if(changes.length)result=queueEdits(changes,{quantize:edits.find(e=>e.kind==='commit')?.quantize,preview:options.preview,source});
       for(const e of actions)request(e);
       diagnostics.compiles.push(performance.now()-started);if(diagnostics.compiles.length>256)diagnostics.compiles.shift();
-      log('evaluate',{edits:all.length,source:source.slice(0,12000)});
+      log('evaluate',{edits:all.length,source});
       notice(options.preview?'Audition ready · quiet monitor · commit or cancel':playing?'Live edit staged · next boundary':'Live definitions ready · press Play');
       return {...result,edits:all.length};
     }catch(e){if(generation!==evaluation)return {ok:false,error:'Superseded edit'};const error=errorText(e);notice('Edit rejected · '+error);log('rejected',{error});return {ok:false,error};}
@@ -412,6 +427,40 @@ export function createHost(api) {
     log('session-load',{missing:prepared.missing});notice(prepared.missing.length?'Session staged · relink missing audio: '+prepared.missing.join(', '):'Session staged');
     return {...result,missing:prepared.missing};
   }
+  function captureTake(document){
+    unlock();
+    if(capturedTake){const finished=capturedTake;capturedTake=null;savedTake=null;savedTake=Takes.d_check(finished);notice('Take captured · replay or fork');return plain(savedTake);}
+    if(!playing)throw new Error('Choose PERFORM before capturing a timeline');
+    capturedTake=Takes.d_create(toBL(session()),toBL(document||{source:lastSource||'',path:'live-set.bl.org'}),
+      toBL({...current(),audioTime:ctx.currentTime,mode}),toBL({shader:shaderSource,assets:Object.values(active.assets),sampleRate:ctx.sampleRate}));
+    savedTake=null;notice('Capturing source, revisions and controls');return plain(capturedTake);
+  }
+  function takeManifest(){const take=capturedTake||savedTake;if(!take)throw new Error('Capture a take first');return Takes.d_check(take);}
+  function saveManifest(){download(JSON.stringify(plain(takeManifest()),null,2),'pelagic-take.json','application/json');}
+  function forkTake(){const source=Takes.d_fork_source(takeManifest());api.dispatch({type:'pelagic/fork',source});notice('Fork opened · undo returns to your source');return source;}
+  async function replayTake(value=plain(takeManifest())){
+    const take=Takes.d_check(toBL(value));const base=plain(take.get(R.kw('base')));
+    const checkpoints=plain(Takes.d_timeline(take));checkpoints.forEach(e=>validateState(e.state));
+    const prepared=[];
+    for(const event of checkpoints){const assets=await prepareAssets(event.state);alive();if(assets.missing.length)throw new Error('Relink take audio: '+assets.missing.join(', '));prepared.push(assets.changes);}
+    pause();await loadSession(base);alive();const start=plain(take.get(R.kw('transport'))).beat;
+    play(start/4,true);const serial=model.get(R.kw('serial'));
+    replayQueue=checkpoints.map((event,index)=>({...event,id:serial+index+1,time:origin+event['relative-time'],assetChanges:prepared[index]}));
+    // play() reserves the base ahead; replay replaces that reservation once.
+    audio.cancelFrom(origin);nextStep=Math.round(start*4);nextTime=origin;schedule();
+    log('take-replay',{events:checkpoints.length});notice('Replaying captured state and controller timeline');return {events:checkpoints.length};
+  }
+
+  function explore(seed=active.variation.seed){
+    explorations=plain(Explore.d_candidates(toBL(active),seed,4));
+    notice('Four seeded alternatives · audition before committing');return explorations;
+  }
+  function auditionAlternative(index){
+    const choice=explorations[index];if(!choice)throw new Error('Explore first');
+    if(JSON.stringify(choice.base)!==JSON.stringify(active))throw new Error('Exploration is stale; generate from the current revision');
+    return queueEdits([choice.edit],{preview:true,source:'(av/variation '+R.printStr(toBL(choice.variation))+')'});
+  }
+  function sourceRevision(){if(!lastSource)throw new Error('Evaluate source first');api.dispatch({type:'pelagic/source',source:lastSource});return lastSource;}
   async function exportTake(){
     if(!lastTake){const id=await store.get('takes','latest');if(!id)throw new Error('No saved take yet');const info=await store.get('takes',id);
       const chunks=[];for(let i=0;i<Math.max(info.chunks+2,2);i++){const chunk=await store.get('chunks',id+':'+i);if(!chunk){if(i<info.chunks)throw new Error('Missing recording chunk');break;}chunks.push(chunk);}if(!chunks.length)throw new Error('No recording chunks stored yet');download(new Blob(chunks,{type:info.mime}),info.complete===false?'pelagic-live-partial.webm':'pelagic-live.webm',info.mime);return;}
@@ -446,7 +495,7 @@ export function createHost(api) {
   }
   function report(){const total=diagnostics.frameHistogram.reduce((a,b)=>a+b,0),q=f=>{let sum=0;for(let i=0;i<diagnostics.frameHistogram.length;i++){sum+=diagnostics.frameHistogram[i];if(sum>=total*f)return i;}return 0;};
     const av=diagnostics.av.slice().sort((a,b)=>a-b);
-    return {audition:auditionState?{status:auditionEngine?'playing':'staged',current:Audition.d_current$Q(auditionState,model),baseRevision:auditionState.get(R.kw('base-revision'))}:null,elapsedSeconds:(performance.now()-diagnostics.started)/1000,missedEvents:diagnostics.missed,schedulerTicks:diagnostics.ticks,longTasks:diagnostics.longTasks,
+    return {sourceAvailable:!!lastSource,take:capturedTake?'capturing':savedTake?'ready':'empty',explorations:explorations.map(c=>c.variation),replayRemaining:replayQueue.length+replayActivations.length,audition:auditionState?{status:auditionEngine?'playing':'staged',current:Audition.d_current$Q(auditionState,model),baseRevision:auditionState.get(R.kw('base-revision'))}:null,elapsedSeconds:(performance.now()-diagnostics.started)/1000,missedEvents:diagnostics.missed,schedulerTicks:diagnostics.ticks,longTasks:diagnostics.longTasks,
       frameP95:q(.95),frameP99:q(.99),framesOver100Percent:diagnostics.frameHistogram.slice(101).reduce((a,b)=>a+b,0)/Math.max(1,total)*100,
       audioClock:ctx?{sampleRate:ctx.sampleRate,baseLatency:ctx.baseLatency,outputLatency:ctx.outputLatency,outputTimestamp:ctx.getOutputTimestamp?.(),nativeSeconds:ctx.currentTime,wallSeconds:(performance.now()-ctxWall)/1000,rate:ctx.currentTime/Math.max(.001,(performance.now()-ctxWall)/1000)}:null,
       avSubmitP95Ms:av[Math.floor(av.length*.95)]??null,avSamples:av.length,avHandoffP95Ms:diagnostics.handoff.slice().sort((a,b)=>a-b)[Math.floor(diagnostics.handoff.length*.95)]??null,
@@ -464,6 +513,7 @@ export function createHost(api) {
     const v={canvas,shader:null,frozen:false,revision(phase,id,targetBeat){controls?.update(controlModel(),{phase,revision:id,targetBeat,...report()});},status(s){$('.status').textContent=s;$('.status').classList.toggle('error',s.startsWith('Edit rejected'));}};views.add(v);
     controls=performanceControls(shadow,{request,notice,perform:()=>dispatch({type:'command',command:'pelagic/perform'}),
       mix:(control,value)=>dispatch({type:'pelagic/control',control,value}),
+      capture:()=>dispatch({type:'pelagic/capture'}),manifest:saveManifest,fork:forkTake,replay:replayTake,explore,auditionAlternative,source:sourceRevision,
       save:()=>download(JSON.stringify(validateSession(session()),null,2),'pelagic-session.pelagic.json','application/json'),load:loadSession,take:exportTake});
     const lost=event=>{event.preventDefault();contextLost=true;pause();if(recording)stopRecording({save:false}).catch(()=>{});notice('GPU context lost · transport paused',false);};
     const restored=async()=>{if(dead||disposed)return;const [source]=await sources();if(!v.shader?.worker){v.shader?.dispose({lose:false});v.shader=new SceneStage(canvas);v.shader.compile(shaderSource||source);if(mode==='performance'){v.shader.validateState(active);v.shader.setState(active,pausedBeat);}}contextLost=false;notice('GPU restored · press RESUME',false);};
@@ -514,7 +564,7 @@ export function createHost(api) {
       if(x.dataset.sampleBpm)dispatch({type:'pelagic/deck',deck:x.dataset.sampleBpm,op:'bpm',value:+x.value});});
     // Proof methods are attached to the owned DOM node, removed with the view.
     root.pelagic={renderAt,renderAudio,evaluate,stats:()=>({playing,audioTime:ctx?.currentTime,nextStep,lastEvaluation,evalCount,voices:audio?.voices.size||0,context:ctx?.state||'none',audition:auditionState?{status:auditionEngine?'playing':'staged',current:Audition.d_current$Q(auditionState,model),baseRevision:auditionState.get(R.kw('base-revision'))}:null,frames:v.shader?.frames||0,recording:!!recording,patterns:Object.keys(scheduled.patterns),pending:pending.length,mode,time:current().time,beat:current().beat,revision:revisionID(),phase:revision?(revision.armed?'ARMED':'QUEUED'):'ACTIVE',resources:audio?.resources(),gpu:v.shader?.resources?.(),diagnostics:{missed:diagnostics.missed,ticks:diagnostics.ticks,longTasks:diagnostics.longTasks}}),ready:()=>init,compilerReady:()=>{alive();return evaluator()?.request(null)??vm();},
-      request,session,loadSession,record,stopRecording,exportRecording:async writable=>{if(recording)await stopRecording({save:false});if(!lastTake)throw new Error('No take');await lastTake.exportTo(writable);},midi:()=>controls,model:()=>plain(model),events:()=>events.slice(),diagnostics:report,wav,soundtrackAnalysis,shader:()=>v.shader,engine:()=>audio,auditionEngine:()=>auditionEngine,config:()=>({...config}),decks:()=>decks};
+      request,session,loadSession,captureTake,takeManifest:()=>plain(takeManifest()),forkTake,replayTake,explore,auditionAlternative,sourceRevision,record,stopRecording,exportRecording:async writable=>{if(recording)await stopRecording({save:false});if(!lastTake)throw new Error('No take');await lastTake.exportTo(writable);},midi:()=>controls,model:()=>plain(model),events:()=>events.slice(),diagnostics:report,wav,soundtrackAnalysis,shader:()=>v.shader,engine:()=>audio,auditionEngine:()=>auditionEngine,config:()=>({...config}),decks:()=>decks};
     return {update(model){const state=model.state||defaults;if(state.revision===undefined||state.revision>=revisionID())configure(state);
       for(const [k,value] of Object.entries(state)){const el=$(`[data-control="${k}"]`);if(el&&shadow.activeElement!==el)el.value=value;}
       shadow.querySelectorAll('[data-stem]').forEach(b=>b.classList.toggle('active',!!config[b.dataset.stem]));$('[data-freeze]').classList.toggle('active',!!config.freeze);
@@ -526,12 +576,13 @@ export function createHost(api) {
     case 'perform':configure(e.args);play(0,true);break;
     case 'request':try{request(e.args);}catch(error){notice('Edit rejected · '+errorText(error));}break;
     case 'configure':configure(e.args);break;case 'cue':play(e.args.bar,mode==='performance');break;
+    case 'capture':captureTake(e.args);break;
     case 'evaluate':unlock();await evaluate(e.args.source,{preview:!!e.args.preview});break;
     case 'sample':{unlock();const {token,deck}=e.args,file=files.get(token);files.delete(token);if(!file)throw new Error('Audio file expired');const hash=await store.asset(file);alive();const result=await decks[deck].load(file);decks[deck].hash=hash;alive();log('asset',{deck,hash,name:file.name});notice(`Deck ${deck.toUpperCase()} · ${result.name} · set its source BPM, then play`);break;}
     case 'deck':unlock();decks[e.args.deck].action(e.args.op,e.args.value);break;
     case 'record':await record();break;case 'export':await exportAudio();break;
     default:throw new Error('Unknown Pelagic effect '+e.op);}},
-    dispose(){unobserve();disposed=true;++evaluation;stopAudition(true);scoreVoices.dispose();evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
+    dispose(){unobserve();capturedTake=null;savedTake=null;explorations=[];replayQueue=[];disposed=true;++evaluation;stopAudition(true);scoreVoices.dispose();evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
       for(const d of Object.values(decks))d.dispose();for(const job of offlineRenders)job.abort();offlineRenders.clear();audio?.dispose();ctx?.close();files.clear();handles.clear();pending=[];patterns.clear();for(const url of urls)URL.revokeObjectURL(url);
       for(const v of views)v.shader?.dispose();}
   };

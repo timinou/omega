@@ -4,7 +4,9 @@ export function performanceControls(shadow,api){
  container.innerHTML=`<div class="performance-row"><button data-perform>▶ PERFORM</button><button data-action="pause">PAUSE</button><button data-action="resume">RESUME</button><button data-action="undo">UNDO</button><button data-action="redo">REDO</button><button data-action="cancel">CANCEL</button><button data-action="panic">PANIC</button><button data-runtime>RUNTIME</button><span class="revision" aria-live="polite">ACTIVE · REV 0</span></div>
  <div class="performance-row"><span>SCENES</span>${['bathymetry','current','cathedral','afterglow'].map(name=>`<button data-launch="${name}">${name.toUpperCase()}</button>`).join('')}<label>AT<select data-quantize><option value="bar">BAR</option><option value="beat">BEAT</option><option value="phrase">PHRASE</option></select></label><label>VIA<select data-transition><option>crossfade</option><option>dissolve</option><option>iris</option></select></label><label>BEATS<select data-transition-beats><option>4</option><option>8</option><option>16</option></select></label></div>
  <div class="performance-row">${['build','break','drop','release'].map(name=>`<button data-gesture="${name}">${name.toUpperCase()}</button>`).join('')}<label>LAYER<select data-layer><option value="">OFF</option><option value="bathymetry">CONTOURS</option><option value="cathedral">MANDALA</option><option value="afterglow">RIBBONS</option></select></label><label>INTENSITY<input aria-label="Visual intensity" data-visual="intensity" type="range" min=".1" max="2" step=".05" value="1"></label></div>
- <details><summary>SESSION / MAPPINGS / DIAGNOSTICS</summary><div class="performance-row"><input data-snapshot-name value="home" aria-label="Snapshot name"><button data-save-snapshot>SAVE SNAPSHOT</button><select data-snapshots aria-label="Saved snapshots"><option value="">RECALL…</option></select><button data-save-session>SAVE SESSION</button><label class="file-label">OPEN SESSION<input data-open-session type="file" accept=".json"></label><button data-command="pelagic/preview">AUDITION CODE</button><button data-action="audition-commit">COMMIT AUDITION</button><button data-action="audition-cancel">CANCEL AUDITION</button><button data-midi>MIDI LEARN</button><select data-midi-target aria-label="MIDI target"><option value="crossfade">CROSSFADE</option><option value="filter">FILTER</option><option value="space">SPACE</option><option value="echo">ECHO</option><option value="master">MASTER</option><option value="intensity">VISUAL INTENSITY</option><option value="feedback">FEEDBACK</option><option value="palette">PALETTE</option></select></div>
+ <section class="audition-strip" aria-label="Safe audition"><span class="audition-state" role="status">NO PREVIEW</span><button data-command="pelagic/preview">AUDITION CODE</button><button class="primary" data-action="audition-commit">COMMIT AT BAR</button><button data-action="audition-cancel">DISCARD PREVIEW</button><button data-source>↗ REVISION SOURCE</button></section>
+ <details class="creative-workflows" open><summary>TAKES / EXPLORE</summary><div class="performance-row"><button data-capture>● CAPTURE TAKE</button><button data-manifest>SAVE TAKE</button><button data-replay>▶ REPLAY</button><button data-fork>⑂ FORK SOURCE</button><label class="file-label">OPEN TAKE<input data-open-take type="file" accept=".json"></label></div><div class="performance-row"><label>SEED<input data-explore-seed aria-label="Exploration seed" type="number" min="0" max="2147483646" value="37"></label><button data-explore>EXPLORE</button><div class="alternatives" aria-label="Seeded alternatives"></div></div></details>
+ <details><summary>SESSION / MAPPINGS / DIAGNOSTICS</summary><div class="performance-row"><input data-snapshot-name value="home" aria-label="Snapshot name"><button data-save-snapshot>SAVE SNAPSHOT</button><select data-snapshots aria-label="Saved snapshots"><option value="">RECALL…</option></select><button data-save-session>SAVE SESSION</button><label class="file-label">OPEN SESSION<input data-open-session type="file" accept=".json"></label><button data-midi>MIDI LEARN</button><select data-midi-target aria-label="MIDI target"><option value="crossfade">CROSSFADE</option><option value="filter">FILTER</option><option value="space">SPACE</option><option value="echo">ECHO</option><option value="master">MASTER</option><option value="intensity">VISUAL INTENSITY</option><option value="feedback">FEEDBACK</option><option value="palette">PALETTE</option></select></div>
  <div class="performance-row"><label>DENSITY<input aria-label="Pattern density" data-variation="density" type="range" min="0" max="1" step=".05" value="1"></label><label>TRANSPOSE<input aria-label="Pattern transposition" data-variation="transpose" type="number" min="-24" max="24" value="0"></label><label>FEEDBACK<input aria-label="Visual feedback" data-visual="feedback" type="range" min="0" max=".7" step=".02" value=".08"></label><button data-save-take>RECOVER LAST TAKE</button></div><pre class="diagnostics"></pre></details>`;
  shadow.querySelector('.transport').after(container);
  const $=selector=>container.querySelector(selector),guard=fn=>Promise.resolve().then(fn).catch(e=>api.notice('Edit rejected · '+errorText(e)));
@@ -27,6 +29,16 @@ export function performanceControls(shadow,api){
    else if(b.dataset.action)await api.request({kind:b.dataset.action});
    else if(b.dataset.launch)send({kind:'launch',name:b.dataset.launch,options:{transition:$('[data-transition]').value,beats:+$('[data-transition-beats]').value}});
    else if(b.dataset.gesture)send({kind:'gesture',name:b.dataset.gesture});
+   else if(b.hasAttribute('data-capture'))api.capture();
+   else if(b.hasAttribute('data-manifest'))api.manifest();
+   else if(b.hasAttribute('data-replay'))await api.replay();
+   else if(b.hasAttribute('data-fork'))api.fork();
+   else if(b.hasAttribute('data-source'))api.source();
+   else if(b.hasAttribute('data-explore')){
+    const choices=api.explore(+$('[data-explore-seed]').value);
+    $('.alternatives').replaceChildren(...choices.map((choice,index)=>{const button=document.createElement('button');button.dataset.alternative=index;button.textContent='◉ '+choice.name;button.title='Audition · density '+choice.variation.density+' · transpose '+choice.variation.transpose;return button;}));
+   }
+   else if(b.hasAttribute('data-alternative'))api.auditionAlternative(+b.dataset.alternative);
    else if(b.hasAttribute('data-save-snapshot'))api.request({kind:'snapshot',name:$('[data-snapshot-name]').value});
    else if(b.hasAttribute('data-save-session'))api.save();
    else if(b.hasAttribute('data-save-take'))await api.take();
@@ -42,6 +54,7 @@ export function performanceControls(shadow,api){
   else if(x.dataset.variation)send({kind:'variation',values:{[x.dataset.variation]:+x.value}});
   else if(x.hasAttribute('data-layer'))send({kind:'layer',name:x.value||null,mix:.3});
   else if(x.hasAttribute('data-snapshots')&&x.value)await api.request({kind:'recall',name:x.value});
+  else if(x.hasAttribute('data-open-take')&&x.files[0])await api.replay(JSON.parse(await x.files[0].text()));
   else if(x.hasAttribute('data-open-session')&&x.files[0])await api.load(JSON.parse(await x.files[0].text()));
  }));
  return {update(model,stats){
@@ -51,6 +64,13 @@ export function performanceControls(shadow,api){
  container.querySelectorAll('[data-launch]').forEach(button=>button.classList.toggle('active',performing&&button.dataset.launch===model.visual?.scene));
  for(const role of ['visual','variation'])container.querySelectorAll('[data-'+role+']').forEach(input=>{const value=model[role]?.[input.dataset[role]];if(value!==undefined&&container.getRootNode().activeElement!==input)input.value=value;});
  $('.revision').textContent=stats.phase+' · REV '+model.revision+(stats.targetBeat!==undefined?' → BEAT '+stats.targetBeat:'');
+  $('.audition-state').textContent=stats.audition?(stats.audition.current?(stats.audition.status==='playing'?'◉ AUDITION · QUIET MONITOR':'◷ PREVIEW READY'):'◷ STALE PREVIEW'):'NO PREVIEW';
+  container.querySelector('.audition-strip').classList.toggle('previewing',!!stats.audition);
+  $('[data-capture]').disabled=!model.playing&&stats.take!=='capturing';
+  $('[data-capture]').textContent=stats.take==='capturing'?'■ FINISH TAKE':'● CAPTURE TAKE';
+  $('[data-capture]').classList.toggle('active',stats.take==='capturing');
+  $('[data-source]').disabled=!stats.sourceAvailable;
+  for(const name of ['manifest','fork','replay'])$('[data-'+name+']').disabled=stats.take==='empty'||stats.take==='capturing';
   $('[data-action="audition-commit"]').disabled=!stats.audition?.current;$('[data-action="audition-cancel"]').disabled=!stats.audition;
   $('[data-action="undo"]').disabled=!model.past.length;$('[data-action="redo"]').disabled=!model.future.length;
   const snapshots=Object.keys(model.snapshots);if($('[data-snapshots]').dataset.names!==snapshots.join(',')){
