@@ -73,9 +73,20 @@ try:
     b.worker.terminate();await wait(()=>P.preparationWorkers().resetting===0);
     const pooled=P.preparationWorkers();if(pooled.created!==1||pooled.forced!==0)throw new Error('Pool did not reuse cleanly '+JSON.stringify(pooled));
     await new Promise(r=>setTimeout(r,100));P.closeIdlePreparationWorkers();
+    // Crash a real Worker after it imports the compiled package kernel, then
+    // reacquire the same pool key with a healthy compiled Worker.
+    const crashURL=URL.createObjectURL(new Blob([`import ${JSON.stringify(new URL(url,location.href).href)};throw new Error('owned-worker-failure-proof');`],{type:'text/javascript'}));
+    const failures=[],failed=P.createPreparationWorker('failure-proof',()=>{const w=new Worker(crashURL,{type:'module'});w.addEventListener('error',e=>e.preventDefault());return w;});
+    failed.addEventListener('error',e=>failures.push(e.message));failed.postMessage({op:'init',budgetMs:4});
+    await wait(()=>failures.length===1);await wait(()=>P.preparationWorkers().active===0);URL.revokeObjectURL(crashURL);
+    const recovered=P.createPreparationWorker('failure-proof',factory),recovery=[];
+    recovered.addEventListener('message',e=>recovery.push(e.data));recovered.postMessage({op:'init',budgetMs:4});
+    await wait(()=>recovery.some(e=>e.op==='ready'));recovered.terminate();await wait(()=>P.preparationWorkers().resetting===0);
+    P.closeIdlePreparationWorkers();
+    const crashRecovery={nativeWorkerError:failures[0],healthyReacquire:true,activeLeases:P.preparationWorkers().active};
     const sorted=xs=>[...xs].sort((a,b)=>a-b),percentile=(xs,q)=>sorted(xs)[Math.floor((xs.length-1)*q)];
     const data=new TextEncoder().encode(full),digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),x=>x.toString(16).padStart(2,'0')).join('');
-    return {cycles:100,completeScores:2,scoreRows:1024,observed,pooled,final:P.preparationWorkers(),cancelP50Ms:percentile(cancel,.5),cancelP95Ms:percentile(cancel,.95),cancelP99Ms:percentile(cancel,.99),cancelMaxMs:Math.max(...cancel),heartbeatP50Ms:percentile(gaps,.5),heartbeatP95Ms:percentile(gaps,.95),heartbeatP99Ms:percentile(gaps,.99),heartbeatMaxMs:Math.max(...gaps),digest,independentSessions:true};
+    return {crashRecovery,cycles:100,completeScores:2,scoreRows:1024,observed,pooled,final:P.preparationWorkers(),cancelP50Ms:percentile(cancel,.5),cancelP95Ms:percentile(cancel,.95),cancelP99Ms:percentile(cancel,.99),cancelMaxMs:Math.max(...cancel),heartbeatP50Ms:percentile(gaps,.5),heartbeatP95Ms:percentile(gaps,.95),heartbeatP99Ms:percentile(gaps,.99),heartbeatMaxMs:Math.max(...gaps),digest,independentSessions:true};
    }finally{clearInterval(heartbeat);P.closeIdlePreparationWorkers();}
   }''')
   assert not errors,errors
