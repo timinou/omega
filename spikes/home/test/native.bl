@@ -1,9 +1,21 @@
 ; Called only by browser.py inside its private shared realm and compositor.
-(ns home.native-test (:require [omega.desktop :as desktop] [omega.ui.probe :as probe]
+(ns home.native-test (:require [omega.window :as desktop] [omega.ui.probe :as probe]
                               [wry] [bl.json :as json]))
 (defn ensure! [value message]
   (when-not (and value (not= value :timeout) (not (and (map? value) (get value "error"))))
     (throw (ex-info message {:value value}))) value)
+(defn shot! [view path]
+  ; DOM readiness precedes Wayland presentation. Wait for two painted frames
+  ; before giving the compositor time to commit its screenshot buffer.
+  (probe/query view "(window.nativePainted=false,requestAnimationFrame(()=>requestAnimationFrame(()=>window.nativePainted=true)),true)")
+  (ensure! (probe/wait-for view "window.nativePainted" 10000) "native paint stalled")
+  (Process/sleep 350)
+  (probe/shot view path))
+(defn activate! [view]
+  (let [point (probe/query view "(()=>{window.nativeClicks=[];nativeMusic.document.addEventListener('click',e=>nativeClicks.push({trusted:e.isTrusted,target:e.composedPath()[0].outerHTML}),true);const f=document.querySelector('[data-pane=music] iframe'),b=nativeMusic.document.querySelector('.view-host .view-body').shadowRoot.querySelector('[data-perform]'),r=b.getBoundingClientRect(),p=f.getBoundingClientRect();return {x:Math.round(p.x+r.x+r.width/2),y:Math.round(p.y+r.y+r.height/2)};})()")
+        result (System/cmd (System/get_env "HOME_POINTER_BIN")
+                          (list (str (get point "x")) (str (get point "y")) "1400" "900"))]
+    (ensure! (= 0 (elem result 1)) "private virtual pointer failed")))
 (let [session (probe/attach) root (System/get_env "HOME_TEST_PROOF")
       inbox (spawn (fn [] (loop [owner nil]
                      (receive [:to p] (recur p)
@@ -15,27 +27,49 @@
       check (fn [js message] (ensure! (probe/wait-for view js 90000) message) (swap! results conj message))]
   (try
     (check "!!window.blEd&&!!document.querySelector('.omega-home h1')" "native Home uses the actual compiled editor")
-    (probe/shot view (str root "/native-home.png"))
-    (probe/query view "(document.querySelector('.omega-home nav [data-activity=work]').click(),true)")
+    (probe/query view "(()=>{if(document.querySelector('.omega-home [data-status]')?.textContent.includes('unavailable'))document.querySelector('.omega-home [data-refresh]').click();return true;})()")
+    (check "[...document.querySelectorAll('.omega-home button')].some(b=>b.textContent.includes('Continue this piece'))" "native Home projects the existing task")
+    (shot! view (str root "/native-home.png"))
+    (probe/query view "([...document.querySelectorAll('.omega-home button')].find(b=>b.textContent.includes('Continue this piece')).click(),true)")
     (check "!!document.querySelector('[data-pane=work] iframe')?.contentWindow?.blEd" "native Work viewer loads on the same host")
-    (probe/shot view (str root "/native-work.png"))
+    (check "!!document.querySelector('[data-pane=work] iframe')?.contentDocument?.querySelector('[data-field=reply]')" "native Continue opens the existing task")
+    (probe/query view "(window.nativeWork=document.querySelector('[data-pane=work] iframe').contentWindow,window.nativeReply=nativeWork.document.querySelector('[data-field=reply]'),nativeReply.value='Native unfinished thought',nativeReply.dispatchEvent(new nativeWork.Event('input',{bubbles:true})),true)")
+    (shot! view (str root "/native-work.png"))
     (probe/query view "(document.querySelector('.omega-home nav [data-activity=music]').click(),true)")
     (check "!!document.querySelector('[data-pane=music] iframe')?.contentDocument?.querySelector('.view-host .view-body')?.pelagic" "native Pelagic package loads")
     (probe/query view "(window.nativeMusic=document.querySelector('[data-pane=music] iframe').contentWindow,window.nativeInstrument=nativeMusic.document.querySelector('.view-host .view-body').pelagic,window.nativeReady=false,nativeInstrument.ready().then(()=>window.nativeReady=true,e=>window.nativeReadyError=String(e)),true)")
     (check "window.nativeReady||(window.nativeReadyError&&{error:window.nativeReadyError})" "native instrument graph is ready")
     (let [features (probe/query view "(()=>{const w=document.querySelector('[data-pane=music] iframe').contentWindow;return {worker:!!w.Worker,audioContext:!!w.AudioContext,audioWorklet:!!w.AudioWorkletNode,offscreenCanvas:!!w.OffscreenCanvas,webgl2:!!w.document.createElement('canvas').getContext('webgl2'),mediaRecorder:!!w.MediaRecorder,userAgent:w.navigator.userAgent};})()")]
       (File/write! (str root "/native-features.json") (json/encode features)))
-    (probe/shot view (str root "/native-pelagic.png"))
+    (shot! view (str root "/native-pelagic.png"))
     (probe/query view "(window.nativeCompiler=false,nativeInstrument.compilerReady().then(()=>window.nativeCompiler=true,e=>window.nativeCompilerError=String(e)),true)")
     (check "window.nativeCompiler||(window.nativeCompilerError&&{error:window.nativeCompilerError})" "native live compiler Worker loads")
+    (activate! view)
+    (ensure! (probe/wait-for view "nativeInstrument.stats().playing&&nativeInstrument.stats().context==='running'" 10000) "native trusted pointer activates Web Audio playback")
+    (check "nativeClicks.some(e=>e.trusted)" "native activation is a trusted pointer click")
+    (swap! results conj "native trusted pointer activates Web Audio playback")
+    (check "nativeInstrument.stats().frames>0&&nativeInstrument.stats().gpu?.programs>0" "native renderer submits real frames")
+    (probe/query view "(window.nativeEngine=nativeInstrument.engine(),window.nativeExport=null,nativeInstrument.renderAudio(undefined,{seconds:2,sampleRate:22050}).then(b=>{let peak=0;for(const x of b.getChannelData(0))peak=Math.max(peak,Math.abs(x));window.nativeExport={frames:b.length,peak};},e=>window.nativeExportError=String(e)),true)")
+    (check "(window.nativeExport&&nativeExport.frames===44100&&nativeExport.peak>0.00001)||(window.nativeExportError&&{error:nativeExportError})" "native offline render produces a non-silent signal")
+    (shot! view (str root "/native-pelagic.png"))
+    (File/write! (str root "/native-media.json") (json/encode (probe/query view "({export:nativeExport,graphicsPlacement:nativeInstrument.stats().gpu?.worker?'worker':'window',stats:nativeInstrument.stats(),diagnostics:nativeInstrument.diagnostics()})")))
     (probe/query view "(document.querySelector('.omega-home nav [data-activity=home]').click(),true)")
-    (check "nativeMusic===document.querySelector('[data-pane=music] iframe').contentWindow&&nativeInstrument===nativeMusic.document.querySelector('.view-host .view-body').pelagic" "native Home return retains the instrument viewer")
+    (check "nativeMusic===document.querySelector('[data-pane=music] iframe').contentWindow&&nativeInstrument===nativeMusic.document.querySelector('.view-host .view-body').pelagic&&nativeInstrument.engine()===nativeEngine&&nativeEngine.ctx.state==='running'" "native Home return retains the playing instrument")
+    (probe/query view "(document.querySelector('.omega-home nav [data-activity=work]').click(),true)")
+    (check "nativeWork===document.querySelector('[data-pane=work] iframe').contentWindow&&nativeReply.value==='Native unfinished thought'" "native Work draft survives the activity round trip")
     (probe/query view "(document.querySelector('.omega-home nav [data-activity=machine]').click(),true)")
     (check "!!document.querySelector('[data-pane=machine] iframe')?.contentDocument?.querySelector('[data-pane=observatory] .view-body')?.shadowRoot?.querySelector('h1')" "native inspector uses the existing Runtime package")
-    (probe/shot view (str root "/native-inspector.png"))
+    (shot! view (str root "/native-inspector.png"))
     (File/write! (str root "/native.json") (json/encode {:checks @results :display (:display session) :physicalDevice false}))
     (println (str "Native Home checks: " (count @results)))
     (catch error
-      (File/write! (str root "/native-failure.json") (json/encode {:checks @results :error (str error)}))
+      (File/write! (str root "/native-failure.json") (json/encode {:checks @results :error (str error) :media (probe/query view "({clicks:window.nativeClicks,observations:[window.blHost?.observation(),document.querySelector('[data-pane=work] iframe')?.contentWindow?.blHost?.observation(),window.nativeMusic?.blHost?.observation()],status:window.nativeMusic?.document.querySelector('.view-host .view-body')?.shadowRoot?.querySelector('.status')?.textContent,stats:window.nativeInstrument?.stats(),diagnostics:window.nativeInstrument?.diagnostics()})")}))
       (throw error))
-    (finally (wry/close window) (erlang/send inbox :stop))))
+    (finally (wry/close window) (erlang/send inbox :stop)))
+  (ensure! (try (wry/eval window "void 0") false (catch _ true))
+           "closed window eval must raise")
+  (ensure! (try (wry/resize window 200 200) false (catch _ true))
+           "closed window resize must raise")
+  (wry/close window)
+  (swap! results conj "closed native eval and resize raise; repeated close is safe")
+  (File/write! (str root "/native.json") (json/encode {:checks @results :display (:display session) :physicalDevice false})))

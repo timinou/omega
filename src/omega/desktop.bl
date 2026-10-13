@@ -1,5 +1,5 @@
 ; The window is a client. Host acquisition remains pelagic.launch/omega.dev.
-(ns omega.desktop (:require [pelagic.launch :as launch] [wry] [loom.desktop :as desktop]))
+(ns omega.desktop (:require [pelagic.launch :as launch] [omega.window :as window] [pelagic.build :as build]))
 (defn options [args]
   (let [demo? (some #{"--demo"} args)
         browser? (some #{"--browser"} args)
@@ -9,29 +9,33 @@
       (throw (ex-info "Choose --demo or --live" {})))
     {:browser? browser? :host-args (conj (conj host-args "--preset") "home")}))
 (defn open!
-  "Attach a native client to an existing host. The caller owns its Window.
-   Does not serve another application, start a task system or stop the host."
-  ([url] (open! url {}))
-  ([url opts]
-   (when-not (desktop/available?)
-     (throw (ex-info "Native WebView is unavailable. Use bl omega -- --browser." {})))
-   (wry/open (merge {:title "Omega" :width 1280 :height 850 :url url} opts))))
-(defn wait!
-  "Wait for window close without owning the world's lifetime. Wry eval refuses
-   a closed native handle; finally also retracts its IPC receiver."
-  [window]
-  (try
-    (loop []
-      (when (try (wry/eval window "void 0") true (catch _ false))
-        (receive :stop nil (after 1000 (recur)))))
-    (finally (wry/close window))))
+  "Display-client API. Use the isolated client process for an application host."
+  ([url] (window/open! url))
+  ([url opts] (window/open! url opts)))
+(defn wait! [view] (window/wait! view))
+(defn client!
+  "Launch the display without inheriting the world's listening sockets. The
+   Erlang OS-command boundary closes unrelated descriptors before exec."
+  [url]
+  (let [root (build/root)
+        display-env (mapv (fn [key] (tuple key (System/get_env key)))
+          ["DISPLAY" "WAYLAND_DISPLAY" "GDK_BACKEND" "XDG_RUNTIME_DIR"
+           "XDG_STATE_HOME" "XDG_CONFIG_HOME" "LIBGL_ALWAYS_SOFTWARE" "BL_USE" "BL_GATEWAY"])
+        result (System/cmd (str root "/bin/bl")
+                 (list "--cold" "run" (str root "/scripts/window.bl") "--" url)
+                 (list (tuple :cd root) (tuple :env (to-list display-env))
+                       (tuple :stderr_to_stdout true)))]
+    (when-not (blank? (elem result 0)) (println (elem result 0)))
+    (when-not (= 0 (elem result 1))
+      (throw (ex-info (str "Native window could not open. Omega Home: " url)
+                     {:exit (elem result 1)})))))
 (defn run! [args]
   (let [{:keys [browser? host-args]} (options args)
         config (launch/route-config)
         opts (launch/options host-args (or (:port config) 8812))]
     (launch/dev! host-args)
     (let [url (launch/preset-url (:port opts) "home")]
-      (if (or browser? (not (desktop/available?)))
+      (if (or browser? (not (window/available?)))
         (println (str "Omega Home: " url (when-not browser? " · native WebView unavailable; open this URL")))
         (do (println (str "Omega window: " url " · closing it keeps the shared world running"))
-            (wait! (open! url)))))))
+            (client! url))))))

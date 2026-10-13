@@ -1,0 +1,24 @@
+; Diagnostic only: observe the real stop callback without changing its code.
+(ns home.shutdown-probe (:require [omega.dev :as dev] [vm.scope :as scope] [vm.service :as service]))
+(let [entry (service/lookup (scope/current) [:omega-world (File/cwd!)])
+      host (:value entry) root (System/get_env "HOME_TEST_PROOF")
+      nodes [[:owner (:pid entry)] [:http (:listener host)] [:tasks (get-in host [:sys :sup])]
+             [:runtime (get-in host [:runtime :pid])] [:workspace (:buffers host)]]
+      observer (spawn (fn []
+        (doseq [delay [1000 9000 22000 20000]]
+          (Process/sleep delay)
+          (File/write! (str root "/shutdown-stack-" delay ".txt")
+            (pr-str (mapv (fn [[label pid]] [label (when (erlang/is_pid pid)
+              (erlang/process_info pid (list :status :message_queue_len :current_function :current_stacktrace)))]) nodes))))))]
+  (try
+       (when (System/get_env "HOME_STOP_INFINITY")
+         (service/apply! (:pid entry)
+           (fn [value]
+             (let [listener (:listener value)]
+               (erlang/unlink listener)
+               (Supervisor/stop listener :normal :infinity)))))
+       (dev/stop! (File/cwd!)) (println "World stopped")
+       (catch error
+         (File/write! (str root "/shutdown-error.txt") (pr-str {:message (str error) :data (ex-data error)}))
+         (throw error))
+       (finally (erlang/exit observer :kill))))

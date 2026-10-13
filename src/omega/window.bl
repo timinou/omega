@@ -1,0 +1,20 @@
+; A display client over the Wry backend also used by Loom. No application host.
+(ns omega.window (:require [wry]))
+(defn available? [] (wry/available?))
+(defn open!
+  "Open a display client. Run in the isolated client process: WebKit can inherit
+   OS descriptors from an embedding VM. The caller owns the returned Window."
+  ([url] (open! url {}))
+  ([url opts]
+   (when-not (available?)
+     (throw (ex-info "Native WebView unavailable. Use bl omega -- --browser." {})))
+   (wry/open (merge {:title "Omega" :width 1280 :height 850 :url url} opts))))
+(defn wait!
+  "Wait for OS window close and retract its IPC receiver. The host is independent."
+  [window]
+  (try
+    (loop []
+      (when (try (wry/eval window "void 0") true (catch _ false))
+        (receive :stop nil (after 1000 (recur)))))
+    (finally (wry/close window))))
+(defn run! [url] (wait! (open! url)))

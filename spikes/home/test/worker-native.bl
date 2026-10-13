@@ -1,0 +1,8 @@
+(ns home.worker-native (:require [omega.ui.probe :as probe] [bl.json :as json]))
+(let [view (probe/open (probe/attach) (System/get_env "HOME_WORKER_URL"))]
+  (try
+    (probe/wait-for view "window.result?.events.some(e=>e.name==='compiled-done')&&window.result?.events.some(e=>e.name==='bridge-done')&&window.result?.events.some(e=>e.name==='graphics-done')" 65000)
+    (let [result (probe/query view "window.result")]
+      (File/write! (str (System/get_env "HOME_TEST_PROOF") "/native-workers.json") (json/encode result))
+      (println (json/encode result)))
+    (finally (probe/close view))))

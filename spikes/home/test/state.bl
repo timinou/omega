@@ -1,0 +1,13 @@
+; Read-only lifecycle identity, including the captured listener after stop.
+(ns home.state-probe (:require [vm.service :as service] [vm.scope :as scope]
+ [pelagic.build :as build] [bl.json :as json]))
+(let [realm (scope/current) root (build/root)
+      entry (service/lookup realm [:omega-world root]) host (:value entry)
+      previous (System/get_env "HOME_LISTENER_PID")]
+  (println (str "HOME_STATE=" (json/encode
+    {:vm (System/pid) :cwd (File/cwd!) :beam-cwd (BeamLisp/cwd) :root root :realm realm
+     :owner (when entry (erlang/list_to_binary (erlang/pid_to_list (:pid entry))))
+     :listener (when (:listener host) (erlang/list_to_binary (erlang/pid_to_list (:listener host))))
+     :port (:port host)
+     :previous-listener-alive (when previous
+       (Process/alive? (erlang/list_to_pid (erlang/binary_to_list previous))))}))))

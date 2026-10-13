@@ -1,0 +1,5 @@
+; Cold display client: one window, no world, no listener, no package build.
+(ns omega.window-task (:require [omega.window :as window]))
+(let [args (vec (BeamLisp/argv))]
+  (when-not (= 1 (count args)) (throw (ex-info "Expected one Omega Home URL" {})))
+  (window/run! (first args)))
