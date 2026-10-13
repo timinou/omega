@@ -1,0 +1,257 @@
+#+title: Omega — one adaptive Lisp workbench
+#+date: 2026-10-13
+#+status: PROPOSED_IMPLEMENTATION_PLAN
+#+basis: Approved Home assessment; navigation and destination contents open to exploration
+
+* Outcome
+Launching Omega enters the same recognizable working environment on desktop
+and phone: live objects, buffers, contextual commands, real Lisp and inspectable
+state. The existing snow-and-coffee desktop/Pocket language is the visual
+reference. The native launcher and canonical runtime integration remain useful.
+
+This plan implements the approved design correction in
+[[file:../../research/home-design-review-2026-10-13.org][the Home assessment]]. It follows PLAN-021's first native slice; it does not
+replace that roadmap's later durable-session, package-admission or installation
+work. The requested deliverable now is this plan and a concise review version.
+Application implementation follows the user's feedback on the plan.
+
+* What is decided and what is deliberately open
+Decided: shared theme/type, compact working surfaces, one visible navigation
+owner, full-width phone content, direct commands/Lisp, typed object actions,
+continuity, readable context, and a clean cutover without a second app shell.
+
+Open: the best destinations, their names and their contents. Work / Places /
+Buffers is the baseline, not a fixed information architecture. Explore at most
+two credible arrangements in the real editor before selecting one:
+
+1. Work / Places / Buffers: dedicated work queue, named environments and a
+   direct switcher for open, recent and pinned working objects.
+2. Work / Buffers with a prominent place/scope picker: places remain first-class
+   inspectable objects and a browsable view, while frequent navigation focuses
+   on work and working surfaces. Test whether this saves steps or hides context.
+
+Explore the contents as well as the labels. In either arrangement:
+- Work prioritizes real questions, working turns, returned answers and recent
+  work. Groups are deliberate; idle does not mean terminal completion.
+- Places expose named roots, hierarchy, effective directory and inherited
+  settings, plus direct New/Open actions. Evaluate useful recent/pinned views.
+- Buffers distinguish currently open views from recently visited objects and
+  pins. Documents, tasks, scratch, REPL, namespaces, diffs, Pelagic and inspectors
+  belong here when useful; their domain capabilities remain intact.
+
+Do not conflate a task's execution state with whether one of its views is open.
+A task can legitimately be in a work queue and a buffer switcher; repeating it
+in two urgency groups is a different issue. A visible pane is not implicit
+input to an agent. Keep place, explicit task input and personal view context
+separate, following the Pocket design.
+
+* Ownership and implementation contracts
+** Generic editor/frame behavior
+Vendored bl-ed owns generic pane focus, command targeting, buffer/view lifecycle
+hooks, key dispatch and reusable chrome/presentation facilities where missing.
+It must know nothing about Omega's task states or Pelagic's DSP. Record changes
+in vendor/bl-ed/VENDOR.md. Moving the editor into upstream Beam Lisp is outside
+this scope; upstream language/runtime fixes are authorized when evidence shows
+a real missing primitive. Commit and validate each such fix separately.
+
+** Omega policy and packages
+Omega owns work/place projections, grouping, navigation policy and application
+entry. Build pure BL models for shell context, object actions, selection and
+status; lower them through the existing BL-to-JS pipeline. Reuse existing
+typed/system facilities for useful compile-time contracts. Host JS handles DOM,
+native input and browser APIs. There is no new reader or task authority.
+
+Pocket becomes the touch adaptation of the same workbench concepts. Share
+semantic models, action identities, theme roles and context; desktop and touch
+may paint them differently. Reuse existing structured readers and presentations.
+Pelagic and Runtime contribute their working surfaces, contextual actions and
+status. They do not install a second global navigation system inside the frame.
+
+** One shell, retained working surfaces
+The frame has one visible chrome/navigation owner. Domain views contribute
+content and contextual controls through an explicit composition contract.
+Command search and Lisp evaluation resolve to the focused buffer, with an
+inspectable override when needed. A parent must not steal a child's input.
+
+Identify views using existing provider addresses, package identity and view
+instance identity. Retain editor state and owned resources by that identity.
+The prototype may keep the existing bounded embedded viewers behind this
+contract; it must remove their duplicate global chrome and preserve targeting.
+Make no shared-JS-heap or zero-copy claim. A later realm consolidation is not
+a prerequisite for correcting the interface.
+
+The canonical host/store remains authoritative. Keep the narrow isolated Wry
+display client: it prevents foreign WebKit descriptors retaining the world's
+listener. Keep hidden-observation cancellation, renderer capability probing,
+actor ownership and audio reserve behavior.
+
+* Implementation milestones
+** 1. Baseline and working vocabulary
+- Record source/build identity and preserve existing uncommitted Pocket and
+  workspace changes. Separate overlapping changes into reviewable hunks or an
+  isolated checkout; never commit unrelated work accidentally.
+- Define the small BL contracts for object identity, view identity, actions,
+  chrome context, status and navigation. Reuse the existing frame/provider
+  data wherever possible rather than creating another registry of domain facts.
+- Capture existing Pocket and desktop reference states with realistic fixtures:
+  multiple places, several task states, long responses, documents and open tools.
+- Prototype the two navigation arrangements as package layouts over those same
+  objects. Judge reachability, visible context, useful density and steps needed.
+
+Deliver: contract note, navigation sketches/layouts and comparable captures.
+Commit: contracts and baseline/prototype scaffolding.
+
+** 2. Early complete vertical — first visual review checkpoint
+Implement a usable minimum of every essential surface through one adaptive
+workbench, before polishing all the individual tools:
+
+launch → useful work list → select task → answer → open document → switch buffer
+→ evaluate Lisp → open Pelagic → inspect its runtime → return to retained work.
+
+- Inherit the actual theme and text/code roles; remove the separate green
+  palette, Georgia hero, launch tiles and redundant branding.
+- Provide compact current-buffer/place identity, global Commands and contextual
+  status. On desktop, use a list/following-preview layout where appropriate.
+- On phone, use the full content width and one reachable navigation system.
+  Represent New/Open/Resume directly. All named surfaces have a working minimum.
+- Reuse actual packages and providers. Selection, input and inspection affect
+  the real private world; the vertical is not a mock or a separate page.
+
+Deliver: desktop/phone screenshots, short recordings and an interactive review
+with the two navigation candidates and a reasoned recommendation. This is the
+checkpoint for assessing the interaction model before broad cutover.
+Commit: theme/chrome foundation and then the complete vertical.
+
+** 3. Consolidate shell, focus and commands
+- Select the navigation arrangement based on the vertical and user feedback.
+  Extract shared behavior from existing packages rather than keeping prototype
+  branches or parallel command systems.
+- Route selection, Enter, search/filter, Back, contextual actions and keyboard
+  hints through ordinary editor/frame contracts. Preserve native text input,
+  IME and modal focus. Commands resolve against the actual focused object/view.
+- Provide real Lisp access with explicit target/world/namespace and readable
+  results. Reuse the evaluator and retained REPL; do not invent an evaluator.
+- Make typed objects expose the actions their real capabilities support:
+  Open, Inspect, Source and References where applicable. Missing capability
+  must not become a decorative button or fabricated data.
+- Keep layout, keymaps, actions and presentation policy configurable as BL data.
+
+Deliver: focus/targeting and typed-action contracts, keyboard/touch drive proof.
+Commit: generic editor hooks separately from Omega policy and package adapters.
+
+** 4. Complete the contents of work, places and buffers
+- Implement nonduplicating work groups, counts, useful summaries/questions,
+  place/time/state metadata and selected-row behavior. Share classification
+  semantics with existing desktop/Pocket projections.
+- Provide direct task creation in the selected context; inspect actual cwd,
+  inherited settings and explicit sources before sending. Preserve backend
+  meanings for steering, replying and follow-up work.
+- Refine place browsing, scope, recent/pinned access and directory/settings
+  inspection. Reuse current place/config authority and guarded commands.
+- Refine open/recent/pinned buffer presentation and switching, including scratch,
+  documents, task views, namespaces, REPL, diffs, instruments and inspectors.
+- Reuse structured prose, code, tool disclosures and source mappings. Keep
+  composers in context and preserve input, scroll, selection and expansion.
+- Integrate Pelagic and Machine/Runtime routes and terminology into the shell.
+  Preserve real performance controls, actor inspection and background playback.
+
+Deliver: realistic complete workflows and readable BL modules/walkthroughs.
+Commit: work, place/context, buffer/document and instrument/inspection units.
+
+** 5. Phone and accessibility completion
+- Check pane and control bounds at 320, 390 and wide desktop sizes. Fix the
+  observed internal clipping, not just document.body.scrollWidth.
+- Validate reduced-height/landscape layouts, increased text and dynamic viewport
+  changes. Maintain readable measures, wrapping and 44–48px touch targets.
+- Exercise command sheets, selection, keyboard/composer accommodation, safe
+  areas, focus restoration and meaningful accessible names.
+- Keep colors semantic and combine them with shape, placement or text. Verify
+  contrast and theme changes against the shared token roles.
+- Use motion only to clarify continuity and honor reduced-motion preferences.
+  Preserve stable DOM identity rather than replacing active fields on updates.
+
+Deliver: phone/desktop geometry and interaction evidence. Physical-device
+keyboard/selection testing is reported separately from browser emulation; if
+devices are unavailable, retain explicit unverified cases in the report.
+Commit: responsive behavior and accessibility fixes in coherent units.
+
+** 6. Startup, recovery and performance
+- Measure SDK/CLI startup, host admission, frontend readiness, first paint,
+  document readiness, resume and graceful drain separately. Include both cold
+  and warm paths; record environmental conditions and sample counts.
+- Give startup/reconnect/loading/failure meaningful progress and recovery at
+  the launcher and application surfaces. Show truthful readiness states.
+- Reuse prepared artifacts and remove unnecessary work found in these traces.
+  Evaluate earlier native-window feedback through existing lifecycle hooks;
+  do not add another world or HTTP host to display a loading screen.
+- Measure selection, filtering, frame switching and inspector updates under
+  realistic load. Protect the audio reserve, cancel obsolete UI/speculative
+  work and bound background observation. Use the actor/BL pipelines where
+  appropriate; keep expensive compilation off playback-sensitive paths.
+- Compare audio/video diagnostics before and after the shell change. The 16ms
+  target remains a measurement goal; functional success is not certification
+  of physical output latency. Record remaining focused runtime work honestly.
+
+Deliver: before/after timing report, recovery scenarios and scoped optimizations.
+Commit: each measured runtime/build improvement separately from UI changes.
+
+** 7. Full cutover, deletion and handoff
+- Route bl omega, browser entry and package entry actions to the selected
+  workbench. Preserve useful incoming Home/Pocket links through one normalized
+  entry configuration, without maintaining a second implementation.
+- Delete superseded Home landing markup, private palette/hero rules, fixed
+  side-rail composition, duplicate task-row/group logic, redundant global
+  navigation and prototype-only variants. Verify exact deletion paths after
+  the shared replacements have been exercised.
+- Remove unused flags, styles, assets and tests that assert the superseded
+  design. Keep tests of actual runtime, package and continuity contracts.
+- Run the real editor with the package used and after unuse; preserve ordinary
+  editor/default-presentation equivalence. Retain original desktop/Pocket
+  reference captures for visual comparison.
+- Produce .bl.org usage/showcase walkthroughs, screenshots, demo recordings,
+  an interactive report, commands to open the result and an explicit list of
+  remaining work. Commit the final implementation and evidence.
+
+Deliver: one adopted workbench, clean deletion inventory and reviewable proof.
+
+* Acceptance gates
+- Existing package layering contract: one bl-package value, pure model/event
+  functions, effects for IO, package state by name and exact use/unuse restoration.
+- Screens remain ed/frame layouts. Load into the real compiled editor and use
+  the same value in any demo. No private render loop or shared keymap mutation.
+- Relevant BL/package drive tests and vendored editor drive tests green;
+  spikes/present/test/check.mjs unchanged and passing. Test actual behavior,
+  not cosmetic implementation details or copies of the implementation.
+- Design gates: shared theme/type changes propagate, one global navigation
+  owner, visible command/Lisp entry, semantic state and no clipped pane/control
+  bounds. Compare desktop and phone with the same fixture identities/content.
+- Continuity gates: unfinished input, reading position, disclosure and buffer
+  identity persist through changes of layout and tool; Pelagic retains its
+  engine during navigation. Window close and explicit world stop keep their
+  documented distinct lifetimes.
+- Browser and actual Wry/WebKit checks, private worlds/compositor only. Never
+  write to port 8790 or another user world. Own and stop test listeners/VMs.
+- Check BL memory first; cap long jobs, serialize heavy builds and record
+  artifact identity. Reuse unchanged compiled graphs and relevant passing gates.
+
+* Relationship to the wider Lisp-machine roadmap
+This correction prepares a coherent surface for PLAN-021's subsequent slices.
+Current view continuity and existing Pocket client-local restoration are in
+scope. New durable cross-device sessions, arbitrary package-generation admission,
+installed release distribution and full native/JS realm consolidation remain
+explicit subsequent work. This plan must expose those seams clearly without
+claiming that restoring a view rewinds actors, external effects or audio.
+
+* Audit coverage
+| Implementation milestone | Approved assessment items |
+|--------------------------+---------------------------|
+| 1–2: vocabulary, visual foundation and vertical | 01–08, 11–14, 18 |
+| 3: shell, commands and typed objects | 04, 06, 14–17, 23–24 |
+| 4: destination contents and workflows | 08–13, 16–19, 22 |
+| 5: touch, sizing and continuity | 07, 20–22, 26 |
+| 6: launch/recovery and performance | 22, 25–26 |
+| 7: clean adoption, proof and documentation | all items; especially 23–24, 26 |
+
+Each milestone ends with concrete evidence and a coherent commit. The early
+vertical provides the first design review; the final handoff includes both
+the chosen experience and the reasons for the navigation/content decisions.
