@@ -22,9 +22,13 @@ with tempfile.TemporaryDirectory(prefix='omega-workbench-') as temp:
   with urlopen(Request(base+'/api/intent',data=json.dumps({'intent':name,'args':args}).encode(),headers={'Content-Type':'application/json'}),timeout=30) as r:return json.load(r)
  try:
   stamp=time.monotonic();run('omega','--','--browser','--demo','--port',str(port),'--db',str(temp/'db'));started=True;results['timings']['hostAdmissionSeconds']=time.monotonic()-stamp
+  warm=[]
+  for _ in range(3):
+   stamp=time.monotonic();run('omega','--','--browser','--demo','--port',str(port),'--db',str(temp/'db'));warm.append((time.monotonic()-stamp)*1000)
+  results['timings']['warmCompatibleAttachMs']=warm
   assert intent('place/put',{'text':f'{{:id "studio" :name "Studio" :root {json.dumps(str(work))}}}'})['ok']
   task=intent('task/open',{'title':'Review the project brief','goal':'Read the project brief and keep the context clear.','path':'place:studio'});assert task['ok']
-  assert intent('task/open',{'title':'Prepare the performance','goal':'Check the performance.','path':'place:studio'})['ok']
+  second=intent('task/open',{'title':'Prepare the performance','goal':'Check the performance.','path':'place:studio'});assert second['ok']
   with sync_playwright() as p:
    browser=p.chromium.launch(executable_path=str(Path.home()/'.cache/ms-playwright/chromium-1243/chrome-linux64/chrome'),args=['--no-sandbox','--autoplay-policy=no-user-gesture-required'])
    context=browser.new_context(viewport={'width':1400,'height':900},record_video_dir=str(OUT/'raw'),record_video_size={'width':1400,'height':900})
@@ -33,6 +37,7 @@ with tempfile.TemporaryDirectory(prefix='omega-workbench-') as temp:
     stamp=time.monotonic();page.goto(base+'/?use=home&layout=home&file=workspace:all');page.locator('.workbench-header').wait_for(timeout=90000)
     frame=page.frame_locator('[data-pane=work] iframe');frame.locator('.mobile-app').wait_for(timeout=90000)
     frame.locator('[data-act=open-task]').filter(has_text='Review the project brief').wait_for(timeout=60000)
+    page.wait_for_function("(()=>{const d=document.querySelector('[data-pane=work] iframe')?.contentDocument,h=d?.querySelector('.mobile-header');return h&&getComputedStyle(h).display==='none';})()")
     results['timings']['workReadySeconds']=time.monotonic()-stamp
     page.screenshot(path=str(OUT/'01-work-desktop.png'));check('launch enters real Work under one adaptive chrome')
     assert page.locator('iframe').count()==1
@@ -47,6 +52,25 @@ with tempfile.TemporaryDirectory(prefix='omega-workbench-') as temp:
     frame.locator('[data-field=reply]').wait_for(timeout=60000);frame.locator('[data-field=reply]').fill('Keep this unfinished thought')
     frame.locator('.workbench-preview-list').wait_for();page.screenshot(path=str(OUT/'02-task-desktop.png'))
     check('desktop selection opens a real task with a following work list')
+    page.get_by_role('button',name='Actions',exact=True).click()
+    frame.locator('[data-act=object-action][data-command="desk/source"]').wait_for()
+    assert page.locator('.workbench-header').evaluate('(e)=>e.closest("section").inert')
+    frame.locator('[data-act=object-action][data-command="desk/source"]').click()
+    assert 'task:' in frame.locator('[role=dialog]').inner_text()
+    frame.locator('button[data-act=dismiss]').first.click()
+    page.wait_for_function('document.activeElement?.getAttribute("aria-label")==="Actions"')
+    check('typed actions inspect the real source and restore parent trigger focus')
+    page.evaluate('document.documentElement.style.setProperty("--snow","rgb(241, 239, 233)")')
+    page.wait_for_function('document.querySelector("[data-pane=work] iframe").contentDocument.documentElement.style.getPropertyValue("--snow").trim()==="rgb(241, 239, 233)"')
+    page.evaluate('document.documentElement.style.removeProperty("--snow")')
+    check('shared theme changes propagate into retained working surfaces')
+    frame.locator('[data-workbench-filter]').fill('Review')
+    wf=page.locator('[data-pane=work] iframe').element_handle().content_frame()
+    wf.evaluate("()=>{window.retainedFilter=document.querySelector('[data-workbench-filter]');const b=blEd;b.dispatch(b.R.hashMap(b.K('type'),b.K('mobile/field'),b.K('field'),'slot-proof',b.K('value'),true,b.K('pane'),b.K('rail')));}")
+    page.wait_for_timeout(50)
+    assert wf.evaluate("retainedFilter===document.querySelector('[data-workbench-filter]')&&document.activeElement===retainedFilter")
+    frame.locator('[data-workbench-filter]').fill('')
+    check('live child reconciliation preserves the exact focused work filter in its owned slot')
     page.get_by_role('button',name='Buffers',exact=True).first.click();frame.get_by_role('heading',name='Buffers',exact=True).wait_for()
     frame.get_by_role('button',name='Pelagic',exact=False).wait_for();page.screenshot(path=str(OUT/'03-buffers.png'))
     frame.locator('[data-parent-buffer=music]').click();music=page.frame_locator('[data-pane=music] iframe');music.get_by_role('button',name='▶ PERFORM',exact=True).wait_for(timeout=90000)
@@ -66,9 +90,33 @@ with tempfile.TemporaryDirectory(prefix='omega-workbench-') as temp:
     page.get_by_role('button',name='Buffers',exact=True).first.click();frame.locator('[data-parent-buffer=machine]').click()
     machine=page.frame_locator('[data-pane=machine] iframe');machine.get_by_role('heading',name='Owned work, in view').wait_for(timeout=90000);page.screenshot(path=str(OUT/'07-runtime.png'))
     check('runtime inspection opens as a retained buffer in the same workbench')
+    page.get_by_role('button',name='Evaluate Lisp',exact=True).click()
+    runtime_frame=page.locator('[data-pane=machine] iframe').element_handle().content_frame()
+    runtime_frame.evaluate("()=>{const b=blEd;for(const e of [{type:'text',text:'(+ 2 3)'},{type:'key',key:'Enter'}])b.dispatch(b.R.hashMap(...Object.entries(e).flatMap(([k,v])=>[b.K(k),k==='type'?b.K(v):v])));}")
+    page.locator('.workbench-feedback').filter(has_text='5').wait_for()
+    check('tool Lisp uses the real generic input sink and surfaces its result')
     page.locator('.workbench-status [data-screen=work]').click();page.set_viewport_size({'width':390,'height':844})
     frame.locator('[data-act=open-task]').filter(has_text='Review the project brief').click();assert frame.locator('[data-field=reply]').input_value()=='Keep this unfinished thought';page.screenshot(path=str(OUT/'08-task-phone.png'))
     page.set_viewport_size({'width':390,'height':500});page.screenshot(path=str(OUT/'09-task-short.png'))
+    for width,height in [(320,740),(390,500),(844,390)]:
+     page.set_viewport_size({'width':width,'height':height});page.wait_for_timeout(100)
+     bounds=frame.locator('[data-field=reply]').bounding_box();assert bounds and bounds['x']>=0 and bounds['x']+bounds['width']<=width+1,bounds
+     for b in page.locator('.workbench-header .workbench-actions button,.workbench-status nav button').all():assert b.bounding_box()['height']>=44
+    check('composer stays within phone, short viewport and landscape bounds; global targets are at least 44px')
+    page.set_viewport_size({'width':1400,'height':900})
+    # Warm UI timings separate synchronous dispatch from the following paint opportunity.
+    results['interaction']=page.evaluate("""async()=>{const rows=[];for(let i=0;i<40;i++){const stamp=performance.now();document.querySelector('.workbench-status [data-screen='+(['buffers','work'][i%2])+']').click();const dispatchMs=performance.now()-stamp;await new Promise(requestAnimationFrame);rows.push({dispatchMs,nextFrameMs:performance.now()-stamp});}return rows;}""")
+    results['audioAfterNavigation']=mf.evaluate('retainedInstrument.diagnostics()')
+    check('40 warm navigation samples recorded while the retained audio engine remains running')
+    assert mf.evaluate('retainedEngine.ctx.state')=='running'
+    frame.locator('[data-act=open-task]').filter(has_text='Prepare the performance').click();frame.locator('[data-field=reply]').fill('The brief is clear. Continue with the performance.');frame.locator('[data-act=send]').click()
+    deadline=time.monotonic()+30
+    while True:
+     with urlopen(base+'/api/doc?path=task:'+second['id'],timeout=30) as response:document=json.load(response)
+     if 'The brief is clear.' in document['text']:break
+     assert time.monotonic()<deadline,document
+     page.wait_for_timeout(100)
+    check('a real task reply is sent through the existing actor-backed composer')
     # Exercise both navigation policies as BL configuration over the same views.
     page.evaluate('''()=>{const b=blEd;b.dispatch(b.R.hashMap(b.K('type'),b.K('home/profile'),b.K('profile'),'scoped'));}''')
     assert page.locator('.workbench-status nav button').count()==2;page.screenshot(path=str(OUT/'10-scoped.png'))
@@ -91,3 +139,4 @@ with tempfile.TemporaryDirectory(prefix='omega-workbench-') as temp:
    except (FileNotFoundError,PermissionError,ProcessLookupError):pass
   (OUT/'journey.json').write_text(json.dumps(results,indent=2)+'\n')
 assert not results['errors'],results['errors']
+for name in ['failure.html','failure.png']:(OUT/name).unlink(missing_ok=True)

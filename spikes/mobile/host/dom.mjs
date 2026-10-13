@@ -6,7 +6,8 @@ function patch(a,b){
  const value=['INPUT','TEXTAREA','SELECT'].includes(b.tagName)?b.value:null;
  for(const attr of [...a.attributes])if(!b.hasAttribute(attr.name)&&!(a.tagName==='DETAILS'&&attr.name==='open'))a.removeAttribute(attr.name);
  for(const attr of b.attributes)if(a.getAttribute(attr.name)!==attr.value)a.setAttribute(attr.name,attr.value);
- children(a,b);
+ // Explicit empty host slots are owned by the composing host.
+ if(!b.hasAttribute('data-host-slot'))children(a,b);
  if(value!==null&&a.value!==value)a.value=value;
 }
 function children(a,b){

@@ -449,3 +449,12 @@ next 250 ms check instead of consuming the full 25-second hold. Accepted writes
 retain their existing shutdown budget; store cleanup still follows HTTP drain.
 The private `spikes/home/test/drain.test.mjs` exercises a held poll alongside an
 accepted slow write and verifies that both finish before the listener closes.
+
+`window` emits `bl-ed-ready` after the initial frame is painted and its public
+API is installed. An embedded editor can finish asynchronous provider loading
+after its iframe's load event. Composing hosts can subscribe once to this
+explicit lifecycle event instead of polling or assuming load means ready.
+The generic inspector's shadow stylesheet now inherits editor theme/font roles
+instead of maintaining a separate green palette. Its controls have 44px minimum
+targets and explicit keyboard focus; sections and metrics keep their existing
+BL-driven rendering and ownership semantics.

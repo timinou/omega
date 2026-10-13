@@ -62,6 +62,7 @@
     (check "!!nativeWork.document.querySelector('[data-parent-buffer=machine]')" "native Buffers includes runtime inspection")
     (probe/query view "(nativeWork.document.querySelector('[data-parent-buffer=machine]').click(),true)")
     (check "!!document.querySelector('[data-pane=machine] iframe')?.contentDocument?.querySelector('[data-pane=observatory] .view-body')?.shadowRoot?.querySelector('h1')" "native inspector uses the existing Runtime package")
+    (check "document.querySelector('[data-pane=machine] iframe')?.contentDocument?.querySelector('[data-pane=observatory] .view-body')?.shadowRoot?.textContent.includes('pelagic · browser work')" "native inspector discovers the retained playing instrument report")
     (shot! view (str root "/native-inspector.png"))
     (File/write! (str root "/native.json") (json/encode {:checks @results :display (:display session) :physicalDevice false}))
     (println (str "Native Home checks: " (count @results)))

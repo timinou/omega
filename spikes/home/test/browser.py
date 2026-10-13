@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Actual root Home task, disposable world, browser and private native window."""
-import json,os,re,signal,socket,subprocess,tempfile,time
+import json,os,re,signal,socket,subprocess,tempfile,time,shutil
 from pathlib import Path
 from urllib.request import urlopen,Request
 from playwright.sync_api import sync_playwright
@@ -61,7 +61,15 @@ with tempfile.TemporaryDirectory(prefix='omega-home-proof-') as temp:
   env['HOME_TEST_TASK']=task_path
   if not os.environ.get('HOME_STOP_ONLY'):
    if not os.environ.get('HOME_LAUNCH_ONLY'):
-    run('--cold','run',str(ROOT/'spikes/home/test/native.bl'),timeout=300)
+    recorder=None
+    recording_log=(PROOF/'workbench/native-recorder.log').open('w')
+    if shutil.which('wf-recorder'):
+     recorder=subprocess.Popen(['wf-recorder','--no-dmabuf','-r','12','-c','libvpx-vp9','-p','deadline=realtime','-f',str(PROOF/'workbench/native.webm')],env=env,stdout=recording_log,stderr=subprocess.STDOUT)
+    try:
+     run('--cold','run',str(ROOT/'spikes/home/test/native.bl'),timeout=300)
+    finally:
+     if recorder and recorder.poll() is None:recorder.send_signal(signal.SIGINT);recorder.wait(timeout=20)
+     recording_log.close()
     checked('actual native WebView journey completes on the private compositor')
     assert doc('launch:identity')['text']==identity;assert doc(task_path)['data']['task-title']=='Continue this piece'
     checked('closing native window preserves the shared host and existing task')

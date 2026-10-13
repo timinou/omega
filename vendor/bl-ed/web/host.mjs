@@ -1415,6 +1415,7 @@ for (const e of queued) dispatch(e);        // keys typed during boot, in order
 sink.focus();
 window.blEd = { dispatch, focusInput: () => sink.focus({preventScroll:true}), observe: observers.subscribe, snapshot: () => renderFrame(fr), setVisible:setViewerVisible, state: () => ed$(), frame: () => fr, render: () => paneView(get(fr, "focus").name), R, K, F };
 window.blHost = { lang, gate, glide, loading, observation:()=>({visible:viewerVisible,watches:watchers.size}) };
+window.dispatchEvent(new Event("bl-ed-ready"));
 if (documents?.eagerLanguage !== false) setTimeout(() => lang.start(), 0);          // the language: off the first-display path
 }
 

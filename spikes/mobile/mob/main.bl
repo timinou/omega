@@ -17,8 +17,8 @@
 (defn present-object [object]
   (if (= "omega/task" (:type object))
     (cond-> (assoc object :state-label (workbench/label object))
-      (contains? #{"done" "failed" "cancelled"} (:status object)) (assoc :ask nil)
-      (= "cancelled" (:status object)) (assoc :summary ""))
+      (contains? #{"done" "failed" "cancelled"} (workbench/status object)) (assoc :ask nil)
+      (= "cancelled" (workbench/status object)) (assoc :summary ""))
     object))
 (defn task-data [ed] (get-in ed [:doc :data]))
 (defn draft [ed] (or (get-in ed [:pkg-state "mobile" :drafts (:path ed)]) ""))
