@@ -1,0 +1,43 @@
+#+title: Omega Home — enter, use, inspect, return
+
+* Open the machine
+From Omega root:
+#+begin_src sh
+bin/bl omega
+#+end_src
+This attaches to or starts the compatible durable world, then opens Home in a
+native window. Use =-- --demo= for scripted work, or =-- --browser= for its URL.
+If native WebView support is unavailable, the launcher prints the browser URL.
+Do not mix live and demo modes on the same port; the host refuses the mismatch.
+
+* Continue something real
+Home's Continue and Needs you rows come from the current workspace provider.
+Select a task to open its existing conversation in Work. Write an unfinished
+reply, choose Home in the left rail, then Work. The reply remains in the same
+editor. A place opens its existing scoped work list.
+
+* Play and inspect
+Choose Pelagic. Press PERFORM to activate audio from a real user gesture.
+Return Home, then Play: the same instrument and engine remain mounted. Choose
+RUNTIME inside Pelagic to see its companion inspector without replacing the
+instrument. Close the companion to return to the performance.
+
+Machine in the outer rail opens the existing standalone inspector. It observes
+the shared world and browser peers; it does not grant remote control authority.
+Only opened viewers allocate their editor resources.
+
+* Leave deliberately
+Closing the native window closes its viewers, including their audio resources.
+The shared host and accepted background work keep running. =bl omega.stop=
+stops that world's host explicitly. Saved documents and task history belong to
+the durable world. This first slice does not restore unsaved viewers after a
+machine restart; saved session restoration is the next slice.
+
+* Inspect the implementation
+=home.main= owns the package, model, identity checks and layouts. The small
+=home/host.mjs= leaf paints models and forwards selected task/place navigation
+through the child's existing editor API. =omega.desktop= owns only native window
+attachment; =pelagic.launch= and =omega.dev= retain shared-host acquisition.
+
+[[file:proof/report.html][Recorded native/browser review]] ·
+[[file:../../!tasks/plans/PLAN-021-lisp-machine-home.bl.org][All six slices]]

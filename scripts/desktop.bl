@@ -1,0 +1,2 @@
+(ns omega.desktop-task (:require [omega.desktop :as desktop]))
+(desktop/run! (vec (BeamLisp/argv)))

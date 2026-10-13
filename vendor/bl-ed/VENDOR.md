@@ -402,3 +402,12 @@ preparation-worker rows. The same host/model runs without either domain provider
 Verification: 80 editor/Runtime checks, 68 Pelagic contracts, unchanged
 presentation equivalence, and 15 private real-browser checks pass. Standalone
 used/unuse images and interactive evidence are in spikes/runtime/proof/.
+
+## 2026-10-13 — retained Home viewers
+
+Generic view models can select an existing painter with `:renderer "embed"`,
+so differently named package views reuse the same same-origin embedding leaf.
+Zero-character-width panes become inert and aria-hidden while remaining mounted;
+restoring their width restores input accessibility without destroying resources.
+No Omega names or home/session policy enter ed/* or the generic host. Native
+Home/browser acceptance and unchanged editor/presentation checks cover this.

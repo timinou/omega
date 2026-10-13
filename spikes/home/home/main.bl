@@ -1,0 +1,60 @@
+; Home composes retained editor viewers. It never owns their tasks or DSP.
+(ns home.main (:require [ed.core :as c] [ed.docs :as docs]))
+(def work-url "?use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile&file=workspace:all")
+(def music-url "?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org")
+(def machine-url "?use=runtime&layout=runtime&file=runtime:overview")
+(defn state [ed] (get-in ed [:pkg-state "home"] {}))
+(defn put [ed k v] (assoc-in ed [:pkg-state "home" k] v))
+(defn layout [activity]
+  {:name (str "home" (when-not (= activity "home") (str "-" activity)))
+   :doc "Home with bounded retained editors; changing the view keeps their resources."
+   :panes [{:id :main :doc :linked :width [:ch 0]}
+           {:id :home :view [:home/surface :main] :width (if (= activity "home") :fill [:ch 9])}
+           {:id :work :view [:home/work :main] :width (if (= activity "work") :fill [:ch 0])}
+           {:id :music :view [:home/music :main] :width (if (= activity "music") :fill [:ch 0])}
+           {:id :machine :view [:home/machine :main] :width (if (= activity "machine") :fill [:ch 0])}]
+   :links [] :focus :main})
+(defn open [ed activity]
+  (if-not (contains? #{"home" "work" "music" "machine"} activity) ed
+    (-> ed (put :activity activity) (put (keyword (str activity "-opened")) true)
+        (c/effect {:kind :frame-layout :layout (:name (layout activity)) :keep {:main [:main :origin]}}))))
+(defn objects [ed] (map second (sort-by first (:obj-index ed))))
+(defn tasks [ed]
+  (vec (take 24 (filter #(= "omega/task" (:type %)) (objects ed)))))
+(defn model [ed]
+  (let [rows (tasks ed)]
+    {:package "home" :error (:error (state ed)) :activity (or (:activity (state ed)) "home")
+     :ready (= "workspace:all" (:path ed))
+     :tasks rows
+     :attention (vec (filter #(and (:ask %) (not (contains? #{"done" "cancelled" "failed"} (:status %)))) rows))
+     :places (vec (take 12 (filter #(and (= "desk/scope" (:type %)) (:place %)) (objects ed))))
+     :opened (vec (filter #(get (state ed) (keyword (str % "-opened"))) ["work" "music" "machine"]))}))
+(defn embed [ed activity url]
+  {:renderer "embed" :src (when (get (state ed) (keyword (str activity "-opened"))) url) :title activity})
+(defn intercept [ed ev]
+  (case (:type ev)
+    :home/open (open (put ed :error nil) (:activity ev))
+    :home/error (put ed :error (:message ev))
+    :home/refresh (docs/visit ed "workspace:all")
+    :home/continue
+    (when (some #(= (:id ev) (:key %)) (tasks ed))
+      (-> (open ed "work")
+          (c/effect {:kind :package-host :package "home" :op :navigate
+                     :args {:screen "task" :path (str "task:" (:id ev))}})))
+    :home/place
+    (when (some #(= (:path ev) (:key %)) (objects ed))
+      (-> (open ed "work")
+          (c/effect {:kind :package-host :package "home" :op :navigate
+                     :args {:screen "work" :path (:path ev)}})))
+    nil))
+(def bl-package
+  {:name "home" :doc "A front door to the shared Omega machine."
+   :commands {:home/open {:doc "Return Home" :run #(open % "home")}}
+   :keys {:normal {"space h h" :home/open}}
+   :intercept intercept :owns [:frame/layout]
+   :provides {:layouts {"home" (layout "home") "home-work" (layout "work")
+                        "home-music" (layout "music") "home-machine" (layout "machine")}
+              :views {:home/surface model
+                      :home/work #(embed % "work" work-url)
+                      :home/music #(embed % "music" music-url)
+                      :home/machine #(embed % "machine" machine-url)}}})

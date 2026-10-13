@@ -663,7 +663,12 @@ function syncPanes(panes) {
   const sig = panes.map((p) => get(p, "id").name + ":" + get(p, "kind").name).join(",");
   panesEl.style.gridTemplateColumns = panes.map((p) => cssWidth(get(p, "width"))).join(" ");
   panesEl.classList.toggle("multi", panes.length > 1);
-  if (sig === layoutSig) return;
+  const visibility = () => { for (const p of panes) {
+    const d = paneDom.get(get(p, "id").name), w = get(p, "width"), a = w?.toArray?.();
+    if (d) { const hidden = a?.[0] === K("ch") && a[1] === 0; d.root.inert = hidden;
+      if (hidden) d.root.setAttribute("aria-hidden", "true"); else d.root.removeAttribute("aria-hidden"); }
+  } };
+  if (sig === layoutSig) { visibility(); return; }
   layoutSig = sig;
   // 1. the original #editor always serves the FIRST editor pane (re-key it)
   const first = get(panes.find((p) => get(p, "kind") === K("editor")), "id").name;
@@ -697,7 +702,8 @@ function syncPanes(panes) {
   }
   // 4. layout order, and each root knows its pane id
   for (const p of panes) { const id = get(p, "id").name, d = paneDom.get(id); d.root.dataset.pane = id; panesEl.appendChild(d.root); }
-  if (heldInput) sink.focus({ preventScroll: true });
+  visibility();
+  if (heldInput && !sink.closest("[inert]")) sink.focus({ preventScroll: true });
   requestAnimationFrame(fitHeight);
 }
 
@@ -794,7 +800,9 @@ function paintView(dom, p) {
     if (model?.package) pkgHosts.paint(model.package, dom.body, model, get(p, "of").name);
     return;
   }
-  const f = viewPainters[get(p, "view-kind").name]; if (f) f(dom, p);
+  // Pure package models may select an existing generic renderer.
+  const renderer = get(get(p, "view"), "renderer") || get(p, "view-kind").name;
+  const f = viewPainters[renderer]; if (f) f(dom, p);
 }
 function minimapSlotAt(root, clientY) {
   const k = +root.dataset.k, ys = JSON.parse(root.dataset.ys || "[]");
