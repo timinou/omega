@@ -1,0 +1,71 @@
+#+title: One workbench — from plain data to retained instruments
+#+date: 2026-10-13
+
+* 1. Start with a value
+=home.main/bl-package= is an ordinary package map. It contributes commands,
+keys, interception and views. It neither writes shared command tables nor owns
+a second renderer. Its state belongs under =[:pkg-state "home"]=.
+
+Its frame has a top dock, one visible working surface and a bottom dock. The
+underlying editor is retained for exact package removal. Tool viewers start
+lazily; zero-width panes remain mounted and become inert.
+
+* 2. Make one decision, in BL
+=ws.workbench= classifies tasks and supplies their state labels. Terminal states
+win over stale questions; pending questions win over running; idle means
+Answered. Each task belongs to one urgency group. Search filters that projection.
+Desktop, Pocket and the following work list consume that same policy.
+
+The navigation variant is also data, not a second page:
+#+begin_src beam-lisp
+; In the outer editor's prompt:
+(ed/cmd "home/navigation")
+#+end_src
+The default keeps Work / Places / Buffers. The scoped variant offers two tabs;
+it saves no height and makes Places an extra step away.
+
+* 3. Observe the painted editor
+The generic host exposes =blEd.snapshot()= and =blEd.observe(fn)=. Observations
+coalesce after painting and return an unsubscribe function. =bl-ed-ready= marks
+the installed public API; iframe load alone is insufficient for async providers.
+
+=home/host/editor-bridge.mjs= reads only title, path, place, actions, prompt and
+work metadata. It does not copy whole conversations, source spans or render
+trees on every input event. DOM and native browser APIs stay at this boundary.
+
+* 4. Compose, then return
+The parent hides a child's global chrome through one owned stylesheet. Child
+content, readers, composers and instruments retain their real package models.
+The theme bridge observes shared token changes and restores previous inline
+values on disposal. Typed actions originate in =ws.actions=; touch adapters
+translate presentation-specific navigation into the existing mobile events.
+
+Commands resolve against the actual current child. Pocket uses its retained
+command/Lisp sheet; tools use the generic editor prompt and input sink. Parent
+chrome becomes inert while a child dialog owns focus. Tool results appear in
+the parent feedback surface because its child's footer is hidden.
+
+* 5. Turn it into an instrument
+Pelagic retains its engine, preparation actor and worker resources when another
+surface becomes visible. Hidden viewers cancel revision polling while retaining
+editor state and audio. Runtime subscribes to reported browser observations and
+native snapshots. Its 1 Hz sampling is not a playback scheduler.
+
+Three viewers currently mean bounded separate JavaScript heaps over one host.
+There is no claim of shared heaps, zero-copy browser realms or durable unsaved
+cross-device sessions. The native Wry client remains an isolated display process:
+otherwise foreign WebKit descriptors can retain the world's HTTP listener.
+
+* 6. Remove it cleanly
+Unuse disposes owned frame subscriptions, child-ready listeners, theme bridges,
+styles and viewers. The prior title/body class and original editor/key layers
+return. Tests use a disposable private world and never the live listener.
+
+Graceful host stop signals held read-only revision polls before HTTP drain.
+Already accepted writes keep their shutdown budget; store cleanup happens after
+that drain. This lifecycle boundary is generic editor behavior, not app policy.
+
+* Read next
+[[file:home/main.bl][The pure package]] · [[file:../workspace/ws/workbench.bl][Shared policy]] ·
+[[file:host/editor-bridge.mjs][The browser boundary]] · [[file:host/theme.mjs][Theme lifetime]] ·
+[[file:test/workbench.py][Real-world drive]] · [[file:proof/workbench/report.html][Measured review]]

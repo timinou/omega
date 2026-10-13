@@ -30,8 +30,8 @@
              (or (some #(starts-with? (web/path conn) %) roots)
                  (contains? #{"/spikes/runtime/inspector.bl.org" "/spikes/pelagic/pelagic.bl.md"
                               "/spikes/mobile/mobile.bl.md" "/spikes/pelagic/tutorials/06-takes-and-exploration.bl.org"
-                              "/spikes/home/01-home.bl.org" "/spikes/home/home.bl.md"
-                              "/!tasks/plans/PLAN-021-lisp-machine-home.bl.org"}
+                              "/spikes/home/01-home.bl.org" "/spikes/home/02-workbench.bl.org" "/spikes/home/home.bl.md"
+                              "/!tasks/plans/PLAN-021-lisp-machine-home.bl.org" "/!tasks/plans/PLAN-022-adaptive-lisp-workbench.bl.org"}
                             (web/path conn))))
         (let [text? (or (ends-with? (web/path conn) ".org")
                         (ends-with? (web/path conn) ".md"))

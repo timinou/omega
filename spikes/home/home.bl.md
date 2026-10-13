@@ -1,12 +1,13 @@
-# Omega Home — native first vertical
+# Omega — one adaptive Lisp workbench
 
 Home is the removable `home` bl-ed package, compiled through the same immutable
-frontend as Pocket, Pelagic and Runtime. Its pure BL module projects the existing
-`workspace:all` provider's task/place objects and emits navigation effects. No
+frontend as Pocket, Pelagic and Runtime. Work opens immediately, with one compact
+header and one navigation dock. Shared `ws.workbench` BL policy projects the
+existing provider objects into exclusive urgency groups, context and navigation. No
 second task registry, backend or editor renderer is introduced.
 
-The first slice uses three lazy, retained same-origin editor viewers: Work
-(Pocket), Pelagic and Runtime. They share the host/store but have separate JS
+The workbench uses three retained same-origin editor viewers: Work
+(Pocket, immediate), Pelagic and Runtime (lazy). They share the host/store but have separate JS
 execution contexts. A zero-width pane stays mounted and becomes inert and hidden
 from accessibility navigation. Switching Home does not recreate its iframe,
 editor, draft or audio graph. This is bounded prototype composition, not a claim
@@ -28,19 +29,19 @@ bin/bl home.dev                      # browser prototype, scripted by default
 ```
 
 Use matching mode, database and port when attaching another preset. An existing
-incompatible world is refused before mutation. This slice adds a root task, not
+incompatible world is refused before mutation. This adds a root task, not
 an OS installer; prepared release distribution remains slice 5.
 
 ## Acceptance
 
 - [Package drive](test/drive.test.mjs): layers, bounded projections, identity
   validation, lazy viewers, stable URLs and exact use/unuse.
-- [Browser journey](test/browser.py): actual root launcher in private XDG state,
+- [Browser journey](test/workbench.py): actual root launcher in private XDG state,
   task continuation, draft retention, playing engine identity, inspector and
   unload; owns and closes its disposable world.
 - [Native journey](test/native.bl): actual Wry/WebKit on a private compositor;
   capabilities and errors retained separately from Chromium evidence.
-- [Recorded review](proof/report.html): screenshots used and after unuse,
+- [Recorded review](proof/workbench/report.html): screenshots used and after unuse,
   walkthrough, checks and native feature support.
 - Vendored editor drive gates and unchanged default presentation checker.
 
@@ -73,13 +74,13 @@ ends its local audio; moving between Home activities preserves it.
 ```sh
 # Build once; unchanged BL graphs are reused for host-asset edits.
 bin/bl --cold omega.build
-python3 spikes/home/test/browser.py
+python3 spikes/home/test/workbench.py
 # Native only, still a private world and private compositor:
 HOME_NATIVE_ONLY=1 python3 spikes/home/test/browser.py
 bin/bl runtime.review
 ```
 
-Open `http://localhost:8820/spikes/home/proof/report.html` for the captures,
+Open `http://localhost:8820/spikes/home/proof/workbench/report.html` for the captures,
 video and acceptance records. The native harness requires sway, grim,
 wayland-scanner, a C compiler, Wayland development libraries and Tesseract
 with its English model (or `TESSDATA_PREFIX` pointing to it); Chromium
@@ -101,3 +102,29 @@ The actual root entry is closed through the private window manager in acceptance
 then its host is queried and explicitly stopped. The port must close and the
 shared VM must remain the same. This catches ownership gaps that actor-only
 inspection cannot see. There is no local native library override in delivery.
+
+## Composition and removal
+
+`home.main` owns layouts and pure events; `ws.workbench` owns shared projection
+policy; `ws.actions` supplies the loaded packages' contextual object actions.
+`host/editor-bridge.mjs` selectively reads painted metadata and translates events.
+`host/theme.mjs` propagates editor theme roles without polling. The existing
+Pocket host retains its readers, structured conversation, input and command sheet.
+Tools use the real generic editor prompt; results surface in parent feedback.
+The parent chrome becomes inert while a child dialog owns focus.
+
+Async editor readiness is explicit: `bl-ed-ready` follows the initial painted
+frame and public API installation. Iframe load alone cannot establish readiness.
+Every subscription, ready listener, stylesheet and theme override has a disposal
+path. Child editor state stays under each package's ordinary ownership boundary.
+
+Superseded: Home's landing hero/launch tiles, private green palette, fixed side
+rail, inline task categorization and duplicate global chrome. There is no second
+Home renderer. Navigation variants are one BL data policy over the same views.
+Desktop and Pocket now share task state labels/classification. The generic
+inspector inherits the editor's theme instead of keeping a green shadow palette.
+
+See [the first-use showcase](01-home.bl.org), [implementation walkthrough](02-workbench.bl.org)
+and [PLAN-022](../../!tasks/plans/PLAN-022-adaptive-lisp-workbench.bl.org).
+The previous native-first [baseline report](proof/report.html) remains historical
+proof; its old landing screenshots are not the shipping entry.

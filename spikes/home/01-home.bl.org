@@ -1,61 +1,77 @@
-#+title: Omega Home — enter, use, inspect, return
+#+title: Omega — a small door into the Lisp machine
+#+date: 2026-10-13
 
-* Open the machine
-From Omega root:
+* Start
+From the Omega root:
 #+begin_src sh
 bin/bl omega
 #+end_src
-This attaches to or starts the compatible durable world, then opens Home in a
-native window. Use =-- --demo= for scripted work, or =-- --browser= for its URL.
-If native WebView support is unavailable, the launcher prints the browser URL.
-Do not mix live and demo modes on the same port; the host refuses the mismatch.
+This opens the native workbench over the compatible durable world. Work is the
+first buffer: your tasks, questions and answers. =-- --demo= uses scripted tasks;
+=-- --browser= prints the same workbench URL. The window title is Omega.
 
-* Continue something real
-Home's Continue and Needs you rows come from the current workspace provider.
-Select a task to open its existing conversation in Work. Write an unfinished
-reply, choose Home in the left rail, then Work. The reply remains in the same
-editor. A place opens its existing scoped work list.
+* Work, then wander
+Choose a task. Its conversation opens; desktop also keeps a following work list
+on the left. Write a thought without sending it. Choose Buffers, then Pelagic.
+Press PERFORM. Choose Work and reopen the task: the unfinished thought remains.
+The instrument keeps playing. Switching a view does not restart its actor or
+create another world.
 
-* Play and inspect
-Choose Pelagic. Press PERFORM to activate audio from a real user gesture.
-Return Home, then Play in the rail: the same instrument and engine remain mounted. Choose
-RUNTIME inside Pelagic to see its companion inspector without replacing the
-instrument. Close the companion to return to the performance.
+Use Places for named environments, their actual directories and inherited
+settings. New tasks use the selected place. A visible document is not silently
+added to an agent's input: choose context or attach an explicit reference.
 
-Machine in the outer rail opens the existing standalone inspector. It observes
-the shared world and browser peers; it does not grant remote control authority.
-Only opened viewers allocate their editor resources.
+* Three small controls
+The current title/place is a context control. The header's =⋯= opens contextual
+Actions; =⌘= opens searchable Commands; =:= goes straight to Lisp. Dialogs own
+focus until closed, then return it to the control that opened them.
 
-* Leave deliberately
-Closing the native window closes its viewers, including their audio resources.
-The shared host and accepted background work keep running. =bl omega.stop=
-stops that world's host explicitly. Saved documents and task history belong to
-the durable world. This first slice does not restore unsaved viewers after a
-machine restart; saved session restoration is the next slice.
+In Commands, Open accepts provider addresses. Try =bl:= for namespaces, or a
+real document such as =work:YOUR-PLACE/README.bl.org=. The target picker names
+Work, Conversation or Document. Editor evaluates in that editor; Machine uses
+the host evaluator. These are different targets, deliberately visible.
 
-* Inspect the implementation
-=home.main= owns the package, model, identity checks and layouts. The small
-=home/host.mjs= leaf paints models and forwards selected task/place navigation
-through the child's existing editor API. =omega.desktop= acquires the host and starts a narrow =omega.window=
-display client. Its separate OS process prevents WebKit inheriting the world
-listener; =pelagic.launch= and =omega.dev= retain shared-host acquisition.
+#+begin_src beam-lisp
+(+ 1 2)
+#+end_src
 
-[[file:proof/report.html][Recorded native/browser review]] ·
-[[file:../../!tasks/plans/PLAN-021-lisp-machine-home.bl.org][All six slices]]
+Actions come from the loaded packages' typed object capabilities. Inspect
+source shows the same buffer's text. References opens actual saved relationships.
+Confirmation prompts for changes belong to the editor; closing a sheet does
+not silently confirm an operation.
 
-* Try the Lisp surface
-In the editor command line, =:(ed/layouts)= lists installed layouts.
-=space h h= returns Home through the package's ordinary command/key layer.
-To remove Home and inspect the underlying editor, enter =:(ed/unuse "home")=.
-Its layout, rail and host styling retract together. Reopen =bl omega= for Home.
-These are the editor's standard package/layout operations, not a special shell.
+* Find a working surface
+Buffers includes open documents, recent objects, personal pins, the retained
+Lisp session, namespaces, Pelagic and Runtime. Recent means visited; it does not
+mean that every recent document has an independent live editor. The current
+implementation retains one working-file editor and guards unpublished edits.
 
-* Read the proof
+Runtime shows owned native actors and reported browser resources. Those are
+separate observation trees; it never fabricates ownership of another process.
+Pelagic's own RUNTIME button opens its companion without replacing playback.
+
+* Leave, or inspect the frame itself
+Closing the native window ends its local viewers/audio. The shared host and
+accepted background work remain alive. Stop this world's host explicitly:
+#+begin_src sh
+bin/bl omega.stop
+#+end_src
+
+The ordinary editor still owns layouts, packages and keys:
+#+begin_src beam-lisp
+(ed/layouts)
+(ed/unuse "home")
+#+end_src
+Use these in the editor's =:= prompt. Unuse removes the workbench's layers,
+styles and child viewers and restores the underlying editor. Reopen =bl omega=
+to enter the workbench again. =space h h= is the package's ordinary Work command.
+
+* Keep exploring
+[[file:02-workbench.bl.org][An advanced, compact implementation walkthrough]] ·
+[[file:proof/workbench/report.html][Screenshots, journey recording and measured evidence]] ·
+[[file:../../!tasks/plans/PLAN-022-adaptive-lisp-workbench.bl.org][Implementation plan]]
+
 #+begin_src sh
 bin/bl runtime.review
 #+end_src
-Open http://localhost:8820/spikes/home/proof/report.html. Select a view, play
-the browser recording, and expand the native acceptance record. The native
-window uses the same compiled packages; its graphics placement depends on
-whether its Worker can actually create WebGL. These captures use software
-rendering and do not measure your speakers or display latency.
+Then open http://localhost:8820/spikes/home/proof/workbench/report.html.

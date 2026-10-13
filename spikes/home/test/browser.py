@@ -64,12 +64,25 @@ with tempfile.TemporaryDirectory(prefix='omega-home-proof-') as temp:
     recorder=None
     recording_log=(PROOF/'workbench/native-recorder.log').open('w')
     if shutil.which('wf-recorder'):
-     recorder=subprocess.Popen(['wf-recorder','--no-dmabuf','-r','12','-c','libvpx-vp9','-p','deadline=realtime','-f',str(PROOF/'workbench/native.webm')],env=env,stdout=recording_log,stderr=subprocess.STDOUT)
+     recorder=subprocess.Popen(['wf-recorder','-y','--no-dmabuf','-r','12','-c','libvpx-vp9','-p','deadline=realtime','-f',str(PROOF/'workbench/native.webm')],env=env,stdout=recording_log,stderr=subprocess.STDOUT)
     try:
      run('--cold','run',str(ROOT/'spikes/home/test/native.bl'),timeout=300)
     finally:
-     if recorder and recorder.poll() is None:recorder.send_signal(signal.SIGINT);recorder.wait(timeout=20)
+     if recorder and recorder.poll() is None:
+      recorder.send_signal(signal.SIGINT)
+      try:recorder.wait(timeout=5)
+      except subprocess.TimeoutExpired:
+       # Some software wlroots capture threads stall after the last window closes.
+       # Retire only our recorder and finalize its already captured WebM packets.
+       recorder.terminate()
+       try:recorder.wait(timeout=3)
+       except subprocess.TimeoutExpired:recorder.kill();recorder.wait(timeout=3)
      recording_log.close()
+     if recorder:
+      finished=PROOF/'workbench/native-finished.webm'
+      repair=subprocess.run(['ffmpeg','-y','-v','error','-i',str(PROOF/'workbench/native.webm'),'-c','copy',str(finished)],capture_output=True,text=True,timeout=30)
+      assert repair.returncode==0,repair.stderr
+      finished.replace(PROOF/'workbench/native.webm')
     checked('actual native WebView journey completes on the private compositor')
     assert doc('launch:identity')['text']==identity;assert doc(task_path)['data']['task-title']=='Continue this piece'
     checked('closing native window preserves the shared host and existing task')
