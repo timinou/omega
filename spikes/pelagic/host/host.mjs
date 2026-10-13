@@ -511,9 +511,9 @@ export function createHost(api) {
     const shadow=root.shadowRoot||root.attachShadow({mode:'open'});root.dataset.pelagicStage='';
     const layoutCSS=document.createElement('link');layoutCSS.rel='stylesheet';layoutCSS.href=moduleURL('layout.css');document.head.append(layoutCSS);
     shadow.innerHTML=`<link rel="stylesheet" href="${moduleURL('style.css')}"><div class="app"><header class="header"><div><div class="brand">PELAGIC</div><div class="edition">OMEGA / PERFORMANCE INSTRUMENT 002</div></div><div class="clock"><b data-time>00:00</b><span data-bar>BAR 01 · ${defaults.bpm} BPM</span></div></header><div class="visual"><canvas aria-label="Audio-reactive Pelagic shader"></canvas><div class="corner"><span class="live-dot"></span>PROCEDURAL / SOUND → LIGHT</div><div class="visual-actions"><button data-command="pelagic/eval">EVALUATE ↵</button><button data-freeze>FREEZE</button><button data-fullscreen aria-label="Fullscreen stage">⛶</button></div><div class="caption"><div class="act">I / THE DESCENT</div><h1>BATHYMETRY</h1><p>a signal beneath the surface</p></div></div><nav class="timeline" aria-label="Movement cues">${movements.map((m,i)=>`<button data-cue="${i}">${String(i+1).padStart(2,'0')} / ${m.name}<span>${String(i*16+1).padStart(2,'0')}—${(i+1)*16} BARS</span></button>`).join('')}</nav><div class="transport"><button class="primary" data-command="pelagic/play">▶ PLAY THE DESCENT</button><button data-command="pelagic/stop">■ STOP</button><label>BPM <input type="number" min="60" max="180" value="${defaults.bpm}" data-control="bpm" aria-label="Performance BPM"></label><label>SCENE <select data-control="scene" aria-label="Visual scene"><option value="-1">NARRATIVE</option>${movements.map((m,i)=>`<option value="${i}">${m.name}</option>`).join('')}</select></label><div class="spacer"></div><button data-record>● REC</button><button data-export title="Export original score, with current mixer settings">SCORE WAV ↗</button></div><div class="decks">${deckHTML('a')}${deckHTML('b')}</div><div class="mixer"><label>FILTER<input type="range" min=".15" max="2" step=".01" value="1" data-control="filter" aria-label="Master filter"></label><label>CROSSFADE<input type="range" min="0" max="1" step=".01" value=".5" data-control="crossfade" aria-label="Equal-power crossfade"><div class="cross-label"><span>ATMOSPHERE</span><span>PULSE</span></div></label><label>SPACE<input type="range" min="0" max=".9" step=".01" value=".45" data-control="space" aria-label="Reverb space"></label></div><div class="mixer"><label>SWING<input type="range" min="0" max=".45" step=".01" value=".12" data-control="swing" aria-label="Swing"></label><label>ECHO<input type="range" min="0" max=".7" step=".01" value=".32" data-control="echo" aria-label="Echo feedback"></label><label>MASTER<input type="range" min="0" max="1" step=".01" value=".72" data-control="master" aria-label="Master volume"></label></div><footer class="bottom"><div class="stems">${['kick','bass','hat','snare','melody'].map(s=>`<button class="active" data-stem="${s}">${s.toUpperCase()}</button>`).join('')}</div><div class="status" role="status">Ready · a four-movement descent / headphones welcome</div></footer></div>`;
-    const $=s=>shadow.querySelector(s),canvas=$('canvas');let raf=0,dead=false,freezeTime=null,init=null,contextLost=false;
+    const $=s=>shadow.querySelector(s),canvas=$('canvas'),bootAbort=new AbortController();let raf=0,dead=false,freezeTime=null,init=null,contextLost=false;
     let controls=null,lastControls=0,nextFrame=0,lastTelemetry=-Infinity;
-    const v={canvas,shader:null,frozen:false,revision(phase,id,targetBeat){controls?.update(controlModel(),{phase,revision:id,targetBeat,...report()});},status(s){$('.status').textContent=s;$('.status').classList.toggle('error',s.startsWith('Edit rejected'));}};views.add(v);
+    const v={canvas,bootAbort,shader:null,frozen:false,revision(phase,id,targetBeat){controls?.update(controlModel(),{phase,revision:id,targetBeat,...report()});},status(s){$('.status').textContent=s;$('.status').classList.toggle('error',s.startsWith('Edit rejected'));}};views.add(v);
     controls=performanceControls(shadow,{request,notice,perform:()=>dispatch({type:'command',command:'pelagic/perform'}),
       mix:(control,value)=>dispatch({type:'pelagic/control',control,value}),
       capture:()=>dispatch({type:'pelagic/capture'}),manifest:saveManifest,fork:forkTake,replay:replayTake,explore,auditionAlternative,source:sourceRevision,
@@ -521,7 +521,19 @@ export function createHost(api) {
     const lost=event=>{event.preventDefault();contextLost=true;pause();if(recording)stopRecording({save:false}).catch(()=>{});notice('GPU context lost · transport paused',false);};
     const restored=async()=>{if(dead||disposed)return;const [source]=await sources();if(!v.shader?.worker){v.shader?.dispose({lose:false});v.shader=new SceneStage(canvas);v.shader.compile(shaderSource||source);if(mode==='performance'){v.shader.validateState(active);v.shader.setState(active,pausedBeat);}}contextLost=false;notice('GPU restored · press RESUME',false);};
     canvas.addEventListener('webglcontextlost',lost);canvas.addEventListener('webglcontextrestored',restored);
-    init=sources().then(([s])=>afterPaint(()=>{if(dead||disposed)return;v.shader=createStage(canvas,{lost,restored,error:e=>{pause();if(recording)stopRecording({save:false}).catch(()=>{});notice('Stage unavailable · '+e.message,false);}});v.shader.compile(shaderSource||s);if(v.shader.worker&&audio?.probe)v.shader.connectClock(audio.graphicsClock());if(mode==='performance'){v.shader.validateState(active);v.shader.setState(active,current().beat);}return Promise.resolve(v.shader.ready).then(()=>{if(!dead&&!disposed)frame();});})).catch(e=>{if(!dead&&!disposed)v.status('Stage unavailable · '+e.message);});
+    init=sources().then(([s])=>afterPaint(async()=>{
+      if(dead||disposed)return;
+      v.shader=await createStage(canvas,{signal:bootAbort.signal,lost,restored,error:e=>{
+        pause();if(recording)stopRecording({save:false}).catch(()=>{});
+        notice('Stage unavailable · '+e.message,false);
+      }});
+      if(dead||disposed){v.shader.dispose();return;}
+      v.shader.compile(shaderSource||s);
+      if(v.shader.worker&&audio?.probe)v.shader.connectClock(audio.graphicsClock());
+      if(mode==='performance'){v.shader.validateState(active);v.shader.setState(active,current().beat);}
+      await v.shader.ready;
+      if(!dead&&!disposed)frame();
+    })).catch(e=>{if(!dead&&!disposed)v.status('Stage unavailable · '+e.message);});
     function renderAt(time,options={}){
       if(ctx)applyRevision();
       const drawStarted=performance.now(),beat=options.beat??time*config.bpm/60,bar=beat/4,act=Math.min(3,Math.floor((bar%64)/16)),scene=config.scene<0?Math.max(0,Math.min(3,bar/16-.15)):config.scene;
@@ -572,7 +584,7 @@ export function createHost(api) {
       for(const [k,value] of Object.entries(state)){const el=$(`[data-control="${k}"]`);if(el&&shadow.activeElement!==el)el.value=value;}
       shadow.querySelectorAll('[data-stem]').forEach(b=>b.classList.toggle('active',!!config[b.dataset.stem]));$('[data-freeze]').classList.toggle('active',!!config.freeze);
       for(const key of ['a','b']){const name=decks[key]?.name;$(`[data-file-name="${key}"]`).textContent=name||(key==='a'?'harmonic field / D minor':'deep-house pulse / melodic fragments');}
-    },dispose(){dead=true;canvas.removeEventListener('webglcontextlost',lost);canvas.removeEventListener('webglcontextrestored',restored);controls?.dispose();cancelAnimationFrame(raf);v.shader?.dispose();views.delete(v);layoutCSS.remove();delete root.dataset.pelagicStage;delete root.pelagic;shadow.replaceChildren();}};
+    },dispose(){dead=true;bootAbort.abort();canvas.removeEventListener('webglcontextlost',lost);canvas.removeEventListener('webglcontextrestored',restored);controls?.dispose();cancelAnimationFrame(raf);v.shader?.dispose();views.delete(v);layoutCSS.remove();delete root.dataset.pelagicStage;delete root.pelagic;shadow.replaceChildren();}};
   }
   const unobserve=observePackage('pelagic',()=>({diagnostics:report(),pool:preparationWorkers({observe:true}),playing,revision:revisionID(),pending:pending.length,preparing:scoreVoices.stats(),evaluator:!!evaluatorClient,graphics:[...views].some(v=>!!v.shader?.worker),audioContext:ctx?.state||'none'}),{'audition-cancel':()=>request({kind:'audition-cancel'})});
   return {mount,async effect(e){alive();switch(e.op){case 'play':configure(e.args);play();break;case 'stop':stop();notice('All voices stopped',false);break;
@@ -587,6 +599,6 @@ export function createHost(api) {
     default:throw new Error('Unknown Pelagic effect '+e.op);}},
     dispose(){unobserve();capturedTake=null;savedTake=null;explorations=[];replayQueue=[];disposed=true;++evaluation;stopAudition(true);scoreVoices.dispose();closeIdlePreparationWorkers({whenDrained:true});evaluatorClient?.dispose();observer?.disconnect();stop();if(recording){const take=recording;recording=null;take.stop().catch(()=>{}).finally(()=>store.close());}else store.close();
       for(const d of Object.values(decks))d.dispose();for(const job of offlineRenders)job.abort();offlineRenders.clear();audio?.dispose();ctx?.close();files.clear();handles.clear();pending=[];patterns.clear();for(const url of urls)URL.revokeObjectURL(url);
-      for(const v of views)v.shader?.dispose();}
+      for(const v of views){v.bootAbort.abort();v.shader?.dispose();}}
   };
 }

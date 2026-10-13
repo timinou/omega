@@ -2,10 +2,25 @@
 import {audioFeatures} from './features.mjs';
 import {SceneStage} from './scenes.mjs';
 import {createGraphicsWorker} from './values.mjs';
-export function createStage(canvas,{lost=()=>{},restored=()=>{},error=()=>{}}={}){
+export async function createStage(canvas,{lost=()=>{},restored=()=>{},error=()=>{},signal}={}){
+ signal?.throwIfAborted();
  if(!canvas.transferControlToOffscreen||!globalThis.Worker)return new SceneStage(canvas);
  const worker=createGraphicsWorker(new URL('render-worker.mjs',import.meta.url));
  if(!worker)return new SceneStage(canvas);
+ // API presence does not guarantee a working worker WebGL context (WebKit).
+ // Probe before transferring the real canvas so the shared SceneStage can
+ // safely stay in this realm. Cancellation owns the pending worker as well.
+ const capable=await new Promise((resolve,reject)=>{
+  let timer;
+  const finish=(value,reason)=>{clearTimeout(timer);worker.removeEventListener('message',message);worker.removeEventListener('error',failed);worker.removeEventListener('messageerror',failed);signal?.removeEventListener('abort',abort);if(!value)worker.terminate();reason?reject(reason):resolve(value);};
+  const message=({data})=>{if(data.op==='capabilities')finish(data.webgl);};
+  const failed=()=>finish(false);
+  const abort=()=>finish(false,signal.reason);
+  worker.addEventListener('message',message);worker.addEventListener('error',failed);worker.addEventListener('messageerror',failed);signal?.addEventListener('abort',abort,{once:true});
+  timer=setTimeout(failed,15000);if(signal?.aborted)abort();
+ });
+ if(signal?.aborted){worker.terminate();signal.throwIfAborted();}
+ if(!capable)return new SceneStage(canvas);
  // Synchronous validation preserves atomic public edits. This small off-DOM
  // context prepares programs only; all per-frame GPU work lives in the worker.
  let validator;

@@ -57,3 +57,8 @@ self.addEventListener('message',event=>{
 
 // Read-only realm probe: the UI mailbox can be stale during an injected UI stall.
 self.pelagicDiagnostics=()=>({frames,metrics,now:performance.now()});
+
+// Test the context this renderer actually uses, before taking a visible canvas.
+let webgl=false;
+try{const gl=new OffscreenCanvas(2,2).getContext('webgl');webgl=!!gl;gl?.getExtension('WEBGL_lose_context')?.loseContext();}catch{}
+self.postMessage({op:'capabilities',webgl});
