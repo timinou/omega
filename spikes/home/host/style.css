@@ -20,3 +20,4 @@ body.omega-workbench-window>#panes{height:100dvh;min-width:0;min-height:0;gap:0}
 .workbench-location{margin-left:auto;font:11px var(--font-code);color:var(--roast);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .workbench-error:empty{display:none}.workbench-error{position:absolute;right:8px;top:52px;max-width:calc(100vw - 16px);padding:12px;background:var(--rose-bg);border:1px solid var(--rose);font:13px var(--font-text);z-index:20}
 @media(max-width:620px){.workbench-header{padding:0 6px;gap:2px}.workbench-mark{width:28px}.workbench-location{display:none}.workbench-status{padding:0 max(4px,env(safe-area-inset-right)) max(0px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left))}.workbench-status nav{max-width:none}}
+body.omega-workbench-window #panes>.pane{border:0}

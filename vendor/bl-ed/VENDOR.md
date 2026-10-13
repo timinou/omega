@@ -436,3 +436,9 @@ render values remain unchanged. Browser geometry is a domain-free leaf.
 an unsubscribe function and coalesces notifications after painting. Subscriptions
 perform no polling; listener failure cannot break editor dispatch. These hooks
 allow a composing package to follow an embedded editor's actual focus/context.
+
+All view panes now establish their own containing block, so a package's absolute
+view body stays inside its dock instead of covering adjacent editors. A real
+minibuffer temporarily owns the single input sink when the underlying editor is
+inert/zero-width; `blEd.focusInput()` lets a composing host focus that input.
+The ordinary editor's input path is retained, including IME and clipboard.

@@ -38,7 +38,7 @@ export function createHost(api){
   if(job.op==='navigate')editorEvent(w,{type:'mobile/nav',...job.args});
   else if(job.args.name==='context'&&w===work())w.document.querySelector(`[data-act=${model.screen==='task'?'context':'scope'}]`)?.click();
   else if(job.args.name==='commands'&&w===work())editorEvent(w,{type:'mobile/modal',value:'commands'});
-  else {const keys=job.args.name==='lisp'?[':']:['space','space'];for(const key of keys)editorEvent(w,{type:'key',key},null);}
+  else {const keys=job.args.name==='lisp'?[':']:['space','space'];for(const key of keys)editorEvent(w,{type:'key',key},null);w.blEd.focusInput();}
  }
  function queue(op,args){pending={op,args,deadline:performance.now()+30000};deliver();}
  function tools(binding){

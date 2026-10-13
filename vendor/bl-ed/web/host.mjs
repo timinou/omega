@@ -715,6 +715,7 @@ function syncPanes(panes) {
     if (get(p, "kind") === K("view")) {
       const root = document.createElement("aside");
       root.className = "pane view view-" + get(p, "view-kind").name;
+      Object.assign(root.style, {position:"relative",minWidth:"0",minHeight:"0",overflow:"hidden"});
       root.innerHTML = '<div class="view-body"></div><div class="view-lens"></div>';
       paneDom.set(id, { root, body: root.querySelector(".view-body"), lens: root.querySelector(".view-lens") });
     } else {
@@ -1075,6 +1076,12 @@ function chrome(v, rv) {
     minibuf.hidden = true;                   // a presentation draws the draft in place (the composer)
   } else if (mb) {
     minibuf.hidden = false;
+    // A view-only layout may retain its editor at zero width. The frame's
+    // one input sink must stay usable while its real minibuffer is open.
+    if (sink.closest('[inert]')) {
+      minibuf.appendChild(sink); sink.style.top = '0'; sink.style.left = '0';
+      sink.focus({preventScroll:true});
+    }
     minibuf.querySelector(".prompt").textContent = get(mb, "prompt");
     minibuf.querySelector(".text").textContent = get(mb, "text");
     const list = minibuf.querySelector(".matches");
@@ -1406,7 +1413,7 @@ panesEl.removeAttribute("aria-busy");
 const queued = bootQueue; bootQueue = [];
 for (const e of queued) dispatch(e);        // keys typed during boot, in order
 sink.focus();
-window.blEd = { dispatch, observe: observers.subscribe, snapshot: () => renderFrame(fr), setVisible:setViewerVisible, state: () => ed$(), frame: () => fr, render: () => paneView(get(fr, "focus").name), R, K, F };
+window.blEd = { dispatch, focusInput: () => sink.focus({preventScroll:true}), observe: observers.subscribe, snapshot: () => renderFrame(fr), setVisible:setViewerVisible, state: () => ed$(), frame: () => fr, render: () => paneView(get(fr, "focus").name), R, K, F };
 window.blHost = { lang, gate, glide, loading, observation:()=>({visible:viewerVisible,watches:watchers.size}) };
 if (documents?.eagerLanguage !== false) setTimeout(() => lang.start(), 0);          // the language: off the first-display path
 }
