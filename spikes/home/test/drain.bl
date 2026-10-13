@@ -1,0 +1,15 @@
+; Private HTTP lifecycle fixture: no world, durable store or user listener.
+(ns home.drain-test (:require [bl-ed.serve :as serve]))
+(let [port (erlang/binary_to_integer (first (BeamLisp/argv))) owner (erlang/self)
+      closing (atom nil)
+      server (serve/start! {:port port :root "/tmp" :web "/tmp"
+               :providers {"proof" {:rev (fn [_ _] (println "REV_WAITING") "same")}}
+               :intents {"proof/write" (fn [_] (println "WRITE_ACCEPTED") (Process/sleep 600) (println "WRITE_FINISHED") {:ok true})
+                         "proof/stop" (fn [_] (spawn (fn [] (Process/sleep 100)
+                            (let [stamp (erlang/monotonic_time :millisecond)]
+                              (serve/stop! @closing)
+                              (println (str "DRAIN_MS=" (- (erlang/monotonic_time :millisecond) stamp)))
+                              (erlang/send owner :done)))) {:ok true})}})]
+  (reset! closing server)
+  (println "READY")
+  (receive :done nil))

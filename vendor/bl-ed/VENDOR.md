@@ -442,3 +442,10 @@ view body stays inside its dock instead of covering adjacent editors. A real
 minibuffer temporarily owns the single input sink when the underlying editor is
 inert/zero-width; `blEd.focusInput()` lets a composing host focus that input.
 The ordinary editor's input path is retained, including IME and clipboard.
+
+Graceful stop now signals the server's read-only revision observers before
+draining its supervised HTTP connections. Idle long polls can finish on their
+next 250 ms check instead of consuming the full 25-second hold. Accepted writes
+retain their existing shutdown budget; store cleanup still follows HTTP drain.
+The private `spikes/home/test/drain.test.mjs` exercises a held poll alongside an
+accepted slow write and verifies that both finish before the listener closes.

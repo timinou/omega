@@ -152,7 +152,7 @@
         deadline (+ (erlang/monotonic_time :millisecond) HOLD-MS)]
     (loop []
       (let [r (try (rev-of cfg p) (catch e nil))]
-        (if (or (nil? r) (not= r since) (> (erlang/monotonic_time :millisecond) deadline))
+        (if (or @(:closing cfg) (nil? r) (not= r since) (> (erlang/monotonic_time :millisecond) deadline))
           (w/json conn 200 {:ok (some? r) :rev r})
           (do (Process/sleep POLL-MS) (recur)))))))
 
@@ -315,17 +315,20 @@
              :providers (or (:providers opts) {})
              :intents (or (:intents opts) {})
              :landing-pages (or (:landing-pages opts) {})
-             :generations (:generations opts)}
+             :generations (:generations opts) :closing (atom false)}
         port (or (:port opts) 8790)
         started (w/serve {:port port :plug (router cfg) :ip (erlang/list_to_tuple (list 127 0 0 1))})]
     (when-not (= :ok (elem started 0))
       (throw (ex-info "Cannot start editor listener" {:reason (elem started 1) :port port})))
     {:url (str "http://127.0.0.1:" port "/") :port port :root (:root cfg)
-     :listener (elem started 1)}))
+     :listener (elem started 1) :closing (:closing cfg)}))
 
 (defn stop!
   "Stop accepting requests and wait for the listener's supervised children."
   [server]
+  ; Release read-only observers before draining accepted requests. Writers keep
+  ; their existing supervised shutdown budget and application state remains live.
+  (when-let [closing (:closing server)] (reset! closing true))
   (when-let [pid (:listener server)]
     (when (Process/alive? pid)
       (erlang/unlink pid)
