@@ -1,0 +1,8 @@
+(ns home.launcher-test (:require [omega.desktop :as desktop] [pelagic.launch :as launch]))
+(deftest desktop-launch-mode-is-explicit
+  (is (= ["--live" "--preset" "home"] (:host-args (desktop/options []))))
+  (is (= ["--preset" "home"] (:host-args (desktop/options ["--demo"]))))
+  (is (:browser? (desktop/options ["--browser"])))
+  (is (thrown? (desktop/options ["--demo" "--live"])))
+  (is (= "home" (:preset (launch/options ["--preset" "home"] 8812))))
+  (is (includes? (launch/preset-url 8812 "home") "use=home&layout=home")))

@@ -7,7 +7,7 @@
         host-args (if (or demo? (some #{"--live"} host-args)) host-args (conj host-args "--live"))]
     (when (and demo? (some #{"--live"} host-args))
       (throw (ex-info "Choose --demo or --live" {})))
-    {:browser? browser? :host-args (conj host-args "--preset" "home")}))
+    {:browser? browser? :host-args (conj (conj host-args "--preset") "home")}))
 (defn open!
   "Attach a native client to an existing host. The caller owns its Window.
    Does not serve another application, start a task system or stop the host."

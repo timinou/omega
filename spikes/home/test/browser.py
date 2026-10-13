@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory(prefix='omega-home-proof-') as temp:
    assert mf.evaluate('window.retainedEngine.ctx.state')=='running';page.locator('.omega-home nav [data-activity="music"]').click()
    assert mf.evaluate(q+'.engine()===window.retainedEngine&&'+q+'===window.retainedActor')
    checked('Pelagic keeps the same playing engine and editor viewer through Home return')
-   music.get_by_role('button',name='RUNTIME',exact=True).click();music.locator('.inspector').wait_for(timeout=30000);assert mf.evaluate(q+'.engine()===window.retainedEngine')
+   music.get_by_role('button',name='RUNTIME',exact=True).click();music.get_by_role('heading',name='Owned work, in view').wait_for(timeout=30000);assert mf.evaluate(q+'.engine()===window.retainedEngine')
    page.screenshot(path=str(PROOF/'04-inspector.png'));checked('existing companion inspector opens beside the retained instrument')
    page.locator('.omega-home nav [data-activity="home"]').click();page.set_viewport_size({'width':390,'height':844});page.screenshot(path=str(PROOF/'05-narrow.png'));page.set_viewport_size({'width':1400,'height':1000})
    page.evaluate('''()=>{const b=blEd;b.dispatch(b.R.hashMap(b.K('type'),b.K('key'),b.K('key'),':'));b.dispatch(b.R.hashMap(b.K('type'),b.K('text'),b.K('text'),'(ed/unuse "home")'));b.dispatch(b.R.hashMap(b.K('type'),b.K('key'),b.K('key'),'Enter'));}''')
