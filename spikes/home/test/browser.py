@@ -47,20 +47,26 @@ with tempfile.TemporaryDirectory(prefix='omega-home-proof-') as temp:
    browser=p.chromium.launch(executable_path=os.environ.get('CHROMIUM',str(Path.home()/'.cache/ms-playwright/chromium-1243/chrome-linux64/chrome')),args=['--no-sandbox','--autoplay-policy=no-user-gesture-required'])
    context=browser.new_context(viewport={'width':1400,'height':1000},record_video_dir=str(PROOF/'raw'),record_video_size={'width':1400,'height':1000})
    page=context.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
-   page.goto(base+'/?use=home&layout=home&file=workspace:all');page.locator('.omega-home h1').wait_for();page.get_by_role('button',name='Continue this piece',exact=False).first.wait_for()
+   page.goto(base+'/?use=home&layout=home&file=workspace:all');page.locator('.omega-home h1').wait_for()
+   try:page.get_by_role('button',name='Continue this piece',exact=False).first.wait_for()
+   except Exception:
+    page.screenshot(path=str(PROOF/'failure.png'));(PROOF/'failure.json').write_text(json.dumps({'workspace':doc('workspace:all'),'home':page.locator('.omega-home').evaluate('(e)=>e.outerHTML'),'objects':page.evaluate('blEd.R.printStr(blEd.state().get(blEd.K("obj-index")))'),'errors':errors},indent=2));raise
    assert page.locator('iframe').count()==0;page.screenshot(path=str(PROOF/'01-home.png'))
    checked('Home projects actual tasks and places; no unopened editor viewers are allocated')
    page.get_by_role('button',name='Continue this piece',exact=False).first.click()
    frame=page.frame_locator('[data-pane="work"] iframe');frame.locator('.question-card').wait_for(timeout=60000)
    reply=frame.locator('[data-field="reply"]');reply.fill('Keep this unfinished thought')
    page.screenshot(path=str(PROOF/'02-work.png'))
+   assert page.locator('.omega-home nav [data-activity="home"]').evaluate('(b)=>{const r=b.getBoundingClientRect();return b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}')
    page.locator('.omega-home nav [data-activity="home"]').click();assert page.locator('[data-pane="work"]').get_attribute('aria-hidden')=='true'
    assert page.locator('[data-pane="work"]').evaluate('(e)=>e.inert')
    page.locator('.omega-home nav [data-activity="work"]').click();assert reply.input_value()=='Keep this unfinished thought'
    checked('Continue opens the existing task; Home return retains its draft and makes hidden panes inert')
    page.locator('.omega-home nav [data-activity="music"]').click();music=page.frame_locator('[data-pane="music"] iframe');music.get_by_role('button',name='▶ PERFORM',exact=True).wait_for(timeout=90000)
    mf=page.locator('[data-pane="music"] iframe').element_handle().content_frame();q='document.querySelector(".view-host .view-body").pelagic'
-   mf.evaluate(q+'.ready()');music.get_by_role('button',name='▶ PERFORM',exact=True).click();mf.wait_for_function(q+'.diagnostics().preparation.done',timeout=60000)
+   mf.evaluate(q+'.ready()');mf.wait_for_function(q+'.diagnostics().preparation.done || '+q+'.diagnostics().preparation.error',timeout=60000)
+   preparation=mf.evaluate(q+'.diagnostics().preparation');(PROOF/'preparation.json').write_text(json.dumps(preparation,indent=2)+'\n');assert preparation['done'],preparation
+   music.get_by_role('button',name='▶ PERFORM',exact=True).click();mf.wait_for_function(q+'.stats().playing&&'+q+'.stats().context==="running"',timeout=15000)
    mf.evaluate('window.retainedEngine='+q+'.engine();window.retainedActor='+q+';window.retainedRevision='+q+'.stats().revision')
    page.screenshot(path=str(PROOF/'03-pelagic.png'))
    page.locator('.omega-home nav [data-activity="home"]').click();page.wait_for_timeout(300)

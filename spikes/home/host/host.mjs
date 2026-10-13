@@ -1,6 +1,8 @@
 // DOM and same-origin viewer boundary. Decisions and bounded rows are home.main.
 export function createHost(api) {
   let pending = null, timer = null, disposed = false, deadline = 0;
+  const priorTitle = document.title, hadClass = document.body.classList.contains('omega-home-window');
+  document.body.classList.add('omega-home-window'); document.title = 'Omega';
   function deliver() {
     if (!pending || disposed) return;
     const frame = document.querySelector('[data-pane="work"] iframe');
@@ -19,6 +21,8 @@ export function createHost(api) {
       pending = effect.args; deadline = performance.now() + 15000; clearTimeout(timer); deliver();
     },
     mount(root, dispatch) {
+      const priorStyle = root.getAttribute('style');
+      root.style.cssText = 'position:absolute;inset:0;overflow:hidden';
       const style = document.createElement('link'); style.rel = 'stylesheet';
       style.href = new URL('style.css', import.meta.url); root.append(style);
       const surface = document.createElement('section'); surface.className = 'omega-home';
@@ -63,9 +67,10 @@ export function createHost(api) {
           surface.querySelector('[data-error]').textContent = model.error || '';
           surface.querySelector('[data-status]').textContent = model.ready ? 'Shared Omega world' : 'Work is unavailable · use Refresh to retry';
         },
-        dispose() { surface.remove(); style.remove(); }
+        dispose() { surface.remove(); style.remove(); if (priorStyle == null) root.removeAttribute('style'); else root.setAttribute('style',priorStyle); }
       };
     },
-    dispose() { disposed = true; pending = null; clearTimeout(timer); }
+    dispose() { disposed = true; pending = null; clearTimeout(timer);
+      if (!hadClass) document.body.classList.remove('omega-home-window'); document.title = priorTitle; }
   };
 }
