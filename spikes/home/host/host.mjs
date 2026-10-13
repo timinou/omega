@@ -27,7 +27,7 @@ export function createHost(api) {
       style.href = new URL('style.css', import.meta.url); root.append(style);
       const surface = document.createElement('section'); surface.className = 'omega-home';
       surface.innerHTML = `<nav aria-label="Omega"><button data-activity="home" title="Home">ω<span>Home</span></button><button data-activity="work">Work</button><button data-activity="music">Play</button><button data-activity="machine">Machine</button></nav><main><header><p class="eyebrow">OMEGA</p><h1>Your work</h1><button data-refresh aria-label="Refresh work">↻</button></header><section data-section="continue"><h2>Continue</h2><div data-list="continue"></div><p data-empty>Open your work, or begin something new.</p></section><section data-section="attention"><h2>Needs you</h2><div data-list="attention"></div></section><section><h2>Start something</h2><div class="starts"><button data-activity="work"><strong>Work</strong><span>Tasks, documents and places</span></button><button data-activity="music"><strong>Pelagic</strong><span>Code, sound and light</span></button></div></section><section data-section="places"><h2>Places</h2><div data-list="places"></div></section><footer><span data-status>Connecting…</span><button data-activity="machine">Inspect the machine ↗</button></footer><p role="status" data-error></p></main>`;
-      root.append(surface); let previous = '';
+      root.append(surface); let previous = '', lastActivity = null, focusFrame = 0, mounted = true;
       const lists = new Map();
       function rows(name, values, kind) {
         const parent = surface.querySelector(`[data-list="${name}"]`), old = lists.get(name) || new Map(), next = new Map();
@@ -45,6 +45,7 @@ export function createHost(api) {
       }
       surface.addEventListener('click', event => {
         const button = event.target.closest('button'); if (!button) return;
+        event.stopPropagation(); // Home controls own focus; do not refocus the hidden editor sink.
         if (button.dataset.activity) dispatch({type:'home/open',activity:button.dataset.activity});
         if (button.dataset.task) dispatch({type:'home/continue',id:button.dataset.task});
         if (button.dataset.place) dispatch({type:'home/place',path:button.dataset.place});
@@ -54,6 +55,17 @@ export function createHost(api) {
         update(model) {
           const signature = JSON.stringify(model); if (signature === previous) return; previous = signature;
           surface.classList.toggle('compact', model.activity !== 'home');
+          if (model.activity !== lastActivity) {
+            lastActivity = model.activity; cancelAnimationFrame(focusFrame);
+            // The editor focuses its input sink after boot and clicks. Follow
+            // that paint, keeping Home keyboard-accessible and restoring the
+            // retained child's own focused control when an activity returns.
+            focusFrame = requestAnimationFrame(() => {
+              if (!mounted || disposed) return;
+              if (lastActivity === 'home') surface.querySelector('nav [data-activity="home"]').focus();
+              else document.querySelector(`[data-pane="${lastActivity}"] iframe`)?.contentWindow?.focus();
+            });
+          }
           for (const button of surface.querySelectorAll('nav button')) button.setAttribute('aria-current',button.dataset.activity === model.activity ? 'page' : 'false');
           const resumed = (model.opened || []).filter(x => x !== 'work').map(x => ({key:x,title:x==='music'?'Pelagic':'Runtime inspector',status:'Open in this window'}));
           rows('continue', model.tasks || [], 'task');
@@ -67,7 +79,7 @@ export function createHost(api) {
           surface.querySelector('[data-error]').textContent = model.error || '';
           surface.querySelector('[data-status]').textContent = model.ready ? 'Shared Omega world' : 'Work is unavailable · use Refresh to retry';
         },
-        dispose() { surface.remove(); style.remove(); if (priorStyle == null) root.removeAttribute('style'); else root.setAttribute('style',priorStyle); }
+        dispose() { mounted = false; cancelAnimationFrame(focusFrame); surface.remove(); style.remove(); if (priorStyle == null) root.removeAttribute('style'); else root.setAttribute('style',priorStyle); }
       };
     },
     dispose() { disposed = true; pending = null; clearTimeout(timer);
