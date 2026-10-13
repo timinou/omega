@@ -16,6 +16,8 @@ with tempfile.TemporaryDirectory(prefix='omega-home-proof-') as temp:
  subprocess.run(['cc','-I',str(temp),str(ROOT/'spikes/home/test/pointer.c'),str(temp/'virtual-pointer.c'),'-o',str(temp/'pointer'),*flags],check=True)
  runtime=temp/'runtime';runtime.mkdir(mode=0o700);work=temp/'work';work.mkdir();(work/'README.bl.org').write_text('#+TITLE: Home acceptance\n\nA private working place.\n')
  env={**os.environ,'XDG_RUNTIME_DIR':str(runtime),'XDG_STATE_HOME':str(temp/'state'),'BL_GATEWAY':'off','HOME_POINTER_BIN':str(temp/'pointer')}
+ tessdata=Path.home()/'.cache/omega-home-tessdata'
+ if 'TESSDATA_PREFIX' not in env and (tessdata/'eng.traineddata').is_file():env['TESSDATA_PREFIX']=str(tessdata)
  sway=None;host_started=False
  def run(*args,good=True,timeout=600):
   r=subprocess.run([str(ROOT/'bin/bl'),*args],cwd=ROOT,env=env,capture_output=True,text=True,timeout=timeout)
