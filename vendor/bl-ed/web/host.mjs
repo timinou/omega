@@ -402,6 +402,7 @@ function applyDoc(j, path, visit, goto, pane) {
 
 // A generic leave event lets packages release host resources without IO in BL.
 window.addEventListener("pagehide", () => {
+  for (const key of [...watchers.keys()]) unwatch(key);
   pkgHosts.dispose();
   if (!fr) return;
   for (const pane of F.d_editor_ids(fr)) fr = F.d_handle(fr, ev(K("type"), K("session-leave"), K("pane"), pane));
@@ -543,17 +544,19 @@ async function perform(eff) {
 // nothing changes. A changed rev → fetch the document → one :doc / :cards event.
 
 const watchers = new Map();       // key → {path, since, alive}
+let requestedVisible = !window.frameElement?.closest("[inert]");
+let viewerVisible = requestedVisible && !document.hidden;
 function watch(key, path, since, onChange) {
-  if (documents) return;
+  if (documents || !viewerVisible) return;
   const cur = watchers.get(key);
   if (cur && cur.path === path) return;
-  if (cur) cur.alive = false;
-  const w = { path, since, alive: true };
+  if (cur) unwatch(key);
+  const w = { path, since, alive: true, controller: new AbortController() };
   watchers.set(key, w);
   (async () => {
     while (w.alive) {
       try {
-        const r = await fetch("/api/rev?path=" + encodeURIComponent(path) + "&since=" + encodeURIComponent(w.since || ""));
+        const r = await fetch("/api/rev?path=" + encodeURIComponent(path) + "&since=" + encodeURIComponent(w.since || ""), {signal:w.controller.signal});
         const j = await r.json();
         if (!w.alive) break;
         // a refresh that did not land (yielded to a visit, failed) is retried:
@@ -564,11 +567,24 @@ function watch(key, path, since, onChange) {
           if (out != null && out !== "applied" && out !== "stale") { w.since = prev; await new Promise((res) => setTimeout(res, 3000)); }
         }
         else if (!j.ok) await new Promise((res) => setTimeout(res, 3000));
-      } catch (err) { await new Promise((res) => setTimeout(res, 3000)); }
+      } catch (err) { if (w.alive) await new Promise((res) => setTimeout(res, 3000)); }
     }
   })();
 }
-function unwatch(key) { const w = watchers.get(key); if (w) { w.alive = false; watchers.delete(key); } }
+function unwatch(key) { const w = watchers.get(key); if (w) { w.alive = false; w.controller.abort(); watchers.delete(key); } }
+
+// Visibility suspends observation, not the editor, its actors or its audio.
+// Aborting parked HTTP/1 requests leaves connection capacity for foreground
+// assets and Workers. A retained same-origin parent calls this directly.
+function setViewerVisible(visible) {
+  requestedVisible = !!visible;
+  const next = requestedVisible && !document.hidden;
+  if (next === viewerVisible) return;
+  viewerVisible = next;
+  if (!next) { for (const key of [...watchers.keys()]) unwatch(key); cardIds = ""; }
+  else if (fr) { watchDocs(); watchCards(true); }
+}
+document.addEventListener("visibilitychange", () => setViewerVisible(requestedVisible));
 
 // one watch per editor pane's document; a pane that left drops its watch
 function watchDocs() {
@@ -723,7 +739,10 @@ const viewPainters = {
     if (!src) { dom.body.replaceChildren(); return; }
     const url = new URL(src, location.href);
     if (url.origin !== location.origin || !["http:", "https:"].includes(url.protocol)) return;
-    if (dom.body.firstElementChild?.dataset.embedSource === url.href) return;
+    if (dom.body.firstElementChild?.dataset.embedSource === url.href) {
+      dom.body.firstElementChild.contentWindow?.blEd?.setVisible?.(!dom.root.inert);
+      return;
+    }
     const frame = document.createElement("iframe");
     frame.dataset.embedSource = url.href;
     frame.title = get(model, "title") || "Embedded tool";
@@ -731,6 +750,7 @@ const viewPainters = {
     frame.allow = "autoplay; clipboard-read; clipboard-write; fullscreen";
     frame.style.cssText = "width:100%;height:100%;border:0;display:block";
     frame.src = url.href;
+    frame.addEventListener("load", () => frame.contentWindow?.blEd?.setVisible?.(!dom.root.inert));
     dom.body.replaceChildren(frame);
   },
   // Generic image view: the package supplies the model; the host paints it.
@@ -802,7 +822,7 @@ function paintView(dom, p) {
   }
   // Pure package models may select an existing generic renderer.
   const renderer = get(get(p, "view"), "renderer") || get(p, "view-kind").name;
-  const f = viewPainters[renderer]; if (f) f(dom, p);
+  const f = Object.prototype.hasOwnProperty.call(viewPainters, renderer) && viewPainters[renderer]; if (f) f(dom, p);
 }
 function minimapSlotAt(root, clientY) {
   const k = +root.dataset.k, ys = JSON.parse(root.dataset.ys || "[]");
@@ -1377,8 +1397,8 @@ panesEl.removeAttribute("aria-busy");
 const queued = bootQueue; bootQueue = [];
 for (const e of queued) dispatch(e);        // keys typed during boot, in order
 sink.focus();
-window.blEd = { dispatch, state: () => ed$(), frame: () => fr, render: () => paneView(get(fr, "focus").name), R, K, F };
-window.blHost = { lang, gate, glide, loading };
+window.blEd = { dispatch, setVisible:setViewerVisible, state: () => ed$(), frame: () => fr, render: () => paneView(get(fr, "focus").name), R, K, F };
+window.blHost = { lang, gate, glide, loading, observation:()=>({visible:viewerVisible,watches:watchers.size}) };
 if (documents?.eagerLanguage !== false) setTimeout(() => lang.start(), 0);          // the language: off the first-display path
 }
 

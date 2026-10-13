@@ -411,3 +411,11 @@ Zero-character-width panes become inert and aria-hidden while remaining mounted;
 restoring their width restores input accessibility without destroying resources.
 No Omega names or home/session policy enter ed/* or the generic host. Native
 Home/browser acceptance and unchanged editor/presentation checks cover this.
+
+Retained embedding also suspends hidden viewers' document/card observations
+through the existing editor host. Watches now abort their parked fetches on
+replacement, suspension and page leave. Previously dead watchers held HTTP/1
+connections until the 25 s server timeout; several retained viewers could starve
+foreground module Workers. Visibility only controls observation, preserving
+drafts, actors and audio. Resume revalidates current revisions. Generic built-in
+painters are selected only through own renderer keys.
