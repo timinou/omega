@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.request import Request,urlopen
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[3];OUT=ROOT/'spikes/home/proof/workbench';OUT.mkdir(parents=True,exist_ok=True)
-results={'privateWorld':True,'physicalDevice':False,'checks':[],'errors':[],'geometry':[],'timings':{}}
+results={'sourceRevision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'privateWorld':True,'physicalDevice':False,'checks':[],'errors':[],'geometry':[],'timings':{}}
 def check(message):results['checks'].append(message);print(message,flush=True)
 with socket.socket() as s:s.bind(('127.0.0.1',0));port=s.getsockname()[1]
 assert port!=8790
@@ -22,6 +22,8 @@ with tempfile.TemporaryDirectory(prefix='omega-workbench-') as temp:
   with urlopen(Request(base+'/api/intent',data=json.dumps({'intent':name,'args':args}).encode(),headers={'Content-Type':'application/json'}),timeout=30) as r:return json.load(r)
  try:
   stamp=time.monotonic();run('omega','--','--browser','--demo','--port',str(port),'--db',str(temp/'db'));started=True;results['timings']['hostAdmissionSeconds']=time.monotonic()-stamp
+  with urlopen(base+'/pelagic-build.json',timeout=30) as response:manifest=json.load(response)
+  results['build']={k:manifest.get(k) for k in ['inputs','compiler']}
   warm=[]
   for _ in range(3):
    stamp=time.monotonic();run('omega','--','--browser','--demo','--port',str(port),'--db',str(temp/'db'));warm.append((time.monotonic()-stamp)*1000)
@@ -31,6 +33,8 @@ with tempfile.TemporaryDirectory(prefix='omega-workbench-') as temp:
   second=intent('task/open',{'title':'Prepare the performance','goal':'Check the performance.','path':'place:studio'});assert second['ok']
   with sync_playwright() as p:
    browser=p.chromium.launch(executable_path=str(Path.home()/'.cache/ms-playwright/chromium-1243/chrome-linux64/chrome'),args=['--no-sandbox','--autoplay-policy=no-user-gesture-required'])
+   results['browser']=browser.version
+   results['conditions']={'headless':True,'journeyRecording':True,'physicalDevice':False,'sampleMeaning':'dispatch cost and following requestAnimationFrame opportunity; no physical output measurement'}
    context=browser.new_context(viewport={'width':1400,'height':900},record_video_dir=str(OUT/'raw'),record_video_size={'width':1400,'height':900})
    page=context.new_page();page.on('pageerror',lambda e:results['errors'].append(str(e)))
    try:
@@ -71,6 +75,12 @@ with tempfile.TemporaryDirectory(prefix='omega-workbench-') as temp:
     assert wf.evaluate("retainedFilter===document.querySelector('[data-workbench-filter]')&&document.activeElement===retainedFilter")
     frame.locator('[data-workbench-filter]').fill('')
     check('live child reconciliation preserves the exact focused work filter in its owned slot')
+    context.set_offline(True)
+    page.locator('.workbench-context small[data-offline]').wait_for(timeout=15000)
+    assert frame.locator('[data-act=send]').is_disabled()
+    context.set_offline(False)
+    page.wait_for_function('!document.querySelector(".workbench-context small[data-offline]")',timeout=15000)
+    check('offline state is visible in the shared chrome and reconnection preserves the draft')
     page.get_by_role('button',name='Buffers',exact=True).first.click();frame.get_by_role('heading',name='Buffers',exact=True).wait_for()
     frame.get_by_role('button',name='Pelagic',exact=False).wait_for();page.screenshot(path=str(OUT/'03-buffers.png'))
     frame.locator('[data-parent-buffer=music]').click();music=page.frame_locator('[data-pane=music] iframe');music.get_by_role('button',name='▶ PERFORM',exact=True).wait_for(timeout=90000)

@@ -17,9 +17,10 @@ const ui=p=>p.locator('[data-pane="phone"]'),click=(p,act)=>ui(p).locator(`butto
 const doc=async address=>{const r=await desktop.request.get(base+'/api/doc?path='+encodeURIComponent(address));const d=await r.json();assert.equal(d.ok,true,JSON.stringify(d));return d;};
 const intent=async(name,args)=>{const r=await desktop.request.post(base+'/api/intent',{data:{intent:name,args}});return r.json();};
 const pane=async(p,id)=>p.evaluate(id=>{const ed=blEd.F.d_editor(blEd.frame(),blEd.K(id));return{path:ed.get(blEd.K('path')),text:ed.get(blEd.K('text')).get(blEd.K('lines')).toArray().join('\n'),saved:ed.get(blEd.K('saved-text')).get(blEd.K('lines')).toArray().join('\n'),data:ed.get(blEd.K('doc'))?.get(blEd.K('data'))};},id);
-const openTask=async(p,title)=>{await click(p,'work');await ui(p).locator('[data-act="open-task"]').filter({hasText:title}).first().click();await ui(p).locator('h1.task-title').filter({hasText:title}).waitFor();};
+const waitTask=(p,title)=>p.waitForFunction(title=>blEd.F.d_editor(blEd.frame(),blEd.K('task')).get(blEd.K('doc'))?.get(blEd.K('data'))?.get(blEd.K('task-title'))===title,title,{timeout:90000});
+const openTask=async(p,title)=>{await click(p,'work');await ui(p).locator('[data-act="open-task"]').filter({hasText:title}).first().click();await waitTask(p,title);await ui(p).locator('h1.task-title').filter({hasText:title}).waitFor();};
 const openDocument=async(p,address)=>{const expected=await doc(address);await click(p,'commands');await ui(p).locator('[data-field="address"]').fill(address);await ui(p).locator('form[data-form="open"] button').click();await p.waitForFunction(({address,rev})=>{const ed=blEd.F.d_editor(blEd.frame(),blEd.K('file'));return ed.get(blEd.K('path'))===address&&ed.get(blEd.K('doc'))?.get(blEd.K('rev'))===rev;},{address,rev:expected.rev});await ui(p).locator('.reader').waitFor();};
-const create=async(p,goal)=>{await click(p,'work');await click(p,'new');await ui(p).locator('[data-field="new-place"]').selectOption('test');await ui(p).locator('[data-field="new-goal"]').fill(goal);await ui(p).locator('form[data-form="new"] button[type="submit"]').click();await ui(p).locator('.task-title').filter({hasText:goal}).waitFor();return(await pane(p,'task')).path;};
+const create=async(p,goal)=>{await click(p,'work');await click(p,'new');await ui(p).locator('[data-field="new-place"]').selectOption('test');await ui(p).locator('[data-field="new-goal"]').fill(goal);await ui(p).locator('form[data-form="new"] button[type="submit"]').click();await waitTask(p,goal);await ui(p).locator('.task-title').filter({hasText:goal}).waitFor();return(await pane(p,'task')).path;};
 const waitText=async(p,text)=>ui(p).getByText(text,{exact:false}).filter({visible:true}).first().waitFor();
 const checks=[];
 try{
@@ -76,22 +77,28 @@ try{
  await click(b,'ask-passage');await ui(b).locator('[data-field="new-place"]').selectOption('test');
  await ui(b).locator('[data-field="new-goal"]').fill('Explain selected text');await ui(b).locator('form[data-form="new"] button[type="submit"]').click();
  await ui(b).locator('.task-title').filter({hasText:'Explain selected text'}).waitFor();
+ await waitTask(b,'Explain selected text');
  const selectedTask=await doc((await pane(b,'task')).path);assert.equal(selectedTask.data.cwd,root);assert.equal(selectedTask.data.home.path,'work:test/long.bl.org');
  assert.match(selectedTask.text,/Selected passage from/);
  checks.push('long document outline, search, follow/back reading position, explicit checked passage and cwd');
- await ui(b).locator('.question-card').waitFor();await click(b,'actions');await click(b,'cancel-task');await click(b,'confirm-cancel');
+ await ui(b).locator('.question-card').waitFor();await click(b,'actions');await ui(b).locator('[data-act=object-action][data-command="desk/cancel"]').click();await ui(b).locator('[data-field=prompt]').fill('cancel');await ui(b).locator('form[data-form=prompt] button').click();
  await ui(b).locator('.question-card').waitFor({state:'detached'});
  assert.equal((await doc((await pane(b,'task')).path)).data['task-status'],'cancelled');
  checks.push('cancel closes the task and removes its actionable question');
  // Both editors retain overlapping drafts, and neither publication overwrites.
  await Promise.all([openDocument(a,'work:test/shared.bl.org'),openDocument(b,'work:test/shared.bl.org')]);
- await click(b,'edit-mode');await ui(b).locator('[data-field="file"]').fill('Phone overlapping draft\n');
- await click(a,'edit-mode');await ui(a).locator('[data-field="file"]').fill('Desktop overlapping draft\n');
- await click(a,'publish');await a.waitForFunction(()=>blEd.F.d_editor(blEd.frame(),blEd.K('file')).get(blEd.K('saved-text')).get(blEd.K('lines')).toArray().join('\n')==='Desktop overlapping draft\n');
- await waitText(b,'overlaps');assert.equal(await ui(b).locator('[data-field="file"]').inputValue(),'Phone overlapping draft\n');
- await click(b,'publish');await waitText(b,'Not published');assert.equal((await doc('work:test/shared.bl.org')).text,'Desktop overlapping draft\n');
- checks.push('shared buffer revisions, overlapping drafts retained, stale publication refused');
+ const draftAck=(p,text)=>p.waitForResponse(r=>r.url().endsWith('/api/intent')&&r.request().method()==='POST'&&r.request().postDataJSON()?.intent==='buffer/draft'&&r.request().postDataJSON()?.args?.text===text);
+ await click(b,'edit-mode');const phoneAck=draftAck(b,'Phone overlapping draft\n');await ui(b).locator('[data-field="file"]').fill('Phone overlapping draft\n');assert.equal((await(await phoneAck).json()).ok,true);
+ await click(a,'edit-mode');const desktopAck=draftAck(a,'Desktop overlapping draft\n');await ui(a).locator('[data-field="file"]').fill('Desktop overlapping draft\n');assert.equal((await(await desktopAck).json()).ok,true);
+ await click(a,'publish');await waitText(a,'Not published');
+ await click(b,'publish');await waitText(b,'Not published');
+ assert.equal((await doc('work:test/shared.bl.org')).text,'Original shared text\n');
+ assert.equal(await ui(a).locator('[data-field="file"]').inputValue(),'Desktop overlapping draft\n');
+ assert.equal(await ui(b).locator('[data-field="file"]').inputValue(),'Phone overlapping draft\n');
+ checks.push('shared overlapping drafts retained; both publications refused before any overwrite');
  await b.screenshot({path:path.join(proof,'02-conflict-phone.png')});
+ // Explicitly withdraw our desktop draft before its later package-unload test.
+ const clearAck=draftAck(a,'Original shared text\n');await ui(a).locator('[data-field="file"]').fill('Original shared text\n');assert.equal((await(await clearAck).json()).ok,true);
  // Commands and the live machine share the same host, including full world data.
  await click(a,'commands');await ui(a).locator('[data-field="eval-code"]').fill('(count (omega.task/all world))');
  await ui(a).locator('form[data-form="eval"] button[value="machine"]').click();
@@ -110,5 +117,9 @@ try{
  assert.equal(await ui(b).locator('[data-field="file"]').inputValue(),'Phone overlapping draft\n');
  assert.equal(await b.locator('.omega-mobile').count(),1);
  assert.equal((await doc(phoneTask)).ok,true);checks.push('exact mobile unuse on desktop preserves phone and host world');
+ // After the rival draft was explicitly withdrawn, this client may publish.
+ await click(b,'publish');await b.waitForFunction(()=>blEd.F.d_editor(blEd.frame(),blEd.K('file')).get(blEd.K('saved-text')).get(blEd.K('lines')).toArray().join('\n')==='Phone overlapping draft\n');
+ assert.equal((await doc('work:test/shared.bl.org')).text,'Phone overlapping draft\n');
+ checks.push('explicit publication succeeds after the conflicting rival draft is withdrawn');
  assert.deepEqual(errors,[]);writeFileSync(path.join(proof,'browser.json'),JSON.stringify({checks,browserErrors:errors},null,2)+'\n');console.log(JSON.stringify({checks}));
-}catch(error){await Promise.all([a.screenshot({path:path.join(proof,'failure-desktop.png')}),b.screenshot({path:path.join(proof,'failure-phone.png')})]);console.error(await ui(b).innerText());throw error;}finally{await browser.close();}
+}catch(error){await Promise.all([a.screenshot({path:path.join(proof,'failure-desktop.png')}),b.screenshot({path:path.join(proof,'failure-phone.png')})]);console.error(JSON.stringify({errors,desktop:await pane(a,'task'),phone:await pane(b,'task')},null,2));console.error(await ui(b).innerText());throw error;}finally{await browser.close();}

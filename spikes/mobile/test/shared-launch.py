@@ -91,7 +91,7 @@ with tempfile.TemporaryDirectory(prefix='omega-pocket-proof-') as temp:
         persistence('persistence-after.json')
         assert {o['key'] for o in restored['objects'] if o['type']=='omega/task'} == saved_tasks
         assert doc(opened['path'])['data']['task-title'] == 'Shell work'
-        assert doc('work:test/shared.bl.org')['text'] == 'Desktop overlapping draft\n'
+        assert doc('work:test/shared.bl.org')['text'] == 'Phone overlapping draft\n'
         assert doc('changes:work:test/shared.bl.org')['objects']
         assert owners() == initial
         run('omega.stop')

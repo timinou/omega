@@ -11,7 +11,7 @@ const cache=path.join(homedir(),'.cache/ms-playwright');
 const executablePath=process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE||readdirSync(cache).filter(x=>/^chromium-\d+$/.test(x)).sort((a,b)=>+b.split('-')[1]-+a.split('-')[1]).map(x=>path.join(cache,x,'chrome-linux64/chrome')).find(existsSync);
 const browser=await chromium.launch({headless:true,executablePath}),ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,...(process.env.POCKET_REVIEW_PROOF?{recordVideo:{dir:path.join(proof,'raw'),size:{width:390,height:844}}}:{})}),p=await ctx.newPage(),errors=[],checks=[];
 p.setDefaultTimeout(30000);p.on('pageerror',e=>errors.push(e.stack));
-const ui=p.locator('[data-pane="phone"]'),click=act=>ui.locator(`[data-act="${act}"]`).first().click();
+const ui=p.locator('[data-pane="phone"]'),click=act=>ui.locator(`${act==='dismiss'?'button':''}[data-act="${act}"]`).first().click();
 const doc=async address=>(await(await ctx.request.get(base+'/api/doc?path='+encodeURIComponent(address))).json());
 const intent=async(name,args)=>(await(await ctx.request.post(base+'/api/intent',{data:{intent:name,args}})).json());
 const open=async address=>{await click('commands');await ui.locator('[data-field="address"]').fill(address);await ui.locator('form[data-form="open"] button').click();await ui.locator('.reader').waitFor();await p.waitForFunction(address=>blEd.F.d_editor(blEd.frame(),blEd.K('file')).get(blEd.K('path'))===address,address);};
