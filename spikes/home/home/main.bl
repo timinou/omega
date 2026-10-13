@@ -1,5 +1,5 @@
 ; One adaptive chrome; retained packages remain the working surfaces.
-(ns home.main (:require [ed.core :as c] [home.workbench :as wb]))
+(ns home.main (:require [ed.core :as c] [ws.workbench :as wb]))
 (def work-url "?use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile&file=workspace:all")
 (def music-url "?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org")
 (def machine-url "?use=runtime&layout=runtime&file=runtime:overview")
@@ -31,6 +31,10 @@
    (let [s (state ed) selected (activity ed) source (:context s)]
      {:package "home" :role role :activity selected :error (:error s)
       :context (wb/context selected source) :screen (or (:screen source) "work")
+      :destination (wb/destination selected (or (:screen source) "work"))
+      :actions (when (= selected "work") (:actions source))
+      :modal (if (= selected "work") (:modal source) (get-in s [:overlays selected]))
+      :feedback (when (= selected (:feedback-owner s)) (:feedback s))
       :navigation (wb/navigation (:navigation s)) :profile (or (:navigation s) "full")
       :buffers wb/buffers :groups (wb/groups (:objects source) (:query s)) :query (or (:query s) "")
       :opened (vec (filter #(or (= % "work") (get s (keyword (str % "-opened")))) ["work" "music" "machine"]))})))
@@ -41,9 +45,12 @@
   (c/effect ed {:kind :package-host :package "home" :op :action :args {:activity (activity ed) :name name}}))
 (defn intercept [ed ev]
   (case (:type ev)
-    :home/open (open ed (:activity ev))
-    :home/navigate (navigate ed (:screen ev) (:path ev))
+    :home/open (open (put ed :error nil) (:activity ev))
+    :home/navigate (navigate (put ed :error nil) (:screen ev) (:path ev))
     :home/context (put ed :context (:context ev))
+    :home/overlay (if (contains? #{"music" "machine"} (:owner ev)) (assoc-in ed [:pkg-state "home" :overlays (:owner ev)] (:open ev)) ed)
+    :home/feedback (-> ed (put :feedback-owner (:owner ev)) (put :feedback (:message ev)))
+    :home/clear-feedback (put ed :feedback nil)
     :home/filter (put ed :query (:text ev))
     :home/profile (if (contains? #{"full" "scoped"} (:profile ev)) (put ed :navigation (:profile ev)) ed)
     :home/tool (if (wb/buffer (:id ev)) (open ed (:id ev)) ed)

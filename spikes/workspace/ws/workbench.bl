@@ -1,18 +1,19 @@
 ; Workbench policy is data and pure functions, shared by chrome and previews.
-(ns home.workbench (:require [clojure.string :as string]))
+(ns ws.workbench (:require [clojure.string :as string]))
 (def buffers
   [{:id "music" :title "Pelagic" :kind "instrument" :path "spikes/pelagic/live-set.bl.org"}
    {:id "machine" :title "Runtime" :kind "inspector" :path "runtime:overview"}])
 (defn buffer [id] (first (filter #(= id (:id %)) buffers)))
+(defn status [task] (let [s (:status task)] (if (keyword? s) (name s) s)))
 (defn category [task]
-  (cond (contains? #{"done" "failed" "cancelled"} (:status task)) "recent"
+  (cond (contains? #{"done" "failed" "cancelled"} (status task)) "recent"
         (:ask task) "attention"
-        (= "idle" (:status task)) "answered"
+        (= "idle" (status task)) "answered"
         :else "working"))
 (defn label [task]
   (if (= "attention" (category task)) "Needs you"
     (get {"done" "Done" "failed" "Failed" "cancelled" "Cancelled" "idle" "Answered" "running" "Running" "open" "Starting"}
-         (:status task) "In progress")))
+         (status task) "In progress")))
 (defn groups [objects query]
   (let [q (string/lower-case (or query ""))
         tasks (filter #(and (= "omega/task" (:type %))
@@ -32,3 +33,7 @@
     {:title (or (:title source) "Work") :place (or (:place source) "All places")
      :path (or (:path source) "workspace:all") :mode (or (:screen source) "work")
      :dirty (:dirty source) :online (:online source)}))
+
+(defn destination [activity screen]
+  (if (not= activity "work") "buffers"
+    (get {"task" "work" "document" "buffers" "machine" "buffers" "host" "buffers"} screen screen)))

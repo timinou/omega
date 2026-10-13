@@ -1,7 +1,7 @@
 ; A phone surface over retained, ordinary editors. No alternate task engine.
 (ns mob.main (:require [ed.core :as c] [ed.docs :as docs] [ed.text :as t]
                        [ed.main :as m] [ed.pkg :as pkg] [ed.keymap :as km]
-                       [ed.commands :as cmds] [buffer.main :as buffers]))
+                       [ed.commands :as cmds] [buffer.main :as buffers] [ws.workbench :as workbench] [ws.actions :as actions]))
 (def phone
   {:name "mobile" :doc "Phone workbench with retained work, conversation and working-text editors."
    :panes [{:id :rail :doc "workspace:all" :width [:ch 0]}
@@ -16,7 +16,7 @@
 (defn objects [ed] (vec (map second (sort-by first (:obj-index ed)))))
 (defn present-object [object]
   (if (= "omega/task" (:type object))
-    (cond-> object
+    (cond-> (assoc object :state-label (workbench/label object))
       (contains? #{"done" "failed" "cancelled"} (:status object)) (assoc :ask nil)
       (= "cancelled" (:status object)) (assoc :summary ""))
     object))
@@ -143,6 +143,9 @@
 (defn model [ed role]
   {:package "mobile" :role role :path (:path ed) :text (t/to-string (:text ed))
    :objects (mapv present-object (objects ed)) :data (task-data ed) :state (state ed)
+   :groups (workbench/groups (mapv present-object (objects ed)) "")
+   :navigation (workbench/navigation (:navigation (state ed)))
+   :actions (actions/available ed)
    :structure (:struct ed) :draft (draft ed) :dirty (and (not (docs/read-only? ed)) (c/dirty? ed)) :read-only (docs/read-only? ed)
    :cursor (first (c/cursor ed)) :message (:message ed) :revision (get-in ed [:doc :rev])
    :minibuf (when (:minibuf ed) (select-keys (:minibuf ed) [:kind :prompt :text :sel]))

@@ -1,7 +1,7 @@
 ; Workbench policy and presentations, layered over present rather than a page.
 (ns ws.desk
   (:require [ed.core :as c] [ed.docs :as docs] [ed.keymap :as km] [ed.text :as t]
-            [ed.omega :as omega] [ed.main :as m] [ws.actions :as actions] [pp.present :as p] [pp.read :as rd] [ws.views :as views] [ed.org :as org] [clojure.string :as str]))
+            [ed.omega :as omega] [ed.main :as m] [ws.actions :as actions] [ws.workbench :as workbench] [pp.present :as p] [pp.read :as rd] [ws.views :as views] [ed.org :as org] [clojure.string :as str]))
 (def desk
   {:name "desk" :doc "A scoped work rail beside the selected conversation."
    :panes [{:id :rail :doc "workspace:all" :width [:ch 40]}
@@ -14,9 +14,9 @@
 (defn- line [o suffix segs role] (p/line-mark (:from o) segs (str (:key o) suffix) {:role role}))
 (defn present-task [o ctx]
   (let [i (info o ctx) status (name (or (:status i) :open))
-        attention? (some? (:ask i)) done? (contains? #{:done "done"} (:status i))]
+        attention? (= "attention" (workbench/category i)) done? (= "done" (workbench/status i))]
     (p/card (:key o) (if (picked? o ctx) "picked" (if attention? "ask" "row"))
-      [(line o "/status" [{:text (str " " (cond attention? "⚑ NEEDS YOU" done? "✓ DONE" :else (upper-case status))) :kind (if attention? :keyword :meta)}
+      [(line o "/status" [{:text (str " " (cond attention? "⚑ NEEDS YOU" done? "✓ DONE" :else (upper-case (workbench/label i)))) :kind (if attention? :keyword :meta)}
                          {:text (str "  " (:place i)) :kind :who}] :meta)
        (line o "/title" [{:text (str " " (clip (:title i) (max 12 (- (or (get-in (:ed ctx) [:view :cols]) 40) 3)))) :kind :rail-title :command :desk/open :doc (:title i)}] :rail-title)
        (line o "/summary" [{:text (str " " (clip (:summary i) (max 12 (- (or (get-in (:ed ctx) [:view :cols]) 40) 3)))) :kind :aside}] :aside)

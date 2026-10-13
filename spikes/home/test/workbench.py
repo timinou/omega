@@ -61,7 +61,7 @@ with tempfile.TemporaryDirectory(prefix='omega-workbench-') as temp:
     frame.locator('.document').wait_for();assert 'An inspectable document' in frame.locator('.document').inner_text();page.screenshot(path=str(OUT/'05-document.png'))
     check('Commands opens the actual structured document buffer')
     page.get_by_role('button',name='Commands',exact=True).click();frame.locator('#eval-code').fill('(+ 1 2)');frame.locator('form[data-form=eval]').get_by_role('button',name='Editor',exact=True).click()
-    frame.locator('[role=dialog] pre[role=status]').filter(has_text='3').wait_for();page.screenshot(path=str(OUT/'06-lisp.png'));frame.locator('[data-act=dismiss]').first.click()
+    frame.locator('[role=dialog] pre[role=status]').filter(has_text='3').wait_for();page.screenshot(path=str(OUT/'06-lisp.png'));frame.locator('button[data-act=dismiss]').first.click()
     check('real Lisp evaluates in the contextual editor and displays its result')
     page.get_by_role('button',name='Buffers',exact=True).first.click();frame.locator('[data-parent-buffer=machine]').click()
     machine=page.frame_locator('[data-pane=machine] iframe');machine.get_by_role('heading',name='Owned work, in view').wait_for(timeout=90000);page.screenshot(path=str(OUT/'07-runtime.png'))

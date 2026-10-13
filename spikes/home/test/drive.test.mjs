@@ -6,7 +6,7 @@ import {pathToFileURL} from 'node:url';
 const load=n=>import(pathToFileURL(path.join(process.env.BLED_OUT,n+'.mjs')));
 const {start}=await load('repl');const repl=await start(f=>fs.readFileSync(path.join(process.env.BLED_OUT,'src',f),'utf8'));
 globalThis.BL_HOST=Object.assign(globalThis.BL_HOST||{},{'eval-ed':(src,api)=>repl.evalWith(src,'ed',api)});
-const [R,M,F,H,W]=await Promise.all(['rt','ed.main','ed.frame','home.main','home.workbench'].map(load));
+const [R,M,F,H,W]=await Promise.all(['rt','ed.main','ed.frame','home.main','ws.workbench'].map(load));
 const K=R.kw,get=(m,k)=>m?.get(K(k),null),ev=(type,...kv)=>R.hashMap(K('type'),K(type),...kv);
 function session(){let fr=F.d_single(M.d_boot('A retained draft','notes.bl.org'));return {get fr(){return fr},send(e){fr=F.d_handle(fr,e);return this}}}
 test('one docked workbench retains editors and retracts its layers exactly',()=>{

@@ -1,6 +1,6 @@
 {:name "home" :editor "home" :editor-only true :layout "home"
  :doc "Continue work, open an instrument, and inspect the shared machine."
  :entry "workspace:all"
- :frontend {:version 1 :entry "home.main" :roots ["vendor/bl-ed" "spikes/home"]
+ :frontend {:version 1 :entry "home.main" :roots ["vendor/bl-ed" "spikes/home" "spikes/workspace"]
   :host ["eval-ed" "eval-cells"] :loader {:host "home/host.mjs"}
   :assets [{:from "spikes/home/host" :to "pkg/home" :suffixes [".mjs" ".css"]}]}}
