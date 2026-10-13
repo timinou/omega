@@ -1,0 +1,27 @@
+PELAGIC: reusing compiled frontend
+Omega development host (offline development): http://localhost:40557/?use=home&layout=home&file=workspace:all
+Host presets registered: omega.localhost, pelagic.dev, spikes.pelagic.dev
+Each browser session owns its package state and audio.
+Host is realm-owned. bl omega.stop stops this world; other realms keep running.
+Omega Home: http://localhost:40557/?use=home&layout=home&file=workspace:all
+:ok
+HOME_VM=1578420
+:ok
+HOME_STATE={"beam-cwd":"/home/user/code/undefine/omega","cwd":"/home/user/code/undefine/omega","listener":"<0.3302.0>","owner":"<0.2296.0>","port":40557,"previous-listener-alive":null,"realm":"omega@0a15d6","root":"/home/user/code/undefine/omega","vm":"1578420"}
+:ok
+PELAGIC: reusing compiled frontend
+Native Home checks: 14
+:ok
+Overriding existing handler for signal 10. Set JSC_SIGNAL_FOR_GC if you want WebKit to use a different signal
+[ALSOFT] (EE) Failed to connect PipeWire event context (errno: 112)
+ERROR: WebKit encountered an internal error. This is a WebKit bug.
+/usr/src/debug/webkit2gtk-4.1/webkitgtk-2.54.1/Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp(679) : void WebKit::WebLoaderStrategy::internallyFailedLoadTimerFired()
+HOME_STATE={"beam-cwd":"/home/user/code/undefine/omega","cwd":"/home/user/code/undefine/omega","listener":"<0.3302.0>","owner":"<0.2296.0>","port":40557,"previous-listener-alive":true,"realm":"omega@0a15d6","root":"/home/user/code/undefine/omega","vm":"1578420"}
+:ok
+Stopping Omega world and draining its HTTP connections…
+Omega development world stopped; the shared VM and other worlds remain available.
+:ok
+HOME_VM=1578420
+:ok
+HOME_STATE={"beam-cwd":"/home/user/code/undefine/omega","cwd":"/home/user/code/undefine/omega","listener":null,"owner":null,"port":null,"previous-listener-alive":false,"realm":"omega@0a15d6","root":"/home/user/code/undefine/omega","vm":"1578420"}
+:ok

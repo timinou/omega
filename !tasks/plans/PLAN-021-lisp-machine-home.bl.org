@@ -1,5 +1,5 @@
 #+title: Omega — a home for the Lisp machine
-#+status: SLICE_1_IN_PROGRESS
+#+status: SLICE_1_COMPLETE
 #+date: 2026-10-13
 
 * Slices and acceptance
@@ -69,3 +69,30 @@ Error::Term returned an error value rather than raising. The caller could not
 observe a dead window. Wry now checks the native thread and raises correctly.
 Main d6a9f79a; minimal published backport 65c25b33 over Omega's existing pin.
 Final acceptance must use that pinned SDK without a consumer native override.
+
+* Completed first slice
+Delivery uses SDK 205c5a34 pinned to the published minimal Wry fix 65c25b33.
+No consumer native-library override remains. Root browser/native journey: 11
+checks; instrumented native journey: 15 checks including trusted audio
+activation, submitted graphics, non-silent export and closed-window errors.
+Editor: 75/75; Home drive: 3/3; graphics ownership: 4/4; launcher: 6 assertions;
+unchanged presentation: 11 welcome and 7 live-set variants. Native Worker,
+compiled namespace and interop-bridge diagnostics pass. The read-only review
+serves all eleven screenshots, the video with byte ranges, and walkthroughs
+while retaining the eight existing milestone tabs.
+
+[[file:../../spikes/home/01-home.bl.org][Usage walkthrough]] ·
+[[file:../../spikes/home/proof/report.html][Interactive evidence]]
+
+* Next, without expanding this slice
+Slice 2 adds durable session restoration and explicit package preparation,
+including a clear distinction between recent continuation and tasks needing
+attention. Current Home can show an attention task in both groups. Closing
+the window still ends local playback and unsaved drafts. Three browser heaps
+remain an explicit prototype bound, not a shared-heap implementation.
+
+A cold document request may need Home's Refresh control after the existing
+15-second budget. Prepared release/recovery belongs to slice 5. This private
+run painted Home in 7.23 seconds; graceful HTTP drain took 24.64 seconds while
+keeping the VM alive. Startup/drain work and physical audio/display latency
+remain measurements for slice 6. The functional proof certifies no 16 ms budget.

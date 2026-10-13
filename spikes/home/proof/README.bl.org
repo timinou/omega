@@ -1,0 +1,89 @@
+#+title: Home — first slice evidence
+
+* Review
+Run =bin/bl runtime.review=, then open
+http://localhost:8820/spikes/home/proof/report.html.
+The report has eleven screenshot selectors, one browser video and raw acceptance.
+
+* Reproduce
+=python3 spikes/home/test/browser.py= starts a private root-task world and a
+private headless desktop, exercises Chromium, then the real native Wry/WebKit.
+=HOME_NATIVE_ONLY=1= skips Chromium for focused native diagnostics.
+=test/review.py= starts the actual read-only review server on a private port,
+checks all captures, links and video byte ranges, and stops its own process.
+No probe connects to port 8790 or changes the user's desktop.
+
+* What the before records explain
+=before-native-workers.json= shows that the BL compiler Worker and interop
+bridge work in isolation, while worker WebGL fails in this WebKit.
+=before-native-failure.json= records playback succeeding while that graphics
+path was broken. They are diagnostic history, not current acceptance records.
+The final =native.json= and =native-media.json= are the application checks.
+
+Hidden iframe long polls previously occupied HTTP connections after their
+observers were marked dead. Generic observation now aborts those requests;
+actors, drafts and audio are retained. Worker capability probing happens before
+the visible graphics canvas changes owners, with cancellation on unload.
+The same SceneStage runs in either realm. Chromium exercises worker placement;
+the installed WebKit exercises window placement and non-silent offline export.
+
+* Limits
+One native window is exercised; concurrent native windows are not certified by
+the upstream Wry prototype. The captures use software graphics and demonstrate
+functional integration, not physical latency or the 16 ms target. Three lazy
+retained editor viewers share a backend but keep separate JS contexts. Cross-
+restart restoration and prepared installed releases belong to later slices.
+The private demo has a durable temporary database and scripted task execution.
+Existing concurrent Pocket/workspace edits are exercised but not committed as
+part of Home; the build-context record identifies those inputs.
+
+* Shutdown finding
+The native trace also caught a parent HTTP-stop deadline expiring while its
+connection supervisors were still draining. The owner now awaits the actual
+supervised stop; connection children retain their finite budgets. Store/task
+cleanup follows the completed drain. The root stop command reports that work
+before waiting. The final stop record checks a closed listener and identical
+VM PIDs before and after stop.
+
+The connection shutdown model is documented by the dependency itself:
+https://thousand-island.hexdocs.pm/ThousandIsland.html#module-connection-draining-shutdown
+The prior failure and process stacks are kept alongside the final acceptance.
+
+A cold backend document request also exceeded the editor's existing 15-second
+first-load budget on one run. Home displayed Work unavailable and its Refresh
+control; acceptance exercises that control before continuing if needed. The
+before-cold-document capture records this recovery state. Automatic first-run
+recovery and prepared releases remain later slices; the test does not replace
+a failed document with fabricated tasks or silently increase the load budget.
+
+* Foreign GUI ownership
+=before-socket-owners.json= shows WebKit children holding the listening socket
+after the actor owner and supervised listener had died. The native GUI now
+runs in a narrow cold display process; only the canonical host owns the world.
+=native-entry.json= records the shipping root
+launcher closed through the private WM, returning while its host remains live.
+=stop.json= verifies the port closes without stopping the shared VM.
+
+Wry's upstream fix also detects finished window threads and raises failures
+instead of returning error values. Main commit: =d6a9f79a=. Minimal backport
+over the existing compiler pin: =65c25b33=. The final proof uses that pinned
+SDK, without a local shared-library override.
+
+The shipping entry capture waits for Home's visible headings using screen OCR
+(Tesseract with the English model). This avoids calling a loading-editor frame
+a Home screenshot. =native-entry-screen.txt= retains the observed text; the
+separate instrumented native journey checks editor/actor/media semantics.
+
+* Final acceptance
+=browser.json=: eleven browser/root/native-launch checks, no errors.
+=native.json=: fifteen actual WebKit checks, including closed eval/resize.
+=editor.log=: 75/75. =drive.log=: 3/3. =stage.log=: 4/4. =launcher.log=: six
+assertions. =presentation.log=: unchanged 11 welcome and 7 live-set variants.
+=native-workers.json=: module Worker, compiled client, namespace bridge and
+graphics completion. =review.json=: eleven screenshots, eight existing tabs,
+walkthrough links and HTTP video byte ranges, no page errors.
+
+Observed shipping Home paint: 7.23 seconds. Explicit world stop: 24.64 seconds,
+closed listener and unchanged shared VM. These are one private functional run,
+not latency percentiles or physical device certification. See the six-slice
+plan for saved sessions, prepared releases and focused performance work.

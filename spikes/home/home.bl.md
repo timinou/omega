@@ -14,12 +14,15 @@ of zero-copy shared browser realms or durable session restoration.
 
 The native entry uses Loom's Wry backend to attach a window to the existing host.
 `loom.desktop/serve-window` would create another server, so this entry uses its
-underlying `wry/open` URL API instead. Closing the window retracts its receiver;
+underlying `wry/open` URL API in a small isolated display process instead. WebKit can
+inherit OS listening descriptors when embedded in the host VM; actor cleanup
+alone cannot retire those foreign copies. The display client owns no world,
+server or frontend build. Closing the window retracts its receiver;
 it does not own or stop the realm's host. `omega.stop` remains explicit.
 
 ```sh
 bin/bl omega                         # native Home, durable live world
-bin/bl omega -- --demo               # scripted memory world
+bin/bl omega -- --demo               # scripted durable world
 bin/bl omega -- --browser            # same Home URL without a native window
 bin/bl home.dev                      # browser prototype, scripted by default
 ```
@@ -44,3 +47,57 @@ an OS installer; prepared release distribution remains slice 5.
 No test writes to the live world or opens a window on the user's desktop.
 Browser evidence may include pre-existing concurrent Pocket/workspace edits;
 those source changes are preserved outside this work's commits.
+
+## What native testing changed
+
+Retained hidden editors now abort their document/card long polls and resume
+observation when shown. Their editor state, actors and audio remain alive.
+Without aborting the HTTP requests, three viewers could consume the browser's
+HTTP/1 connection allowance and prevent the live compiler Worker from loading.
+This fix belongs to the generic editor host, not a Home-only watcher.
+
+Pelagic probes WebGL in its graphics Worker before transferring the visible
+canvas. Chromium uses the Worker; this machine's WebKit cannot create that
+context, so it uses the same `SceneStage` in the window. Cancellation terminates
+an unfinished probe. There is one rendering implementation and no browser-name
+switch. Actual native playback, submitted frames and a non-silent offline render
+are checked, separately from mere API availability.
+
+The private native proof uses software graphics. It validates functionality,
+not smooth physical output or the 16 ms latency goal. Native frame costs remain
+a slice 6 measurement and optimization task. Closing a window intentionally
+ends its local audio; moving between Home activities preserves it.
+
+## Reproduce
+
+```sh
+# Build once; unchanged BL graphs are reused for host-asset edits.
+bin/bl --cold omega.build
+python3 spikes/home/test/browser.py
+# Native only, still a private world and private compositor:
+HOME_NATIVE_ONLY=1 python3 spikes/home/test/browser.py
+bin/bl runtime.review
+```
+
+Open `http://localhost:8820/spikes/home/proof/report.html` for the captures,
+video and acceptance records. The native harness requires sway, grim,
+wayland-scanner, a C compiler, Wayland development libraries and Tesseract
+with its English model (or `TESSDATA_PREFIX` pointing to it); Chromium
+acceptance uses Playwright. None of those are application launch dependencies.
+
+## Native lifecycle ownership
+
+The root task acquires the canonical shared host once, then runs
+`omega.window` as a cold display client. Explicit display environment reaches
+the client even when the shared host predates the desktop session. The client
+only opens the existing Home URL; the three editor viewers remain browser
+contexts over that one host. The extra process is a GUI lifetime boundary.
+
+Upstream Wry now checks the native thread, rather than trusting an event proxy
+whose GTK receiver can outlive the window. Native failures raise as documented;
+Rustler's previous error return was a value and fooled a polling caller. Omega
+pins the minimal upstream lifecycle backport `65c25b33`; main has `d6a9f79a`.
+The actual root entry is closed through the private window manager in acceptance,
+then its host is queried and explicitly stopped. The port must close and the
+shared VM must remain the same. This catches ownership gaps that actor-only
+inspection cannot see. There is no local native library override in delivery.

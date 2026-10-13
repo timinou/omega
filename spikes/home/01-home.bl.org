@@ -18,7 +18,7 @@ editor. A place opens its existing scoped work list.
 
 * Play and inspect
 Choose Pelagic. Press PERFORM to activate audio from a real user gesture.
-Return Home, then Play: the same instrument and engine remain mounted. Choose
+Return Home, then Play in the rail: the same instrument and engine remain mounted. Choose
 RUNTIME inside Pelagic to see its companion inspector without replacing the
 instrument. Close the companion to return to the performance.
 
@@ -36,8 +36,26 @@ machine restart; saved session restoration is the next slice.
 * Inspect the implementation
 =home.main= owns the package, model, identity checks and layouts. The small
 =home/host.mjs= leaf paints models and forwards selected task/place navigation
-through the child's existing editor API. =omega.desktop= owns only native window
-attachment; =pelagic.launch= and =omega.dev= retain shared-host acquisition.
+through the child's existing editor API. =omega.desktop= acquires the host and starts a narrow =omega.window=
+display client. Its separate OS process prevents WebKit inheriting the world
+listener; =pelagic.launch= and =omega.dev= retain shared-host acquisition.
 
 [[file:proof/report.html][Recorded native/browser review]] ·
 [[file:../../!tasks/plans/PLAN-021-lisp-machine-home.bl.org][All six slices]]
+
+* Try the Lisp surface
+In the editor command line, =:(ed/layouts)= lists installed layouts.
+=space h h= returns Home through the package's ordinary command/key layer.
+To remove Home and inspect the underlying editor, enter =:(ed/unuse "home")=.
+Its layout, rail and host styling retract together. Reopen =bl omega= for Home.
+These are the editor's standard package/layout operations, not a special shell.
+
+* Read the proof
+#+begin_src sh
+bin/bl runtime.review
+#+end_src
+Open http://localhost:8820/spikes/home/proof/report.html. Select a view, play
+the browser recording, and expand the native acceptance record. The native
+window uses the same compiled packages; its graphics placement depends on
+whether its Worker can actually create WebGL. These captures use software
+rendering and do not measure your speakers or display latency.

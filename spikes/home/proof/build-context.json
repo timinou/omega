@@ -1,0 +1,37 @@
+{
+  "compilerPin": "65c25b33",
+  "omegaSourceBeforeFinalEvidence": "2683676293ec52c1ec54799b1927deb1f094b118",
+  "upstreamCheckoutForEditorCorpus": "d6a9f79a552873bb0c17ddebd5b2c43a3a72ce0e",
+  "concurrentInputsNotCommittedByHome": {
+    "spikes/mobile/host/host.mjs": "d217b174f9a96fac5ccd7742126f3e30b8241ef13e16c6ca76ee738537d5469f",
+    "spikes/mobile/host/style.css": "09dfea2f036e640884730b832c4b40460c4fca551bb488c23ab8db7149a8ff24",
+    "spikes/mobile/mobile.bl.md": "26d62a40cf2badcb71bd4556e44fea87335e18539f9679fc4eb59afb501ea8a6",
+    "spikes/mobile/test/host-browser.mjs": "a756a43782b5ec8e9085c14ad677cd513f2e64e58fe86de66d00fe6cc6e54f5f",
+    "spikes/mobile/test/shared-browser.mjs": "1ccb32987f2ea3c84702fb8a74f439c952c08c4b9b8c656e187b2e6185a5853c",
+    "spikes/mobile/test/touch-browser.mjs": "bba59f2568085ef20268e0dd7129949d180222587d1ddac80518cff7e5d67abb",
+    "spikes/workspace/test/desk_test.bl": "0fb89f880b6efcf4fb85f7f0dc925540ee8018446f9576fd3712524174aedbd7",
+    "spikes/workspace/ws/desk_server.bl": "ab1cc5d0e2d0b6ffbddf3d8c40350fa57e6c85f2e7f77fb142e322808c9a80b4"
+  },
+  "physicalDevice": false,
+  "composition": "Three lazy retained editor contexts on one host/store",
+  "verificationCommands": [
+    "BLED_OUT=<frontend>/out node --test spikes/home/test/drive.test.mjs",
+    "HOME_FRONTEND=<frontend> node --test spikes/home/test/stage.test.mjs",
+    "BL_GATEWAY=off BLED_ROOT=/home/user/code/undefine/beam-lisp BLED_OUT=<frontend>/out BLED_WEB=<frontend> node --test vendor/bl-ed/test/",
+    "node spikes/present/test/check.mjs spikes/present/web/welcome.bl.org spikes/pelagic/live-set.bl.org",
+    "bin/bl --cold test spikes/home/test/launcher_test.bl",
+    "python3 spikes/home/test/browser.py",
+    "HOME_FRONTEND=<frontend> python3 spikes/home/test/workers.py",
+    "python3 spikes/home/test/review.py"
+  ],
+  "frontend": "c84abb5fcc5310b95257c7e1b663ad000095cc5e894a3a5d7a151557aee70325",
+  "graph": "43d1facca1a474aedb2a9ebead8ee8db93d76b7bbfe6f6bb1607620a92754aa5",
+  "regressionFrontend": "dc72e76e445ca094ed74247585880a57c02eb88ce5f731af8f106214992621d5",
+  "release": "205c5a34",
+  "upstreamLifecycleMain": "d6a9f79a",
+  "upstreamLifecyclePublished": "65c25b33c90766829334033d77a30c0c5f33938a",
+  "upstreamLifecycleBranch": "https://github.com/timinou/beam-lisp/tree/fix/wry-home-lifecycle",
+  "consumerNativeOverride": false,
+  "nativeLibraryHash": "1a75a6393bf6d552fe0e4ed1528e19ee82bcbf394edb8ec3ba9fd3a14d06718c",
+  "nativeDisplay": "Isolated cold BL display client; one canonical shared application host"
+}
