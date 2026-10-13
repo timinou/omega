@@ -1,0 +1,34 @@
+; Workbench policy is data and pure functions, shared by chrome and previews.
+(ns home.workbench (:require [clojure.string :as string]))
+(def buffers
+  [{:id "music" :title "Pelagic" :kind "instrument" :path "spikes/pelagic/live-set.bl.org"}
+   {:id "machine" :title "Runtime" :kind "inspector" :path "runtime:overview"}])
+(defn buffer [id] (first (filter #(= id (:id %)) buffers)))
+(defn category [task]
+  (cond (contains? #{"done" "failed" "cancelled"} (:status task)) "recent"
+        (:ask task) "attention"
+        (= "idle" (:status task)) "answered"
+        :else "working"))
+(defn label [task]
+  (if (= "attention" (category task)) "Needs you"
+    (get {"done" "Done" "failed" "Failed" "cancelled" "Cancelled" "idle" "Answered" "running" "Running" "open" "Starting"}
+         (:status task) "In progress")))
+(defn groups [objects query]
+  (let [q (string/lower-case (or query ""))
+        tasks (filter #(and (= "omega/task" (:type %))
+                     (string/includes? (string/lower-case (str (:key %) " " (:title %) " " (:summary %) " " (:place-name %))) q)) objects)]
+    (vec (keep (fn [[id title]]
+                 (let [rows (filter #(= id (category %)) tasks)]
+                   (when (seq rows) {:id id :title title :count (count rows)
+                     :rows (mapv #(assoc % :state-label (label %)) rows)})))
+               [["attention" "Attention"] ["working" "Working"] ["answered" "Answered"] ["recent" "Recent"]]))))
+(defn navigation [profile]
+  (cond-> [{:id "work" :title "Work"}]
+    (not= profile "scoped") (conj {:id "places" :title "Places"})
+    true (conj {:id "buffers" :title "Buffers"})))
+(defn context [activity source]
+  (if-let [tool (buffer activity)]
+    {:title (:title tool) :place "Omega" :path (:path tool) :mode (:kind tool)}
+    {:title (or (:title source) "Work") :place (or (:place source) "All places")
+     :path (or (:path source) "workspace:all") :mode (or (:screen source) "work")
+     :dirty (:dirty source) :online (:online source)}))

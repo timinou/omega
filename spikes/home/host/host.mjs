@@ -1,88 +1,93 @@
-// DOM and same-origin viewer boundary. Decisions and bounded rows are home.main.
-export function createHost(api) {
-  let pending = null, timer = null, disposed = false, deadline = 0;
-  const priorTitle = document.title, hadClass = document.body.classList.contains('omega-home-window');
-  document.body.classList.add('omega-home-window'); document.title = 'Omega';
-  function deliver() {
-    if (!pending || disposed) return;
-    const frame = document.querySelector('[data-pane="work"] iframe');
-    const editor = frame?.contentWindow?.blEd;
-    if (!editor) {
-      if (performance.now() > deadline) { pending = null; api.dispatch({type:'home/error',message:'Work could not open. Select it again to retry.'}); return; }
-      timer = setTimeout(deliver, 50); return;
-    }
-    const args = pending; pending = null;
-    editor.dispatch(editor.R.hashMap(editor.K('type'), editor.K('mobile/nav'),
-      editor.K('screen'), args.screen, editor.K('path'), args.path, editor.K('pane'), editor.K('rail')));
-  }
-  return {
-    effect(effect) {
-      if (effect.op !== 'navigate') return;
-      pending = effect.args; deadline = performance.now() + 15000; clearTimeout(timer); deliver();
-    },
-    mount(root, dispatch) {
-      const priorStyle = root.getAttribute('style');
-      root.style.cssText = 'position:absolute;inset:0;overflow:hidden';
-      const style = document.createElement('link'); style.rel = 'stylesheet';
-      style.href = new URL('style.css', import.meta.url); root.append(style);
-      const surface = document.createElement('section'); surface.className = 'omega-home';
-      surface.innerHTML = `<nav aria-label="Omega"><button data-activity="home" title="Home">ω<span>Home</span></button><button data-activity="work">Work</button><button data-activity="music">Play</button><button data-activity="machine">Machine</button></nav><main><header><p class="eyebrow">OMEGA</p><h1>Your work</h1><button data-refresh aria-label="Refresh work">↻</button></header><section data-section="continue"><h2>Continue</h2><div data-list="continue"></div><p data-empty>Open your work, or begin something new.</p></section><section data-section="attention"><h2>Needs you</h2><div data-list="attention"></div></section><section><h2>Start something</h2><div class="starts"><button data-activity="work"><strong>Work</strong><span>Tasks, documents and places</span></button><button data-activity="music"><strong>Pelagic</strong><span>Code, sound and light</span></button></div></section><section data-section="places"><h2>Places</h2><div data-list="places"></div></section><footer><span data-status>Connecting…</span><button data-activity="machine">Inspect the machine ↗</button></footer><p role="status" data-error></p></main>`;
-      root.append(surface); let previous = '', lastActivity = null, focusFrame = 0, mounted = true;
-      const lists = new Map();
-      function rows(name, values, kind) {
-        const parent = surface.querySelector(`[data-list="${name}"]`), old = lists.get(name) || new Map(), next = new Map();
-        values.forEach((value, i) => {
-          const id = value.key; let button = old.get(id);
-          if (!button) { button = document.createElement('button'); button.innerHTML = '<strong></strong><span></span>'; }
-          button.dataset[kind] = id;
-          button.querySelector('strong').textContent = value.title || id;
-          button.querySelector('span').textContent = kind === 'place' ? value.root || '' : [value['place-name'], value.status].filter(Boolean).join(' · ');
-          if (parent.children[i] !== button) parent.insertBefore(button, parent.children[i] || null);
-          next.set(id, button);
-        });
-        for (const [id, button] of old) if (!next.has(id)) button.remove();
-        lists.set(name, next);
-      }
-      surface.addEventListener('click', event => {
-        const button = event.target.closest('button'); if (!button) return;
-        event.stopPropagation(); // Home controls own focus; do not refocus the hidden editor sink.
-        if (button.dataset.activity) dispatch({type:'home/open',activity:button.dataset.activity});
-        if (button.dataset.task) dispatch({type:'home/continue',id:button.dataset.task});
-        if (button.dataset.place) dispatch({type:'home/place',path:button.dataset.place});
-        if (button.hasAttribute('data-refresh')) dispatch({type:'home/refresh'});
-      });
-      return {
-        update(model) {
-          const signature = JSON.stringify(model); if (signature === previous) return; previous = signature;
-          surface.classList.toggle('compact', model.activity !== 'home');
-          if (model.activity !== lastActivity) {
-            lastActivity = model.activity; cancelAnimationFrame(focusFrame);
-            // The editor focuses its input sink after boot and clicks. Follow
-            // that paint, keeping Home keyboard-accessible and restoring the
-            // retained child's own focused control when an activity returns.
-            focusFrame = requestAnimationFrame(() => {
-              if (!mounted || disposed) return;
-              if (lastActivity === 'home') surface.querySelector('nav [data-activity="home"]').focus();
-              else document.querySelector(`[data-pane="${lastActivity}"] iframe`)?.contentWindow?.focus();
-            });
-          }
-          for (const button of surface.querySelectorAll('nav button')) button.setAttribute('aria-current',button.dataset.activity === model.activity ? 'page' : 'false');
-          const resumed = (model.opened || []).filter(x => x !== 'work').map(x => ({key:x,title:x==='music'?'Pelagic':'Runtime inspector',status:'Open in this window'}));
-          rows('continue', model.tasks || [], 'task');
-          const list = surface.querySelector('[data-list="continue"]');
-          for (const stale of list.querySelectorAll('[data-resume]')) stale.remove();
-          for (const item of resumed) { const button=document.createElement('button');button.dataset.activity=item.key;button.dataset.resume='';button.textContent=item.title+' ↗';list.append(button); }
-          surface.querySelector('[data-empty]').hidden = !!((model.tasks || []).length || resumed.length);
-          rows('attention', model.attention || [], 'task'); rows('places', model.places || [], 'place');
-          surface.querySelector('[data-section="attention"]').hidden = !(model.attention || []).length;
-          surface.querySelector('[data-section="places"]').hidden = !(model.places || []).length;
-          surface.querySelector('[data-error]').textContent = model.error || '';
-          surface.querySelector('[data-status]').textContent = model.ready ? 'Shared Omega world' : 'Work is unavailable · use Refresh to retry';
-        },
-        dispose() { mounted = false; cancelAnimationFrame(focusFrame); surface.remove(); style.remove(); if (priorStyle == null) root.removeAttribute('style'); else root.setAttribute('style',priorStyle); }
-      };
-    },
-    dispose() { disposed = true; pending = null; clearTimeout(timer);
-      if (!hadClass) document.body.classList.remove('omega-home-window'); document.title = priorTitle; }
-  };
+// Paint the BL workbench model and bind retained editors through their public API.
+// No backend transport, task registry or periodic observation loop lives here.
+const get=(m,k,w)=>m?.get(w.blEd.K(k),null);
+function plain(value){
+ if(value?.entries&&value?.get){const out={};for(const [k,v]of value.entries())out[k.fq??String(k)]=plain(v);return out;}
+ if(value?.toArray)return value.toArray().map(plain);
+ if(value&&typeof value==='object'&&typeof value.fq==='string')return value.fq;
+ return value;
+}
+function editorEvent(w,event,pane='rail'){
+ const b=w.blEd;if(!b)return;
+ const cv=x=>Array.isArray(x)?b.R.vecFromArray(x.map(cv)):x&&typeof x==='object'?Object.entries(x).reduce((m,[k,v])=>m.assoc(b.K(k),cv(v)),b.R.EMPTY_MAP):x;
+ let e=cv(event).assoc(b.K('type'),b.K(event.type));if(pane)e=e.assoc(b.K('pane'),b.K(pane));b.dispatch(e);
+}
+function context(w){
+ const panes=plain(w.blEd.snapshot()).panes,rail=panes.find(p=>p.id==='phone')?.view;
+ if(!rail)return null;
+ const models=Object.fromEntries(panes.filter(p=>p.view?.package==='mobile').map(p=>[p.view.role,p.view]));
+ const s=rail.state||{},screen=s.screen||'work',m=models[screen==='task'?'task':screen==='document'?'file':'rail']||rail,d=m.data||{};
+ const scope=rail.objects?.find(o=>o.type==='desk/scope'&&o.active);
+ return {screen,path:m.path,title:screen==='task'?d['task-title']||'Session':screen==='document'?d.title||m.path:({work:'Work',places:'Places',buffers:'Buffers',machine:'Lisp',host:'Connection'}[screen]||screen),
+  place:d['place-name']||scope?.title||'All places',dirty:m.dirty,online:s.connection?.online,
+  objects:rail.objects?.filter(o=>o.type==='omega/task').map(o=>({type:o.type,key:o.key,title:o.title,summary:o.summary,ask:o.ask,status:o.status,'place-name':o['place-name']}))||[]};
+}
+export function createHost(api){
+ const priorTitle=document.title,hadClass=document.body.classList.contains('omega-workbench-window');
+ document.body.classList.add('omega-workbench-window');document.title='Omega';
+ const stylesheet=document.createElement('link');stylesheet.rel='stylesheet';stylesheet.href=new URL('style.css',import.meta.url);document.head.append(stylesheet);
+ const bindings=new Map();let model=null,pending=null,timer=null,disposed=false,lastContext='',lastActivity=null;
+ const dispatch=e=>{if(!disposed)api.dispatch(e);};
+ const work=()=>document.querySelector('[data-pane=work] iframe')?.contentWindow;
+ const current=()=>document.querySelector(`[data-pane=${model?.activity||'work'}] iframe`)?.contentWindow;
+ function deliver(){
+  clearTimeout(timer);if(!pending||disposed)return;
+  const job=pending,w=job.op==='navigate'?work():current();
+  if(!w?.blEd){if(performance.now()>job.deadline){pending=null;dispatch({type:'home/error',message:'Buffer is still loading. Try the action again.'});return;}timer=setTimeout(deliver,50);return;}
+  pending=null;
+  if(job.op==='navigate')editorEvent(w,{type:'mobile/nav',...job.args});
+  else if(job.args.name==='context'&&w===work())w.document.querySelector(`[data-act=${model.screen==='task'?'context':'scope'}]`)?.click();
+  else if(job.args.name==='commands'&&w===work())editorEvent(w,{type:'mobile/modal',value:'commands'});
+  else {const keys=job.args.name==='lisp'?[':']:['space','space'];for(const key of keys)editorEvent(w,{type:'key',key},null);}
+ }
+ function queue(op,args){pending={op,args,deadline:performance.now()+30000};deliver();}
+ function tools(binding){
+  const w=binding.w,root=w.document.querySelector('.mobile-app'),content=root?.querySelector('.mobile-content');if(!content||!model)return;
+  const c=context(w);if(!c)return;
+  if(c.screen==='buffers'){
+   if(!binding.tools){const box=w.document.createElement('section');box.className='workbench-tools';box.setAttribute('aria-label','Tools');binding.tools=box;}
+   for(const item of model.buffers){let row=binding.tools.querySelector(`[data-parent-buffer=${item.id}]`);
+    if(!row){row=w.document.createElement('button');row.dataset.parentBuffer=item.id;row.innerHTML='<span></span><small></small>';binding.tools.append(row);}
+    row.querySelector('span').textContent=item.title;row.querySelector('small').textContent=model.opened.includes(item.id)?'Open · '+item.kind:item.kind;
+   }content.append(binding.tools);
+  }else binding.tools?.remove();
+  if(c.screen==='task'){
+   if(!binding.sidebar){const side=w.document.createElement('aside');side.className='workbench-preview-list';side.setAttribute('aria-label','Work');side.innerHTML='<input data-workbench-filter aria-label="Filter work" placeholder="Filter work…"><div></div>';side.addEventListener('input',e=>{if(e.target.matches('[data-workbench-filter]'))dispatch({type:'home/filter',text:e.target.value});});binding.sidebar=side;}
+   const input=binding.sidebar.querySelector('input');if(w.document.activeElement!==input)input.value=model.query;
+   const box=binding.sidebar.querySelector('div'),signature=JSON.stringify([model.groups,c.path]);
+   if(binding.rowsSignature!==signature){binding.rowsSignature=signature;const fragment=w.document.createDocumentFragment();
+    for(const group of model.groups){const heading=w.document.createElement('h2');heading.textContent=group.title+' · '+group.count;fragment.append(heading);
+     for(const task of group.rows){const b=w.document.createElement('button');b.dataset.parentTask=task.key;b.dataset.state=group.id;b.setAttribute('aria-current',String(c.path==='task:'+task.key));b.innerHTML='<strong></strong><small></small>';b.querySelector('strong').textContent=task.title||task.key;b.querySelector('small').textContent=[task['state-label'],task['place-name']].filter(Boolean).join(' · ');fragment.append(b);}}
+    box.replaceChildren(fragment);
+   }root.querySelector('.mobile-scroll').prepend(binding.sidebar);
+  }else binding.sidebar?.remove();
+ }
+ function attach(frame){
+  if(disposed||!['work','music','machine'].includes(frame.closest('[data-pane]')?.dataset.pane))return;
+  const w=frame.contentWindow;if(!w?.blEd||bindings.get(frame)?.document===w.document)return;
+  const old=bindings.get(frame);old?.dispose();
+  const style=w.document.createElement('link');style.rel='stylesheet';style.href=new URL('content.css',import.meta.url);w.document.head.append(style);
+  const was=w.document.documentElement.classList.contains('omega-workbench-content');w.document.documentElement.classList.add('omega-workbench-content');
+  const binding={w,style,document:w.document};bindings.set(frame,binding);
+  const clicked=e=>{const b=e.target.closest('[data-parent-buffer],[data-parent-task]');if(!b)return;e.preventDefault();e.stopPropagation();if(b.dataset.parentBuffer)dispatch({type:'home/tool',id:b.dataset.parentBuffer});else dispatch({type:'home/navigate',screen:'task',path:'task:'+b.dataset.parentTask});};
+  w.document.addEventListener('click',clicked,true);
+  const refresh=()=>{if(disposed)return;const next=context(w),sig=JSON.stringify(next);if(next&&sig!==lastContext){lastContext=sig;dispatch({type:'home/context',context:next});}tools(binding);};
+  const unsubscribe=frame.closest('[data-pane]').dataset.pane==='work'?w.blEd.observe(refresh):()=>{};binding.dispose=()=>{unsubscribe();w.document.removeEventListener('click',clicked,true);binding.sidebar?.remove();binding.tools?.remove();style.remove();if(!was)w.document.documentElement.classList.remove('omega-workbench-content');};
+  refresh();deliver();
+ }
+ const loaded=e=>{if(e.target.tagName==='IFRAME')attach(e.target);};document.addEventListener('load',loaded,true);
+ const shortcut=e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();queue('action',{name:'commands'});}};document.addEventListener('keydown',shortcut);
+ return {effect(effect){queue(effect.op,effect.args);},mount(root,send){
+  const old=root.getAttribute('style');root.style.cssText='position:absolute;inset:0;overflow:hidden';
+  const surface=document.createElement('section');surface.className='omega-workbench';root.append(surface);let role=null;
+  surface.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;e.stopPropagation();if(b.dataset.screen)send({type:'home/navigate',screen:b.dataset.screen,path:b.dataset.screen==='places'?'places:':b.dataset.screen==='work'?'workspace:all':null});if(b.dataset.action)send({type:'home/action',name:b.dataset.action});});
+  return {update(next){model=next;
+   if(role!==next.role){role=next.role;surface.innerHTML=role==='chrome'?'<header class="workbench-header"><button class="workbench-mark" data-screen="work" aria-label="Work">ω</button><button class="workbench-context" data-action="context"><strong></strong><small></small></button><div class="workbench-actions"><button data-screen="buffers" aria-label="Buffers">▤</button><button data-action="commands" aria-label="Commands">⌘</button><button data-action="lisp" aria-label="Evaluate Lisp">:</button></div></header><p class="workbench-error" role="status"></p>':'<footer class="workbench-status"><nav aria-label="Main navigation"></nav><span class="workbench-location"></span></footer>';}
+   if(role==='chrome'){surface.querySelector('strong').textContent=next.context.title;surface.querySelector('small').textContent=next.context.place;surface.querySelector('.workbench-error').textContent=next.error||'';}
+   else {const nav=surface.querySelector('nav');for(const stale of nav.children)if(!next.navigation.some(x=>x.id===stale.dataset.screen))stale.remove();for(const item of next.navigation){let b=nav.querySelector(`[data-screen=${item.id}]`);if(!b){b=document.createElement('button');b.dataset.screen=item.id;nav.append(b);}b.textContent=item.title;b.setAttribute('aria-current',next.activity==='work'&&(next.screen===item.id||item.id==='buffers'&&['document','machine','host'].includes(next.screen))?'page':'false');}surface.querySelector('.workbench-location').textContent=[next.context.mode,next.context.path,next.context.dirty?'modified':null].filter(Boolean).join(' · ');}
+   for(const f of document.querySelectorAll('[data-pane=work] iframe'))attach(f);
+   for(const b of bindings.values())tools(b);
+   if(lastActivity!==next.activity){lastActivity=next.activity;requestAnimationFrame(()=>{if(!disposed)current()?.focus();});}
+  },dispose(){surface.remove();if(old==null)root.removeAttribute('style');else root.setAttribute('style',old);}};
+ },dispose(){disposed=true;clearTimeout(timer);document.removeEventListener('load',loaded,true);document.removeEventListener('keydown',shortcut);for(const b of bindings.values())b.dispose();bindings.clear();stylesheet.remove();if(!hadClass)document.body.classList.remove('omega-workbench-window');document.title=priorTitle;}};
 }

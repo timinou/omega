@@ -1,6 +1,6 @@
 #+title: Omega — one adaptive Lisp workbench
 #+date: 2026-10-13
-#+status: PROPOSED_IMPLEMENTATION_PLAN
+#+status: IMPLEMENTATION_IN_PROGRESS
 #+basis: Approved Home assessment; navigation and destination contents open to exploration
 
 * Outcome
@@ -12,8 +12,8 @@ reference. The native launcher and canonical runtime integration remain useful.
 This plan implements the approved design correction in
 [[file:../../research/home-design-review-2026-10-13.org][the Home assessment]]. It follows PLAN-021's first native slice; it does not
 replace that roadmap's later durable-session, package-admission or installation
-work. The requested deliverable now is this plan and a concise review version.
-Application implementation follows the user's feedback on the plan.
+work. The user approved autonomous implementation on 2026-10-13, with incremental
+commits and the navigation/content exploration kept open.
 
 * What is decided and what is deliberately open
 Decided: shared theme/type, compact working surfaces, one visible navigation
@@ -255,3 +255,12 @@ claiming that restoring a view rewinds actors, external effects or audio.
 Each milestone ends with concrete evidence and a coherent commit. The early
 vertical provides the first design review; the final handoff includes both
 the chosen experience and the reasons for the navigation/content decisions.
+
+* Progress
+- Generic docked view geometry and post-paint read-only frame subscriptions
+  committed as 4e1699f. Geometry and observer lifetime checks pass; compiled
+  frame/default-equivalence gates follow the first frontend build.
+- First vertical reuses the existing Pocket host unchanged. Parent chrome owns
+  global navigation, embedded packages contribute content, and Work opens at
+  full width. Home's separate landing surface and palette are removed. The
+  first compiled prototype and real-world browser drive are in progress.

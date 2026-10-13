@@ -1,0 +1,23 @@
+/* A retained package contributes content while its frame owns global chrome. */
+html.omega-workbench-content #titlebar,html.omega-workbench-content body>footer,
+html.omega-workbench-content .mobile-header,html.omega-workbench-content .bottom-nav{display:none!important}
+html.omega-workbench-content body{grid-template-rows:1fr}
+html.omega-workbench-content #panes{height:100dvh!important;min-width:0;min-height:0}
+html.omega-workbench-content .mobile-app{max-width:none;min-width:0}
+html.omega-workbench-content .mobile-content,html.omega-workbench-content .mobile-scroll{min-width:0}
+.workbench-tools{border-top:1px solid var(--oat);margin-top:16px;padding-top:8px}
+.workbench-tools button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--oat);padding:10px 0;min-height:48px;color:var(--espresso);font:15px var(--font-text)}
+.workbench-tools small{display:block;font:11px var(--font-code);color:var(--roast)}
+.workbench-preview-list{display:none}
+@media(min-width:960px){
+ html.omega-workbench-content .mobile-content{max-width:900px;margin:auto;width:100%;padding:24px 32px}
+ html.omega-workbench-content .mobile-scroll:has(.workbench-preview-list){display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);align-items:start}
+ .workbench-preview-list{display:block;position:sticky;top:0;padding:16px 18px;height:100%;max-height:100%;overflow:auto;border-right:1px solid var(--oat);background:var(--snow-2)}
+ .workbench-preview-list input{width:100%;min-height:44px;padding:8px;background:var(--snow);color:var(--espresso);border:1px solid var(--latte);border-radius:var(--radius);font:13px var(--font-code)}
+ .workbench-preview-list h2{font:11px var(--font-code);color:var(--roast);text-transform:uppercase;letter-spacing:.04em;margin:18px 0 8px}
+ .workbench-preview-list button{width:100%;display:block;min-height:52px;padding:10px 8px;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--oat);color:var(--espresso);font:14px var(--font-text)}
+ .workbench-preview-list button strong{display:block}.workbench-preview-list button small{display:block;font:11px var(--font-code);color:var(--roast)}
+ .workbench-preview-list button[aria-current=true]{background:var(--latte);border-left:2px solid var(--mocha)}
+ .workbench-preview-list button[data-state=attention]{border-left:2px solid var(--apricot);background:var(--peach-bg)}
+}
+@media(max-width:620px){html.omega-workbench-content .mobile-content{padding:16px 16px 24px}html.omega-workbench-content .mobile-content>*{max-width:100%;overflow-wrap:anywhere}html.omega-workbench-content .composer{padding-bottom:max(8px,env(safe-area-inset-bottom))}}
