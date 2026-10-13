@@ -1,3 +1,4 @@
 (ns omega.stop-dev-task (:require [omega.dev :as dev]))
+(println "Stopping Omega world and draining its HTTP connections…")
 (dev/stop! (File/cwd!))
 (println "Omega development world stopped; the shared VM and other worlds remain available.")

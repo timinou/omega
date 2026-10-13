@@ -329,5 +329,8 @@
   (when-let [pid (:listener server)]
     (when (Process/alive? pid)
       (erlang/unlink pid)
-      (Supervisor/stop pid :normal 30000)))
+      ; Each connection supervisor has its own finite shutdown budget. An
+      ; unrelated parent deadline can expire before those children drain,
+      ; falsely failing host cleanup while HTTP still owns the store.
+      (Supervisor/stop pid :normal :infinity)))
   :ok)

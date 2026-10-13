@@ -419,3 +419,10 @@ connections until the 25 s server timeout; several retained viewers could starve
 foreground module Workers. Visibility only controls observation, preserving
 drafts, actors and audio. Resume revalidates current revisions. Generic built-in
 painters are selected only through own renderer keys.
+
+The native server stop waits for its supervised listener to actually terminate.
+Connection children retain their finite shutdown budgets; the former additional
+30-second parent wait could time out first with retained browser connections,
+failing the service acknowledgement and beginning store cleanup too early.
+The private native Home journey exercises the real stop callback and checks
+that the shared VM survives while the listener closes.
