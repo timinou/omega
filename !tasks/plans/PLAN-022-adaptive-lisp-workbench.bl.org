@@ -1,6 +1,6 @@
 #+title: Omega — one adaptive Lisp workbench
 #+date: 2026-10-13
-#+status: IMPLEMENTATION_IN_PROGRESS
+#+status: COMPLETE
 #+basis: Approved Home assessment; navigation and destination contents open to exploration
 
 * Outcome
@@ -264,3 +264,70 @@ the chosen experience and the reasons for the navigation/content decisions.
   global navigation, embedded packages contribute content, and Work opens at
   full width. Home's separate landing surface and palette are removed. The
   first compiled prototype and real-world browser drive are in progress.
+
+** Checkpoint: shared policy and command consolidation
+- 7aa29e8 replaces the landing page with actual Work, two docked chrome panes
+  and three lazy retained working surfaces. e789f19 fixes dock containing blocks
+  and the generic input sink in a view-only frame.
+- 88cba57 moves exclusive task classification, labels, navigation and destination
+  policy into ws.workbench, consumed by Pocket, desktop task presentations and
+  Home. Terminal stale questions cannot duplicate an urgency group.
+- 1d05b99 adds selective frame metadata reads, event-driven theme propagation,
+  contextual typed actions from ws.actions, actual prompt/result feedback and
+  modal chrome ownership. The existing Pocket host paints its owned sheets.
+- Default navigation decision: Work / Places / Buffers. The scoped alternative
+  saves no vertical space and requires an extra step to reach Places. It remains
+  one data-configured policy, not a second rendering implementation.
+- The shared graph compiled in 9m04s with a 1.5 GB peak. Host-only staging reused
+  it in 7.2s with a 171 MB peak. Immutable staging correctly refused an input
+  change during compilation; the cached graph was then reused.
+- 21 compiled Home/frame/geometry checks and the existing Pocket host browser
+  contracts pass. Full browser and native journeys are being rerun against the
+  resulting immutable frontend before accepting the cutover.
+
+** Final delivery — all seven milestones
+1. Grounded audit and preserved source snapshots; shared BL contracts and both
+   navigation arrangements are implemented. Full navigation is the default.
+2. The actual private-world vertical passes: work/task/draft, source, document,
+   Lisp, playing instrument, Runtime and retained return. Desktop/phone captures
+   and a journey recording are available in spikes/home/proof/workbench/.
+3. One docked frame owns chrome; generic readiness, frame subscriptions and input
+   hooks support actual command targets. Typed actions reuse ws.actions. Modal
+   ownership, focus return and identical repeated tool results are exercised.
+4. Existing Pocket work/place/settings/readers, references, retained Lisp,
+   recent/pinned objects and guarded publication remain the working surfaces.
+   Desktop, Pocket and Home share urgency semantics. Tools are lazy buffers.
+5. Width/height bounds, 44px global targets, live focused filter identity,
+   draft/engine retention and offline/reconnection pass. The broader Pocket
+   touch tour covers reading, selection, settings, undo and reload continuity.
+6. Startup stages, warm attach, navigation samples, native window/paint and drain
+   are recorded separately. Generic stop releases idle read-only observers while
+   preserving accepted writes. The old native drain was 24.64s; the new native
+   run is 0.85s, and the final browser world drain is 0.54s. The controlled held
+   poll plus accepted 600ms write test drains in 486ms.
+7. Root/package entry uses the workbench; superseded shell code is removed.
+   Tutorials, walkthrough, deletion/coverage ledger, two videos and an interactive
+   review are delivered. Historical landing captures are clearly labeled.
+
+Acceptance: 77 generic editor checks, 26 focused Home/frame/host checks, 18 actual
+native checks, 17 final browser checks, 10 shared Pocket workflow checks and five
+touch tour groups; cold server and graceful drain gates pass. The unchanged
+presentation checker passes 11 welcome and seven Pelagic variants. The review
+checks all 17 capture controls, documentation/plan links and byte-range video.
+Detailed artifact identities and conditions are in proof/workbench/gates.json,
+journey.json and the native host identity record. All test worlds/compositors
+were private; the read-only evidence viewer remains on port 8820.
+
+Remaining limits are recorded, rather than represented as passes: physical phone
+IME/keyboard/text enlargement and assistive technology, physical A/V loopback,
+controlled 16ms frame-budget work, fresh-host admission/prepared installations,
+durable cross-device unsaved sessions, arbitrary package admission and eventual
+browser-heap consolidation. The final recorded navigation P95 is 100.8ms for
+synchronous dispatch and 302ms to the next frame opportunity with software
+rendering/recording. There are zero missed audio events in that run; it does not
+certify physical output latency. These remain focused follow-ups, not another
+parallel shell implementation.
+
+Open http://localhost:8820/spikes/home/proof/workbench/report.html for the review,
+or run bin/bl omega for the actual application. The coverage ledger links every
+milestone and approved assessment group to evidence and lists the deleted code.

@@ -1,0 +1,92 @@
+#+title: Adaptive workbench — implementation and evidence ledger
+#+date: 2026-10-13
+
+* What to open
+[[file:report.html][Interactive review]] · [[file:../../01-home.bl.org][First-use showcase]] ·
+[[file:../../02-workbench.bl.org][Implementation walkthrough]]
+
+The report is served read-only at
+http://localhost:8820/spikes/home/proof/workbench/report.html by =bl runtime.review=.
+=bl omega= opens the actual application, rather than the evidence viewer.
+
+* Milestones
+| Milestone | Delivered | Evidence |
+|-----------+-----------+----------|
+| 1 | Preserved concurrent work, grounded visual audit, shared identity/status/navigation policy, two arrangements | research/home-design-review-2026-10-13.org; ws.workbench; profile screenshots |
+| 2 | Real Work → task/draft → tool → document → Lisp → Runtime → return | journey.json; journey.webm; desktop/phone captures |
+| 3 | Docked frame, explicit readiness, actual command targeting, typed capability actions, modal ownership, feedback | generic frame/host tests; source/focus/theme/tool-Lisp checks |
+| 4 | Existing work/place/settings/readers/buffer/REPL flows reused; exclusive groups; following work list; tools as retained buffers | real task reply; source/references; Pocket shared-world regression |
+| 5 | Full phone width; 320/390/landscape/short viewport; 44px controls; filter/draft/engine identity; reduced-motion rules | geometry in journey.json; Pocket host/touch contracts |
+| 6 | Separate host admission, warm attach, work readiness, UI samples, native window/paint and drain timings; scoped poll-drain fix | journey.json; native-entry.json; stop.json; drain.test.mjs |
+| 7 | Adopted root/package entry; removed superseded shell; tutorials, screenshots, two recordings and linked report | source/deletion inventory below; review.json; editor/default-equivalence gates |
+
+* Approved assessment coverage
+| Items | Result |
+|-------+--------|
+| 01–03 | Shared warm theme/font roles; compact header/list; hero, green landing palette and launch tiles removed. Generic inspector inherits theme roles. |
+| 04–07 | One chrome/navigation owner; Work is immediate; phone uses the full width; tools reached through Buffers/commands. |
+| 08–10 | Desktop following list, selected-row arrow/border, shared exclusive urgency groups and labels. Existing Pocket rows keep question/summary/place/time presentation. |
+| 11–13 | Context control uses named place; entry New remains direct; existing place/settings, recent/pinned, document, namespace and retained Lisp flows reused. |
+| 14–16 | Actual editor/host Lisp targets; searchable command registry; existing typed action capability registry; owned source and confirmation sheets. |
+| 17–19 | Compact context/mode line; modified status; Pocket connection state; real structured readers/composer; retained instrument and Runtime routes. |
+| 20–22 | Narrow/short/landscape bounds, global touch targets, stable content slots, draft/filter identity, native selection contracts and background audio. Physical keyboard and enlarged-text/device checks remain explicitly unverified. |
+| 23–24 | BL policy and package layouts; generic geometry/readiness/input hooks in vendored bl-ed; browser APIs in small host modules. No upstream editor reintegration. |
+| 25 | Startup stages measured independently; existing bootstrap/reconnect errors retained; retryable buffer-loading error; graceful stop improved. Cold host loading and prepared release UX remain follow-ups. |
+| 26 | Same real identities on desktop/phone, theme propagation, one nav owner, typed actions, input bounds, use/unuse and actual WebKit proof. |
+
+* Deleted or superseded implementations
+- =spikes/home/host/host.mjs=: removed landing hero, launch tiles, fixed rail,
+  private Home task cards and duplicate landing navigation. It is now composition
+  over actual editors. Browser values, owned content and theme lifetimes have
+  distinct small modules.
+- =spikes/home/host/style.css=: replaced green/Georgia landing styles with the
+  editor's shared roles. Georgia remains only for the small omega glyph.
+- =spikes/home/home/main.bl=: replaced the old landing/rail layouts and its
+  task/place projection with one adaptive frame and shared workbench policy.
+- =spikes/home/home/workbench.bl=: moved its prototype policy to =ws.workbench=,
+  so desktop task presentations and Pocket consume the same semantics.
+- =spikes/mobile/host/host.mjs=: removed independent task classification and
+  hardcoded navigation definitions. Task action labels/capabilities now come
+  from =ws.actions=; existing presentation navigation adapters remain.
+- =vendor/bl-ed/web/inspector.css=: removed its independent green palette and
+  system/monospace font choices in favor of shared editor roles.
+- =spikes/home/test/browser.py=: removed the obsolete landing/side-rail journey;
+  invokes the adaptive journey and retains the independent native lifecycle gate.
+- Old native-first captures remain historical evidence, linked as baseline. They
+  are not another application renderer. The shipping native captures were updated.
+
+The retained viewers remain three bounded browser heaps over one canonical host.
+This is deliberate composition, not a zero-copy/shared-heap claim. The isolated
+Wry display client remains necessary for OS descriptor lifetime correctness.
+
+* Measured limits and useful next work
+The prior native lifecycle baseline at commit =228fd72= drained in 24.64 s.
+The updated native run drained in 0.85 s while preserving the same shared VM.
+The focused held-poll / accepted-write test drained in 486 ms.
+
+The JSON files contain sample counts and conditions. UI timings were collected
+with headless software graphics and journey recording. The native proof also
+uses software graphics; its recording is 12 fps. Those conditions do not certify
+a physical 16 ms audiovisual path. Frame and navigation P95 exceed that target;
+zero missed audio events in these runs does not certify every device.
+
+1. Profile frame/render allocation, repeated layout work and retained-inspector
+   wakeups in a controlled performance session; compare with capture disabled.
+2. Reduce fresh-host module admission and first-document preparation. Prepared
+   installable artifacts and earlier native feedback need their own release work.
+3. Test physical phone IME/keyboard, text enlargement, assistive technology and
+   audio/video loopback. Browser geometry is only one part of that evidence.
+4. Add durable cross-device unsaved sessions and arbitrary package admission on
+   the established ownership boundaries. Recent objects are not all live buffers.
+5. Consolidate browser realms/heaps when a real resource/latency measurement
+   justifies it. Restoring a view must not rewind actors or external effects.
+
+* Concurrent source work
+The build includes the pre-existing Pocket session/header and workspace changes.
+Their dirty hunks remain uncommitted by this work. Snapshots were preserved before
+implementation. Overlapping host/test edits were staged against HEAD, committing
+only the shared policy, typed action/slot/target adapters and the corresponding
+cancellation/collaboration tests. The related provider-readiness waits were
+consolidated with the existing draft of that test; unrelated source hunks remain
+uncommitted. This evidence therefore records the actual frontend input
+identity in journey.json, alongside the implementation revision.
