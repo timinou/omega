@@ -21,3 +21,7 @@ html.omega-workbench-content .mobile-content,html.omega-workbench-content .mobil
  .workbench-preview-list button[data-state=attention]{border-left:2px solid var(--apricot);background:var(--peach-bg)}
 }
 @media(max-width:620px){html.omega-workbench-content .mobile-content{padding:16px 16px 24px}html.omega-workbench-content .mobile-content>*{max-width:100%;overflow-wrap:anywhere}html.omega-workbench-content .composer{padding-bottom:max(8px,env(safe-area-inset-bottom))}}
+.workbench-preview-list button[aria-current=true]{border-left:3px solid var(--mocha)}
+.workbench-preview-list button[aria-current=true] strong:before{content:'▸ ';color:var(--mocha)}
+/* Pocket paints owned editor prompts as sheets; retain the generic prompt in tools. */
+html.omega-workbench-content body:has(.mobile-app) #minibuf{display:none!important}

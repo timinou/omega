@@ -54,57 +54,9 @@ with tempfile.TemporaryDirectory(prefix='omega-home-proof-') as temp:
   assert intent('place/put',{'text':f'{{:id "home-proof" :name "Private studio" :root {json.dumps(str(work))}}}'})['ok']
   opened=intent('task/open',{'goal':'Continue this piece','title':'Continue this piece','path':'place:home-proof'});assert opened['ok'],opened
   task_path=opened.get('path') or 'task:'+opened['id']
-  if not os.environ.get('HOME_NATIVE_ONLY') and not os.environ.get('HOME_STOP_ONLY') and not os.environ.get('HOME_LAUNCH_ONLY'):
-   with sync_playwright() as p:
-    browser=p.chromium.launch(executable_path=os.environ.get('CHROMIUM',str(Path.home()/'.cache/ms-playwright/chromium-1243/chrome-linux64/chrome')),args=['--no-sandbox','--autoplay-policy=no-user-gesture-required'])
-    context=browser.new_context(viewport={'width':1400,'height':1000},record_video_dir=str(PROOF/'raw'),record_video_size={'width':1400,'height':1000})
-    page=context.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
-    page.goto(base+'/?use=home&layout=home&file=workspace:all');page.locator('.omega-home h1').wait_for()
-    recovered='unavailable' in page.locator('.omega-home [data-status]').inner_text()
-    if recovered:
-     page.get_by_role('button',name='Refresh work').click();checked('cold Home document failure exposes a working Refresh control')
-    try:page.get_by_role('button',name='Continue this piece',exact=False).first.wait_for(timeout=60000)
-    except Exception:
-     page.screenshot(path=str(PROOF/'failure.png'));(PROOF/'failure.json').write_text(json.dumps({'workspace':doc('workspace:all'),'home':page.locator('.omega-home').evaluate('(e)=>e.outerHTML'),'objects':page.evaluate('blEd.R.printStr(blEd.state().get(blEd.K("obj-index")))'),'errors':errors},indent=2));raise
-    assert page.locator('iframe').count()==0;page.screenshot(path=str(PROOF/'01-home.png'))
-    checked('Home projects actual tasks and places; no unopened editor viewers are allocated')
-    if recovered:
-     assert page.get_by_role('button',name='Refresh work').evaluate('(b)=>b===document.activeElement')
-     for _ in range(4):page.keyboard.press('Shift+Tab')
-    page.wait_for_function('document.activeElement?.dataset.activity===\"home\"')
-    page.keyboard.press('Tab');assert page.evaluate('document.activeElement.dataset.activity')=='work'
-    page.keyboard.press('Enter');page.wait_for_function('!!document.querySelector(\"[data-pane=work] iframe\")')
-    page.locator('.omega-home nav [data-activity=home]').click()
-    checked('Home supports Tab and Enter; activity return restores keyboard focus')
-    page.get_by_role('button',name='Continue this piece',exact=False).first.click()
-    frame=page.frame_locator('[data-pane="work"] iframe');frame.locator('.question-card').wait_for(timeout=60000)
-    reply=frame.locator('[data-field="reply"]');reply.fill('Keep this unfinished thought')
-    page.screenshot(path=str(PROOF/'02-work.png'))
-    assert page.locator('.omega-home nav [data-activity="home"]').evaluate('(b)=>{const r=b.getBoundingClientRect();return b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}')
-    page.locator('.omega-home nav [data-activity="home"]').click();assert page.locator('[data-pane="work"]').get_attribute('aria-hidden')=='true'
-    assert page.locator('[data-pane="work"]').evaluate('(e)=>e.inert')
-    assert page.locator('[data-pane="work"] iframe').evaluate('(e)=>e.contentWindow.blHost.observation().watches')==0
-    page.locator('.omega-home nav [data-activity="work"]').click();assert reply.input_value()=='Keep this unfinished thought'
-    checked('Continue opens the existing task; Home return retains its draft and makes hidden panes inert')
-    page.locator('.omega-home nav [data-activity="music"]').click();music=page.frame_locator('[data-pane="music"] iframe');music.get_by_role('button',name='▶ PERFORM',exact=True).wait_for(timeout=90000)
-    mf=page.locator('[data-pane="music"] iframe').element_handle().content_frame();q='document.querySelector(".view-host .view-body").pelagic'
-    mf.evaluate(q+'.ready()');mf.wait_for_function(q+'.diagnostics().preparation.done || '+q+'.diagnostics().preparation.error',timeout=60000)
-    preparation=mf.evaluate(q+'.diagnostics().preparation');(PROOF/'preparation.json').write_text(json.dumps(preparation,indent=2)+'\n');assert preparation['done'],preparation
-    music.get_by_role('button',name='▶ PERFORM',exact=True).click();mf.wait_for_function(q+'.stats().playing&&'+q+'.stats().context==="running"',timeout=15000)
-    mf.wait_for_function(q+'.stats().frames>0&&'+q+'.stats().gpu.worker===true',timeout=30000)
-    mf.evaluate('window.retainedEngine='+q+'.engine();window.retainedActor='+q+';window.retainedRevision='+q+'.stats().revision')
-    page.screenshot(path=str(PROOF/'03-pelagic.png'))
-    page.locator('.omega-home nav [data-activity="home"]').click();page.wait_for_timeout(300)
-    assert mf.evaluate('window.retainedEngine.ctx.state')=='running';page.locator('.omega-home nav [data-activity="music"]').click()
-    assert mf.evaluate(q+'.engine()===window.retainedEngine&&'+q+'===window.retainedActor')
-    checked('Pelagic keeps the same playing engine and editor viewer through Home return')
-    music.get_by_role('button',name='RUNTIME',exact=True).click();music.get_by_role('heading',name='Owned work, in view').wait_for(timeout=30000);assert mf.evaluate(q+'.engine()===window.retainedEngine')
-    page.screenshot(path=str(PROOF/'04-inspector.png'));checked('existing companion inspector opens beside the retained instrument')
-    page.locator('.omega-home nav [data-activity="home"]').click();page.set_viewport_size({'width':390,'height':844});page.screenshot(path=str(PROOF/'05-narrow.png'));page.set_viewport_size({'width':1400,'height':1000})
-    page.evaluate('''()=>{const b=blEd;b.dispatch(b.R.hashMap(b.K('type'),b.K('key'),b.K('key'),':'));b.dispatch(b.R.hashMap(b.K('type'),b.K('text'),b.K('text'),'(ed/unuse "home")'));b.dispatch(b.R.hashMap(b.K('type'),b.K('key'),b.K('key'),'Enter'));}''')
-    page.wait_for_function('!document.querySelector(".omega-home")');assert page.locator('iframe').count()==0;page.screenshot(path=str(PROOF/'06-unused.png'))
-    checked('real editor unuse removes Home and its viewers while retaining workspace source')
-    video=page.video;context.close();video.save_as(str(PROOF/'browser.webm'));browser.close()
+  if not any(os.environ.get(k) for k in ['HOME_NATIVE_ONLY','HOME_STOP_ONLY','HOME_LAUNCH_ONLY']):
+   subprocess.run(['python3',str(ROOT/'spikes/home/test/workbench.py')],cwd=ROOT,check=True)
+   checked('adaptive browser journey completes in its separately owned private world')
   assert not errors,errors
   env['HOME_TEST_TASK']=task_path
   if not os.environ.get('HOME_STOP_ONLY'):
@@ -141,7 +93,7 @@ with tempfile.TemporaryDirectory(prefix='omega-home-proof-') as temp:
      while True:
       subprocess.run(['grim',str(PROOF/'native-entry.png')],env=env,check=True)
       screen=subprocess.run(['tesseract',str(PROOF/'native-entry.png'),'stdout','--psm','11'],env=env,capture_output=True,text=True,check=True).stdout
-      if all(label in screen for label in ['Your work','Pelagic','Machine']):break
+      if all(label in screen for label in ['Work','Places','Buffers']):break
       assert native.poll() is None and time.monotonic()<deadline,screen
       time.sleep(.5)
      (PROOF/'native-entry-screen.txt').write_text(screen)
