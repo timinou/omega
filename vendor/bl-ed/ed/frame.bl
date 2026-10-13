@@ -348,14 +348,15 @@
   {:layout (:name (:layout fr))
    :focus (:focus fr)
    :panes (vec (map (fn [p]
-                      (if (view-pane? p)
+                      (let [drawn (if (view-pane? p)
                         (let [[kind of] (:view p)
                               ed (editor fr of)
                               f (some (fn [q] (get-in q [:provides :views kind])) (reverse (pkg/packages ed)))]
                           {:id (:id p) :width (:width p) :kind :view :view-kind kind :of of
                            :view (when (some? f) (rendered-view f ed))})
                         {:id (:id p) :width (:width p) :kind :editor :focus? (= (:id p) (:focus fr))
-                         :view (rendered-view m/render (editor fr (:id p)))}))
+                         :view (rendered-view m/render (editor fr (:id p)))})]
+                        (cond-> drawn (:dock p) (assoc :dock (:dock p) :height (:height p)))))
                     (panes fr)))})
 
 ; ─── the layouts packages provide ──────────────────────────────────────────

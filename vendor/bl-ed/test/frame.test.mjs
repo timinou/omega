@@ -262,3 +262,15 @@ test("a package that arranges the window on :use keeps the effects its :adopt em
   assert.ok(ask, "the adopt's intent survives the arrangement");
   assert.equal(get(ask, "pane"), K("left"), "tagged to the pane the editor now lives in");
 });
+
+test('docked views carry geometry while preserving editor identity and ordinary view models',()=>{
+ const s=session(),before=F.d_focused(s.fr);
+ const toolbar=R.hashMap(K('id'),K('toolbar'),K('view'),R.vec(K('outline'),K('main')),K('dock'),K('top'),K('height'),52);
+ const base=R.hashMap(K('id'),K('main'),K('doc'),K('linked'),K('width'),K('fill'));
+ const layout=R.hashMap(K('name'),'docked',K('panes'),R.vec(toolbar,base),K('focus'),K('main'));
+ const f=F.d_arrange(s.fr,layout),panes=get(F.d_render(f),'panes').toArray();
+ assert.strictEqual(F.d_focused(f),before);
+ assert.equal(get(panes[0],'dock'),K('top'));assert.equal(get(panes[0],'height'),52);
+ assert.equal(get(get(panes[0],'view'),'path'),'x.bl.org');
+ assert.equal(panes[1].get(K('dock'),'absent'),'absent','ordinary pane shape remains unchanged');
+});

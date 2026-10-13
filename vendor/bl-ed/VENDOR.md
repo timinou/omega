@@ -426,3 +426,13 @@ Connection children retain their finite shutdown budgets; the former additional
 failing the service acknowledgement and beginning store cleanup too early.
 The private native Home journey exercises the real stop callback and checks
 that the shared VM survives while the listener closes.
+
+### 2026-10-13 — adaptive frame chrome (PLAN-022)
+
+View panes may declare `:dock :top` / `:bottom` and a pixel `:height`; they span
+ordinary columns without displacing the working editor. Existing undocked
+render values remain unchanged. Browser geometry is a domain-free leaf.
+`blEd.snapshot()` returns the memoized painted model; `blEd.observe(fn)` returns
+an unsubscribe function and coalesces notifications after painting. Subscriptions
+perform no polling; listener failure cannot break editor dispatch. These hooks
+allow a composing package to follow an embedded editor's actual focus/context.

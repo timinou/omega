@@ -27,6 +27,8 @@
 import { documentPackages } from "./document-packages.mjs";
 import * as R from "./out/rt.mjs";
 import { packageHosts } from "./package-hosts.mjs";
+import { frameGeometry } from "./frame-geometry.mjs";
+import { frameObservers } from "./frame-observers.mjs";
 
 // ─── primitives ────────────────────────────────────────────────────────────
 
@@ -273,6 +275,7 @@ function measure() {
 // read the frame's render through this memo (keyed on the frame value).
 const renderFrame = memoFrame((f) => F.d_render(f));
 const paneView = (id) => { const p = get(renderFrame(fr), "panes").toArray().find((q) => get(q, "id").name === id); return p && get(p, "kind") === K("editor") ? get(p, "view") : null; };
+const observers = frameObservers();
 let bootQueue = [];                         // input typed before the first display: replayed, never dropped
 
 // run the frame's pending effects, then paint
@@ -284,6 +287,7 @@ function settle() {
   for (const e of effects) perform(e);
   draw();
   syncPackageHosts();
+  observers.notify(fr);
   return effects.length;
 }
 
@@ -677,11 +681,16 @@ let layoutSig = "";
 function syncPanes(panes) {
   const heldInput = document.activeElement === sink;
   const sig = panes.map((p) => get(p, "id").name + ":" + get(p, "kind").name).join(",");
-  panesEl.style.gridTemplateColumns = panes.map((p) => cssWidth(get(p, "width"))).join(" ");
+  const geometry = frameGeometry(panes.map(p => ({id:get(p,"id").name,
+    width:cssWidth(get(p,"width")),dock:get(p,"dock")?.name,height:get(p,"height")})));
+  panesEl.style.gridTemplateColumns = geometry.columns;
+  panesEl.style.gridTemplateRows = geometry.rows;
   panesEl.classList.toggle("multi", panes.length > 1);
   const visibility = () => { for (const p of panes) {
     const d = paneDom.get(get(p, "id").name), w = get(p, "width"), a = w?.toArray?.();
-    if (d) { const hidden = a?.[0] === K("ch") && a[1] === 0; d.root.inert = hidden;
+    if (d) { const place = geometry.placements.get(get(p,"id").name);
+      d.root.style.gridRow = place.row; d.root.style.gridColumn = place.column;
+      const hidden = get(p,"dock") ? get(p,"height") === 0 : a?.[0] === K("ch") && a[1] === 0; d.root.inert = hidden;
       if (hidden) d.root.setAttribute("aria-hidden", "true"); else d.root.removeAttribute("aria-hidden"); }
   } };
   if (sig === layoutSig) { visibility(); return; }
@@ -733,7 +742,7 @@ const MAP_ROW = 3;                          // px per screen row in a minimap
 const viewPainters = {
   // Same-origin embedded tools. Packages supply a URL, never HTML or host IO.
   embed(dom, p) {
-    dom.root.style.cssText = "position:relative;min-width:0;min-height:0;overflow:hidden";
+    Object.assign(dom.root.style, {position:"relative",minWidth:"0",minHeight:"0",overflow:"hidden"});
     dom.body.style.cssText = "position:absolute;inset:0";
     const model = get(p, "view"), src = model && get(model, "src");
     if (!src) { dom.body.replaceChildren(); return; }
@@ -1397,7 +1406,7 @@ panesEl.removeAttribute("aria-busy");
 const queued = bootQueue; bootQueue = [];
 for (const e of queued) dispatch(e);        // keys typed during boot, in order
 sink.focus();
-window.blEd = { dispatch, setVisible:setViewerVisible, state: () => ed$(), frame: () => fr, render: () => paneView(get(fr, "focus").name), R, K, F };
+window.blEd = { dispatch, observe: observers.subscribe, snapshot: () => renderFrame(fr), setVisible:setViewerVisible, state: () => ed$(), frame: () => fr, render: () => paneView(get(fr, "focus").name), R, K, F };
 window.blHost = { lang, gate, glide, loading, observation:()=>({visible:viewerVisible,watches:watchers.size}) };
 if (documents?.eagerLanguage !== false) setTimeout(() => lang.start(), 0);          // the language: off the first-display path
 }
