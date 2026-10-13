@@ -1,0 +1,51 @@
+#+title: Omega — a home for the Lisp machine
+#+status: SLICE_1_IN_PROGRESS
+#+date: 2026-10-13
+
+* Slices and acceptance
+1. Native Home: launch the existing shared host, open its real editor in a
+   Loom/Wry window, continue existing work, open Pelagic and its inspector,
+   return Home without losing drafts or interrupting playback. Browser access
+   uses the same package. Record real native-window and browser evidence.
+2. Leave and return: saved session identity, package/layout/document restoration,
+   explicit package-specific preparation and restart semantics. Do not claim
+   that restoring a document rewinds actors, audio graphs or external effects.
+3. Discover and compose: package entry actions and resumable capabilities from
+   descriptors; explicit immutable-generation admission for new packages.
+4. Use, inspect and change: contextual source, scratch versus saved definitions,
+   validation, deliberate adoption, drift and rollback evidence.
+5. Install and recover: desktop integration, prepared release assets, first run,
+   reconnect, host identity and useful recovery without requiring a checkout.
+6. Consistent speed: launch/resume/input/playback budgets, dense canonical
+   projection and graphics queue profiling, actual device audio/display proof.
+
+* Scope of slice 1
+Home is a pure removable bl-ed package and a frame layout. Existing work and
+Pelagic are bounded retained same-origin editor viewers, using the editor's
+existing embed view. They share the current host/store, not browser heaps.
+This prototype does not introduce a second task engine or editor renderer.
+It does not yet provide durable cross-device session restoration. The bounded
+viewer composition is explicit; do not sell it as zero-copy shared JS realms.
+The inspector remains the existing companion inside Pelagic.
+
+Use current workspace documents/facts for Continue and Needs you; no shadow
+task registry. Package models and decisions are BL. DOM/native window operations
+remain small host boundaries. The editor stays vendored in Omega.
+
+* Gates
+- Pure package drive: navigation, bounded model, unknown actions, repeated open,
+  use/unuse, ordinary editor restoration; no shared command/key mutations.
+- Actual browser: private world, continue real task, preserve unfinished draft,
+  retain Pelagic engine on Home return, inspector companion and exact unload.
+- Actual Wry/WebKit: private headless compositor, same Home and editor graph;
+  record feature support and failures honestly. Never touch the live desktop.
+- Vendored editor drive tests and unchanged default presentation checker.
+- Native launcher: compatibility refusal before writes, browser alternative,
+  explicit demo versus durable defaults, window close preserves shared host.
+- Tutorial .bl.org, screenshots, interactive report and reproducible commands.
+
+* Guardrails
+Never write to port 8790 or an existing user world. Own private test listeners,
+stores and compositor, cap BL jobs and stop them. Preserve existing concurrent
+Pocket/workspace edits; record whether browser proofs exercised them.
+Commit each coherent step. Stop after slice 1; do not implement later slices.
