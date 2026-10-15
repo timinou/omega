@@ -49,9 +49,27 @@
               :step (loop/scripted [(loop/call-tool "eval" {:code "(edit \"board.bl.org\" [{:old \"TODO\" :new \"DONE\"}])\n(done \"Completed the board.\")"} "edit")])})
         id (task/open! sys {:goal "Update the board" :place "omega" :cwd root})]
     (task/await sys id 10000)
+    (is (= "changed" (:kind (first (:artifacts (desk/task-context sys id))))))
+    (links.model/put! e {:id "out" :from {:task id} :kind :output :to {:place "omega" :path "board.bl.org"}})
     (let [ctx (desk/task-context sys id)]
       (is (= "work:omega/board.bl.org" (:path (first (:artifacts ctx)))))
-      (is (= "changed" (:kind (first (:artifacts ctx)))))
+      (is (= "output" (:kind (first (:artifacts ctx)))))
+      (is (= ["work:omega/board.bl.org"] (:changed-files ctx)))
       (is (= "Completed the board." (:task-result ctx)))
       (is (= "* DONE Board\n" (File/read! (str root "/board.bl.org")))))
+    (task/stop-system! sys) (GenServer/stop server) (env/close! e)))
+
+(deftest change-counts-include-linked-human-edits-once-and-exclude-unedited-inputs
+  (let [root (str "/tmp/omega-desk-count-" (System/system_time :microsecond))
+        e (env/open {:schema (vec (concat place/schema links.model/schema buffer/schema))})
+        _ (File/mkdir_p! root) _ (File/write! (str root "/review.org") "Original\n")
+        _ (place/put! e {:id "a" :root root}) server (buffer/start! e)
+        sys (task/start-system e {:root root :step (loop/scripted [(loop/say "waiting")])})
+        id (task/open! sys {:goal "Review" :place "a"})]
+    (task/await sys id 5000)
+    (doseq [[key path block] [["first" "review.org" "one"] ["second" "review.org" "two"] ["input" "input.org" nil]]]
+      (links.model/put! e {:id key :from {:task id} :kind :input :to {:place "a" :path path :block block}}))
+    (is (= [] (:changed-files (desk/task-context sys id))))
+    (buffer/request! server [:save (str root "/review.org") {:text "Edited\n" :base "0" :client "human" :sequence 1}])
+    (is (= ["work:a/review.org"] (:changed-files (desk/task-context sys id))))
     (task/stop-system! sys) (GenServer/stop server) (env/close! e)))

@@ -79,6 +79,35 @@ maps the 54-point review to behavior and tests. The proof uses isolated worlds.
 
 ## Current proof
 
+### Compact session layout (2026-10-11)
+
+Sessions put their title in the fixed header and their place immediately below
+it; the place opens the existing textual context sheet. Conversation, Files and
+Changes stay pinned below the header, with a thin selection underline. File
+counts deduplicate anchored references; change counts include only session files
+with recorded buffer operations, including linked human edits. A quiet dot marks
+unread conversation output. Session titles and counts remain available when a
+command opens a reference document.
+
+Work / Places / Buffers is absent throughout a session, releasing its entire
+height. Returning to another screen restores it with a 180ms slide and fade;
+reduced-motion preferences disable that animation. Other screens retain their
+navigation even in short landscape viewports. The composer retains its bottom
+safe-area padding.
+
+The same removable `mobile` package owns this layout. No vendored editor source
+changes or separate rendering loop are involved. The frontend build provides the
+same `pkg/mobile.mjs` loader and compiled package to `bin/bl-ed`.
+
+Proof: [session in the real editor](proof/session-layout/03-conversation.png),
+[place context](proof/session-layout/04-context.png),
+[file review](proof/session-layout/14-review.png),
+[after unuse](proof/session-layout/13-unused.png), and
+[verification receipt](proof/session-layout/verification.log).
+`host-browser.mjs` checks fixed tabs, unique counts, back navigation, reduced
+motion and 320px geometry. `touch-browser.mjs` checks the same session chrome
+and recorded edit counts through the real editor in an isolated world.
+
 ```sh
 spikes/mobile/test/verify.sh
 ```

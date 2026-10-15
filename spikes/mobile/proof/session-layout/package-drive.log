@@ -1,0 +1,27 @@
+✔ mobile is a removable layer and a real frame layout, with no user table mutation (43.234529ms)
+✔ drafts stay keyed to tasks and navigation leaves the conversation editor untouched (4.163834ms)
+✔ send uses the existing task intent, blocks duplicates and preserves drafts on failure (3.667786ms)
+✔ quick answers keep a composed reply; successful text sends clear only the submitted draft (3.857906ms)
+✔ completed task follow-up carries its actual place and frozen directory (2.211898ms)
+✔ mobile file input participates in the shared-buffer draft protocol and read-only guards (10.225451ms)
+✔ dirty file navigation keeps its current tab and exposes a publication message (1.72641ms)
+✔ task creation from a place document validates against the retained place choices (1.278044ms)
+✔ document navigation and explicit passage retain their address, revision and anchor (1.923332ms)
+✔ command discovery includes core and package commands without shared table mutation (3.777033ms)
+✔ first editor eval can resume when the language arrives (2.858308ms)
+✔ native prompts expose data and submit through the existing editor (4.656033ms)
+✔ reading a task home does not manufacture unpublished edits when a task completes (3.242784ms)
+✔ long goals retain their complete instruction under a compact editable title (2.081752ms)
+✔ running task instructions steer the current turn (1.246264ms)
+✔ place form invokes the existing place intent as ordinary data (1.359568ms)
+✔ Files index clears an earlier file target without discarding that editor (0.917784ms)
+✔ clearing a local cwd setting restores inheritance (0.930918ms)
+✔ a newly visited document opens in reading mode without changing the retained editor text (4.035692ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 301.187167
