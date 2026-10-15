@@ -10,6 +10,14 @@ omega's pin `94700545` contains everything bl-ed needs (`bl.doc.spans`, `system.
 `js.eval`), so **the editor is built and served by omega's own pinned `bl`**. The page, the server
 and omega's world run on one beam-lisp.
 
+## License in Omega
+
+Copyright holder Othman Benkiran relicensed this vendored editor and its Omega
+changes under GNU GPL version 3 or later on 2026-10-15. See `LICENSE` here and
+`../../THIRD_PARTY.md` for third-party material. The upstream snapshot was
+distributed under EPL-2.0; this declaration records the owner-authorized GPL
+license for the copy distributed with Omega.
+
 ## What differs from upstream
 | file | change | why |
 |---|---|---|
