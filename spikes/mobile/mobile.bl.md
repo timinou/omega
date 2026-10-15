@@ -135,36 +135,35 @@ The original screenshots include [Work](proof/01-work.png),
 [conversation](proof/02-conversation.png), [changes](proof/05-changes.png)
 and [unuse](proof/13-unloaded.png).
 
-## Optional Android companion
+## Android app
 
-The companion is in `android/`, using the sibling `beam-lisp--mobile` worktree.
-Its native connection screen accepts an HTTPS `.ts.net` origin on port 443 or
-8443 and then loads the exact editor URL above. Navigation is restricted to
-that origin. No agent credentials or Erlang-distribution port are exposed over
-the network; Tailscale handles transport and device access.
+The companion in `android/` loads the same real Pocket package over private
+Tailscale HTTPS. Install its signed, self-contained ARM64 APK on Android 9 or
+later. Connect the phone's Tailscale app, enter the server's HTTPS `.ts.net`
+origin (any port, e.g. Work's `:18001`), and tap Connect. The app remembers that origin across
+process restarts. Server changes the address; Reload retries the current page.
+
+Task execution and credentials stay on the server. The shell requests only
+Internet and network-state permissions. Remote pages have no native JavaScript
+bridge, and navigation stays within the chosen server origin.
 
 ```sh
-# Build the ARM64 debug APK; the mobile worktree must be present.
+# Requires Beam Lisp's standalone Android packaging support and the Android SDK.
 spikes/mobile/android/setup.sh
-# With one development phone attached by USB:
+# Optionally install the completed APK onto an attached development phone:
 spikes/mobile/android/setup.sh --install
 ```
 
-`BEAM_LISP_MOBILE_BIN` can select a different checkout's `bin/bl`. The app pins
-mob 0.9.3 in its own lock file and does not change Omega's compiler pin.
-The default app ABI is `arm64-v8a`; use `x86_64` in its env for an emulator.
-As in the mobile framework's documented development flow, **install alone is
-insufficient**: `android push` copies the runtime and compiled namespaces onto
-the device, and `android up` launches it. The setup script performs all three
-when passed `--install`.
+`BEAM_LISP_MOBILE_BIN` selects the builder; the default is the sibling
+`beam-lisp/bin/bl`. The native app locks mob 0.9.3 independently of Omega's server
+compiler. The output is `android/release/omega-pocket-0.1.0-arm64-v8a.apk` plus its
+SHA-256 receipt. The signing key and password stay outside the repository under
+`~/.local/share/omega-pocket/signing/`; retain them for compatible app updates.
 
-The ARM64 APK build succeeded at:
+The APK contains OTP, Beam Lisp, libraries and the app's namespaces. First launch
+verifies and installs its runtime into private storage. No runtime push or USB
+connection is needed. Bundle upgrades preserve the saved server address and
+replace the bundled runtime together. The release build disables Erlang
+distribution.
 
-```text
-android/_build/android/android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-Native connection validation and screen trees pass 14 desk assertions. The
-Android doctor found SDK, NDK, JDK, Zig and mob runtimes, but no attached device.
-On-device startup, keyboard behavior and TLS loading remain unverified. The
-browser version requires no Android build and is the directly usable prototype.
+Validation and screenshots are recorded in `proof/android-standalone/`.

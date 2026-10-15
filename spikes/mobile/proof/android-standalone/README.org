@@ -1,0 +1,59 @@
+#+title: Omega Pocket — standalone Android release
+#+date: 2026-10-14
+
+* Download
+=../../android/release/omega-pocket-0.1.0-arm64-v8a.apk= is the signed ARM64 phone APK.
+Version 0.1.0; Android 9 or later; 115573392 bytes.
+SHA-256: =4b89e2e4a44be181d90bb7f0444fb42dce3a986a047ad3aa135438087f76bc32=.
+The adjacent =.apk.sha256= file is the download receipt.
+
+Connect the phone's Tailscale app, open Pocket, and enter the server's private
+HTTPS origin. Its address is retained in Android app storage. Server changes
+connection settings; Reload refreshes the current server view.
+
+* Evidence
+- =android-smoke.json= and =android-smoke.log=: seven release-app journeys pass.
+- =android-connection.png=, =android-invalid-origin.png=, =android-pocket.png=,
+  =android-reopened.png=: native release screenshots.
+- =browser-pocket-used.png= and =browser-pocket-unused.png=: the same package
+  loaded and removed in the real editor.
+- =pocket-contract.log=: 17 Pocket connection assertions pass.
+- =beam-android-tests.log=: 55 Android framework/packaging assertions pass.
+- =runtime-installer-tests.xml=: seven JVM installer tests pass, covering fresh
+  installation, upgrades, preserved settings, checksums, malformed bundles,
+  path traversal and interrupted installation.
+- =editor-drive.log=: 24 vendored editor drive tests pass.
+- =presentation.log=: the unchanged presentation check passes 36 variants.
+- =signing.log= and =apk-audit.json=: APK signatures, bundled runtime checksum,
+  ARM64 libraries and 16 KB alignment verified. 41 app/device/startup BEAM
+  modules match the tested emulator release byte-for-byte.
+
+Native journeys use an x86_64 Android 36.1 emulator. The phone APK is ARM64;
+physical ARM64 hardware was unavailable. ARM translation in the x86 emulator
+cannot launch BEAM's standalone helper executables, so native execution is
+validated with the matching emulator ABI.
+
+All browser and native network journeys target an offline memory world on
+127.0.0.1:8792, rooted under /tmp/omega-pocket-world. The emulator's test-only
+HTTPS proxy routes only to that listener, using a valid Tailscale certificate.
+No test writes to port 8790 or the running Pocket server. Tailscale Serve mappings
+remain unchanged.
+
+* Rebuild
+=android/setup.sh= builds and signs a self-contained release APK using Beam Lisp's
+=android build --standalone --release= support. =BEAM_LISP_MOBILE_BIN= selects the
+builder. This release uses source generation =d9e87831= plus the standalone
+packaging changes. The signing key remains private under
+=~/.local/share/omega-pocket/signing/=; it is excluded from the APK and repository.
+
+Upstream implementation is in Beam Lisp's =priv/std/bl/android.bl.md=,
+=priv/android/kotlin/BlRuntime.kt= and =priv/std/bl/cli.bl=. Runtime assets are
+verified and installed before BEAM starts; upgrades preserve files outside the
+bundled =otp/= directory. The Android image includes its runtime startup owner
+registry, all locked libraries, the Android namespaces and the Pocket app.
+
+The shell requests Internet and network-state permissions. AndroidX also adds
+its own signature permission for internal receivers. Development distribution,
+notification listeners, accessibility services, overlay services, microphone
+access and the remote page's native JavaScript bridge are absent from this
+release configuration.

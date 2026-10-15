@@ -1,0 +1,28 @@
+Running as unit: run-p2282018-i77686353.service; invocation ID: 2ccc424e4fab48f4afabc2374c4aa35f
+bl-stage-hosts: 67 pinned host beams staged into /home/user/code/undefine/beam-lisp/build (app resource beam_lisp.app)
+
+Testing android.build-test
+
+Testing android.ui-test
+
+Testing android.loom-test
+
+Testing android.events-test
+14 Android companion assertions passed (origin validation, connection and native screen trees).
+
+Testing pocket.home-test
+── ward: warm isolated test run ──
+
+  ✓ android.build-test  6 passed
+  ✓ android.ui-test  17 passed
+  ✓ android.loom-test  25 passed
+  ✓ android.events-test  7 passed
+  ✓ pocket.home-test  0 passed
+
+  5 file(s) passed, 0 failed, 0 incoherent
+  ✓ all green
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 1min 20.454s
+             CPU time consumed: 1min 7.034s
+                   Memory peak: 311.9M (swap: 108K)
