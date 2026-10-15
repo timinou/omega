@@ -1,9 +1,15 @@
-# spikes/ — pre-implementation experiments for PLAN-003
+# spikes/ — packages, prototypes and experiments
 
-Each spike is a runnable literate file: `bin/bl run spikes/<name>.bl.md` (omega's pinned beam-lisp).
-Each one asks one question, prints OBSERVED output, and ends with `## Findings`. A spike that disproves
-the design is a success. Spikes are not product code. They are deleted or turned into tests once the
-feature they de-risk lands.
+Runnable editor packages remain here alongside their host assets, tests,
+literate design notes and recorded proofs. Root `packages/*.edn` declarations
+select packages for the shared frontend; being used by that frontend does not
+make an experiment a stable API. See each directory's `.bl.md` or `.bl.org` notes
+for its current contract, limitations and launch commands.
+
+The standalone literate experiments below investigate particular questions.
+Run them with `bin/bl run spikes/<name>.bl.md` when their documented prerequisites
+are available. Historical observations record the revision tested at the time;
+they do not imply that every experiment is part of the current release checks.
 
 | spike | question | answer, in one line |
 |---|---|---|

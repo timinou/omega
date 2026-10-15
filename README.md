@@ -1,132 +1,151 @@
 # omega
 
-The simplest coding harness that works, built from beam-lisp primitives. pi's
-architecture (a small loop plus extensions), with one deviation: **prompts are
-tasks, not chats**. Tasks coordinate stigmergically. They leave traces in a shared
-fact log, sense each other's traces, message one another (the human included), and
-wait on each other.
+Omega is a coding harness and shared Lisp workbench built on Beam Lisp.
+Prompts are tasks: humans and agents coordinate through a shared fact log,
+messages, traces and editable documents. The desktop, browser and Pocket views
+connect to the same host. PELAGIC adds an audiovisual studio as an editor package.
 
-## Try it
+This is an experimental project. Runnable packages and exploratory work remain
+under `spikes/`; each package's literate notes describe its status and evidence.
 
-```sh
-bin/bl run omega.bl.md                      # playground: 3 tasks + a human, offline
-bin/bl run docs/domain-model.bl.md          # the datom model, runnable, with invariants
-bin/bl test                                 # the suite (offline; 7 files)
+## License
 
-cd /some/project
-~/code/undefine/omega/bin/omega --offline "look around"     # no network
-~/code/undefine/omega/bin/omega "add a test for X and run it" # live: Sonnet 5.5
-~/code/undefine/omega/bin/omega --jev --notify "…"          # + Jev done-gate, desktop notifications
-```
+Copyright (C) 2026 Othman Benkiran.
 
-PELAGIC opens as a package in an Omega editor session:
+Omega is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later version.
 
-```sh
-bl pelagic.dev                   # server + frontend; open the printed URL
-bl pelagic.dev -- --port 8820       # another development host
-bl pelagic.local                 # standalone demo server
-bl pelagic.bundle                # portable demo ZIP
-```
+Omega is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full terms.
 
-Unchanged launches reuse compiled output. See the [PELAGIC launch guide](spikes/pelagic/session-launch.bl.md).
-
-Flags: `--offline`, `--jev`, `--notify`, `--cassette PATH` (record/replay the model),
-`--db DIR` (where to keep tasks), `--memory` (keep nothing).
-
-**Where tasks are kept.** Every task, its conversation (each turn), messages,
-traces and results are datoms in ONE store per project: `<project>/.omega/db`
-(fjall, on disk). Close the window or kill omega and nothing is lost: the next
-`omega-ui` in that project shows every task again. A task that was mid-turn
-comes back as *idle* ("interrupted…", under Needs you); send it a message to
-continue. A store is one process's at a time, so a second omega in the same
-project says so and exits (use `--db DIR` or `--memory`). `--offline` and
-`--demo` runs are in memory unless `--db` is given. An omega started from
-inside a task (omega testing itself) is in memory too. Add `.omega/` to the
-project's `.gitignore`.
-
-The UI is a beam-lisp `live.app` (server-rendered, keyed patches over a socket,
-streaming tokens), shown in a native wry window or any browser:
-
-```sh
-cd /some/project && ~/code/undefine/omega/bin/omega-ui        # live: type a goal, Enter = a task
-~/code/undefine/omega/bin/omega-ui --demo                      # offline scripted world
-~/code/undefine/omega/bin/omega-ui --no-window                 # serve only → http://127.0.0.1:4747
-~/code/undefine/omega/bin/omega-headless                       # the real UI, off-screen: scenarios + screenshots
-```
-
-omega inside bl-ed: the task world and the editor in one VM. Tasks are `#+begin_task` blocks in
-your `.bl.org` files, and every view is a document.
-
-```sh
-cd /some/project && ~/code/undefine/omega/bin/bl-ed --offline  # open the printed URL
-# C-Enter on a #+begin_task block  open/refine a task; its #+RESULTS row is drawn as a live card
-# y / n / a on a card              answer its question · t its livebook · e what it did · s say
-# space a o / s / n / q / i        overview · scratch · new task · query · the live image (bl:)
-# C-o                              back
-```
+This applies to author-owned material throughout the repository, including the
+vendored bl-ed and browser port relicensed by their copyright holder. Third-party
+material retains its own terms; see [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Requirements
 
-- **beam-lisp, pinned** in `env.bl` (`:bl "commit:…"`) and run by the `bl`
-  launcher at `~/.local/bin/bl`, which builds that commit once in a clean tree
-  and keeps it. omega is unaffected by uncommitted work in the beam-lisp
-  checkout. `bin/bl` adds `src/` to the search path and always starts the VM in
-  omega's root. Run the live checkout instead with
-  `OMEGA_BL=~/code/undefine/beam-lisp/bin/bl`. To move the pin, see `env.bl`.
-- **Live model:** an Anthropic Messages endpoint. The default is the local
-  better-ccflare proxy at `http://localhost:8080`. It only routes requests whose
-  first system block is the Claude Code identity line, which `omega.llm` sends.
-  Override with `OMEGA_BASE_URL` / `OMEGA_MODEL` in `.env`. Set
-  `OMEGA_BASE_URL=https://api.anthropic.com` plus `ANTHROPIC_API_KEY` for the
-  direct API.
-- **Output limit:** `OMEGA_MAX_TOKENS` (in `.env` or the environment) sets the maximum tokens of
-  one model reply. Unset keeps the default of 8000, a deliberate small default (cost, latency): raise it
-  per project when you ask for large single replies (`OMEGA_MAX_TOKENS=32000`). It must be a whole number
-  from 1 to 128000; anything else (`0`, `-1`, `8k`, `1e5`, too large) stops startup with an error that names
-  the variable and the rule but never echoes the value. When a reply is cut off by the limit while it was
-  writing a tool call, omega runs nothing, answers the call with a "NOT RUN … retry with smaller chunks"
-  error, and the model carries on. `eval` with a missing, non-string or blank `code` likewise returns an
-  actionable error instead of running anything.
-- **Interrupted tool calls:** an assistant tool call is persisted before the tool runs, so a kill
-  (SIGTERM, crash) in between leaves a call with no result. `task/recover!` answers each genuinely
-  unanswered call with an explicit error result ("INTERRUPTED … NOT re-run … effect UNKNOWN: inspect
-  before retrying"); completed results and healthy histories are untouched, and no tool is ever replayed.
-  The request builder (`omega.loop/messages`) applies the same pure repair, so no provider sees an orphan.
-- **Transient 5xx:** `omega.llm` retries rate-limit, 5xx (500/502/503/504/529) and transport errors 3 times
-  with 1 s, 2 s, 4 s backoff. A 503 that outlasts those retries fails the turn and the task ends as
-  `failed` (terminal: open a new task to try again). This is by design, not changed.
-- **Jev:** `TYPESAFE_API_KEY` in omega's `.env`. Credentials are always read from
-  omega's home, never from the project being worked on.
+Install the [Beam Lisp](https://github.com/timinou/beam-lisp) launcher at
+`~/.local/bin/bl`, following its upstream setup instructions. `bin/bl` resolves
+and builds the commit pinned by `env.bl`; the first uncached setup can take tens
+of minutes. Use the platform prerequisites documented by Beam Lisp for its
+runtime and optional native WebView. Python 3 is required for the shell client
+and release packaging; Node.js is needed for JavaScript tests.
+
+An explicit `OMEGA_BL=/absolute/path/to/beam-lisp/bin/bl` override runs that
+checkout instead of resolving the normal pin. Keep it at the `env.bl` revision
+when checking a release. Optional native-browser and Android builds have their
+own prerequisites in their respective guides.
+
+## Try it offline
+
+From the repository root:
+
+```sh
+bin/bl run omega.bl.md                 # scripted task playground
+bin/bl run docs/domain-model.bl.md     # executable model and invariants
+bin/bl --cold test                     # offline unit suite; no frontend build required
+bin/bl omega.build                     # compile the shared package frontend
+bin/bl-ed --offline --memory --port 8792 --root /tmp/omega-demo
+```
+
+Open the printed editor URL. The isolated editor above uses a disposable,
+in-memory world. Use an unused port and a temporary root for testing.
+
+The shared development host defaults to port 8812. Its presets include:
+
+```sh
+bin/bl pocket                         # scripted Pocket workbench
+bin/bl home.dev                       # scripted Home prototype
+bin/bl pelagic.dev                    # scripted audiovisual studio
+bin/bl runtime.dev                    # scripted runtime observatory
+```
+
+Compatible launches reuse the host and compiled frontend. Task options follow
+`--`, for example `bin/bl pocket -- --port 8820`. Stop the shared world with
+`bin/bl omega.stop` before changing its live/offline mode or backend sources.
+Closing a browser tab or native window does not stop the shared world.
+
+## Live work and shell commands
+
+Copy `.env.example` to `.env` in this repository and configure the model endpoint
+and key. The example selects the direct Anthropic API. Without an override,
+Omega uses the local proxy at `http://localhost:8080`. Optional Jev integrations
+use `TYPESAFE_API_KEY`. Credentials come from Omega's home, not an attached project.
+`OMEGA_MAX_TOKENS` controls the reply limit (default 8000, range 1–128000).
+
+```sh
+bin/bl omega -- --browser              # live Home; omit --browser for a native window
+bin/bl omega -- --demo --browser --port 8820  # scripted Home on a separate host
+bin/omega --help
+bin/omega "add a test for X and run it"
+bin/omega list
+bin/omega read task:t-1
+bin/omega say t-1 "continue with the smaller change"
+bin/omega answer MESSAGE_ID "yes"
+```
+
+`bin/omega` is a Python client for the shared host, not a separate task executor.
+From another directory, use its absolute path; the caller's directory becomes
+the task's working place. It starts the default host if absent. `--no-start`
+requires an existing host; `--url` selects one explicitly; `--offline` requires a
+scripted host; `--json` prints structured results. See `--help` for all commands.
+
+`bin/omega-ui` opens the shared Pocket preset (live by default, `--demo` for
+scripted work). `bin/bl-ed` opens the package catalog on the live shared host;
+its explicit `--offline`/`--memory` mode is the isolated foreground editor.
+
+Live shared-host tasks, turns, messages and traces are stored in this
+repository's `.omega/db`, unless `--db` selects another store. Attached folders
+provide working places; they do not each own a separate host database. Scripted
+hosts use memory unless given `--db`. Keep `.omega/` ignored. Interrupted work
+is recovered without replaying unknown tool effects.
+
+## Packages and experiments
+
+The package catalog is at `http://localhost:8812/?use=packages&file=package:catalog`.
+Packages load through `?use=<name>` or `:(ed/use "<name>")`; `:(ed/unuse "<name>")`
+removes their session behavior. Tasks can live in `#+begin_task` document blocks.
+
+```sh
+bin/bl pelagic.local                  # standalone demo, default port 8818
+bin/bl pelagic.bundle                 # generated ZIP under spikes/pelagic/dist/
+```
+
+See the [PELAGIC launch guide](spikes/pelagic/session-launch.bl.md),
+[Home notes](spikes/home/home.bl.md), [Pocket notes](spikes/mobile/mobile.bl.md),
+and [spike index](spikes/README.md). The
+[Android release notes](spikes/mobile/proof/android-standalone/README.org)
+describe the optional signed Pocket APK. Its builder is selected separately with
+`BEAM_LISP_MOBILE_BIN`; use the recorded builder revision when reproducing it.
 
 ## Layout
 
-| path | what |
+| Path | Purpose |
 |---|---|
-| `src/omega/schema.bl` | the datom schema: actor, task, msg, trace, turn |
-| `src/omega/env.bl` | one fact store per env (in memory, or durable per project: `.omega/db`); ids resume on reopen; `sense` = datom watch |
-| `src/omega/actor.bl` | uniform actors (tasks and humans); mailboxes are facts |
-| `src/omega/trace.bl` | open trace vocabulary and glossary; decay; reinforcing reads; claim policy |
-| `src/omega/task.bl` | **the interface**: `open! say! steer! cancel! await view children tree`; `recover!` after a restart |
-| `src/omega/loop.bl` | one turn (`turn!`): model → tools → … → answer; the `step` seam; scripted models |
-| `src/omega/codemode.bl` | **the only tool: `eval`** (beam-lisp, harness cell evaluator, heap cap + deadline; a killed cell reaps its processes) |
-| `src/omega/reap.bl` | OS processes tagged per task and cell (env tags), killed when the cell is killed or the task ends |
-| `src/omega/prelude.bl` | what eval code calls: read write edit ls glob sh · spawn wait send done · trace traces q (`wait` returns `:pending` before the cell deadline) |
-| `src/omega/llm.bl` | Anthropic over OTP httpc; retries; cassettes. `llm/usage.bl` vendored from relay |
-| `src/omega/jev.bl` | Jev typed decisions: questions as values, declared decisions with fail direction |
-| `src/omega/ext.bl` | extensions as values: events, hooks (call-predicate, context, tool/after), tools |
-| `src/omega/ext/notify.bl.md` | desktop notifications; click a button to answer a task's question |
-| `src/omega/ext/jev_gate.bl.md` | Jev done-gate and scope check, with live evidence |
-| `src/omega/cli.bl`, `bin/omega` | one task from the shell |
-| `src/omega/ui/model.bl` | the env projected for screens: task rows grouped by urgency, asks, details |
-| `src/omega/ui/theme.bl` | design system as data: dark/light (WCAG AA tested), status = glyph + word + tone |
-| `src/omega/ui/screens.bl.md` | overview + task screens as pure `state → hiccup`, with the design reasoning |
-| `src/omega/ui/web.bl`, `bin/omega-ui` | the UI as a `live.app`: env + ephemeral stream conn observed, intents = task verbs |
-| `src/omega/stream.bl`, `src/omega/llm/sse.bl` | streaming: SSE parsed and folded purely; deltas and activity (the call or `sh` running now) broadcast over `pg`, never facts |
-| `src/omega/ui/probe.bl`, `bin/omega-headless`, `test/headless/ui.bl` | the real window in a private headless sway: drive, query, wait-for, screenshot |
-| `src/omega/ed/`, `bin/bl-ed` | omega in bl-ed: pure org renderers (`render.bl`), the providers and intents (`providers.bl`), the one-VM launcher (`main.bl`) |
-| `vendor/bl-ed/` | bl-ed, vendored from beam-lisp (`VENDOR.md` lists every delta): documents that are not files, presentations, `ed/omega.bl` |
-| `research/domain/` | the research basis (15 literate notes) and the decision register |
-| `!tasks/plans/PLAN-001-…` | the decisions this version implements |
+| `src/omega/` | Task model, actors, tools, model transport, host services and document providers |
+| `bin/` | Pinned BL wrapper, shared-host shell client, editor/UI launchers and legacy headless probe |
+| `scripts/` | Desktop/client entrypoints, evidence viewer and release packaging |
+| `packages/*.edn` | Package declarations, frontend assembly and backend capabilities |
+| `spikes/` | Runnable packages, prototypes and standalone experiments; code stays with its literate notes |
+| `vendor/` | Editor and optional native browser port, with provenance and license records |
+| `test/` | Offline core tests, fixtures and the legacy headless UI scenarios |
+| `docs/`, `research/` | Executable model, domain decisions and reference material |
+| `!tasks/` | Development plans, issues and milestone reports |
+| `spikes/*/proof/` | Recorded package contracts, screenshots, logs and captures |
+
+## Checks and publication
+
+Run `bin/bl --cold test` for the core suite. Package-specific drive, browser and
+presentation checks are documented with each spike. JavaScript editor tests need
+a compiled frontend and the matching Beam Lisp corpus; historical recordings do
+not substitute for a current test run. Never test by writing to a running user
+world; use the isolated command above.
+
+[Release instructions](docs/releasing.md) cover paired source/evidence archives,
+checksums, retained proof paths and optional demo/APK publication. Generated
+archives, compiler output, credentials and local agent memory are ignored.
 
 ## Known beam-lisp gotchas (observed on main, 2026-10-01)
 
