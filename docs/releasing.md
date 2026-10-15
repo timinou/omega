@@ -33,7 +33,7 @@ The script reads Git objects, not working files or ignored artifacts. It writes
 three files under ignored `dist/releases/` by default:
 
 - `omega-<commit>-source.tar.gz`: source, tests, package assets and license notices.
-- `omega-<commit>-evidence.tar.gz`: recorded `spikes/*/proof/` material and
+- `omega-<commit>-evidence.tar.gz`: recorded `proof/` directories (including research) and
   `!tasks/reports/`, plus the license, notices and release documentation.
 - `omega-<commit>-manifest.json`: full commit ID, archive sizes and SHA-256 hashes.
 
