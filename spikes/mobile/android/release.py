@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import subprocess
 import xml.etree.ElementTree as ET
@@ -13,6 +14,19 @@ HERE = Path(__file__).resolve().parent
 PROJECT = HERE / "_build/android/android"
 MAIN = PROJECT / "app/src/main"
 ANDROID = "{http://schemas.android.com/apk/res/android}"
+VERSION = "0.1.1"
+VERSION_CODE = 2026101601
+
+
+def release_versions(gradle, version, code):
+    """Set release identity in a generated or previously configured project."""
+    def replace(pattern, value, source):
+        result, count = re.subn(pattern, lambda match: match[1] + value, source)
+        if count != 1:
+            raise ValueError('Expected exactly one Android release version field')
+        return result
+    named = replace(r'(\bversionName\s+)"[^"\n]*"', '"' + version + '"', gradle)
+    return replace(r'(\bversionCode\s+)\d+', str(code), named)
 
 
 def replace_once(path, before, after):
@@ -61,8 +75,8 @@ def configure():
     text = text.replace("                            view.evaluateJavascript(MOB_JS_SHIM, null)",
                         "                            // Remote Pocket uses its own browser transport.")
     bridge.write_text(text)
-    replace_once(PROJECT / "app/build.gradle", 'versionName "1.0"', 'versionName "0.1.0"')
-    replace_once(PROJECT / "app/build.gradle", "versionCode 1\n", "versionCode 2026101401\n")
+    gradle = PROJECT / "app/build.gradle"
+    gradle.write_text(release_versions(gradle.read_text(), VERSION, VERSION_CODE))
 
 
 def run(*args, env=None):
@@ -107,7 +121,7 @@ def main():
     if len(abis) != 1:
         raise RuntimeError(f"Expected one ABI, got {abis}")
     abi = abis.pop()
-    output = release / f"omega-pocket-0.1.0-{abi}.apk"
+    output = release / f"omega-pocket-{VERSION}-{abi}.apk"
     run(str(tools / "zipalign"), "-P", "16", "-f", "4", str(unsigned), str(aligned))
     run(str(tools / "apksigner"), "sign", "--ks", str(key), "--ks-key-alias", "omega-pocket",
         "--ks-pass", "env:OMEGA_APK_STOREPASS", "--key-pass", "env:OMEGA_APK_STOREPASS",

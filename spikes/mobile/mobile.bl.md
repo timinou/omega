@@ -156,7 +156,7 @@ spikes/mobile/android/setup.sh --install
 
 `BEAM_LISP_MOBILE_BIN` selects the builder; the default is the sibling
 `beam-lisp/bin/bl`. The native app locks mob 0.9.3 independently of Omega's server
-compiler. The output is `android/release/omega-pocket-0.1.0-arm64-v8a.apk` plus its
+compiler. The current output is `android/release/omega-pocket-0.1.1-arm64-v8a.apk` plus its
 SHA-256 receipt. The signing key and password stay outside the repository under
 `~/.local/share/omega-pocket/signing/`; retain them for compatible app updates.
 

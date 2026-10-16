@@ -1,0 +1,46 @@
+{
+  "sha256": "d63dcc77c11f8c3ae9f2a1f4165e4b5e3c3315e3ebba5f92cea8b87e9c156e0f",
+  "bytes": 115421840,
+  "runtimeSHA256": "06f6b58b406267442020d91e9a0ded1d46fbe7ef7f4015f8cea203a881c5e14f",
+  "appModulesMatchCompiledTree": 8,
+  "oldPortMessageAbsent": true,
+  "currentPortMessagePresent": true,
+  "apk": "omega-pocket-0.1.1-arm64-v8a.apk",
+  "date": "2026-10-16",
+  "version": "0.1.1",
+  "versionCode": 2026101601,
+  "signingCertificateSHA256": "479bdc5d821df21d5f2ae39532b24d07776275bbff9c5fe1a80392725d921d72",
+  "sameSigningIdentity": true,
+  "alignment16KB": true,
+  "unchangedNativeLibraries": 7,
+  "unchangedRuntimeEntries": 7622,
+  "completeRuntimeBeams": 1104,
+  "hostTestModulesEqualFinalAPK": true,
+  "packagedConnectionTest": {
+    "accepted": [
+      "https://work.tailcb5318.ts.net:18001",
+      "https://work.tail123.ts.net",
+      "https://work.tail123.ts.net:8443",
+      "https://work.tail123.ts.net:65535"
+    ],
+    "rejected": [
+      "http://work.tail123.ts.net",
+      "https://evil.example",
+      "https://work.tail123.ts.net:0",
+      "https://work.tail123.ts.net:99999"
+    ],
+    "physicalARM64DeviceTested": false
+  },
+  "builder": {
+    "base": "d9e87831",
+    "packagingFilesFrom": "def50332",
+    "nativeLibrariesFrom": "omega-pocket-0.1.0-arm64-v8a.apk"
+  },
+  "focusedTests": [
+    "upgrade identity and reused Gradle configuration",
+    "app-only overlay preservation and ABI gate",
+    "packaged APK current modules and validation message",
+    "packaged Home behavior loaded without source paths",
+    "old signed APK rejected by artifact gate"
+  ]
+}
