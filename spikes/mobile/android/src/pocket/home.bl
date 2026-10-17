@@ -1,9 +1,8 @@
 ; Optional native host. Every work screen is the SAME real bl-ed package.
 (ns pocket.home (:require [android.screen :refer [defscreen]] [android.ui :as ui]
-                          [android.app :as app] [pocket.config :as config]
+                          [android.app :as app] [android.jvm :as jvm] [pocket.config :as config]
                           [pocket.attention :as attention] [android.notify :as notify]
-                          [android.events :as events] [android.jvm :as jvm]
-                          [connector.transport :as transport]))
+                          [android.events :as events] [connector.transport :as transport]))
 (defscreen)
 (def query "/?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile")
 (defn origin-valid? [s]
@@ -12,16 +11,27 @@
          (not (blank? (subs host 0 (- (count host) 7))))
          (contains? #{nil ""} (:path u)) (nil? (:userinfo u))
          (nil? (:query u)) (nil? (:fragment u))
-         (contains? #{443 8443} (:port u)))))
+         ;; Any explicit port: Work's endpoint publisher allocates them (e.g. 18001).
+         ;; The boundary is HTTPS on a private tailnet host, not a port list.
+         (or (nil? (:port u)) (<= 1 (:port u) 65535)))))
 (defn connect [assigns]
   (let [origin (trim (or (:origin assigns) ""))]
-    (if (origin-valid? origin) (assoc assigns :connected origin :error nil)
-      (assoc assigns :error "Enter a private Tailscale HTTPS origin, with port 8443 if you used the spike’s Serve command."))))
-(defn start-url [a]
-  (if-let [key (:open a)] (attention/task-url (:connected a) query key) (str (:connected a) query)))
+    (if (origin-valid? origin) (assoc assigns :origin origin :connected origin :error nil)
+      (assoc assigns :error "Enter a private Tailscale HTTPS address, e.g. https://work.tailnet.ts.net:18001"))))
+(defn saved-origin []
+  (if (jvm/available?)
+    (try (let [s (trim (File/read! (Path/join (System/get_env "MOB_DATA_DIR") "pocket-origin")))]
+           (if (origin-valid? s) s config/origin))
+      (catch _ config/origin))
+    config/origin))
+(defn remember-origin! [origin]
+  (when (jvm/available?)
+    (File/write! (Path/join (System/get_env "MOB_DATA_DIR") "pocket-origin") origin)))
 ;; Notifications: the host stays the only source of truth. While connected the
 ;; screen polls its own work document and announces tasks that wait on the person.
 ;; `attend` is pure (assigns + items -> assigns + effects); `perform!` is the IO.
+(defn start-url [a]
+  (if-let [key (:open a)] (attention/task-url (:connected a) query key) (str (:connected a) query)))
 (defn attend [a items]
   (let [n (attention/news (:seen a) items)]
     {:assigns (assoc a :seen (:seen n) :poll-failed false)
@@ -46,31 +56,52 @@
   (try (let [ctx (jvm/ctx) i (jvm/call (jvm/call ctx :get-package-manager) :get-launch-intent-for-package (jvm/call ctx :get-package-name))]
          (when i (jvm/call i :add-flags 268435456) (jvm/call ctx :start-activity i)))
        (catch _ nil)))
+(defn start-polling! [origin]
+  (begin-notifications!) (fetch! origin)
+  (erlang/send_after attention/poll-ms (erlang/self) :poll))
+(defn- flex [node] (assoc-in node [:props :weight] 1))
+(def toolbar-button {:fill-width false :background "#f7f6f0" :color "#294c3c" :size :sm :padding 0})
 (defn render [a]
   (if-let [origin (:connected a)]
-    (ui/el :web-view {:url (start-url a) :allow (str origin "/") :show-url false})
+    (ui/column {:background "#f7f6f0"}
+      (ui/row {:padding 4 :gap 8}
+        (flex (ui/text "ω  pocket" {:size :sm :color "#294c3c"}))
+        (ui/button "Reload" [(erlang/self) :reload] toolbar-button)
+        (ui/button "Server" [(erlang/self) :server] toolbar-button))
+      (flex (ui/el :web-view {:url (start-url a) :allow (str origin "/") :show-url false})))
     (ui/column {:padding 28 :gap 16 :background "#f7f6f0"}
       (ui/spacer 36)
       (ui/text "ω  omega / pocket" {:size :xl :color "#294c3c"})
       (ui/text "Your work, within reach." {:size :lg :color "#263d35"})
       (ui/text "Connect this phone to Tailscale, then enter the private HTTPS address of your host." {:color :ink-3})
-      (ui/el :text-field {:text (or (:origin a) "") :placeholder "https://host.tailnet.ts.net:8443"
+      (ui/el :text-field {:value (or (:origin a) "") :keyboard "url" :return-key "go" :fill-width true
+                          :placeholder "https://host.tailnet.ts.net:8443"
                           :on-change [(erlang/self) :origin]})
       (when (:error a) (ui/text (:error a) {:color :care}))
       (ui/button "Connect to host" [(erlang/self) :connect] {:background "#294c3c" :color "#fffef9"})
       (ui/text "Execution stays on your computer. This app loads its existing mobile workbench." {:color :ink-3}))))
 (defn mount [_params _session socket]
-  (tuple :ok (app/assign socket {:origin config/origin :connected nil :error nil :seen {} :open nil :poll-failed false})))
+  (let [origin (saved-origin)]
+    ;; a remembered server connects at launch, so polling starts from a message
+    (when (origin-valid? origin) (erlang/send (erlang/self) :start))
+    (tuple :ok (app/assign socket {:origin origin :draft-origin origin
+                                 :connected (when (origin-valid? origin) origin) :error nil
+                                 :seen {} :open nil :poll-failed false}))))
 (defn handle_info [msg socket]
   (let [a (app/assigns socket)]
     (cond
       (and (erlang/is_tuple msg) (= 3 (erlang/tuple_size msg)) (= :change (erlang/element 1 msg)) (= :origin (erlang/element 2 msg)))
-      (tuple :noreply (app/assign socket :origin (erlang/element 3 msg)))
+      ;; Keep the draft in the screen model without echoing old render frames
+      ;; into the native field while a person types or pastes an address.
+      (tuple :noreply (app/assign socket :draft-origin (erlang/element 3 msg)))
       (= msg (tuple :tap :connect))
-      (let [next (connect a)]
-        (when (:connected next) (begin-notifications!) (fetch! (:connected next))
-              (erlang/send_after attention/poll-ms (erlang/self) :poll))
+      (let [next (connect (assoc a :origin (or (:draft-origin a) (:origin a))))]
+        (when (:connected next) (remember-origin! (:connected next)) (start-polling! (:connected next)))
         (tuple :noreply (app/assign socket next)))
+      (= msg (tuple :tap :server))
+      (tuple :noreply (app/assign socket {:connected nil :draft-origin (:origin a)}))
+      (= msg :start)
+      (do (when (:connected a) (start-polling! (:connected a))) (tuple :noreply socket))
       (= msg :poll)
       (do (when (:connected a) (fetch! (:connected a)) (erlang/send_after attention/poll-ms (erlang/self) :poll))
           (tuple :noreply socket))
@@ -82,4 +113,6 @@
       (let [id (attention/tapped msg) key (first (keep (fn [[k _]] (when (= id (attention/id-of k)) k)) (:seen a)))]
         (foreground!)
         (tuple :noreply (if key (app/assign socket :open key) socket)))
+      (= msg (tuple :tap :reload))
+      (do (mob_nif/webview_eval_js "location.reload()") (tuple :noreply socket))
       :else (tuple :noreply socket))))

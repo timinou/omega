@@ -1,25 +1,39 @@
 (ns pocket.home-test (:require [pocket.home :as home] [android.ui :as ui]))
-(assert (home/origin-valid? "https://work.tail123.ts.net"))
-(assert (home/origin-valid? "https://work.tail123.ts.net:8443"))
-(doseq [s ["http://work.tail123.ts.net" "https://evil.example" "https://work.tail123.ts.net.evil.example" "https://work.tail123.ts.net/path" "https://user@work.tail123.ts.net" "https://work.tail123.ts.net?x=y" "https://work.tail123.ts.net#x" "https://work.tail123.ts.net:8790"]]
-  (assert (not (home/origin-valid? s))))
-(assert (= "https://work.tail123.ts.net:8443" (:connected (home/connect {:origin "https://work.tail123.ts.net:8443"}))))
-(assert (:error (home/connect {:origin "http://evil.example"})))
-(assert (= :column (:type (home/render {:origin ""}))))
-(assert (= :web_view (:type (home/render {:connected "https://work.tail123.ts.net:8443"}))))
-;; notifications: polling decisions are pure; effects are data
-(let [item {:key "t-1" :title "Ship" :ask "Go?"}
-      r1 (home/attend {:seen {}} [item])
-      r2 (home/attend (:assigns r1) [item])
-      r3 (home/attend (:assigns r2) [])]
-  (assert (= :post (first (first (:effects r1)))))
-  (assert (= "Go?" (:text (second (first (:effects r1))))))
-  (assert (= [] (:effects r2)))
-  (assert (= [[:cancel (pocket.attention/id-of "t-1")]] (:effects r3)))
-  (assert (= {} (:seen (:assigns r3)))))
-(assert (= "https://h.ts.net:8443" (subs (home/start-url {:connected "https://h.ts.net:8443"}) 0 21)))
-(assert (= (str "https://h.ts.net" home/query "&pocket=task&at=task%3At-9") (home/start-url {:connected "https://h.ts.net" :open "t-9"})))
-(assert (= :web_view (:type (home/render {:connected "https://h.ts.net:8443" :open "t-9"}))))
-(home/perform! [])  ; off a phone nothing throws
-(home/perform! [[:post {:id 1}]])
-(println "14 Android companion assertions passed (origin validation, connection and native screen trees).")
+
+(deftest android-companion-contract
+  (is (home/origin-valid? "https://work.tail123.ts.net"))
+  (is (home/origin-valid? "https://work.tail123.ts.net:8443"))
+  (is (home/origin-valid? "https://work.tail123.ts.net:18001"))
+  (is (= "https://work.tailcb5318.ts.net:18001"
+         (:connected (home/connect {:origin "https://work.tailcb5318.ts.net:18001"}))))
+  (doseq [s ["http://work.tail123.ts.net" "https://evil.example" "https://work.tail123.ts.net.evil.example" "https://work.tail123.ts.net/path" "https://user@work.tail123.ts.net" "https://work.tail123.ts.net?x=y" "https://work.tail123.ts.net#x" "https://work.tail123.ts.net:0" "https://work.tail123.ts.net:99999"]]
+    (is (not (home/origin-valid? s))))
+  (is (= "https://work.tail123.ts.net:8443" (:connected (home/connect {:origin "https://work.tail123.ts.net:8443"}))))
+  (is (:error (home/connect {:origin "http://evil.example"})))
+  (is (= :column (:type (home/render {:origin ""}))))
+  (is (= (home/render {:origin ""}) (home/render {:origin "" :draft-origin "https://typing.tail.ts.net"})))
+  (let [field (nth (:children (home/render {:origin "https://work.tail123.ts.net:8443"})) 4)]
+    (is (= "https://work.tail123.ts.net:8443" (get-in field [:props :value])))
+    (is (= "url" (get-in field [:props :keyboard]))))
+  (is (= :web_view (:type (last (:children (home/render {:connected "https://work.tail123.ts.net:8443"})))))))
+
+(deftest notification-decisions
+  (let [item {:key "t-1" :title "Ship" :ask "Go?"}
+        r1 (home/attend {:seen {}} [item])
+        r2 (home/attend (:assigns r1) [item])
+        r3 (home/attend (:assigns r2) [])]
+    (is (= :post (first (first (:effects r1)))))
+    (is (= "Go?" (:text (second (first (:effects r1))))))
+    (is (= [] (:effects r2)))
+    (is (= [[:cancel (pocket.attention/id-of "t-1")]] (:effects r3)))
+    (is (= {} (:seen (:assigns r3))))))
+
+(deftest tapping-a-notification-opens-its-task
+  (is (= (str "https://h.ts.net:18001" home/query) (home/start-url {:connected "https://h.ts.net:18001"})))
+  (is (= (str "https://h.ts.net" home/query "&pocket=task&at=task%3At-9")
+         (home/start-url {:connected "https://h.ts.net" :open "t-9"})))
+  (let [web (last (:children (home/render {:connected "https://h.ts.net:8443" :open "t-9"})))]
+    (is (= :web_view (:type web)))
+    (is (re-find #"pocket=task" (get-in web [:props :url]))))
+  (home/perform! [])
+  (home/perform! [[:post {:id 1}]]))

@@ -22,7 +22,7 @@ const title=m=>(m?.text.split('\n')[0]||'').replace(/^#\+TITLE:\s*/i,'');
 const empty=(heading,copy)=>`<div class="empty"><span class="empty-icon">${icon('work')}</span><h2>${esc(heading)}</h2><p>${esc(copy)}</p></div>`;
 
 export function createHost(api){
- const models=new Map(),mounts=new Map(),messageOrder=new Map(),positions=new Map(),history=[],queries=new Map();let messageSequence=0; let disposed=false,probeTimer,probeAbort,probing=false,composing=false;
+ const models=new Map(),mounts=new Map(),messageOrder=new Map(),positions=new Map(),history=[],queries=new Map();let messageSequence=0,sessionContext=null; let disposed=false,probeTimer,probeAbort,probing=false,composing=false;
  const css=document.createElement('link');css.rel='stylesheet';css.href=new URL('style.css',import.meta.url);css.dataset.mobileResource='';document.head.append(css);
  const priorTitle=document.title;document.title='Omega · Pocket';
  document.documentElement.classList.add('omega-mobile');
@@ -98,12 +98,27 @@ const restored=new Set(),restoring=new Set();
   const group=(label,items,cls='')=>items.length?`<section class="task-group"><div class="section-label ${cls}">${label}<span>${items.length}</span></div>${items.map(card).join('')}</section>`:'';
   return `<div class="heading-row"><h1>Work</h1>${btn(icon('plus'),'new','round primary','aria-label="New task"')}</div><div class="scope-row">${btn(icon('places')+esc(scope)+'<span class="chevron">⌄</span>','scope','scope')}${btn(icon('filter'),'scope','icon-button','aria-label="Filter by place"')}</div>${groups.map(g=>group(g.title,g.rows,g.id==='attention'?'attention-label':'')).join('')}${Object.values(session.snoozed||{}).some(t=>t>Date.now())?btn('Snoozed','unsnooze','text-button'):''}${tasks.length?'':empty('No tasks','')}`;
  }
+ function sessionData(){
+  const t=task(),path=shell()['task-path'];
+  if(t.data?.desk==='task'&&(!path||t.path===path))return t.data;
+  if(sessionContext&&sessionContext.path===path)return sessionContext.data;
+  const row=(rail().objects||[]).find(o=>o.type==='omega/task'&&'task:'+o.key===path);
+  return row?{...row,'task-title':row.title||row.goal,'task-status':row.status}:{};
+ }
+ function sessionHeader(){
+  const d=sessionData(),label=d['task-title']||'Session',place=d['place-name']||d.place;
+  return `${btn(icon('back'),'work','back-button','aria-label="Back to Work"')}<div class="session-heading"><h1 class="task-title" title="${esc(label)}">${esc(label)}</h1><div class="task-context">${place?btn('<span class="session-place-name">'+esc(place)+'</span><span aria-hidden="true">⌄</span>','context','session-place','aria-label="Session place and context"'):''}<span class="tag ${d.ask?'peach':d['task-status']==='failed'?'error':finished(d)?'sage':'lilac'}"><span class="sr-only">${esc(d.ask?'Needs you':d['task-status']||'Opening')}</span></span></div></div>`;
+ }
+ function sessionTabs(){
+  const d=sessionData(),which=shell().tab||'conversation',files=new Set((d.artifacts||[]).map(a=>a.path).filter(Boolean)).size,changes=new Set(d['changed-files']||(d.artifacts||[]).filter(a=>a.kind==='changed').map(a=>a.path)).size;
+  const tabs=[['conversation','Conversation',null],['plan','Files',files],['changes','Changes',changes]].map(([id,label,count])=>btn(label+(count==null?(fields.unseen===shell()['task-path']?'<span class="tab-dot" aria-label="Unread output"></span>':''):`<span class="tab-count">${count}</span>`),'tab-'+id,`tab ${which===id?'selected':''}`,`aria-selected="${which===id}" role="tab"`)).join('');
+  return `<div class="tabs" role="tablist" aria-label="Session views">${tabs}</div>`;
+ }
  function taskScreen(){
   const t=task(),d=t.data||{},s=shell(),which=s.tab||'conversation';
   if(which==='conversation'&&t.path&&!t.path.startsWith('task:')&&t.path!=='desk:welcome')return reader(t,'task');
   if((s['task-path']&&t.path!==s['task-path'])||d.desk!=='task')return empty('Opening…','');
   const home=d.home,artifact=(d.artifacts||[]).find(a=>a.kind!=='home')||home||(file().path?.startsWith('work:')?{path:file().path}:null);
-  const tabs=[['conversation','Conversation'],['plan','Files'],['changes','Changes']].map(([id,label])=>btn(label,'tab-'+id,`tab ${which===id?'selected':''}`,`aria-selected="${which===id}" role="tab"`)).join('');
   let body='';
   if(which==='conversation'){
    body='';
@@ -118,14 +133,29 @@ const restored=new Set(),restoring=new Set();
   }else if(s['file-path']&&file().path!==s['file-path'])body=empty('Opening…','');
   else if(which==='plan')body=artifactList(d)+((s['file-path']&&file().path===s['file-path'])?artifactView(file(),home,artifact):'');
   else body=changesView(file(),artifact);
-  return `<div class="task-context"><span>${btn(icon('places')+esc(d['place-name']||d.place),'context','text-button')}</span><span class="tag ${d.ask?'peach':d['task-status']==='failed'?'error':finished(d)?'sage':'lilac'}"><span class="sr-only">${esc(d.ask?'Needs you':d['task-status'])}</span></span></div><h1 class="task-title">${esc(compact(d['task-title']||(which!=='conversation'?title(file()):title(t))))}</h1><div class="tabs" role="tablist" aria-label="Task views">${tabs}</div><div class="task-body">${body}</div>`;
+  return `<div class="task-body">${body}</div>`;
  }
  function artifactList(d){return `<div class="artifact-list">${(d.artifacts||[]).map(a=>btn(`<span class="artifact-kind">${esc(a.kind==='home'?'Home':a.kind)}</span>${icon('file')}<span>${esc(a.kind==='home'?'Home':a.label||a.path)}<small>${esc(a.path)}</small></span>`,'artifact','file-row',`data-path="${esc(a.path)}" ${a.block?`data-block="${esc(a.block)}"`:''}`)).join('')||empty('No files','')}${btn(icon('places')+'Folder','folder','sheet-option')}</div>`;}
+ // Read DOM geometry after scroll restoration too, so background updates and
+ // returning from Files keep the prompt aligned with the visible conversation.
+ function syncPrompt(root){
+  const strip=root.querySelector('.conversation-prompt'),scroll=root.querySelector('.mobile-scroll');
+  if(!strip||!scroll)return;
+  const prompts=[...scroll.querySelectorAll('[data-user-prompt]')];
+  const top=scroll.getBoundingClientRect().top;
+  let current=prompts[0];
+  for(const prompt of prompts){if(prompt.getBoundingClientRect().top>top+1)break;current=prompt;}
+  const text=current?.dataset.userPrompt||'';
+  strip.hidden=!text;
+  if(strip.textContent!==text)strip.textContent=text;
+  strip.title=text;
+ }
+ const promptAttr=text=>` data-user-prompt="${esc(String(text).split(/\r?\n/)[0])}"`;
  function conversation(t){
   if(Array.isArray(t.data?.turns)&&t.data.turns.length){
    const turns=t.data.turns,results=new Map(turns.flatMap(turn=>(turn.content||[]).filter(b=>b.type==='tool-result').map(b=>[b.id,b])));
    return turns.map(turn=>`<div data-key="turn:${esc(t.path)}:${turn.n}">${(turn.content||[]).map((block,index)=>{
-    if(block.type==='text'&&block.text?.trim())return `<article class="message ${turn.role==='user'?'human':'agent'}" data-key="text:${index}"><div class="message-who">${turn.role==='user'?'You':'ω'}${btn('Copy','copy','text-button',`data-text="${esc(encodeURIComponent(block.text))}" aria-label="Copy message"`)}</div>${rich(block.text)}</article>`;
+    if(block.type==='text'&&block.text?.trim())return `<article class="message ${turn.role==='user'?'human':'agent'}" data-key="text:${index}"${turn.role==='user'?promptAttr(block.text):''}><div class="message-who">${turn.role==='user'?'You':'ω'}${btn('Copy','copy','text-button',`data-text="${esc(encodeURIComponent(block.text))}" aria-label="Copy message"`)}</div>${rich(block.text)}</article>`;
     if(block.type==='tool-use'){const result=results.get(block.id),input=block.input?.code||block.input?.command||(typeof block.input==='string'?block.input:JSON.stringify(block.input,null,2));const hint=(input||'').match(/(?:read|write|shell|exec)\s*[ (]+["']?([^"'\n)]+)/)?.[0]||Object.values(block.input||{}).find(v=>typeof v==='string')||'';
      return `<details class="execution ${result?.['error?']?'failed':''}" data-key="step:${esc(block.id)}"><summary><code>${esc(block.name)}</code><span>${esc(compact(hint))}</span><small>${result?(result['error?']?'Failed':'✓'):'…'}</small></summary><div class="execution-body"><pre>${esc(input)}</pre>${result?`<pre class="tool-result">${esc(result.content)}</pre>${btn('Copy output','copy','text-button',`data-text="${esc(encodeURIComponent(result.content))}"`)}`:''}</div></details>`;
     }return '';
@@ -134,7 +164,7 @@ const restored=new Set(),restoring=new Set();
   // Provider source stays inspectable. Source syntax is only styled here;
   // task identity, questions, results and available controls are typed data.
   const lines=t.text.split('\n'),out=[];let chunk=[],who='';
-  const flush=()=>{if(chunk.some(x=>x.trim())&&chunk.some(x=>/^#\+begin_src/i.test(x))){out.push(`<details class="execution" data-key="${esc(t.path+':'+(chunk.join('\n').match(/:id\s+([^\s]+)/)?.[1]||chunk[0]))}"><summary>Agent step · execution details</summary><pre>${esc(chunk.join('\n'))}</pre></details>`);chunk=[];return;}if(chunk.some(x=>x.trim()))out.push(`<article class="message ${who==='you'?'human':'agent'}"><div class="message-who"><span class="avatar">${who==='you'?'Y':'ω'}</span>${esc(who==='you'?'You':'Agent')}<span class="message-rule"></span></div>${rich(chunk.join('\n'))}</article>`);chunk=[];};
+  const flush=()=>{if(chunk.some(x=>x.trim())&&chunk.some(x=>/^#\+begin_src/i.test(x))){out.push(`<details class="execution" data-key="${esc(t.path+':'+(chunk.join('\n').match(/:id\s+([^\s]+)/)?.[1]||chunk[0]))}"><summary>Agent step · execution details</summary><pre>${esc(chunk.join('\n'))}</pre></details>`);chunk=[];return;}if(chunk.some(x=>x.trim()))out.push(`<article class="message ${who==='you'?'human':'agent'}"${who==='you'?promptAttr(chunk.join('\n').trim()):''}><div class="message-who"><span class="avatar">${who==='you'?'Y':'ω'}</span>${esc(who==='you'?'You':'Agent')}<span class="message-rule"></span></div>${rich(chunk.join('\n'))}</article>`);chunk=[];};
   let collecting=false;
   for(const l of lines){
    if(/^\* (you|agent|assistant|model)\s*[·:]/i.test(l)){flush();who=/^\* you/i.test(l)?'you':'agent';collecting=true;continue;}
@@ -177,7 +207,7 @@ const restored=new Set(),restoring=new Set();
  }
  function browseDocument(f){return `<h2>${esc(title(f))}</h2><div class="place-list">${(f.objects||[]).filter(o=>o.type.startsWith('workspace/')||o.type==='omega/task').map(o=>btn(icon(o.type==='workspace/file'?'file':'places')+esc(o.label||f.text.split('\n')[o.row]||o.key),'browse','place-card',`data-path="${esc(o.type==='omega/task'?'task:'+o.key:o.key)}"`)).join('')}</div><details class="source-details"><summary>Document & settings</summary><pre>${esc(f.text)}</pre></details>`;}
  function changesView(f,artifact){
-  const d=task().data||{},files=(d.artifacts||[]).filter(a=>a.path?.startsWith('work:'));
+  const d=sessionData(),files=[...new Map((d.artifacts||[]).filter(a=>a.path?.startsWith('work:')&&(!Array.isArray(d['changed-files'])||d['changed-files'].includes(a.path))).map(a=>[a.path,a])).values()];
   const choices=`<div class="review-files">${files.map(a=>btn(icon('file')+esc(a.label||a.path),'review-file',`file-row ${f.path==='changes:'+a.path?'selected':''}`,`data-path="${esc(a.path)}"`)).join('')}</div>`;
   if(!files.length)return empty('No changed files','');
   if(!shell()['file-path']||!files.some(a=>'changes:'+a.path===shell()['file-path']))return choices+empty('Choose a file','');
@@ -202,7 +232,7 @@ const restored=new Set(),restoring=new Set();
  }
 
  function sheet(){
-  const s=shell(),value=s.modal,t=task(),d=t.data||{},r=rail();
+  const s=shell(),value=s.modal,t=task(),d=sessionData(),r=rail();
   const pending=prompt();
   if(pending){const [pane,m]=pending,mb=m.minibuf;return `<div class="scrim" data-act="dismiss"><section class="sheet" role="dialog" aria-modal="true" aria-label="Editor prompt">${btn(icon('close'),'dismiss','sheet-close','aria-label="Cancel prompt"')}<form data-form="prompt" data-pane="${esc(pane)}"><label for="editor-prompt">${esc(mb.prompt)}</label><input id="editor-prompt" data-field="prompt" data-pane="${esc(pane)}" value="${esc(mb.text)}" autocomplete="off"/><button class="primary full" type="submit">Enter</button></form></section></div>`;}
   if(!value)return '';
@@ -254,11 +284,13 @@ const restored=new Set(),restoring=new Set();
   const active=document.activeElement,field=active?.dataset.field,start=active?.selectionStart,end=active?.selectionEnd;
   const priorScroll=root.querySelector('.mobile-scroll'),follow=priorScroll&&priorScroll.scrollHeight-priorScroll.clientHeight-priorScroll.scrollTop<80;const changedTask=root._taskText!=null&&root._taskText!==t.text;const oldScroll=priorScroll?.scrollTop||0;if(root._viewKey)positions.set(root._viewKey,oldScroll);
   const viewKey=screen+':'+(screen==='document'?file().path:screen==='task'?which+':'+(which==='conversation'?t.path:file().path):rail().path);
-  if(changedTask&&screen==='task'&&which==='conversation'&&!follow)fields.unseen=t.path;root._taskText=t.text;
+  if(changedTask&&screen==='task'&&t.data?.desk==='task'&&(which!=='conversation'||!follow))fields.unseen=t.path;root._taskText=t.text;
+  if(screen==='task'&&which==='conversation'&&root._viewKey===viewKey&&follow&&fields.unseen===t.path)fields.unseen=null;
   const noticeOrder=[...models.entries()].sort(([a],[b])=>(messageOrder.get(b)||0)-(messageOrder.get(a)||0)).map(([,m])=>m.message);
   const message=noticeOrder.filter(Boolean).find(x=>/unsaved|discard|overlap|not sent|could not|not published|retained|reverted|Publish the file|Choose a place|Write an instruction/i.test(x));
-  reconcile(root,`<div class="mobile-app"><header class="mobile-header">${screen==='task'?btn(icon('back')+'Work','work','back-button'):'<a class="wordmark" href="#" data-act="work"><span class="omega-mark">ω</span> omega<span class="wordmark-note"> / pocket</span></a>'}<div>${btn('⌘','commands','icon-button','aria-label="Commands"')}${connection()}${screen==='task'?btn(icon('dots'),'actions','icon-button','aria-label="Task actions"'):''}</div></header><main class="mobile-scroll"><div class="mobile-content">${screen==='document'?reader():screen==='task'?taskScreen():screen==='places'?places():screen==='host'?host():screen==='buffers'?buffers():screen==='machine'?machine():work()}${s.workbench&&screen==='buffers'?'<div data-key="workbench-tools" data-host-slot="workbench-tools"></div>':''}</div></main>${screen==='task'&&which==='conversation'&&t.data?.desk==='task'?`${fields.unseen===t.path?btn('New output ↓','latest','latest'):''}${composer(t)}`:''}${message||fields.toast?`<div class="mobile-notice" role="status">${esc(fields.toast||message)}</div>`:''}<nav class="bottom-nav" aria-label="Main navigation">${(rail().navigation||[]).map(({id,title:label})=>btn(icon(id)+`<span>${label}</span>`+(id==='work'?(rail().objects||[]).some(o=>o.ask)?'<b class="nav-dot"></b>':'':''),id,`nav-item ${screen===id||id==='work'&&screen==='task'||id==='buffers'&&['document','machine','host'].includes(screen)?'active':''}`,screen===id||id==='buffers'&&['document','machine','host'].includes(screen)?'aria-current="page"':'')).join('')}</nav>${sheet()}</div>`);
+  reconcile(root,`<div class="mobile-app"><header class="mobile-header ${screen==='task'?'session-header':''}">${screen==='task'?sessionHeader():'<a class="wordmark" href="#" data-act="work"><span class="omega-mark">ω</span> omega<span class="wordmark-note"> / pocket</span></a>'}<div>${btn('⌘','commands','icon-button','aria-label="Commands"')}${connection()}${screen==='task'?btn(icon('dots'),'actions','icon-button','aria-label="Task actions"'):''}</div></header>${screen==='task'?sessionTabs():''}${screen==='task'&&which==='conversation'&&t.data?.desk==='task'&&t.path===s['task-path']?'<div class="conversation-prompt" data-key="conversation-prompt" aria-label="Current user message" hidden></div>':''}<main class="mobile-scroll" data-key="content">${s.workbench&&screen==='task'?'<aside class="workbench-preview-list" aria-label="Work" data-key="workbench-preview" data-host-slot="workbench-preview"></aside>':''}<div class="mobile-content">${screen==='document'?reader():screen==='task'?taskScreen():screen==='places'?places():screen==='host'?host():screen==='buffers'?buffers():screen==='machine'?machine():work()}${s.workbench&&screen==='buffers'?'<div data-key="workbench-tools" data-host-slot="workbench-tools"></div>':''}</div></main>${screen==='task'&&which==='conversation'&&t.data?.desk==='task'?`${fields.unseen===t.path?btn('New output ↓','latest','latest'):''}${composer(t)}`:''}${message||fields.toast?`<div class="mobile-notice" role="status">${esc(fields.toast||message)}</div>`:''}${screen==='task'?'':`<nav class="bottom-nav" data-key="navigation" aria-label="Main navigation">${(rail().navigation||[]).map(({id,title:label})=>btn(icon(id)+`<span>${label}</span>`+(id==='work'?(rail().objects||[]).some(o=>o.ask)?'<b class="nav-dot"></b>':'':''),id,`nav-item ${screen===id||id==='work'&&screen==='task'||id==='buffers'&&['document','machine','host'].includes(screen)?'active':''}`,screen===id||id==='buffers'&&['document','machine','host'].includes(screen)?'aria-current="page"':'')).join('')}</nav>`}${sheet()}</div>`);
   root.querySelector('.mobile-scroll').scrollTop=positions.get(viewKey)||0;if(changedTask&&follow&&root._viewKey===viewKey&&screen==='task'&&which==='conversation')root.querySelector('.mobile-scroll').scrollTop=1e9;if(root._viewKey!==viewKey&&screen==='task'&&which==='plan'&&file().cursor>0&&!positions.has(viewKey)){const row=file().cursor;(root.querySelector(`[data-row="${row}"]`)||root.querySelector(`[data-row="${row+1}"]`))?.scrollIntoView({block:'start'});}root._viewKey=viewKey;
+  syncPrompt(root);
   root._readerKey=readerKey;
   const dialog=root.querySelector('[role="dialog"]');
   if(dialog&&(!priorDialog||dialog!==priorDialog)){if(!priorDialog)root._returnFocus=active;queueMicrotask(()=>(dialog.querySelector('[autofocus]')||dialog.querySelector('input,textarea,select')||dialog.querySelector('button'))?.focus({preventScroll:true}));}
@@ -270,7 +302,7 @@ const restored=new Set(),restoring=new Set();
  function handle(event){
   const el=event.target.closest('[data-act]');if(!el)return;
   if(el.classList.contains('scrim')&&event.target!==el)return;
-  const action=el.dataset.act,d=task().data||{},artifact=(d.artifacts||[]).find(a=>a.kind!=='home')||d.home;
+  const action=el.dataset.act,d=sessionData(),artifact=(d.artifacts||[]).find(a=>a.kind!=='home')||d.home;
   if(el.disabled||(!online()&&['yes','no','send','publish','undo','confirm-cancel','start-block'].includes(action)))return;event.preventDefault();
   switch(action){
    case 'work':nav('work','workspace:'+(rail().data?.scope||'all'));break;
@@ -320,9 +352,9 @@ const restored=new Set(),restoring=new Set();
    case 'open-task':session.read={...(session.read||{}),[el.dataset.path.slice(5)]:(rail().objects||[]).find(o=>'task:'+o.key===el.dataset.path)?.ask};saveSession();nav('task',el.dataset.path);break;
    case 'open-place':nav('places',el.dataset.path);break;
    case 'place-tasks':nav('work','workspace:'+(rail().data?.place||rail().path.split(':')[1]));break;
-   case 'tab-conversation':tab('conversation');break;
-   case 'tab-plan':tab('plan');break;
-   case 'tab-changes':{const changed=(d.artifacts||[]).find(a=>a.path?.startsWith('work:'));tab('changes',changed?'changes:'+changed.path:undefined);break;}
+   case 'tab-conversation':if(shell()['task-path']&&task().path!==shell()['task-path'])nav('task',shell()['task-path']);else tab('conversation');break;
+   case 'tab-plan':if(shell()['task-path']&&task().path!==shell()['task-path'])nav('task',shell()['task-path']);tab('plan');break;
+   case 'tab-changes':{if(shell()['task-path']&&task().path!==shell()['task-path'])nav('task',shell()['task-path']);const changed=d['changed-files']?.[0]??(Array.isArray(d['changed-files'])?null:(d.artifacts||[]).find(a=>a.path?.startsWith('work:'))?.path);tab('changes',changed?'changes:'+changed:undefined);break;}
    case 'yes':send('task',{type:'mobile/send',answer:'yes'});break;
    case 'no':send('task',{type:'mobile/send',answer:'no'});break;
    case 'answer':mounts.get('rail').root.querySelector('[data-field="reply"]')?.focus();break;
@@ -376,10 +408,10 @@ const restored=new Set(),restoring=new Set();
  }
  const network=()=>probe();window.addEventListener('online',network);window.addEventListener('offline',network);
  probeTimer=setInterval(probe,8000);queueMicrotask(probe);queueMicrotask(restoreDrafts);
- return {mount(root){let role;const click=e=>{e.stopPropagation();handle(e);},onInput=e=>input(e),onSubmit=e=>submit(e),onScroll=e=>{if(e.target.matches?.('.mobile-scroll')&&root._viewKey){positions.set(root._viewKey,e.target.scrollTop);saveSession();}};root.addEventListener('scroll',onScroll,true);root.addEventListener('pointerup',passage);root.addEventListener('click',click);root.addEventListener('input',onInput);root.addEventListener('change',onInput);root.addEventListener('submit',onSubmit);
+ return {mount(root){let role;const click=e=>{e.stopPropagation();handle(e);},onInput=e=>input(e),onSubmit=e=>submit(e),onScroll=e=>{if(e.target.matches?.('.mobile-scroll')&&root._viewKey){positions.set(root._viewKey,e.target.scrollTop);syncPrompt(root);saveSession();if(shell().screen==='task'&&(shell().tab||'conversation')==='conversation'&&fields.unseen===task().path&&e.target.scrollHeight-e.target.clientHeight-e.target.scrollTop<80){fields.unseen=null;forceRender();}}};root.addEventListener('scroll',onScroll,true);root.addEventListener('pointerup',passage);root.addEventListener('click',click);root.addEventListener('input',onInput);root.addEventListener('change',onInput);root.addEventListener('submit',onSubmit);
   // The editor's global keyboard sink must not swallow native mobile fields.
   const compositionStart=()=>{composing=true;},compositionEnd=e=>{composing=false;input(e);render();};root.addEventListener('compositionstart',compositionStart);root.addEventListener('compositionend',compositionEnd);
   const stop=e=>{e.stopPropagation();const dialog=root.querySelector('[role="dialog"]');if(e.key==='Escape'&&dialog){e.preventDefault();const p=prompt();if(p)send(p[0],{type:'key',key:'Escape'});else modal(null);}if(e.key==='Tab'&&dialog){const items=[...dialog.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href]')];const first=items[0],last=items.at(-1);if(e.shiftKey&&(document.activeElement===first||!dialog.contains(document.activeElement))){e.preventDefault();last?.focus();}else if(!e.shiftKey&&(document.activeElement===last||!dialog.contains(document.activeElement))){e.preventDefault();first?.focus();}}};root.addEventListener('keydown',stop);root.addEventListener('beforeinput',stop);
-  return {update(model){role=model.role;if(models.get(role)?.message!==model.message)messageOrder.set(role,++messageSequence);if(role==='rail'&&models.get(role)?.state?.['saving-place']&&model.state?.['saving-place']===false&&!model.state?.modal){session.placeDraft=null;placeDraft={};}models.set(role,model);if(session.pendingCode&&role==='rail'&&model.state?.['eval-result']!=null){session.repl=[...(session.repl||[]),{code:session.pendingCode,result:model.state['eval-result']}].slice(-100);session.lastEval=model.state['eval-result'];session.namespace=model.state['eval-namespace']||session.namespace;session.pendingCode=null;saveSession();}if(model.path&&model.path!=='desk:welcome'&&(role==='file'||role==='task'&&model.path.startsWith('task:')||role==='rail'&&/^(place|folder):/.test(model.path))){session.recent=[{path:model.path,title:model.data?.['task-title']||title(model)},...(session.recent||[]).filter(x=>x.path!==model.path)].slice(0,40);}mounts.set(role,{root});if(role==='task')syncDraft();render();},dispose(){if(mounts.get(role)?.root===root)mounts.delete(role);root.removeEventListener('scroll',onScroll,true);root.removeEventListener('pointerup',passage);root.removeEventListener('click',click);root.removeEventListener('input',onInput);root.removeEventListener('change',onInput);root.removeEventListener('submit',onSubmit);root.removeEventListener('compositionstart',compositionStart);root.removeEventListener('compositionend',compositionEnd);root.removeEventListener('keydown',stop);root.removeEventListener('beforeinput',stop);root.replaceChildren();}};},
- dispose(){disposed=true;clearInterval(probeTimer);clearTimeout(toastTimer);probeAbort?.abort();draftAbort?.abort();directoryAbort?.abort();window.removeEventListener('popstate',pop);window.removeEventListener('online',network);window.removeEventListener('offline',network);css.remove();document.documentElement.classList.remove('omega-mobile');document.title=priorTitle;models.clear();mounts.clear();positions.clear();history.length=0;queries.clear();restored.clear();restoring.clear();}};
+  return {update(model){role=model.role;if(role==='task'&&model.data?.desk==='task'){const {turns,questions,...data}=model.data;sessionContext={path:model.path,data};}if(models.get(role)?.message!==model.message)messageOrder.set(role,++messageSequence);if(role==='rail'&&models.get(role)?.state?.['saving-place']&&model.state?.['saving-place']===false&&!model.state?.modal){session.placeDraft=null;placeDraft={};}models.set(role,model);if(session.pendingCode&&role==='rail'&&model.state?.['eval-result']!=null){session.repl=[...(session.repl||[]),{code:session.pendingCode,result:model.state['eval-result']}].slice(-100);session.lastEval=model.state['eval-result'];session.namespace=model.state['eval-namespace']||session.namespace;session.pendingCode=null;saveSession();}if(model.path&&model.path!=='desk:welcome'&&(role==='file'||role==='task'&&model.path.startsWith('task:')||role==='rail'&&/^(place|folder):/.test(model.path))){session.recent=[{path:model.path,title:model.data?.['task-title']||title(model)},...(session.recent||[]).filter(x=>x.path!==model.path)].slice(0,40);}mounts.set(role,{root});if(role==='task')syncDraft();render();},dispose(){if(mounts.get(role)?.root===root)mounts.delete(role);root.removeEventListener('scroll',onScroll,true);root.removeEventListener('pointerup',passage);root.removeEventListener('click',click);root.removeEventListener('input',onInput);root.removeEventListener('change',onInput);root.removeEventListener('submit',onSubmit);root.removeEventListener('compositionstart',compositionStart);root.removeEventListener('compositionend',compositionEnd);root.removeEventListener('keydown',stop);root.removeEventListener('beforeinput',stop);root.replaceChildren();}};},
+ dispose(){disposed=true;clearInterval(probeTimer);clearTimeout(toastTimer);probeAbort?.abort();draftAbort?.abort();directoryAbort?.abort();window.removeEventListener('popstate',pop);window.removeEventListener('online',network);window.removeEventListener('offline',network);css.remove();document.documentElement.classList.remove('omega-mobile');document.title=priorTitle;models.clear();sessionContext=null;mounts.clear();positions.clear();history.length=0;queries.clear();restored.clear();restoring.clear();}};
 }

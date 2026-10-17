@@ -1,7 +1,7 @@
 ; Domain documents remain plain text plus typed provider objects.
 (ns ws.desk-server
   (:require [omega.task :as task] [omega.loop :as loop] [omega.env :as env] [omega.ui.model :as model] [place.model :as place] [links.model :as link]
-            [bl-ed.serve :as serve] [clojure.string :as str]))
+            [ws.server :as ws] [bl-ed.serve :as serve] [clojure.string :as str]))
 (defn- emit [d text object]
   (cond-> (update d :lines conj text) object (update :objects conj (assoc object :row (count (:lines d))))))
 (defn- finish [d data]
@@ -52,13 +52,21 @@
         artifacts (map (fn [m] {:path (link/target e (:to m)) :block (:block (:to m))
                                 :label (Path/basename (:path (:to m))) :kind (name (:kind m))})
                        (sort-by (fn [m] [(if (= :output (:kind m)) 0 1) (:id m)]) refs))
-        home (:home t)]
+        home (:home t)
+        artifacts (reduce (fn [out a] (if (some (fn [old] (and (= (:path old) (:path a)) (= (:block old) (:block a)))) out)
+                                      out (conj out a))) []
+                          (concat artifacts (changed-files sys t) (when home [(assoc home :label "Plan / home" :kind "home")])))
+        roots (place/roots (place/all e))
+        changed (filter (fn [address]
+                          (and (str/starts-with? address "work:")
+                               (try (seq (env/q e '[:find ?op :in $ ?path :where [?buf :buf/path ?path] [?op :op/buf ?buf]]
+                                                (ws/resolve-file roots (subs address 5))))
+                                    (catch _ false))))
+                        (distinct (keep :path artifacts)))]
     {:desk "task" :task-id id :task-at (:at t) :task-title (:title t) :task-status (name (:status t)) :task-result (:result t)
      :ask (some-> (model/task-rows e [id]) first :asks first :text)
      :place-name (get-in (place/all e) [(:place t) :name]) :place (:place t) :cwd (:cwd t) :folder (folder-address sys t) :home home
-     :artifacts (reduce (fn [out a] (if (some (fn [old] (and (= (:path old) (:path a)) (= (:block old) (:block a)))) out)
-                                   out (conj out a))) []
-                       (concat artifacts (changed-files sys t) (when home [(assoc home :label "Plan / home" :kind "home")])))}))
+     :artifacts artifacts :changed-files (vec changed)}))
 (defn task-context [sys id]
   (assoc (task-context-base sys id) :turns (loop/turns sys id)
          :questions (vec (or (some-> (model/task-rows (:env sys) [id]) first :asks) []))))

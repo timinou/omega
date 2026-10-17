@@ -24,14 +24,14 @@ remain separate realms. This does not share an AudioContext between tabs.
 
 For a plain editor session on the same host, open `http://localhost:8812/`.
 For the package catalog, open `http://localhost:8812/?file=package:catalog&use=packages`.
-This frontend currently includes PELAGIC and the package catalog. Other package
-builds still use their existing integration; this is not yet a universal Omega
-frontend builder.
+The shared frontend includes the packages selected by `package-manifests` in
+`pelagic/build.bl`, with their declarations in the root `packages/` directory.
+Some standalone experiments still use their own documented build commands.
 
 ## One compilation, separate launch and export
 
 Root `env.bl` declares task names and their BL entry files. It also selects the
-single compiler pin for every package, currently `d5363326`. There is no compiler build per package:
+single compiler pin for the shared frontend (see `:bl` in root `env.bl`). There is no compiler build per package:
 the launcher resolves the pinned compiler once and reuses its cached image.
 A first uncached compiler setup can take tens of minutes.
 
@@ -57,7 +57,8 @@ but no longer installs files into `vendor/bl-ed/web`.
 request. Its dynamic identity covers the repository/document root, frontend,
 backend sources and offline/live mode. A matching host is reused. An occupied
 port with a different identity is rejected; use another port or stop your older
-host. No activation or task mutation is sent during this check.
+host. No activation or task mutation is sent during this check. With the shared
+launcher, `bin/bl omega.stop` stops the world; closing its client window does not.
 
 ## Optional standalone demos
 
@@ -76,14 +77,14 @@ adds the ZIP, which can be served by any static HTTP server without BL or BEAM.
 
 The cache currently recompiles the BL graph when any BL build input changes;
 module-level incremental compilation belongs in upstream `bl.js`. Concurrent
-cold builds also need upstream process-wide build coordination. There is no
-watch/HMR loop yet.
+cold builds also need upstream process-wide build coordination. `bl omega.watch`
+prepares immutable candidates for explicit session reload; backend changes still
+require restarting the realm.
 
-Package catalogs and builds should eventually declare all frontend entries and
-assets in one Omega package graph. Existing domain package shell builds have
-not all been migrated. Backend realm reuse across projects and shared worker
-pools across sessions remain runtime work. Reuse must preserve explicit resource
-ownership and cancellation; package loading must not imply a new realm.
+Root package declarations supply frontend entries and assets to the shared graph.
+Existing experiment-specific shell builds have not all been migrated. Reuse must
+preserve explicit resource ownership and cancellation; package loading must not
+imply a new realm.
 
 ## Verification
 

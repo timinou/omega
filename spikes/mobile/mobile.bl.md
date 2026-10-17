@@ -79,6 +79,64 @@ maps the 54-point review to behavior and tests. The proof uses isolated worlds.
 
 ## Current proof
 
+### Pinned user prompt (2026-10-17)
+
+The session title occupies the fixed top bar, with its place immediately below;
+there is no separate scrolling title section. The existing compact header is
+verified with the current immutable frontend.
+
+Conversation adds a 24px strip immediately below the tabs, showing only the
+first line of the user message for the visible part of the conversation.
+Scrolling past another user message replaces the strip; scrolling back restores
+the earlier one. Long lines ellipsize. Tool results do not become prompts, and
+Files, Changes and reference readers have no prompt strip. Scroll restoration
+and background model updates recompute the prompt without dispatching editor
+events or replacing the conversation DOM.
+
+This stays inside the existing removable `mobile` package's host boundary.
+No shared tables or vendored editor source were changed. The immutable build
+publishes the same package loader and host assets; the generated compatibility
+copy in `vendor/bl-ed/web/out` was refreshed too.
+
+Proof: [real session](proof/prompt-strip/03-conversation.png),
+[320px session](proof/prompt-strip/session-320.png),
+[after unuse](proof/prompt-strip/13-unused.png),
+[browser checks](proof/prompt-strip/browser.json), and
+[verification receipt](proof/prompt-strip/verification.log).
+The host browser contract checks both scroll directions, multiline and long
+prompts, escaping, background updates, tool-only turns, source-only turns, and
+empty conversations. The real-editor session test checks the thin fixed strip,
+header placement, Files/Changes, narrow/landscape/desktop layouts, and unuse.
+
+### Compact session layout (2026-10-11)
+
+Sessions put their title in the fixed header and their place immediately below
+it; the place opens the existing textual context sheet. Conversation, Files and
+Changes stay pinned below the header, with a thin selection underline. File
+counts deduplicate anchored references; change counts include only session files
+with recorded buffer operations, including linked human edits. A quiet dot marks
+unread conversation output. Session titles and counts remain available when a
+command opens a reference document.
+
+Work / Places / Buffers is absent throughout a session, releasing its entire
+height. Returning to another screen restores it with a 180ms slide and fade;
+reduced-motion preferences disable that animation. Other screens retain their
+navigation even in short landscape viewports. The composer retains its bottom
+safe-area padding.
+
+The same removable `mobile` package owns this layout. No vendored editor source
+changes or separate rendering loop are involved. The frontend build provides the
+same `pkg/mobile.mjs` loader and compiled package to `bin/bl-ed`.
+
+Proof: [session in the real editor](proof/session-layout/03-conversation.png),
+[place context](proof/session-layout/04-context.png),
+[file review](proof/session-layout/14-review.png),
+[after unuse](proof/session-layout/13-unused.png), and
+[verification receipt](proof/session-layout/verification.log).
+`host-browser.mjs` checks fixed tabs, unique counts, back navigation, reduced
+motion and 320px geometry. `touch-browser.mjs` checks the same session chrome
+and recorded edit counts through the real editor in an isolated world.
+
 ```sh
 spikes/mobile/test/verify.sh
 ```
@@ -106,53 +164,57 @@ The original screenshots include [Work](proof/01-work.png),
 [conversation](proof/02-conversation.png), [changes](proof/05-changes.png)
 and [unuse](proof/13-unloaded.png).
 
-## Optional Android companion
+## Android app
 
-The companion is in `android/`, using the sibling `beam-lisp--mobile` worktree.
-Its native connection screen accepts an HTTPS `.ts.net` origin on port 443 or
-8443 and then loads the exact editor URL above. Navigation is restricted to
-that origin. No agent credentials or Erlang-distribution port are exposed over
-the network; Tailscale handles transport and device access.
+The companion in `android/` loads the same real Pocket package over private
+Tailscale HTTPS. Install its signed, self-contained ARM64 APK on Android 9 or
+later. Connect the phone's Tailscale app, enter the server's HTTPS `.ts.net`
+origin (any port, e.g. Work's `:18001`), and tap Connect. The app remembers that origin across
+process restarts. Server changes the address; Reload retries the current page.
+
+Task execution and credentials stay on the server. The shell requests only
+Internet and network-state permissions. Remote pages have no native JavaScript
+bridge, and navigation stays within the chosen server origin.
 
 ```sh
-# Build the ARM64 debug APK; the mobile worktree must be present.
+# Requires Beam Lisp's standalone Android packaging support and the Android SDK.
 spikes/mobile/android/setup.sh
-# With one development phone attached by USB:
+# Optionally install the completed APK onto an attached development phone:
 spikes/mobile/android/setup.sh --install
 ```
 
-`BEAM_LISP_MOBILE_BIN` can select a different checkout's `bin/bl`. The app pins
-mob 0.9.3 in its own lock file and does not change Omega's compiler pin.
-The default app ABI is `arm64-v8a`; use `x86_64` in its env for an emulator.
-As in the mobile framework's documented development flow, **install alone is
-insufficient**: `android push` copies the runtime and compiled namespaces onto
-the device, and `android up` launches it. The setup script performs all three
-when passed `--install`.
+`BEAM_LISP_MOBILE_BIN` selects the builder; the default is the sibling
+`beam-lisp/bin/bl`. The native app locks mob 0.9.3 independently of Omega's server
+compiler. The current output is `android/release/omega-pocket-0.1.1-arm64-v8a.apk` plus its
+SHA-256 receipt. The signing key and password stay outside the repository under
+`~/.local/share/omega-pocket/signing/`; retain them for compatible app updates.
+
+The APK contains OTP, Beam Lisp, libraries and the app's namespaces. First launch
+verifies and installs its runtime into private storage. No runtime push or USB
+connection is needed. Bundle upgrades preserve the saved server address and
+replace the bundled runtime together. The release build disables Erlang
+distribution.
 
 ### Notifications
 
-While connected, the native screen polls the host's own `workspace:all`
-document every 30 s (`pocket.attention`, pure) and posts one notification per
-task that is waiting for an answer, on the high-importance channel
-"Needs you". An unchanged question is announced once; a changed question
-re-announces; a task that is answered, cancelled or finished is withdrawn.
-Tapping a notification brings the app forward and opens that task
-(`?pocket=task&at=task:<id>`, the editor's existing route parameters).
-Android 13+ asks for `POST_NOTIFICATIONS` on first connection (the permission
-is merged from beam-lisp's manifest). No new host API, credential or port:
-the poll uses the same Tailscale-HTTPS origin as the WebView.
+While a server is connected (including a remembered one at launch), the native
+screen polls the host's own `workspace:all` document every 30 s
+(`pocket.attention`, pure) and posts one notification per task that is waiting
+for an answer, on the high-importance channel "Needs you". An unchanged
+question is announced once; a changed question re-announces; a task that is
+answered, cancelled or finished is withdrawn. Tapping a notification brings the
+app forward and opens that task (`?pocket=task&at=task:<id>`, the editor's
+existing route parameters). Android 13+ asks for `POST_NOTIFICATIONS` on first
+connection. No new host API, credential or port: the poll uses the same
+Tailscale-HTTPS origin as the WebView. `release.py` keeps that permission and
+beam-lisp's `BlNotifyReceiver`; the listener, reader and overlay services remain
+stripped.
 
 Limit: polling runs only while the app process is alive. There is no push
-service, so a task that asks while the app is fully stopped is announced on
-the next launch and connect.
+service, so a task that asks while the app is fully stopped is announced on the
+next launch.
 
-The ARM64 APK build succeeded at:
+Status: desk tests only (`attention_test.bl`, `home_test.bl`). The APK has not
+been rebuilt with this change and nothing is verified on a device.
 
-```text
-android/_build/android/android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-Native connection validation and screen trees pass 14 desk assertions. The
-Android doctor found SDK, NDK, JDK, Zig and mob runtimes, but no attached device.
-On-device startup, keyboard behavior and TLS loading remain unverified. The
-browser version requires no Android build and is the directly usable prototype.
+Validation and screenshots are recorded in `proof/android-standalone/`.

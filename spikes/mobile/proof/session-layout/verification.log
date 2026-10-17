@@ -1,0 +1,47 @@
+2026-10-11 — compact session layout
+
+PASS bin/bl omega.build
+Frontend: bbca0b9b724cb20067d63d1341ae1b032b50ae4aad0376dd7641975ca3fcfea0
+Compiled mobile package is byte-identical to vendor/bl-ed/web/out/ns/mob.main.mjs.
+Generated pkg/mobile/host.mjs and style.css match the source assets.
+
+PASS bin/bl --cold test spikes/mobile/test/shared_world_test.bl spikes/mobile/test/attention_test.bl spikes/workspace/test/desk_test.bl test/actor_test.bl test/task_test.bl test/frontend_test.bl test/dev_host_test.bl
+148 assertions across 7 files. See backend.log.
+
+PASS BLED_OUT=vendor/bl-ed/web/out BLED_ROOT=/home/user/.cache/bl/build-trees/b78374703d81 node --test spikes/mobile/test/drive.test.mjs vendor/bl-ed/test/*.test.mjs
+94 tests (19 mobile + 75 vendored editor). See editor-tests.log.
+
+PASS BLED_OUT=<frontend>/out node --test spikes/mobile/test/drive.test.mjs
+19 tests against the newly built immutable graph. See package-drive.log.
+
+PASS node spikes/mobile/test/host-browser.mjs
+Rail-before-task startup; session title and context; unique counts; fixed tabs;
+absent session navigation; animated return; reduced motion; narrow geometry;
+reference navigation; retained replies, selection, focus and host disposal.
+See host-browser.log.
+
+PASS POCKET_TEST_URL=http://127.0.0.1:8792 POCKET_TEST_ROOT=<temporary-root> node spikes/mobile/test/session-layout.mjs
+Real bl-ed, offline, in memory, temporary root, port 8792. The entry uses
+omega.ed.main/main with {:web "vendor/bl-ed/web"} and --offline --memory.
+The generated loader uses the same mobile bl-package as the immutable graph.
+Session screenshots at 320px, 390px, landscape and desktop; context; Files;
+recorded Changes; composer retention; back navigation; reduced motion;
+package unuse restoring one ordinary editor and removing host resources.
+See browser.json and real-browser.log.
+
+PASS PP_OUT=<frontend>/out node spikes/mobile/test/presentation-check.mjs spikes/dwim/test/outline.bl.org vendor/bl-ed/web/welcome.bl.org vendor/bl-ed/web/split-demo.bl.org spikes/present/web/welcome.bl.org
+36 default-presentation variants, zero differences. The wrapper runs the
+unchanged spikes/present/test/check.mjs. See equivalence.log.
+
+PASS python3 spikes/mobile/test/shared-launch.py
+Actual root launcher, private runtime, disposable durable store and random port.
+Independent desktop and phone clients; typed questions, retained drafts,
+commands, context, publication conflicts, machine evaluation, use/unuse,
+restart persistence and listener cleanup. Both shared-browser.mjs and
+expanded touch-browser.mjs passed. See shared-launch.log, shared-browser.json,
+touch-browser.json and launch.json.
+
+The existing shared-world and touch-workbench proof files were restored after
+this run; this directory contains the new evidence. The offline listener was
+stopped. No requests were sent to the user's running world on port 8790.
+No vendored source changes. git diff --check passes.

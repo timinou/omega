@@ -1,0 +1,21 @@
+Running as unit: run-p2933537-i78322523.service
+bl-stage-hosts: 67 pinned host beams staged into /tmp/omega-pocket-builder/build (app resource beam_lisp.app)
+  · runtime
+  · copy otp-android-5c9c69fc
+  · beam-lisp
+  · copy ebin
+  · compile device runtime
+  · bl_android_nif stub
+  · libraries
+  · copy ebin
+  · copy priv
+  · copy ebin
+  · this tree
+  · compile the tree
+  · boot module
+/tmp/omega-pocket-final-stage
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 16.287s
+             CPU time consumed: 19.281s
+                   Memory peak: 714.8M (swap: 0B)

@@ -2,11 +2,13 @@
 
 Source: beam-lisp `optional/browser-port`, branch `feat/native-browser-port-pr`,
 commit `4f38ef95`. Contribution: https://github.com/timinou/beam-lisp/pull/1.
-License: Eclipse Public License 2.0, copied from the repository as LICENSE.
+License in Omega: GNU GPL version 3 or later, relicensed by copyright holder
+Othman Benkiran on 2026-10-15. `LICENSE` contains the GPL; `LICENSE.upstream`
+preserves the original upstream EPL-2.0 text for provenance.
 
 Cargo manifests, Rust source, optional Beam Lisp client under bl/, Nix flake/lock,
-README and opt-in tests are copied unchanged. VENDOR.md and the license copy are
-packaging additions. Artifacts belong in spikes/browser/.native, not here.
+README and opt-in tests are copied unchanged. VENDOR.md and the license files are
+packaging additions; Cargo.toml declares the GPL license for this distribution. Artifacts belong in spikes/browser/.native, not here.
 
 The upstream package is outside both priv/ (core release source) and native/*
 (automatic NIF build discovery). Cargo defaults build no executable and resolve

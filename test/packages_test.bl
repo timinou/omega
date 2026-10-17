@@ -4,6 +4,14 @@
 (defn dir! []
  (let [p (str "/tmp/omega-packages-test-" (erlang/unique_integer (list :positive))) ]
   (File/mkdir_p! p) p))
+(defn fixture-registry [root opts]
+ ;; These tests exercise world activation, not frontend compilation. Admit
+ ;; explicit loader fixtures instead of relying on ignored developer output.
+ (let [web (str root "/frontend")]
+  (File/mkdir_p! (str web "/pkg"))
+  (doseq [name ["atlas" "browser"]]
+   (File/write! (str web "/pkg/" name ".mjs") "export {};\n"))
+  (p/registry (File/cwd!) root (assoc opts :web web))))
 (defn desk-profile [label]
  {:step (fn [req]
    (if (not (some (fn [b] (= :tool-result (:type b))) (:content (last (:messages req)))))
@@ -13,8 +21,8 @@
            :input-schema {:type "object"} :run (fn [_ _] {:ok label})}]
   :system-prompt label :max-steps 4})
 (deftest independent-worlds-retain-notebooks-and-disable-new-tasks
- (let [a (p/registry (File/cwd!) (dir!) {:offline? true})
-       b (p/registry (File/cwd!) (dir!) {:offline? true})
+ (let [a (fixture-registry (dir!) {:offline? true})
+       b (fixture-registry (dir!) {:offline? true})
        path (str (:root a) "/spikes/atlas/desk.bl.org")]
   (is (= "atlas" (:name (p/use! a "atlas"))))
   (is (p/active? a "atlas")) (is (not (p/active? b "atlas")))
@@ -29,7 +37,7 @@
   (is (some (fn [m] (= "browser" (:name m))) (:packages (p/catalog b))))
   (File/rm_rf! (:root a)) (File/rm_rf! (:root b))))
 (deftest tasks-use-a-pinned-profile-including-after-disable-and-recovery
- (let [root (dir!) r (p/registry (File/cwd!) root {:offline? true})
+ (let [root (dir!) r (fixture-registry root {:offline? true})
        e (env/open) base (task/start-system e {:root root :tools [] :step (fn [_] (loop/say "base"))})]
   (swap! (:cache r) assoc "atlas" (desk-profile "atlas profile"))
   (p/use! r "atlas")
@@ -41,7 +49,7 @@
    (p/unuse! r "atlas")
    (is (try ((get (p/intents r base) "task/open") {:package "atlas" :goal "blocked"}) false (catch _ true)))
    (task/stop-system! base)
-   (let [r2 (p/registry (File/cwd!) root {})
+   (let [r2 (fixture-registry root {})
          s2 (task/start-system e {:root root :tools [] :step (fn [_] (loop/say "WRONG default"))})]
     (swap! (:cache r2) assoc "atlas" (desk-profile "recovered atlas profile"))
     (task/recover! s2 (fn [id] (p/recover-system r2 s2 id)))
