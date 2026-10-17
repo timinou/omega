@@ -1,0 +1,73 @@
+;; Pure core of Pocket's native notifications. No Android, no IO: the screen
+;; polls the host's existing `workspace:all` document, and this namespace says
+;; which tasks need the person, which of those are news, and what to post.
+;; A task needs the person exactly when the work document gives it an :ask.
+(ns pocket.attention (:require [bl.json :as json]))
+
+(def channel {:id "omega-attention" :name "Needs you" :importance :high
+              :description "Tasks that are waiting for your answer."})
+(def poll-ms 30000)
+(def path "/api/doc?path=workspace:all")
+
+(defn- blank-text? [s] (or (nil? s) (= "" (trim (str s)))))
+
+(defn one-line [s n]
+  (let [t (trim (first (split (str (or s "")) "\n")))]
+    (if (> (count t) n) (str (subs t 0 (- n 1)) "…") t)))
+
+(defn needing
+  "The tasks of a decoded work document (string keys) that wait on the person:
+   [{:key :title :ask}], in document order."
+  [doc]
+  (vec (keep (fn [o]
+               (let [ask (get o "ask")]
+                 (when (and (= "omega/task" (get o "type")) (not (blank-text? ask)) (get o "key"))
+                   {:key (str (get o "key"))
+                    :title (one-line (or (get o "title") (get o "goal") "Task") 80)
+                    :ask (one-line ask 240)})))
+             (get doc "objects"))))
+
+(defn parse
+  "Decoded work document from a transport response, or nil when it is not one."
+  [response]
+  (let [body (:body response) doc (if (string? body) (try (json/decode body) (catch _ nil)) body)]
+    (when (and (= 200 (:status response)) (map? doc) (get doc "ok")) doc)))
+
+(defn news
+  "Split `items` against `seen` ({key ask-text} of what was already announced).
+   A task is news when it is new or its question changed. Returns
+   {:fresh items :gone keys :seen seen'} where :gone are announced tasks that no
+   longer wait, whose notifications should be withdrawn."
+  [seen items]
+  (let [now (into {} (map (fn [i] [(:key i) (:ask i)]) items))]
+    {:fresh (vec (remove (fn [i] (= (get seen (:key i)) (:ask i))) items))
+     :gone (vec (remove (fn [k] (contains? now k)) (keys seen)))
+     :seen now}))
+
+(defn id-of [key] (+ 1000 (erlang/phash2 key 1000000)))
+
+(defn notification
+  "The android.notify/post! map for one waiting task."
+  [item]
+  {:id (id-of (:key item)) :channel (:id channel) :category :message
+   :title (:title item) :text (:ask item) :style {:big-text (:ask item)}
+   :sub-text "Needs you" :only-once? true})
+
+(defn task-url
+  "The workbench URL that opens task `key` directly (the host reads pocket/at)."
+  [origin query key]
+  (str origin query "&pocket=task&at=" (URI/encode_www_form (str "task:" key))))
+
+(defn parts
+  "A message's elements, whether it arrived as a tuple or a vector."
+  [msg]
+  (cond (erlang/is_tuple msg) (vec (erlang/tuple_to_list msg))
+        (vector? msg) msg
+        :else nil))
+
+(defn tapped
+  "The notification id when `msg` is a tap or action event on one, else nil."
+  [msg]
+  (let [p (parts msg)]
+    (when (and p (= 3 (count p)) (= :android (nth p 0)) (= :notify/action (nth p 1)) (map? (nth p 2)))
+      (get (nth p 2) "notification"))))

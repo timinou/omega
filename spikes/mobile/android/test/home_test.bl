@@ -7,4 +7,19 @@
 (assert (:error (home/connect {:origin "http://evil.example"})))
 (assert (= :column (:type (home/render {:origin ""}))))
 (assert (= :web_view (:type (home/render {:connected "https://work.tail123.ts.net:8443"}))))
+;; notifications: polling decisions are pure; effects are data
+(let [item {:key "t-1" :title "Ship" :ask "Go?"}
+      r1 (home/attend {:seen {}} [item])
+      r2 (home/attend (:assigns r1) [item])
+      r3 (home/attend (:assigns r2) [])]
+  (assert (= :post (first (first (:effects r1)))))
+  (assert (= "Go?" (:text (second (first (:effects r1))))))
+  (assert (= [] (:effects r2)))
+  (assert (= [[:cancel (pocket.attention/id-of "t-1")]] (:effects r3)))
+  (assert (= {} (:seen (:assigns r3)))))
+(assert (= "https://h.ts.net:8443" (subs (home/start-url {:connected "https://h.ts.net:8443"}) 0 21)))
+(assert (= (str "https://h.ts.net" home/query "&pocket=task&at=task%3At-9") (home/start-url {:connected "https://h.ts.net" :open "t-9"})))
+(assert (= :web_view (:type (home/render {:connected "https://h.ts.net:8443" :open "t-9"}))))
+(home/perform! [])  ; off a phone nothing throws
+(home/perform! [[:post {:id 1}]])
 (println "14 Android companion assertions passed (origin validation, connection and native screen trees).")

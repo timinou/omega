@@ -129,6 +129,23 @@ insufficient**: `android push` copies the runtime and compiled namespaces onto
 the device, and `android up` launches it. The setup script performs all three
 when passed `--install`.
 
+### Notifications
+
+While connected, the native screen polls the host's own `workspace:all`
+document every 30 s (`pocket.attention`, pure) and posts one notification per
+task that is waiting for an answer, on the high-importance channel
+"Needs you". An unchanged question is announced once; a changed question
+re-announces; a task that is answered, cancelled or finished is withdrawn.
+Tapping a notification brings the app forward and opens that task
+(`?pocket=task&at=task:<id>`, the editor's existing route parameters).
+Android 13+ asks for `POST_NOTIFICATIONS` on first connection (the permission
+is merged from beam-lisp's manifest). No new host API, credential or port:
+the poll uses the same Tailscale-HTTPS origin as the WebView.
+
+Limit: polling runs only while the app process is alive. There is no push
+service, so a task that asks while the app is fully stopped is announced on
+the next launch and connect.
+
 The ARM64 APK build succeeded at:
 
 ```text

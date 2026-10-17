@@ -1,6 +1,9 @@
 ; Optional native host. Every work screen is the SAME real bl-ed package.
 (ns pocket.home (:require [android.screen :refer [defscreen]] [android.ui :as ui]
-                          [android.app :as app] [pocket.config :as config]))
+                          [android.app :as app] [pocket.config :as config]
+                          [pocket.attention :as attention] [android.notify :as notify]
+                          [android.events :as events] [android.jvm :as jvm]
+                          [connector.transport :as transport]))
 (defscreen)
 (def query "/?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile")
 (defn origin-valid? [s]
@@ -14,9 +17,38 @@
   (let [origin (trim (or (:origin assigns) ""))]
     (if (origin-valid? origin) (assoc assigns :connected origin :error nil)
       (assoc assigns :error "Enter a private Tailscale HTTPS origin, with port 8443 if you used the spike’s Serve command."))))
+(defn start-url [a]
+  (if-let [key (:open a)] (attention/task-url (:connected a) query key) (str (:connected a) query)))
+;; Notifications: the host stays the only source of truth. While connected the
+;; screen polls its own work document and announces tasks that wait on the person.
+;; `attend` is pure (assigns + items -> assigns + effects); `perform!` is the IO.
+(defn attend [a items]
+  (let [n (attention/news (:seen a) items)]
+    {:assigns (assoc a :seen (:seen n) :poll-failed false)
+     :effects (vec (concat (map (fn [i] [:post (attention/notification i)]) (:fresh n))
+                           (map (fn [k] [:cancel (attention/id-of k)]) (:gone n))))}))
+(defn perform! [effects]
+  (try
+    (doseq [[op arg] effects]
+      (case op :post (notify/post! arg) :cancel (notify/cancel! arg) nil))
+    (catch _ nil)))
+(defn fetch! [origin]
+  (let [me (erlang/self)]
+    (spawn (fn []
+             (let [doc (attention/parse (transport/request! {:method :get :url (str origin attention/path)
+                                                             :decode :bytes :timeout-ms 15000}))]
+               (erlang/send me (tuple :attention (when doc (attention/needing doc)))))))))
+(defn begin-notifications! []
+  (try (notify/channel! attention/channel) (events/subscribe! :notify)
+       (when-not (notify/permitted?) (notify/request-permission!))
+       (catch _ nil)))
+(defn foreground! []
+  (try (let [ctx (jvm/ctx) i (jvm/call (jvm/call ctx :get-package-manager) :get-launch-intent-for-package (jvm/call ctx :get-package-name))]
+         (when i (jvm/call i :add-flags 268435456) (jvm/call ctx :start-activity i)))
+       (catch _ nil)))
 (defn render [a]
   (if-let [origin (:connected a)]
-    (ui/el :web-view {:url (str origin query) :allow (str origin "/") :show-url false})
+    (ui/el :web-view {:url (start-url a) :allow (str origin "/") :show-url false})
     (ui/column {:padding 28 :gap 16 :background "#f7f6f0"}
       (ui/spacer 36)
       (ui/text "ω  omega / pocket" {:size :xl :color "#294c3c"})
@@ -28,11 +60,26 @@
       (ui/button "Connect to host" [(erlang/self) :connect] {:background "#294c3c" :color "#fffef9"})
       (ui/text "Execution stays on your computer. This app loads its existing mobile workbench." {:color :ink-3}))))
 (defn mount [_params _session socket]
-  (tuple :ok (app/assign socket {:origin config/origin :connected nil :error nil})))
+  (tuple :ok (app/assign socket {:origin config/origin :connected nil :error nil :seen {} :open nil :poll-failed false})))
 (defn handle_info [msg socket]
   (let [a (app/assigns socket)]
     (cond
       (and (erlang/is_tuple msg) (= 3 (erlang/tuple_size msg)) (= :change (erlang/element 1 msg)) (= :origin (erlang/element 2 msg)))
       (tuple :noreply (app/assign socket :origin (erlang/element 3 msg)))
-      (= msg (tuple :tap :connect)) (tuple :noreply (app/assign socket (connect a)))
+      (= msg (tuple :tap :connect))
+      (let [next (connect a)]
+        (when (:connected next) (begin-notifications!) (fetch! (:connected next))
+              (erlang/send_after attention/poll-ms (erlang/self) :poll))
+        (tuple :noreply (app/assign socket next)))
+      (= msg :poll)
+      (do (when (:connected a) (fetch! (:connected a)) (erlang/send_after attention/poll-ms (erlang/self) :poll))
+          (tuple :noreply socket))
+      (and (erlang/is_tuple msg) (= 2 (erlang/tuple_size msg)) (= :attention (erlang/element 1 msg)))
+      (if-let [items (erlang/element 2 msg)]
+        (let [r (attend a items)] (perform! (:effects r)) (tuple :noreply (app/assign socket (:assigns r))))
+        (tuple :noreply (app/assign socket :poll-failed true)))
+      (attention/tapped msg)
+      (let [id (attention/tapped msg) key (first (keep (fn [[k _]] (when (= id (attention/id-of k)) k)) (:seen a)))]
+        (foreground!)
+        (tuple :noreply (if key (app/assign socket :open key) socket)))
       :else (tuple :noreply socket))))
