@@ -79,6 +79,35 @@ maps the 54-point review to behavior and tests. The proof uses isolated worlds.
 
 ## Current proof
 
+### Pinned user prompt (2026-10-17)
+
+The session title occupies the fixed top bar, with its place immediately below;
+there is no separate scrolling title section. The existing compact header is
+verified with the current immutable frontend.
+
+Conversation adds a 24px strip immediately below the tabs, showing only the
+first line of the user message for the visible part of the conversation.
+Scrolling past another user message replaces the strip; scrolling back restores
+the earlier one. Long lines ellipsize. Tool results do not become prompts, and
+Files, Changes and reference readers have no prompt strip. Scroll restoration
+and background model updates recompute the prompt without dispatching editor
+events or replacing the conversation DOM.
+
+This stays inside the existing removable `mobile` package's host boundary.
+No shared tables or vendored editor source were changed. The immutable build
+publishes the same package loader and host assets; the generated compatibility
+copy in `vendor/bl-ed/web/out` was refreshed too.
+
+Proof: [real session](proof/prompt-strip/03-conversation.png),
+[320px session](proof/prompt-strip/session-320.png),
+[after unuse](proof/prompt-strip/13-unused.png),
+[browser checks](proof/prompt-strip/browser.json), and
+[verification receipt](proof/prompt-strip/verification.log).
+The host browser contract checks both scroll directions, multiline and long
+prompts, escaping, background updates, tool-only turns, source-only turns, and
+empty conversations. The real-editor session test checks the thin fixed strip,
+header placement, Files/Changes, narrow/landscape/desktop layouts, and unuse.
+
 ### Compact session layout (2026-10-11)
 
 Sessions put their title in the fixed header and their place immediately below

@@ -73,6 +73,41 @@ try{
  assert.equal(await page.locator('.message.agent strong').innerText(),'Readable');
  assert.equal(await page.locator('.message.agent li').count(),2);
  assert.equal(await page.locator('.result-card').count(),0,'one canonical response');
+ // The thin prompt follows the visible user turn in both scroll directions.
+ await page.evaluate(()=>{
+  ms.task.data.turns=[
+   {n:1,role:'user',content:[{type:'text',text:'First prompt <safe>\nKeep the second line out of the strip.'}]},
+   {n:2,role:'assistant',content:[{type:'text',text:'First response\n\n'.repeat(80)}]},
+   {n:3,role:'user',content:[{type:'text',text:'Next prompt '+ 'long '.repeat(50)+'\nMore details'}]},
+   {n:4,role:'assistant',content:[{type:'text',text:'Second response\n\n'.repeat(80)}]},
+   {n:5,role:'user',content:[{type:'tool-result',id:'only-tool',content:'Not a human prompt'}]}
+  ];update();document.querySelector('.mobile-scroll').scrollTop=0;
+ });
+ const prompt=page.locator('.conversation-prompt');
+ await page.waitForFunction(()=>document.querySelector('.conversation-prompt')?.textContent==='First prompt <safe>');
+ assert.ok((await prompt.boundingBox()).height<=24,'prompt is one thin line');
+ assert.equal(await prompt.locator('safe').count(),0,'prompt text is escaped');
+ const promptTop=(await prompt.boundingBox()).y;
+ await page.locator('.message.human').nth(1).evaluate(el=>{
+  const scroll=el.closest('.mobile-scroll');scroll.scrollTop+=el.getBoundingClientRect().top-scroll.getBoundingClientRect().top+2;
+ });
+ await page.waitForFunction(()=>document.querySelector('.conversation-prompt')?.textContent.startsWith('Next prompt'));
+ assert.equal((await prompt.boundingBox()).y,promptTop,'prompt stays fixed');
+ assert.ok(!(await prompt.innerText()).includes('More details'),'only the first line appears');
+ await page.evaluate(()=>{ms.rail.state.connection.checked=Date.now();update();});
+ assert.match(await prompt.innerText(),/^Next prompt/,'background updates preserve the current prompt');
+ await page.evaluate(()=>document.querySelector('.mobile-scroll').scrollTop=1e9);
+ await page.waitForTimeout(50);
+ assert.match(await prompt.innerText(),/^Next prompt/,'tool results never replace the user prompt');
+ await page.evaluate(()=>document.querySelector('.mobile-scroll').scrollTop=0);
+ await page.waitForFunction(()=>document.querySelector('.conversation-prompt')?.textContent==='First prompt <safe>');
+ await page.evaluate(()=>{ms.rail.state.tab='plan';update();});
+ assert.equal(await prompt.count(),0,'Files has no conversation prompt');
+ await page.evaluate(()=>{ms.rail.state.tab='conversation';ms.task.data.turns=[];ms.task.text='* you · 1\nSource prompt\nSecond line\n* model · 2\nAnswer\n';update();});
+ assert.equal(await prompt.innerText(),'Source prompt','source-only conversations also pin user messages');
+ await page.evaluate(()=>{ms.task.data.turns=[{n:1,role:'assistant',content:[{type:'text',text:'No user message yet'}]}];update();});
+ assert.equal(await prompt.isVisible(),false,'no empty strip without a user prompt');
+ await page.evaluate(()=>{ms.task.data.turns=[{n:1,role:'user',content:[{type:'text',text:'A full prompt'}]}];update();});
  await page.evaluate(()=>{ms.task.objects=[{type:'omega/msg',key:'q-1',message:'Which route?'}];ms.task.data.questions=[{id:'q-1',data:{choices:[{label:'Keep',value:'keep'},{label:'Replace',value:'replace'}]}}];update();});
  assert.equal(await page.locator('[data-act="choice"]').count(),2,'typed choices retain their actual semantics');await page.locator('[data-act="choice"]').first().click();assert.equal(await page.evaluate(()=>events.filter(e=>e.type==='mobile/send').at(-1).answer),'keep');
  await page.evaluate(()=>{ms.task.objects=[];ms.task.data.questions=[];update();});

@@ -71,6 +71,8 @@
 .tab-count {font:11px var(--font-code,monospace);color:var(--p-muted);font-variant-numeric:tabular-nums}
 .tab-dot {width:5px;height:5px;border-radius:50%;background:var(--apricot,#c4875a)}
 .session-header~.composer {padding-bottom:max(8px,env(safe-area-inset-bottom))}
+.conversation-prompt {flex-shrink:0;height:24px;padding:2px 18px;border-bottom:1px solid var(--p-line);background:var(--p-paper);color:var(--p-muted);font:12px/19px var(--font-text,system-ui,sans-serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conversation-prompt[hidden] {display:none}
 .message {margin-bottom:28px;overflow-wrap:anywhere}.message.human {border-left:2px solid var(--latte,#d9c8b4);padding-left:12px}
 .message-who {display:flex;align-items:center;justify-content:space-between;font:12px var(--font-code,monospace);color:var(--p-muted);height:36px;margin-bottom:5px}.message-who .text-button {min-height:36px;font-size:11px}
 .message p,.document p {margin:10px 0;line-height:1.8}.message p>span,.document p>span {white-space:pre-wrap}

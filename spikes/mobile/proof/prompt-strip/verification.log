@@ -1,0 +1,35 @@
+2026-10-17 — Pocket pinned user prompt
+
+PASS bin/bl omega.build
+Frontend: 0dfd85c012f6a784d0d3da18f813bb1457c35bb8a88f95925d633a90f0a1f748
+Generated compatibility assets refreshed in vendor/bl-ed/web/pkg/mobile and
+compiled graph copied into vendor/bl-ed/web/out (ignored build artifacts).
+
+PASS node spikes/mobile/test/host-browser.mjs
+Both scroll directions; first-line clipping and long lines; escaped text;
+background updates preserve prompt; tool-result-only turns ignored; source
+fallback; absent strip in Files and empty conversations. Existing contracts pass.
+
+PASS POCKET_TEST_URL=http://127.0.0.1:8792 POCKET_TEST_ROOT=/tmp/omega-pocket-prompts POCKET_PROOF_DIR=$PWD/spikes/mobile/proof/prompt-strip node spikes/mobile/test/session-layout.mjs
+Real bl-ed launched via bin/bl-ed --offline --memory --port 8792
+--root /tmp/omega-pocket-prompts. Disposable fixture files review.bl.org
+(First line / Original detail / Last line) and linked.bl.org created in that root.
+Thin prompt strip, fixed session title and place, absent scrolling title,
+Files/Changes, drafts, 320px/390px/landscape/desktop, use/unuse all pass.
+See browser.json and PNGs. No page errors.
+
+PASS PP_OUT=<frontend>/out node spikes/mobile/test/presentation-check.mjs spikes/dwim/test/outline.bl.org vendor/bl-ed/web/welcome.bl.org vendor/bl-ed/web/split-demo.bl.org spikes/present/web/welcome.bl.org
+Unchanged spikes/present/test/check.mjs, 36 variants, zero differences.
+See equivalence.log.
+
+No vendored editor source changes. Tests use an isolated offline world only.
+
+PASS BLED_OUT=<frontend>/out BLED_ROOT=$HOME/.cache/bl/build-trees/65c25b33c907 node --test spikes/mobile/test/drive.test.mjs vendor/bl-ed/test/*.test.mjs
+98 tests passed, zero failures (20 Pocket + 78 editor/host contracts).
+Includes random document edits, complete document round trips, frame geometry,
+package lifecycle and cold server. See editor-tests.log.
+Initial attempt against the old compatibility build was superseded by this run
+against the current graph with BLED_ROOT set to the pinned document corpus.
+
+PASS git diff --check
+Offline listener on port 8792 stopped after verification.
