@@ -1,0 +1,39 @@
+Column resizing regression verification
+
+Compiled source: vendor/bl-ed/ed/*.bl, pinned BL 65c25b33.
+Packaged frontend: a048d7cb986f5969aab43cea00c26ea35d22cc08780d2d5b21acace00b2ada9f
+The final packaged modules are also copied into vendor/bl-ed/web/out.
+Browser acceptance: 14 checks passed, 0 page exceptions (browser.log/checks.json).
+
+All 82 distinct vendored checks passed.
+Final packaged batch: 81 passed, 1 cold-fixture startup deadline.
+Isolated cold-fixture retry: 1 passed, 0 failed (46.6 seconds).
+The batch ran under CPU contention; the fixture produced no startup output
+before its readiness budget elapsed. Raw batch and retry logs are retained
+in editor.log and cold-server.log. No timeout or assertion was relaxed.
+  columns: 4; frame: 16; editor drive/corpus: 24; host: 17;
+  packages: 4; omega: 12; document packages: 2; geometry/observers: 2;
+  cold packaged server: 1.
+
+Reproduce the vendored suite with these environment values:
+BLED_OUT=vendor/bl-ed/web/out
+BLED_ROOT=/home/user/.cache/bl/build-trees/65c25b33c907
+node --test vendor/bl-ed/test/*.test.mjs
+
+Frontend assembly: bin/bl --cold test test/frontend_test.bl
+15 assertions passed.
+
+Presentation equivalence: unchanged spikes/present/test/check.mjs.
+The pinned compiler no longer exports the legacy Core.pr_str printer.
+A temporary PP_OUT facade reexports the real compiled pp.check and rt modules,
+and aliases rt.printStr as core.pr_str solely for the checker display.
+All equivalence computations use the actual compiled pp.check implementation.
+No checker or presentation source was changed.
+
+Results:
+spikes/dwim/test/outline.bl.org {:bad [], :variants 6}
+vendor/bl-ed/web/welcome.bl.org {:bad [], :variants 11}
+vendor/bl-ed/web/split-demo.bl.org {:bad [], :variants 8}
+spikes/present/web/welcome.bl.org {:bad [], :variants 11}
+
+Checker Git object: 360261971fc1bc348198a16b94daff793b92a6b0

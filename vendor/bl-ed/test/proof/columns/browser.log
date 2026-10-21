@@ -1,0 +1,14 @@
+single editor has no resize handles
+loading the BL browser controller preserves deferred commands before the language is ready
+drag moves only adjacent columns, preserves editors and retains separator focus
+internal column changes update editor wrapping/caret cell measurements
+keyboard arrows resize by 16px; Shift resizes by 64px
+Escape cancels a captured drag and restores exact previous width declarations
+pointer cancellation restores widths and releases capture
+native browser touch events resize columns through the same BL controller
+drag and keyboard enforce a 120px minimum for both neighboring panes
+Enter and double-click remove overrides and restore package layout defaults
+unpublished insert-mode draft, selection and history survive resizing and viewport changes
+unusing the layout package removes every handle and frame width override
+passive minimap resizes; unloading a layout during pointer capture leaves no handles
+no browser exceptions

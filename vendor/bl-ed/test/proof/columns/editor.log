@@ -1,0 +1,106 @@
+✔ adjacent resizing conserves widths, skips hidden/docked panes and preserves a third column (407.823923ms)
+✔ incomplete/invalid measurements and nonadjacent boundaries cannot corrupt widths (309.321015ms)
+✔ frame widths survive drawing and keys without changing editors or package layout; cancel/reset is exact (1175.608147ms)
+✔ late layout events and malformed width declarations are ignored (291.355694ms)
+✔ file-local package declaration accepts installed names, orders dependencies and excludes executable/remote references (12.000428ms)
+✔ explicit unload is respected across refreshes until explicitly used again (3.583359ms)
+✔ normal-mode motions: hjkl, w selects a word, counts (1193.584468ms)
+✔ insert mode types, Escape returns, undo/redo round-trip (476.540979ms)
+✔ multiple cursors: C adds a cursor below, typing goes to both (291.908496ms)
+✔ x selects lines; d deletes and yanks; p pastes (401.555855ms)
+✔ org navigation: ]h [h g u ]b (1033.731525ms)
+✔ structural form motion inside a cell (891.588995ms)
+✔ paredit-style: wrap and raise (639.536077ms)
+✔ the command line evaluates Beam Lisp against the live editor (674.313978ms)
+✔ the command line is the real language: macros, defn, destructuring, threading (1472.695639ms)
+✔ split cells: a local cell runs in the page; a beam cell becomes an effect (1310.233094ms)
+✔ the palette finds and runs commands by fuzzy name (1764.145759ms)
+✔ describe-key explains a binding (231.710561ms)
+✔ search: / n N * with smart-case and wrap (555.391748ms)
+✔ dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans (498.999677ms)
+✔ save is an effect, not a side effect (280.264664ms)
+✔ an eval reload keeps the cursor and is one undo step (427.782515ms)
+✔ render model: segments, problems, status (139.910893ms)
+✔ incremental structure == full derive, over random typing in real documents (328750.71356ms)
+✔ round trip: every repo .bl.org is reproduced byte-for-byte (8518.932284ms)
+✔ deferred language: Enter keeps the draft, one effect, replays once on ready (150.515045ms)
+✔ deferred language: Escape or an edit cancels the parked run (92.182642ms)
+✔ deferred language: a failed load keeps the draft and says so; Enter retries (74.017228ms)
+✔ deferred language: a local cell keeps its text and resumes once; edits cancel stale results (226.911503ms)
+✔ named command events use normal command lookup and retain the read-only guard (32.501752ms)
+✔ docked views span columns without occupying an editor column (8.386333ms)
+✔ observation coalesces after painting; unsubscribe and listener failure are isolated (2.473767ms)
+✔ one pane is today's bl-ed: the frame renders exactly ed.main/render (1439.726685ms)
+✔ ed/layout arranges the window: the current editor is kept, other panes fetch their docs (826.335134ms)
+✔ a :select link: moving onto an object visits it in the linked pane (as an effect) (901.958549ms)
+✔ effects are tagged by pane; an answer for one pane changes only that pane (512.736215ms)
+✔ space w w cycles focus over editor panes only; space w o keeps the focused editor (1259.797991ms)
+✔ a view pane draws from the pane it views, through the package's :views (654.081726ms)
+✔ (ed/layout nil) and unknown layouts (936.886481ms)
+✔ packages are frame-wide: unuse in one pane removes it everywhere, and its layout (861.921123ms)
+✔ boot layout without a command line: F.arrange(fr, layouts[name]) is what ed/layout does (384.251417ms)
+✔ events for a pane that left (a late host answer) leave the frame untouched (512.624196ms)
+✔ a frame reuses unchanged pane models while another editor moves (461.642132ms)
+✔ reconfigure retains named editors and blocks discarded text and prompt drafts (273.478427ms)
+✔ source candidates keep an existing context or retain main when adding the first aside (209.887039ms)
+✔ visit and focus candidates choose the existing pane and protect its file and prompt drafts (260.351577ms)
+✔ a package that arranges the window on :use keeps the effects its :adopt emitted, tagged to the kept pane (29.029061ms)
+✔ docked views carry geometry while preserving editor identity and ordinary view models (53.018655ms)
+✔ latest visit wins: an older slow answer never overwrites a newer one (13.803243ms)
+✔ a stale ERROR is dropped; the newest request's error is shown (1.309564ms)
+✔ superseded requests are aborted (1.01778ms)
+✔ a background refresh never supersedes a foreground visit, nor lands on another path (1.229154ms)
+✔ a visit supersedes an in-flight refresh of the same pane (2.039316ms)
+✔ a disposed pane's answer is dropped (1.401686ms)
+✔ memoFrame renders once per frame value (1.460315ms)
+✔ language: sync hooks never return a Promise; honest status, retry after failure (43.667662ms)
+✔ awaitLanguage: answers ready once; failure carries the message; a vanished pane gets nothing (8.821254ms)
+✔ easing is elapsed-time based: 60/120/144 Hz settle alike and cover the distance (10.143262ms)
+✔ one 60 Hz frame covers the former 32 % (0.78185ms)
+✔ reduced motion and trackpad deltas apply directly, with no easing (1.261765ms)
+✔ wheel vs trackpad classification (0.961916ms)
+✔ pane disposal: apply→false drops the glide; drop() cancels the frame (1.009745ms)
+✔ packageUrl: bare names resolve under ./pkg (0.744049ms)
+✔ task navigation preserves package and theme bootstrap parameters on reload (1.672041ms)
+✔ presentation actions accept command names, including qualified keywords, without executable text (2.388798ms)
+✔ C-Enter on a task block asks the world to open a task, then writes the reference (781.999284ms)
+✔ the reference row is drawn as a live card; the text stays the reference (811.726518ms)
+✔ y on a card answers its question; y elsewhere still yanks (513.126774ms)
+✔ C-Enter again: same body focuses, an edited body refines, a finished task reopens (1513.896678ms)
+✔ a reference the world wrote (no digest) is adopted on C-Enter, not refined (164.698448ms)
+✔ a finished task's reference is rewritten once with its summary (113.401927ms)
+✔ visiting a read-only view: objects get their keys, edits are refused, C-o goes back (961.187336ms)
+✔ a refreshed read-only view keeps the cursor; a refreshed dirty file keeps your text (570.645087ms)
+✔ a refresh of a read-only view keeps what you are typing in the minibuffer (263.341678ms)
+✔ space a n opens a homeless task through the minibuffer (204.773054ms)
+✔ ordinary cells still evaluate (C-Enter falls through to eval-cell) (105.433935ms)
+✔ a refresh of a read-only view keeps your place: text above moves the row, the cursor follows its object (340.424057ms)
+✔ a used package adds keys and commands; unuse removes exactly them (1217.913216ms)
+✔ a package intercepts before the core, reacts after it, adopts visited documents (409.78271ms)
+✔ ed/use asks the host for the module (an effect); a failed load is a message (234.959094ms)
+✔ package observers see completed module installation and failed loads (31.277707ms)
+✖ a cold packaged server resolves virtual paths and serves changing task documents (63796.974366ms)
+ℹ tests 82
+ℹ suites 0
+ℹ pass 81
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 352073.177823
+
+✖ failing tests:
+
+test at vendor/bl-ed/test/serve-cold.test.mjs:20:1
+✖ a cold packaged server resolves virtual paths and serves changing task documents (63796.974366ms)
+  AssertionError [ERR_ASSERTION]: cold fixture did not start: 
+      at TestContext.<anonymous> (file:///home/user/code/undefine/omega/vendor/bl-ed/test/serve-cold.test.mjs:36:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

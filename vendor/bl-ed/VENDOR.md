@@ -484,3 +484,6 @@ pass even when only internal column widths change. CSS width conversion now
 unwraps BL floats returned by browser measurements. The frontend assembly and
 legacy build script include this module; no application-specific policy enters
 the vendored editor. Browser acceptance is `test/columns-browser.py`.
+DOM listeners explicitly return nil: the native ABI checks callback returns
+even when the DOM ignores them, so a BL state value returned by `swap!` must
+stay inside the controller. The browser gate rejects all page exceptions.

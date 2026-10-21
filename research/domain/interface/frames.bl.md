@@ -130,7 +130,63 @@ frame = {:layout  layout
 - Rows of panes, tabs, saved window configurations.
 - `space a o` opening the inbox instead of a single overview (a key in the omega package, once
   `ed/omega.bl` is a package: FUP-010).
-- Pane resize by dragging the hairline.
+
+## Resizing columns (2026-10-21)
+
+Drag the boundary between visible columns to resize the adjacent pair. Focus a
+boundary and use Left/Right for 16px steps, Shift for 64px steps, or Home/End
+for the limits. Escape cancels a drag and restores the exact previous width
+declarations. Enter or a double-click restores all layout defaults. Widths are
+local to this frame, and reset when arranging another layout or returning to a
+single editor; they are not saved across reloads.
+
+`ed/columns.bl` owns sizing and validation. `ed/columns-browser.bl` owns browser
+input, pointer capture, animation-frame coalescing, measurements and accessible
+separator elements. Both are compiled Beam Lisp. The existing JS host only
+mounts/syncs the controller and schedules its normal editor measurement pass.
+Column changes explicitly schedule that pass: the outer grid can remain the
+same size while its editors gain or lose character columns.
+
+The frame stores `:column-widths` separately from the package's layout value.
+The host sends `{:type :frame-columns :layout name :panes [ids…]
+:widths {id width…}}`; nil widths removes overrides. The layout name and ordered
+column IDs reject late events for another layout. Original declarations remove
+matching overrides, so drag cancellation restores the previous state exactly.
+Editor documents, selections, undo and prompt drafts do not participate in the
+width update. Removing a layout's package removes its boundaries too.
+
+Sizing uses measured widths as proportional `[:fr n]` shares. Moving a boundary
+preserves the pair's total and every other column's share. Each neighbor has a
+120px minimum during resizing, reduced to half the pair when less than 240px
+is available. Docked views and `[:ch 0]` panes never become resize boundaries;
+passive undocked views, including minimaps, can be resized.
+
+Drive contract: `vendor/bl-ed/test/columns.test.mjs`. Real-editor acceptance:
+`vendor/bl-ed/test/columns-browser.py`, against an offline in-memory world on
+8792 with a disposable `/tmp` root.
+
+```sh
+mkdir -p /tmp/omega-columns-world
+bin/bl-ed --offline --memory --port 8792 --root /tmp/omega-columns-world
+```
+
+In another terminal, once the offline server is ready:
+
+```sh
+python vendor/bl-ed/test/columns-browser.py --port 8792 --root /tmp/omega-columns-world
+```
+
+Real-editor proof: [package used](../../../vendor/bl-ed/test/proof/columns/01-workspace-used.png),
+[resized with an unpublished draft](../../../vendor/bl-ed/test/proof/columns/02-workspace-resized-draft.png),
+[after unuse](../../../vendor/bl-ed/test/proof/columns/03-workspace-unused.png).
+Acceptance results and regression commands live beside these images. The
+14 browser checks pass without page exceptions. All 81 editor logic checks
+pass against the packaged frontend. The cold-server check passes separately;
+its first batch run exceeded the startup budget under CPU contention, and the
+isolated retry passed. Raw batch and retry logs are retained. The
+unchanged presentation checker uses a temporary printer facade for the pinned
+compiler's current printer interface; the actual equivalence implementation is used
+unchanged (see `regressions.txt`).
 
 ## Retaining editors across package layout transitions
 
