@@ -69,7 +69,16 @@ kbd {
 
 /* ── the page ───────────────────────────────────────────────────────────── */
 /* the window: one column per pane (a layout adds panes; one pane = today) */
-#panes { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; overflow: hidden; }
+#panes { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; overflow: hidden; }
+.column-handle {
+  position: absolute; width: 10px; z-index: 10; cursor: col-resize;
+  touch-action: none; user-select: none; outline: none;
+}
+.column-handle::after { content: ""; position: absolute; inset: 0 4px; background: transparent; }
+.column-handle:hover::after, .column-handle:focus-visible::after,
+.resizing-columns .column-handle::after { background: var(--mocha); }
+.column-handle:focus-visible { background: var(--oat); }
+.resizing-columns, .resizing-columns * { cursor: col-resize !important; user-select: none !important; }
 .pane.editor {
   position: relative; overflow: hidden; min-width: 0;
   display: grid; grid-template-columns: 4.2rem 1fr 6px;

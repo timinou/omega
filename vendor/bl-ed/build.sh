@@ -19,6 +19,11 @@ esac
 out="$here/web/out"
 ${RUN:-} "$root/bin/bl" js build js.eval -p "$tree/priv/lib" -p "$tree/priv/boot" --stub lower --with reader --host run --out "$out"
 ${RUN:-} "$root/bin/bl" js build ed.frame -p "$here" --host eval-ed,eval-cells --out "$out"
+${RUN:-} "$root/bin/bl" js build ed.columns-browser -p "$here" --out "$out"
+# New compiler output lives under ns/; retain the page's module entrypoints.
+for module in ed.columns ed.columns-browser; do
+  printf "export * from './ns/%s.mjs';\n" "$module" > "$out/$module.mjs"
+done
 # the language's own macros, read by the page at start (boot.mjs)
 mkdir -p "$out/src/priv/boot"
 cp "$tree/priv/boot/core.bl" "$tree/priv/boot/sugar.bl" "$out/src/priv/boot/"

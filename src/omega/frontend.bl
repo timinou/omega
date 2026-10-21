@@ -27,7 +27,7 @@
           (declaration! m) m)) names))
 (defn assembly [root packages]
  (let [fs (mapv declaration! packages)]
-  {:namespaces (vec (distinct (concat ["ed.frame" "js.eval"]
+  {:namespaces (vec (distinct (concat ["ed.frame" "ed.columns-browser" "js.eval"]
                         (mapcat (fn [f] (cons (:entry f) (:includes f))) fs))))
    :paths (mapv (fn [p] (str root "/" p)) (distinct (mapcat :roots fs)))
    :host (join "," (distinct (mapcat :host fs)))

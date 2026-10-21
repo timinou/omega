@@ -18,6 +18,6 @@
  (let [root (File/cwd!) m (first (frontend/manifests root ["atlas"]))
        a (frontend/assembly root [m])]
   (is (some? (:backend m)))
-  (is (= ["ed.frame" "js.eval" "atlas.main"] (:namespaces a)))
+  (is (= ["ed.frame" "ed.columns-browser" "js.eval" "atlas.main"] (:namespaces a)))
   (is (= "eval-ed,eval-cells" (:host a)))
   (is (String/contains? (frontend/loader m) "./atlas/desk.mjs"))))

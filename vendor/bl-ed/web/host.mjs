@@ -229,6 +229,8 @@ globalThis.BL_HOST = Object.assign(globalThis.BL_HOST || {}, {
   "eval-ed": (src, api) => lang.call("evalWith", src, "ed", api),
   "eval-cells": (cells) => lang.call("evalCells", cells),
 });
+// Install the synchronous language hooks before loading any compiled BL module.
+const { d_create: createColumns } = await import("./out/ed.columns-browser.mjs");
 
 
 // ─── DOM scaffold ──────────────────────────────────────────────────────────
@@ -253,6 +255,7 @@ function domFor(root) {
 paneDom.set("main", domFor($("#editor")));
 
 let fr = null;                              // the frame (ed/frame.bl)
+const columnsHost = createColumns(panesEl, dispatch, scheduleFit, () => sink.focus({preventScroll:true}));
 const ed$ = () => F.d_focused(fr);          // the focused editor
 let metrics = { line: 22, ch: 8.4 };       // measured once fonts load
 
@@ -658,6 +661,7 @@ function draw() {
     if (get(p, "focus?")) focusV = v;
   }
   chrome(focusV, rv);
+  columnsHost.sync(rv, get(fr, "layout"));
 }
 
 // ─── panes: the DOM follows the frame's layout ─────────────────────────────
@@ -673,8 +677,8 @@ editorSkeleton.querySelector("#input-sink")?.remove();
 function cssWidth(w) {
   if (w == null || w === K("fill")) return "minmax(0, 1fr)";
   const a = w.toArray ? w.toArray() : null;
-  if (a && a[0] === K("ch")) return `${a[1]}ch`;
-  if (a && a[0] === K("fr")) return `minmax(0, ${a[1]}fr)`;
+  if (a && a[0] === K("ch")) return `${toJS(a[1])}ch`;
+  if (a && a[0] === K("fr")) return `minmax(0, ${toJS(a[1])}fr)`;
   return "minmax(0, 1fr)";
 }
 let layoutSig = "";
@@ -1307,6 +1311,7 @@ let lastFit = "", fitFrame = 0;
 function fitHeight() {
   const first = [...paneDom.values()].find((d) => d.page);
   if (!first || !fr) return;
+  columnsHost.sync(renderFrame(fr), get(fr, "layout"));
   // the page's top padding is not rows (the last row was clipped by a few px)
   const pad = parseFloat(getComputedStyle(first.page).paddingTop) || 0;
   for (const dom of paneDom.values()) {

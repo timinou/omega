@@ -475,3 +475,12 @@ editor state and user tables untouched. Hidden columns and docked views do not
 form resize boundaries. Reconfiguration/unarranging discards the overrides;
 restoring the original declarations removes them exactly. The compiled drive
 contract is `test/columns.test.mjs`.
+
+`ed/columns-browser.bl` implements the browser boundary in compiled BL: pointer
+capture, coalesced moves, cancellation on Escape/capture loss/window blur or
+resize, keyboard adjustment, default reset, separator accessibility and listener
+disposal. The JS host mounts/syncs it and schedules its existing measurement
+pass even when only internal column widths change. CSS width conversion now
+unwraps BL floats returned by browser measurements. The frontend assembly and
+legacy build script include this module; no application-specific policy enters
+the vendored editor. Browser acceptance is `test/columns-browser.py`.

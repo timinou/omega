@@ -1,0 +1,153 @@
+; Browser IO only, compiled from BL. The frame and ed.columns remain pure.
+(ns ^:js ed.columns-browser (:require [ed.columns :as columns]))
+
+(defn- pane-node [ctx id]
+  (.querySelector (:root ctx) (str ".pane[data-pane=\"" (name id) "\"]")))
+
+(defn- measurements [ctx model]
+  (into {} (map (fn [p] [(:id p) (.-width (.getBoundingClientRect (pane-node ctx (:id p))))])
+                (columns/visible (:panes model)))))
+
+(defn- send! [ctx model widths]
+  ((:dispatch ctx) {:type :frame-columns :layout (:layout model)
+                   :panes (mapv :id (columns/middle (:panes model))) :widths widths})
+  ((:fit ctx)))
+
+(defn- stop! [ctx restore?]
+  (let [state (:state ctx) {:keys [drag raf]} @state]
+    (when raf (js/cancelAnimationFrame raf))
+    (swap! state dissoc :drag :raf :pending-x)
+    (.remove (.-classList (:root ctx)) "resizing-columns")
+    (when drag
+      (let [node (:node drag) pointer (:pointer drag)]
+        (when (.hasPointerCapture node pointer) (.releasePointerCapture node pointer)))
+      (when restore? (send! ctx (:model drag) (:before drag))))))
+
+(defn- apply-drag! [ctx x]
+  (when-let [drag (:drag @(:state ctx))]
+    (when-let [ws (columns/resize (:panes (:model drag)) (:sizes drag)
+                   (:left drag) (:right drag) (- x (:x drag)))]
+      (send! ctx (:model drag) ws))))
+
+(defn- move! [ctx e]
+  (let [state (:state ctx)]
+    (when (= (.-pointerId e) (:pointer (:drag @state)))
+      (.preventDefault e)
+      (swap! state assoc :pending-x (.-clientX e))
+      (when-not (:raf @state)
+        (swap! state assoc :raf
+          (js/requestAnimationFrame
+            (fn [_]
+              (let [x (:pending-x @state)]
+                (swap! state dissoc :raf :pending-x)
+                (when (some? x) (apply-drag! ctx x))))))))))
+
+(defn- handle-node [e] (.closest (.-target e) ".column-handle"))
+
+(defn- start! [ctx e]
+  (when-let [node (handle-node e)]
+    (when (and (= 0 (.-button e)) (.-isPrimary e))
+      (.preventDefault e)
+      (stop! ctx true)
+      (.focus node #js {:preventScroll true})
+      (let [state (:state ctx) model (:model @state)
+            left (keyword (.-left (.-dataset node))) right (keyword (.-right (.-dataset node)))]
+        (swap! state assoc :drag {:model model :sizes (measurements ctx model)
+                                 :before (columns/widths (:panes model))
+                                 :left left :right right :x (.-clientX e)
+                                 :pointer (.-pointerId e) :node node})
+        (.add (.-classList (:root ctx)) "resizing-columns")
+        (.setPointerCapture node (.-pointerId e))))))
+
+(defn- finish! [ctx e]
+  (when (= (.-pointerId e) (:pointer (:drag @(:state ctx))))
+    (when (some? (:pending-x @(:state ctx))) (apply-drag! ctx (.-clientX e)))
+    (stop! ctx false)))
+
+(defn- cancel-pointer! [ctx e]
+  (when (= (.-pointerId e) (:pointer (:drag @(:state ctx)))) (stop! ctx true)))
+
+(defn- reset! [ctx]
+  (stop! ctx false)
+  (send! ctx (:model @(:state ctx)) nil))
+
+(defn- key! [ctx e]
+  (when-let [node (handle-node e)]
+    (let [key (.-key e) model (:model @(:state ctx))
+          delta (columns/key-delta key (.-shiftKey e))]
+      (cond
+        (some? delta)
+        (do (.preventDefault e) (.stopPropagation e)
+            (stop! ctx true)
+            (when-let [ws (columns/resize (:panes model) (measurements ctx model)
+                            (keyword (.-left (.-dataset node)))
+                            (keyword (.-right (.-dataset node))) delta)]
+              (send! ctx model ws)))
+        (= key "Enter") (do (.preventDefault e) (.stopPropagation e) (reset! ctx))
+        (= key "Escape")
+        (do (.preventDefault e) (.stopPropagation e) (stop! ctx true) ((:focus ctx)))))))
+
+(defn- remove-handles! [ctx]
+  (doseq [[_ node] (:handles @(:state ctx))] (.remove node))
+  (swap! (:state ctx) assoc :handles {}))
+
+(defn- make-handle! [ctx {:keys [left right]}]
+  (let [node (.createElement js/document "div")]
+    (set! (.-className node) "column-handle")
+    (set! (.-tabIndex node) 0)
+    (set! (.-left (.-dataset node)) (name left))
+    (set! (.-right (.-dataset node)) (name right))
+    (.setAttribute node "role" "separator")
+    (.setAttribute node "aria-orientation" "vertical")
+    (.setAttribute node "aria-label" (str "Resize " (name left) " and " (name right)))
+    (.setAttribute node "aria-valuemin" "0")
+    (.setAttribute node "aria-valuemax" "100")
+    (set! (.-title node) "Drag to resize · ←/→ adjust · Shift for larger steps · Enter or double-click restores layout widths")
+    (.appendChild (:root ctx) node)
+    node))
+
+(defn- sync! [ctx model token]
+  (let [state (:state ctx) root (:root ctx) bounds (columns/boundaries (:panes model))
+        changed? (or (not (identical? token (:token @state))) (not= bounds (:bounds @state))
+                     (some (fn [[_ node]] (not (.-isConnected node))) (:handles @state)))]
+    (when changed?
+      ; A reconfiguration owns fresh widths. Never replay an old drag into it.
+      (stop! ctx false)
+      (remove-handles! ctx)
+      (swap! state assoc :handles (into {} (map (fn [b] [(:left b) (make-handle! ctx b)]) bounds))))
+    (swap! state assoc :model model :token token :bounds bounds)
+    (doseq [{:keys [left right]} bounds]
+      (let [node (get (:handles @state) left) a (pane-node ctx left) b (pane-node ctx right)
+            size-a (.-width (.getBoundingClientRect a)) size-b (.-width (.getBoundingClientRect b))
+            style (.-style node)]
+        (set! (.-left style) (str (- (.-offsetLeft b) 5) "px"))
+        (set! (.-top style) (str (.-offsetTop b) "px"))
+        (set! (.-height style) (str (.-clientHeight b) "px"))
+        (.setAttribute node "aria-valuenow" (str (.round js/Math (* 100 (/ size-a (max 1 (+ size-a size-b)))))))))))
+
+(defn create
+  "One owner per editor host. All listeners and capture are removed on dispose;
+   layout changes remove handles, including after the owning package is unused."
+  [root dispatch fit focus]
+  (let [state (atom {:handles {}}) ctx {:state state :root root :dispatch dispatch :fit fit :focus focus}
+        handlers [[root "pointerdown" (fn [e] (start! ctx e))]
+                   [root "pointermove" (fn [e] (move! ctx e))]
+                   [root "pointerup" (fn [e] (finish! ctx e))]
+                   [root "pointercancel" (fn [e] (cancel-pointer! ctx e))]
+                   [root "lostpointercapture" (fn [e] (cancel-pointer! ctx e))]
+                   [root "keydown" (fn [e] (key! ctx e))]
+                   [root "click" (fn [e] (when (handle-node e) (.stopImmediatePropagation e))) ]
+                   [root "dblclick" (fn [e] (when (handle-node e) (.preventDefault e) (.stopPropagation e) (reset! ctx))) ]
+                   [js/window "keydown" (fn [e] (when (and (:drag @state) (= "Escape" (.-key e)))
+                                                   (.preventDefault e) (.stopPropagation e) (stop! ctx true))) ]
+                   [js/window "blur" (fn [_] (stop! ctx true))]
+                   [js/window "resize" (fn [_] (stop! ctx true))]
+                   [js/window "pagehide" (fn [_] (stop! ctx true))]]
+        ; DOM event return values are ignored, but the native ABI still checks
+        ; them. Keep BL state returned by swap! inside the controller.
+        listeners (mapv (fn [[target event handler]]
+                          [target event (fn [e] (handler e) nil)]) handlers)]
+    (doseq [[target event listener] listeners] (.addEventListener target event listener))
+    #js {:sync (fn [model token] (sync! ctx model token))
+         :dispose (fn [] (stop! ctx false) (remove-handles! ctx)
+                    (doseq [[target event listener] listeners] (.removeEventListener target event listener)))}))
