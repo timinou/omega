@@ -51,6 +51,7 @@
             [ed.core :as c]
             [ed.docs :as docs]
             [ed.pkg :as pkg]
+            [ed.columns :as columns]
             [ed.memo :as memo]))
 
 ; ─── panes ─────────────────────────────────────────────────────────────────
@@ -314,6 +315,7 @@
   [fr ev]
   (let [target (or (:pane ev) (:focus fr))]
     (cond
+      (= :frame-columns (:type ev)) (columns/handle fr ev)
       ; `space w` + w/h/l/o is the frame's own chord, in every layout (the
       ; editor still owns `space w (` etc.: only these four keys are taken)
       (window-key? fr ev) (window-key fr (:key ev))
@@ -352,9 +354,9 @@
                         (let [[kind of] (:view p)
                               ed (editor fr of)
                               f (some (fn [q] (get-in q [:provides :views kind])) (reverse (pkg/packages ed)))]
-                          {:id (:id p) :width (:width p) :kind :view :view-kind kind :of of
+                          {:id (:id p) :width (get (:column-widths fr) (:id p) (:width p)) :kind :view :view-kind kind :of of
                            :view (when (some? f) (rendered-view f ed))})
-                        {:id (:id p) :width (:width p) :kind :editor :focus? (= (:id p) (:focus fr))
+                        {:id (:id p) :width (get (:column-widths fr) (:id p) (:width p)) :kind :editor :focus? (= (:id p) (:focus fr))
                          :view (rendered-view m/render (editor fr (:id p)))})]
                         (cond-> drawn (:dock p) (assoc :dock (:dock p) :height (:height p)))))
                     (panes fr)))})

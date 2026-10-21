@@ -466,3 +466,12 @@ The generic inspector's shadow stylesheet now inherits editor theme/font roles
 instead of maintaining a separate green palette. Its controls have 44px minimum
 targets and explicit keyboard focus; sections and metrics keep their existing
 BL-driven rendering and ownership semantics.
+
+### 2026-10-21 — frame column widths
+
+`ed/columns.bl` owns pure adjacent-column sizing and validates `:frame-columns`
+events. Width overrides live on the frame, leaving package layout declarations,
+editor state and user tables untouched. Hidden columns and docked views do not
+form resize boundaries. Reconfiguration/unarranging discards the overrides;
+restoring the original declarations removes them exactly. The compiled drive
+contract is `test/columns.test.mjs`.

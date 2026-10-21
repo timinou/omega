@@ -1,0 +1,61 @@
+; Generic column policy. No DOM, clocks or application/package knowledge.
+(ns ed.columns)
+
+(defn middle [panes]
+  (vec (remove (fn [p] (contains? #{:top :bottom} (:dock p))) panes)))
+
+(defn visible [panes]
+  (vec (remove (fn [p] (= [:ch 0] (:width p))) (middle panes))))
+
+(defn widths [panes]
+  (into {} (map (fn [p] [(:id p) (or (:width p) :fill)]) (middle panes))))
+
+(defn boundaries [panes]
+  (let [ps (visible panes)]
+    (mapv (fn [i] {:left (:id (nth ps i)) :right (:id (nth ps (inc i)))})
+          (range (max 0 (dec (count ps)))))))
+
+(defn- positive? [n] (and (number? n) (> n 0) (< n 10000000)))
+(defn- delta? [n] (and (number? n) (< -10000000 n) (< n 10000000)))
+
+(defn resize
+  "Measured pixel widths become proportional column weights. Move only the
+   adjacent pair; conserve its total and every other column's share. Hidden
+   panes and docked chrome retain their declarations. Minimum 120px per pane,
+   or half the available pair when the viewport is narrower than that."
+  [panes sizes left right delta]
+  (let [ps (visible panes) ids (mapv :id ps)
+        pair? (some (fn [b] (= b {:left left :right right})) (boundaries panes))]
+    (when (and pair? (delta? delta) (every? (fn [id] (positive? (get sizes id))) ids))
+      (let [total (+ (get sizes left) (get sizes right))
+            minimum (min 120 (/ total 2))
+            a (max minimum (min (- total minimum) (+ (get sizes left) delta)))
+            adjusted (assoc sizes left a right (- total a))]
+        (merge (widths panes)
+               (into {} (map (fn [id] [id [:fr (get adjusted id)]]) ids)))))))
+
+(defn key-delta [key shift?]
+  (let [step (if shift? 64 16)]
+    (get {"ArrowLeft" (- step) "ArrowRight" step "Home" -1000000 "End" 1000000} key)))
+
+(defn- valid-width? [w]
+  (or (= w :fill)
+      (and (vector? w) (= 2 (count w))
+           (or (and (= :fr (first w)) (positive? (second w)))
+               (and (= :ch (first w)) (number? (second w))
+                    (<= 0 (second w)) (< (second w) 10000000))))))
+
+(defn handle
+  "Set frame-local widths, guarded against late events from another layout.
+   nil widths restores the package's defaults. Equal declarations are removed
+   from overrides, so cancelling a drag restores the prior state exactly."
+  [fr ev]
+  (let [ps (middle (get-in fr [:layout :panes])) ws (:widths ev)
+        defaults (widths ps)]
+    (if (and (= (:layout ev) (get-in fr [:layout :name]))
+             (= (:panes ev) (mapv :id ps))
+             (or (nil? ws) (and (map? ws) (= (set (keys ws)) (set (keys defaults)))
+                               (every? valid-width? (vals ws)))))
+      (let [overrides (into {} (remove (fn [[id w]] (= w (get defaults id))) ws))]
+        (if (seq overrides) (assoc fr :column-widths overrides) (dissoc fr :column-widths)))
+      fr)))
