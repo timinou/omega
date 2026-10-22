@@ -1,0 +1,47 @@
+; Small profiles over the actual Pelagic browser DSL. Data validation only.
+(ns pelagic.profiles (:require [pelagic.melody :as melody]))
+(def instrument-calls
+  '[+ - * / o/env-gen o/perc o/adsr o/sin-osc o/saw
+    o/lpf o/hpf o/rlpf o/mix o/pan2 o/white-noise o/pink-noise o/x-line o/pulse o/lf-tri o/line])
+(defn parameter-indices [params] (mapv (fn [i] (* 2 i)) (range (quot (count params) 2))))
+(defn read-one [text]
+  (when-not (and (string? text) (< 0 (count text)) (<= (count text) 12000))
+    (throw "Replacement must be one bounded form"))
+  ; The browser uses the existing structural reader; the host uses the BL reader.
+  text)
+(defn expression [x bindings depth]
+  (when (> depth 14) (throw "Instrument expression is too deep"))
+  (cond
+    (number? x) (when (> (abs x) 20000) (throw "Instrument literal exceeds profile"))
+    (symbol? x) (when-not (contains? bindings x) (throw (str "Unknown instrument parameter " x)))
+    (vector? x) (do (when (> (count x) 16) (throw "Instrument vector too large"))
+                  (doseq [v x] (expression v bindings (inc depth))))
+    (seq? x) (do (when-not (some (fn [op] (= op (first x))) instrument-calls) (throw (str "Unsupported synthesis call " (first x))))
+                (doseq [v (rest x)] (expression v bindings (inc depth))))
+    :else (throw "Unsupported instrument expression")))
+(defn validate [form profile]
+  (if (= profile "phrase")
+    (let [label (second form) kick? (= label 'kick-pattern)]
+      (when-not (and (seq? form) (= 'defn (first form))
+                    (some (fn [name] (= name label)) '[melody bass-pattern kick-pattern])
+                    (= '[root seed] (nth form 2)) (= 4 (count form)))
+        (throw "Keep the selected pattern's name and [root seed] signature"))
+      (if-not kick? (melody/validate (apply list (assoc (vec form) 1 'melody)))
+        (let [body (nth form 3)]
+          (when-not (and (vector? body) (<= 1 (count body)) (<= (count body) 24)) (throw "Use 1–24 drum events"))
+          (let [events (mapv (fn [event]
+            (when-not (and (vector? event) (= 3 (count event))) (throw "Drum events are [beat amplitude duration]"))
+            (let [[beat amp dur] (mapv (fn [x] (melody/scalar x {'root 62 'seed 7} 0)) event)]
+              (when-not (and (<= 0 beat) (< beat 8) (<= 0.001 amp) (<= amp 0.8) (<= 0.08 dur) (<= dur 2))
+                (throw "Use beat 0–<8, amplitude .001–.8, duration .08–2"))
+              [beat amp dur])) body)]
+            (when-not (= (mapv first events) (vec (sort (map first events)))) (throw "Sort events by beat")) events))))
+    (do
+      (when-not (and (seq? form) (= 'o/definst (first form)) (= 4 (count form)) (vector? (nth form 2)))
+        (throw "Keep (o/definst name [parameters] body)"))
+      (let [params (nth form 2)]
+        (when-not (and (even? (count params)) (<= (count params) 16)) (throw "Use parameter/default pairs"))
+        (doseq [i (parameter-indices params)]
+          (when-not (and (symbol? (nth params i)) (number? (nth params (inc i)))) (throw "Instrument parameters need numeric defaults")))
+        (expression (nth form 3) (set (map (fn [i] (nth params i)) (parameter-indices params))) 0))
+      [])))

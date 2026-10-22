@@ -1,0 +1,46 @@
+{
+  "url": "http://127.0.0.1:8792/?use=pelagic&layout=pelagic-gen&file=composer.bl.org",
+  "checks": [
+    "continuous native typing does not dispatch/render once per key; source rows and focused textarea are retained",
+    "blur, selection and layout switches preserve a pending prompt draft",
+    "pending generation shows elapsed time and Cancel immediately releases the request",
+    "failed transport returns to editable controls and displays its error",
+    "the exact reported polyrhythm request completes through real Gen and browser validation",
+    "inline component DOM survives a selection-style change on a one-line generated form"
+  ],
+  "errors": [],
+  "thirteen_characters_ms": 75.85,
+  "frames_during_typing": 0,
+  "frames_after_idle": 1,
+  "input_to_paint_ms": [
+    1.4000000059604645,
+    5.799999997019768,
+    3.5,
+    1.199999988079071,
+    12.799999997019768,
+    9.100000008940697,
+    5.9000000059604645,
+    1.4000000059604645,
+    12.299999997019768,
+    7.399999991059303,
+    4.899999991059303,
+    1.2999999970197678,
+    8.400000005960464
+  ],
+  "selection_to_paint_ms": [
+    196.5,
+    79.59999999403954,
+    58.900000005960464,
+    69.90000000596046,
+    150.3999999910593,
+    271.29999999701977
+  ],
+  "live_change_seconds": 12.056,
+  "live_change": {
+    "status": "changed",
+    "provider": "Gen / deepseek-flash",
+    "summary": "Reworked kick phrase into a sloppy, uneven 3-against-4 polyrhythm."
+  },
+  "frontend": "f87532fcf3095dfd61095699a01f25ff86100481a7e5c48d072e4758b18c7bd3",
+  "compiled_graph": "54bc6319014bc1dd1a848fab4a251e6129ce4c00038ca502b7155e2c1f37ee42"
+}

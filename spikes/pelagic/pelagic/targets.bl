@@ -1,0 +1,93 @@
+; Both code and components name the same reader nodes. No second parser.
+(ns pelagic.targets
+  (:require [ed.core :as c] [ed.text :as t] [ed.forms :as forms] [ed.memo :as memo]
+            [pelagic.composer :as legacy] [pelagic.profiles :as profiles]))
+(defn- read-source [text _] (t/to-string text))
+(def ^:private cached-source (memo/identity-pair 8 read-source))
+(defn source [ed] (cached-source (:text ed) nil))
+(defn- read-roots [text forest-map]
+ (let [ed {:text text :forms forest-map}]
+  (vec (mapcat (fn [[cell forest]]
+    (map-indexed (fn [i node]
+      (let [kids (forms/navigable (:kids node)) head (first kids) label (second kids)
+            op (when head (t/slice (:text ed) (:from head) (:to head)))
+            title (if label (t/slice (:text ed) (:from label) (:to label)) op)
+            kind (cond (= op "o/definst") "instrument"
+                       (and (= op "defn") (contains? #{"melody" "bass-pattern" "kick-pattern"} title)) "phrase"
+                       :else "code")]
+        {:id (str cell "/" title "/" i) :label (or title "form") :profile kind
+         :cell cell :path [i] :from (:from node) :to (:to node) :kind (name (:kind node))
+         :code (t/slice (:text ed) (:from node) (:to node))
+         :supported (and (not= kind "code") (not (:open? node)) (empty? (forms/problems [node])))}))
+      (forms/navigable forest))) (sort-by first (:forms ed))))))
+(def ^:private cached-roots (memo/identity-pair 8 read-roots))
+(defn roots [ed] (cached-roots (:text ed) (:forms ed)))
+(defn contains-node? [a b]
+  (and (t/pos<= (:from a) (:from b)) (t/pos<= (:to b) (:to a))))
+(defn current [ed]
+  (when-let [fc (c/forest-at-cursor ed)]
+    (let [forest (:forest fc) path (forms/path-at forest (:anchor (c/primary ed)))
+          node (when path (forms/node-at forest path))
+          root (when node (first (filter (fn [r] (contains-node? r node)) (roots ed))))]
+      (when (and root node (not (:skip? node)) (not (:open? node)))
+        (merge root {:root-id (:id root) :id (if (= 1 (count path)) (:id root) (str (:id root) "/" (pr-str (rest path))))
+          :path path :from (:from node) :to (:to node) :kind (name (:kind node))
+          :code (t/slice (:text ed) (:from node) (:to node)) :definition (:code root)})))))
+(defn resolve-target [ed target]
+  (when (= (:document target) (:path ed))
+    (when-let [root (first (filter (fn [r] (and (= (:label target) (:label r)) (= (:profile target) (:profile r)))) (roots ed)))]
+      (let [path (into (:path root) (rest (:path target)))
+            forest (get (:forms ed) (:cell root)) node (forms/node-at forest path)]
+        (when node (merge root target {:id (:id target) :cell (:cell root) :path path
+          :from (:from node) :to (:to node) :code (t/slice (:text ed) (:from node) (:to node))
+          :definition (:code root)}))))))
+(defn normalize [targets]
+  (reduce (fn [out x]
+    (if (some (fn [a] (contains-node? a x)) out) out
+      (conj (vec (remove (fn [a] (contains-node? x a)) out)) x))) []
+    (sort-by :from targets)))
+(defn toggle [targets target]
+  (if (some (fn [x] (= (:id x) (:id target))) targets)
+    (vec (remove (fn [x] (= (:id x) (:id target))) targets))
+    (normalize (conj (vec targets) target))))
+(defn select [ed target]
+  (legacy/select-node ed target))
+(defn captured [ed target] (assoc target :document (:path ed)))
+(defn validate [ed]
+  (doseq [root (roots ed)]
+    (when (:supported root)
+      (when (seq (forms/problems [(forms/node-at (get (:forms ed) (:cell root)) (:path root))]))
+        (throw "Incomplete generated form"))
+      (profiles/validate (legacy/node-data (:text ed) (forms/node-at (get (:forms ed) (:cell root)) (:path root))) (:profile root))))
+  ed)
+(defn apply-replacements [ed request replacements]
+  (when-not (= (source ed) (:source request)) (throw "Source changed during generation"))
+  (when-not (= (set (map :id (:targets request))) (set (map :id replacements)))
+    (throw "Return one replacement for each selected target"))
+  (when-not (= (count replacements) (count (:targets request))) (throw "Duplicate replacement target"))
+  (let [edits (mapv (fn [target]
+      (let [replacement (:replacement (first (filter (fn [r] (= (:id r) (:id target))) replacements)))]
+        (profiles/read-one replacement)
+        (let [probe (c/new-editor (str "#+begin_src beam-lisp\n" replacement "\n#+end_src\n") "replacement.bl.org")
+              nodes (mapcat forms/navigable (vals (:forms probe)))]
+          (when-not (and (= 1 (count nodes)) (empty? (forms/problems nodes))) (throw "Return exactly one complete replacement form")))
+        [(:from target) (:to target) replacement])) (:targets request))
+        updated (c/apply-edits ed edits (fn [_ end] {:anchor end :head end}) nil)]
+    (when-not (= (mapv (fn [r] [(:label r) (:profile r)]) (roots ed))
+                 (mapv (fn [r] [(:label r) (:profile r)]) (roots updated)))
+      (throw "Keep existing definitions and names"))
+    (doseq [before (filter (fn [r] (= "instrument" (:profile r))) (roots ed))]
+      (let [after (first (filter (fn [r] (= (:label before) (:label r))) (roots updated)))
+            old-form (legacy/node-data (:text ed) (forms/node-at (get (:forms ed) (:cell before)) (:path before)))
+            new-form (legacy/node-data (:text updated) (forms/node-at (get (:forms updated) (:cell after)) (:path after)))]
+        (when-not (= (mapv (fn [i] (nth (nth old-form 2) i)) (profiles/parameter-indices (nth old-form 2)))
+                     (mapv (fn [i] (nth (nth new-form 2) i)) (profiles/parameter-indices (nth new-form 2))))
+          (throw "Keep instrument parameter names"))))
+    (validate updated)))
+(defn display [ed root]
+  (try
+    (let [form (legacy/node-data (:text ed) (forms/node-at (get (:forms ed) (:cell root)) (:path root)))]
+      (if (= "phrase" (:profile root)) {:notes (profiles/validate form "phrase")}
+        {:parameters (mapv (fn [i] {:name (str (nth (nth form 2) i)) :value (nth (nth form 2) (inc i))})
+                            (profiles/parameter-indices (nth form 2)))}))
+    (catch _ {:notes []})))

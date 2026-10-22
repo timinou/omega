@@ -28,7 +28,8 @@
             [ed.docs :as docs]
             [ed.omega :as omega]
             [ed.pkg :as pkg]
-            [ed.view :as view]))
+            [ed.view :as view]
+            [ed.memo :as memo]))
 
 ; ─── packages ───
 ; What omega adds goes in through the same tables a user's `ed/defcmd` and
@@ -399,24 +400,38 @@
               out (if (< f to) (conj out {:text (subs l f to) :kind (:kind m)}) out)]
           (recur (rest ms) (max at to) out))))))
 
+(defn- source-colors [text descriptor]
+  (let [[forests rows] descriptor
+        lo (if (empty? rows) 0 (first rows))
+        hi (if (empty? rows) 0 (inc (last rows)))
+        marks (reduce (fn [acc [_ forest]]
+                (if (some (fn [n] (and (< (first (:from n)) hi) (>= (first (:to n)) lo))) forest)
+                  (into acc (code-marks forest rows)) acc)) [] forests)
+        by-row (group-by :row marks)]
+    {:marks-by-row by-row
+     :segments-by-row (reduce (fn [out r]
+        (assoc out r (segments-with-marks (t/line text r) (get by-row r []) :code))) {} rows)}))
+(def ^:private cached-source-colors (memo/identity-value 8 source-colors))
+(def ^:private cached-problems (memo/identity-pair 8 (fn [forest _] (forms/problems forest))))
+(declare cached-line-views)
+
 (defn line-context
   "What drawing any row of `rows` needs, computed once per frame: the spans,
    the code marks of the cells intersecting `rows`, the folds, the cursor row."
   [ed rows]
-  (let [bs (:blocks (:struct ed))
-        ; only the cells that intersect the visible rows contribute marks
-        r-lo (if (empty? rows) 0 (first rows))
-        r-hi (if (empty? rows) 0 (inc (last rows)))
-        marks (reduce (fn [acc b] (into acc (code-marks (get (:forms ed) (:from b) []) rows)))
-                      [] (filter (fn [b] (= :cell (:kind b))) (org/blocks-in bs r-lo r-hi)))]
-    {:bs bs :marks-by-row (group-by :row marks) :folds (or (:folds ed) #{})
+  (merge (cached-source-colors (:text ed) [(:forms ed) rows])
+    {:bs (:blocks (:struct ed)) :folds (or (:folds ed) #{})
+     :base-lines (cached-line-views (:text ed)
+                   [(:struct ed) (:forms ed) (:folds ed) (:placements ed) (:cards ed) (:obj-index ed) rows])
      :cur-row (first (:head (c/primary ed)))}))
 
 (defn line-view
   "How row `r` draws today: segments, block band, placement, card, object.
    The default presenter of every text row (spikes/present-pipeline.bl.md)."
   [ed lc r]
-  (let [tx (:text ed) bs (:bs lc)
+  (if-let [base (get (:base-lines lc) r)]
+    (assoc base :current? (= r (:cur-row lc)))
+   (let [tx (:text ed) bs (:bs lc)
         l (t/line tx r) b (org/block-at bs r) k (hl-kind b r)
         blk? (and (some? b) (contains? #{:cell :prose-code :block :result} (:kind b)))]
     {:row r
@@ -446,9 +461,20 @@
      :current? (= r (:cur-row lc))
      :segments (cond
                  (= :heading (:kind b)) (heading-segments l b)
-                 (= k :code) (if (= :cell (:kind b)) (segments-with-marks l (get (:marks-by-row lc) r []) :code) [{:text l :kind :code}])
+                 (= k :code) (if (= :cell (:kind b))
+                              (or (get (:segments-by-row lc) r) (segments-with-marks l (get (:marks-by-row lc) r []) :code))
+                              [{:text l :kind :code}])
                  (= k :prose) (prose-segments l :prose)
-                 :else [{:text l :kind k}])}))
+                 :else [{:text l :kind k}])})))
+
+(defn- static-line-views [text descriptor]
+  (let [[structure forests folds placements cards objects rows] descriptor
+        ed {:text text :struct structure :forms forests :folds folds
+            :placements placements :cards cards :obj-index objects}
+        lc (merge (cached-source-colors text [forests rows])
+             {:bs (:blocks structure) :folds (or folds #{})})]
+    (reduce (fn [out r] (assoc out r (line-view ed lc r))) {} rows)))
+(def ^:private cached-line-views (memo/identity-value 8 static-line-views))
 
 (defn render-rows
   "The view model with `rows` as its text lines (a presentation chooses them)."
@@ -458,7 +484,7 @@
         prim (c/primary ed)
         mb (:minibuf ed)
         fc (c/forest-at-cursor ed)
-        probs (if (nil? fc) [] (forms/problems (:forest fc)))
+        probs (if (nil? fc) [] (cached-problems (:forest fc) nil))
         h (org/heading-at (:outline (:struct ed)) (first (c/cursor ed)))
         b (c/block-at-cursor ed)]
     {:lines (mapv (fn [r] (line-view ed lc r)) rows)

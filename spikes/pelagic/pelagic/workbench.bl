@@ -1,0 +1,189 @@
+(ns pelagic.workbench
+  (:require [ed.core :as c] [ed.text :as t] [ed.forms :as forms] [ed.memo :as memo]
+            [pelagic.targets :as targets] [pelagic.session :as session]))
+(def slot [:pkg-state "pelagic" :workbench])
+(def defaults {:enabled true :layout "split" :sidebar false :serial 0 :phase "idle"
+               :marks [] :peeks #{} :entries [] :draft "" :sidebar-draft ""
+               :mode "change" :sidebar-mode "ask" :provider "gen"})
+(defn state [ed] (get-in ed slot))
+(defn put [ed value] (assoc-in ed slot value))
+(defn enabled? [ed] (:enabled (state ed)))
+(defn enable [ed] (put ed (merge defaults (state ed) {:enabled true})))
+(defn emit [ed op args] (c/effect ed {:kind :package-host :package "pelagic" :op op :args args}))
+(defn adopt [ed]
+  (if (or (enabled? ed) (ends-with? (or (:path ed) "") "composer.bl.org"))
+    (put ed (merge defaults (state ed))) ed))
+(defn selected [ed]
+  (let [s (state ed)]
+    (if (seq (:marks s)) (:marks s)
+      (if-let [x (targets/current ed)] [(targets/captured ed x)] []))))
+(defn root-target [ed id]
+  (when-let [root (first (filter (fn [r] (= id (:id r))) (targets/roots ed)))]
+    (targets/captured ed (assoc root :definition (:code root) :root-id (:id root)))))
+(defn layout-name [s]
+  (str "pelagic-" (if (= "inline" (:layout s)) "inline" "gen") (if (:sidebar s) "-session" "")))
+(defn arrange [ed]
+  (c/effect ed {:kind :frame-layout :layout (layout-name (state ed)) :keep {:main :origin}}))
+(defn toggle-layout [ed]
+  (arrange (put ed (update (state ed) :layout (fn [x] (if (= x "inline") "split" "inline"))))))
+(defn toggle-sidebar [ed] (let [ed (enable ed)] (arrange (put ed (update (state ed) :sidebar not)))))
+(defn peek-source [ed]
+  (if-let [x (targets/current ed)]
+    (put ed (update (state ed) :peeks (fn [xs] (if (contains? xs (:root-id x)) (disj xs (:root-id x)) (conj xs (:root-id x)))))) ed))
+(defn mark [ed]
+  (if-let [x (targets/current ed)]
+    (put ed (update (state ed) :marks targets/toggle (targets/captured ed x))) ed))
+(defn ask [ed]
+  (let [opening? (not (enabled? ed)) ed (enable ed) s (state ed) xs (selected ed)
+        focus (targets/current ed)
+        root (or (first (filter (fn [x] (= (:label x) (:label focus))) xs)) (first xs))
+        local {:anchor (or (:root-id root) (:id root)) :focus (:id focus) :targets xs}]
+    (let [ed (-> ed (put (assoc s :local local :local-answer nil :error nil)) (emit :work-focus {:surface "local"}))]
+      (if opening? (arrange ed) ed))))
+(defn entry [s id] (first (filter (fn [x] (= (:id x) id)) (:entries s))))
+(defn active-entry [s] (entry s (:entry s)))
+(defn request-targets [ed surface mode]
+  (let [s (state ed) previous (when (= surface "session") (active-entry s))
+        captured (if previous (or (:reply-targets s) (:after-targets previous) (:targets previous)) (selected ed))]
+    (if previous
+      (vec (keep (fn [x] (or (targets/resolve-target ed x) (when (= mode "ask") x))) captured)) captured)))
+(defn submit [ed ev]
+  (let [s (state ed) surface (or (:surface ev) "local") sidebar? (= surface "session")
+        mode (or (:mode ev) (get s (if sidebar? :sidebar-mode :mode)))
+        prompt (trim (or (:prompt ev) (get s (if sidebar? :sidebar-draft :draft)) ""))
+        xs (request-targets ed surface mode) old (when sidebar? (active-entry s))
+        id (inc (:serial s)) conversation (or (:conversation old) id)]
+    (cond
+      (contains? #{"generating" "checking"} (:phase s)) ed
+      (or (empty? prompt) (> (count prompt) 2000)) (c/message ed "Enter a request, up to 2000 characters")
+      (and (= mode "change") old (seq (or (:reply-targets s) (:after-targets old) (:targets old)))
+           (not= (count xs) (count (or (:reply-targets s) (:after-targets old) (:targets old)))))
+        (put ed (assoc s :error "Select the current targets, then use current selection"))
+      (and (= mode "change") (or (empty? xs) (some (fn [x] (not (:supported x))) xs)))
+        (put ed (assoc s :error "Choose an instrument or pattern to change; Ask works with any code"))
+      :else
+        (let [historical? (and (= mode "ask") old (not (:reply-targets s)) (not= (:document old) (:path ed)))
+          basis (if historical?
+                  (or (:snapshot old) (join "\n\n" (map (fn [x] (or (:definition x) (:code x))) xs)))
+                  (targets/source ed))
+          document (if historical? (:document old) (:path ed))
+          request {:id id :conversation conversation :mode mode :surface surface
+          :focus (or (:focus (:local s)) (:id (targets/current ed)))
+          :prompt prompt :source basis :document document :targets xs
+          :provider (:provider s) :context (session/context (:entries s) conversation)}
+          record (assoc (select-keys request [:id :conversation :mode :surface :prompt :document :targets]) :status "working"
+                        :snapshot (when (empty? xs) basis))]
+          (-> ed (put (assoc s :serial id :request request :phase "generating" :error nil
+                 :entries (session/append (:entries s) record) :entry id
+                 :local (when-not sidebar? {:anchor (or (:anchor (:local s)) (:root-id (first xs)) (:id (first xs)))
+                                           :focus (:focus request) :targets xs})))
+            (emit :work-request request))))))
+(defn fail [ed message]
+  (let [s (state ed)]
+    (put ed (assoc s :phase "idle" :error message
+      :entries (session/finish (:entries s) (:serial s) {:status "failed" :answer message})))))
+(defn- read-components [text forest-map]
+  (let [ed {:text text :forms forest-map}]
+    (mapv (fn [r] (merge r (targets/display ed r))) (filter :supported (targets/roots ed)))))
+(def ^:private cached-components (memo/identity-pair 8 read-components))
+(defn components [ed] (cached-components (:text ed) (:forms ed)))
+(defn edit-basis [ed id]
+  (when-let [root (root-target ed id)]
+    (assoc (select-keys root [:id :from :to :code]) :document (:path ed) :roots (components ed))))
+(defn handle [ed ev]
+  (let [s (state ed)]
+    (case (:action ev)
+      "select" (if-let [x (root-target ed (:id ev))]
+        (let [ed (targets/select ed x)]
+          (put ed (assoc s :marks (if (:add ev) (targets/toggle (:marks s) x) [x])))) ed)
+      "note" (if-let [root (root-target ed (:id ev))]
+        (let [forest (get (:forms ed) (:cell root)) path (into (:path root) [3 (:index ev)])
+              node (forms/node-at forest path) ed (targets/select ed node)
+              x (targets/captured ed (targets/current ed))]
+          (put ed (assoc s :marks (if (:add ev) (targets/toggle (:marks s) x) [x])))) ed)
+      "clear" (put ed (assoc s :marks []))
+      "edit-start" (if-let [basis (edit-basis ed (:id ev))] (put ed (assoc s :editing basis)) ed)
+      "edit-end" (assoc (put ed (assoc s :editing nil)) :last-edit nil)
+      "edit" (let [basis (if (and (= (:id ev) (:id (:editing s))) (= (:path ed) (:document (:editing s))))
+                           (:editing s) (edit-basis ed (:id ev)))]
+        (if (and basis (string? (:code ev)))
+          (let [updated (c/apply-edits ed [[(:from basis) (:to basis) (:code ev)]]
+                          (fn [_ end] {:anchor end :head end}) :component-source)]
+            (put updated (assoc s :editing (assoc basis :to (c/cursor updated) :code (:code ev))))) ed))
+      "parameter" (if-let [root (root-target ed (:id ev))]
+        (let [forest (get (:forms ed) (:cell root))
+              node (forms/node-at forest (into (:path root) [2 (inc (* 2 (:index ev)))]))]
+          (if (and node (number? (:value ev)))
+            (c/apply-edits ed [[(:from node) (:to node) (str (:value ev))]]
+              (fn [_ end] {:anchor end :head end}) :component-parameter) ed)) ed)
+      "mark" (mark ed)
+      "open" (ask ed)
+      "peek" (let [id (:id ev)]
+        (if id (put ed (update s :peeks (fn [xs] (if (contains? xs id) (disj xs id) (conj xs id))))) (peek-source ed)))
+      "layout" (toggle-layout ed)
+      "sidebar" (toggle-sidebar ed)
+      "draft" (let [sidebar? (= "session" (:surface ev))]
+        (put ed (cond-> s
+          (some? (:prompt ev)) (assoc (if sidebar? :sidebar-draft :draft) (:prompt ev))
+          (:mode ev) (assoc (if sidebar? :sidebar-mode :mode) (:mode ev))
+          (:provider ev) (assoc :provider (:provider ev)))))
+      "submit" (submit ed ev)
+      "cancel" (-> ed (put (assoc s :serial (inc (:serial s)) :phase "idle"
+          :entries (session/finish (:entries s) (:serial s) {:status "cancelled"})))
+        (emit :work-cancel {}))
+      "dismiss" (put ed (assoc s :local nil :error nil))
+      "entry" (put ed (assoc s :entry (:id ev) :reply-targets nil))
+      "new" (put ed (assoc s :entry nil :reply-targets nil :sidebar-mode "ask"))
+      "retarget" (let [xs (selected ed) old (active-entry s)]
+        (put ed (assoc s :reply-targets xs :error nil)))
+      "reveal" (if-let [x (first (filter (fn [x] (= (:id ev) (:id x))) (:targets (active-entry s))))]
+        (if-let [current (targets/resolve-target ed x)] (targets/select ed current)
+          (c/message ed "This exchange refers to an earlier source snapshot")) ed)
+      "answered" (if (and (= (:id ev) (:serial s)) (= "generating" (:phase s)))
+        (put ed (assoc s :phase "idle" :local-answer (:answer ev)
+          :entries (session/finish (:entries s) (:serial s)
+            {:status "answered" :answer (:answer ev) :provider (:provider ev)}))) ed)
+      "generated" (if (and (= (:id ev) (:serial s)) (= "generating" (:phase s)))
+        (try
+          (let [draft (targets/apply-replacements ed (:request s) (:edits ev))]
+            (-> ed (put (assoc s :phase "checking" :candidate (:edits ev) :summary (:summary ev) :result-provider (:provider ev)))
+              (emit :work-check {:id (:serial s) :source (targets/source draft)})))
+          (catch e (fail ed (str e)))) ed)
+      "checked" (if (and (= (:id ev) (:serial s)) (= "checking" (:phase s)))
+        (try
+          (let [updated (targets/apply-replacements ed (:request s) (:candidate s))
+                request (:request s) xs (vec (keep (fn [x] (targets/resolve-target updated x)) (:targets request)))
+                focus (or (first (filter (fn [x] (= (:id x) (:focus request))) xs)) (first xs))
+                updated (if focus (targets/select updated focus) updated)]
+            (put updated (assoc s :phase "idle" :marks xs :local-answer nil :draft ""
+              :entries (session/finish (:entries s) (:serial s)
+                {:status "changed" :summary (:summary s) :provider (:result-provider s)
+                 :edits (:candidate s) :targets (:targets request) :after-targets xs})
+              :local nil :changed (mapv :label xs))))
+          (catch e (fail ed (str e)))) ed)
+      "failed" (if (= (:id ev) (:serial s)) (fail ed (:message ev)) ed)
+      ed)))
+(defn sync [old ed ev]
+  (if-not (enabled? ed) ed
+    (let [s (state ed) changed (not= (:text old) (:text ed))
+          s (if (and changed (not (and (= :pelagic/work (:type ev)) (= "edit" (:action ev)))))
+              (assoc s :editing nil) s)
+          s (if (or (= :click (:type ev))
+                    (and (= :key (:type ev)) (not= (:sels old) (:sels ed)) (= 1 (count (:marks s)))))
+              (assoc s :marks []) s)
+          applied (and (= :pelagic/work (:type ev)) (= "checked" (:action ev)))
+          visit (not= (:path old) (:path ed))
+          s (if (and changed (not applied))
+              (cond-> (assoc s :marks [] :changed [])
+                visit (assoc :local nil :peeks #{})
+                (and (= "change" (:mode (:request s))) (contains? #{"generating" "checking"} (:phase s)))
+                (assoc :phase "idle" :serial (inc (:serial s))
+                  :entries (session/finish (:entries s) (:serial s) {:status "source changed"}))) s)]
+      (put ed s))))
+(defn model [ed]
+  (when (enabled? ed)
+    (let [s (state ed) xs (selected ed)]
+      (assoc (dissoc s :candidate) :document (:path ed) :dirty (c/dirty? ed) :selected xs
+        :roots (if-let [editing (:editing s)]
+                 (mapv (fn [r] (if (= (:id r) (:id editing)) (assoc r :code (:code editing)) r)) (:roots editing))
+                 (components ed))))))

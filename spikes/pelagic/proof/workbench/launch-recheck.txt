@@ -1,0 +1,33 @@
+Launch correction — 2026-10-22
+
+Reproduced: bin/bl pelagic.gen --port 8814 exits 1 after its frontend message.
+The pinned task CLI does not forward this recognized --port option without
+an argument separator; it used 8812. Its exception was written only to the
+warm daemon log, hiding the incompatible-host diagnostic from the terminal.
+
+Also checked: bin/bl --cold pelagic.gen -- --port 8814.
+The requested port is respected, but startup refuses the named routes already
+owned by the running 8812 world. A custom port does not make these shared route
+names or the per-checkout service slot independent.
+
+Changed spikes/pelagic/dev.bl to print its launch exception and an independent
+foreground command through task stdout before rethrowing. The failing exit is
+retained. No world/service stop, restart, migration or takeover was performed.
+
+Verified separate launch path:
+  bin/bl-ed --offline --memory --port 8792 --root /tmp/omega-pelagic-runcheck
+The temporary root contains a copy of spikes/pelagic/composer.bl.org.
+Opened /?use=pelagic&layout=pelagic-gen&file=composer.bl.org in Chromium:
+actual workbench mounted, bass selection and Play controls present, no page
+errors. This uses the real frontend, existing package and Omega intent host.
+
+User command from the repository root:
+  bin/bl-ed --offline --memory --port 8814 --root "$PWD"
+Then open:
+  http://localhost:8814/?use=pelagic&layout=pelagic-gen&file=spikes/pelagic/composer.bl.org
+Keep this foreground terminal running. Startup is ready at the bl-ed + omega
+message. This independent memory world leaves the existing shared world alone.
+
+Read-only verification: the existing live host on 8812 still reports its
+original ed033b6b9cb4a52237d153a8f584600682ef60673ed1cb8040374cc7b386e2de
+frontend. No writes were sent to the live world on 8790.

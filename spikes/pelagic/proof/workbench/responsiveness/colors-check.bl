@@ -1,0 +1,14 @@
+(ns pelagic.colors-check (:require [ed.main :as m] [ed.core :as c]))
+(def fixture "#+begin_src beam-lisp\n(def first 12)\n(def second [3 4])\n#+end_src\n")
+(deftest colors-and-diagnostics-follow-current-source
+ (let [ed (m/boot fixture "render.bl.org")
+       a (m/render-rows ed [1 2])
+       ed (m/handle ed {:type :click :pos [1 0]})
+       b (m/render-rows ed [1 2])]
+  (is (identical? (:segments (first (:lines a))) (:segments (first (:lines b)))))
+  (is (= [1 0] (:cursor b)))
+  (let [ed (c/replace-text ed (String/replace fixture "(def first 12)" "(def first [12)")) v (m/render-rows ed [1 2])
+        ed (m/handle ed {:type :key :key "u"}) restored (m/render-rows ed [1 2])]
+   (is (pos? (:problems (:status v))))
+   (is (= 0 (:problems (:status restored))))
+   (is (= (:segments (first (:lines a))) (:segments (first (:lines restored))))))))

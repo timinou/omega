@@ -19,6 +19,7 @@
             [omega.ext :as ext]
             [omega.artifacts :as artifacts]
             [omega.runtime :as runtime]
+            [omega.music-gen :as music-gen]
             [omega.workspace :as workspace]
             [buffer.model :as buffer]
             [bl-ed.serve :as serve]
@@ -79,7 +80,7 @@
                          :landing-pages (:landing-pages opts) :generations generations
                          :providers (merge (:providers opts)
                                            (assoc (workspace/providers sys server context-opts) "bl" (:provider img) "runtime" (runtime/provider inspection) "package" (packages/provider registry)))
-                         :intents (merge (pv/intents sys context-opts) (workspace/intents sys server) (:intents img) (runtime/intents inspection)
+                         :intents (merge (pv/intents sys context-opts) (workspace/intents sys server) (:intents img) (runtime/intents inspection) (music-gen/intents home)
                                    (when-let [factory (:intent-factory opts)] (factory sys))
                                    (packages/intents registry sys context-opts))})]
     (when db (println (str "omega: tasks are kept in " db (when (seq interrupted) (str " · interrupted: " (clojure.string/join " " interrupted))))))

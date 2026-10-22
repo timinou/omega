@@ -329,7 +329,7 @@ const pkgHosts = packageHosts({ dispatch: e => {
   let event = toBL(e);
   for (const k of ["type", "command", "pane"]) if (typeof e[k] === "string") event = event.assoc(K(k), K(e[k]));
   dispatch(event);
-}, toBL, toJS,
+}, toBL, toJS, focusEditor: () => sink.focus({preventScroll:true}),
   language: () => lang.start() });
 const documentAutoUsed = new Set(), documentSuppressed = new Set();
 let previousPackageNames = new Set();
@@ -888,7 +888,9 @@ function paint(dom, v, focused) {
     const cls2 = cls + (card ? " card tone-" + get(card, "tone") : "") + (obj ? " obj" : "") + (orn ? " ornament" : "")
       + (role ? " r-" + role.name : "") + (size > 1 ? " big" : "");
     const shown = card ? R.vec(ev(K("kind"), K("card"), K("text"), get(card, "text"))) : segs;
-    const sig = segSig(shown) + (get(ln, "folded?") ? "\u0003" : "") + "\u0004" + cls2;
+    const embedded = get(ln, "host");
+    const sig = segSig(shown) + (get(ln, "folded?") ? "\u0003" : "") + "\u0004" + cls2
+      + (embedded ? "\u0005" + get(embedded,"package") + ":" + get(ln,"key") : "");
     nextLines.set(row ?? "o" + get(ln, "key"), sig);
     frag.push([row, sig, shown, get(ln, "folded?"), cls2, get(ln, "current?"), place, why, orn ? get(ln, "src") : null, size, get(ln, "vy")]);
   }
@@ -920,7 +922,15 @@ function paint(dom, v, focused) {
   for (let i = 0; i < frag.length; i++) {
     const [row, sig, segs, folded, cls, current, place, why, src, size, vy] = frag[i];
     let node = view.children[i];
-    if (!node || node.dataset.sig !== sig) {
+    const embedded = get(lineArr[i], "host");
+    const mountKey = embedded ? get(embedded, "package") + ":" + get(lineArr[i], "key") : null;
+    // A style/current-row change must not destroy an owned native input/view.
+    // Keep the same mount for the same package object; model.update owns its
+    // contents. A different object in this viewport slot still replaces it.
+    if (node && mountKey && node.dataset.packageMountKey === mountKey) {
+      if (node.className !== cls) node.className = cls;
+      node.dataset.sig = sig;
+    } else if (!node || node.dataset.sig !== sig) {
       const fresh = document.createElement("div");
       fresh.className = cls;
       if (row != null) fresh.dataset.row = row; else fresh.dataset.src = src;
@@ -958,6 +968,16 @@ function paint(dom, v, focused) {
     // or scroll. Reused DOM must point at the row it now represents.
     if (row != null) { node.dataset.row = row; delete node.dataset.src; }
     else { node.dataset.src = src; delete node.dataset.row; }
+    // A package may mount an owned view in an ornament slot. Its source row,
+    // height and lifetime still belong to the ordinary presentation/frame.
+    if (embedded) {
+      node.dataset.packageMountKey = mountKey;
+      node.style.height = size * metrics.line + 'px';
+      let root = node.querySelector(':scope > [data-package-inline]');
+      if (!root) { root = document.createElement('div'); root.dataset.packageInline = ''; root.style.cssText = 'height:100%;white-space:normal;overflow:hidden;pointer-events:auto'; node.replaceChildren(root); }
+      const model = toJS(embedded);
+      pkgHosts.paint(model.package, root, model, dom.root.dataset.pane);
+    }
     place$(node, lineArr[i], shiftOf(lineArr[i]));
     let g = gutter.children[i];
     // a cell's first row carries its placement: ● local (runs in the page),
@@ -1255,7 +1275,7 @@ function activateCommand(node, command) {
   dispatch(ev(K("type"), K("command"), K("command"), K(command))); sink.focus();
 }
 panesEl.addEventListener("mousedown", (e) => {
-  if (!fr || e.target.closest(".view")) return;
+  if (!fr || e.target.closest(".view, [data-package-inline]")) return;
   const action = e.target.closest("[data-command]");
   if (action) { e.preventDefault(); activateCommand(action, action.dataset.command); return; }
   const lineNode = e.target.closest(".line");
@@ -1299,6 +1319,7 @@ const glide = createGlide({
 });
 panesEl.addEventListener("wheel", (e) => {
   if (e.target.closest(".view")) return;
+  if (e.composedPath().some(n => n?.dataset?.packageScroll !== undefined)) return;
   e.preventDefault();
   if (!fr) return;
   const id = paneOf(e.target);

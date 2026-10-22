@@ -1,0 +1,90 @@
+(ns pelagic.workbench-beam-test
+  (:require [ed.main :as m] [ed.core :as c] [ed.pkg :as pkg]
+            [pelagic.main :as p] [pelagic.targets :as t] [pelagic.workbench :as w]))
+(def fixture (File/read! "spikes/pelagic/composer.bl.org"))
+(defn fresh [] (m/handle (first (m/take-effects (m/boot fixture "composer.bl.org"))) {:type :use :package p/bl-package}))
+(defn act [ed action args] (m/handle ed (merge {:type :pelagic/work :action action} args)))
+(defn pick [ed label add]
+  (act ed "select" {:id (:id (first (filter (fn [r] (= label (:label r))) (t/roots ed)))) :add add}))
+(deftest prompt-state-stays-current-when-slot-geometry-is-reused
+  (let [ed (m/handle (pick (fresh) "kick-pattern" false) {:type :command :command :pelagic/ask})
+        a (act ed "draft" {:prompt "first request"})
+        _ (m/render a)
+        b (act a "draft" {:prompt "revised request"})
+        prompt (first (filter (fn [line] (= "prompt" (:kind (:host line)))) (:lines (m/render b))))]
+    (is (= "revised request" (:draft (:workbench (:host prompt)))))
+    (is (= fixture (t/source b)))))
+(deftest multitrack-edit-is-one-source-transaction
+  (let [ed (pick (pick (fresh) "kick-pattern" false) "bass-pattern" true)
+        ed (act ed "submit" {:mode "change" :prompt "More space"})
+        id (:serial (w/state ed))
+        edits (mapv (fn [x] {:id (:id x) :replacement
+          (if (= "kick-pattern" (:label x)) "(defn kick-pattern [root seed] [[0 0.22 0.25]])"
+            "(defn bass-pattern [root seed] [[0 root 0.25]])")}) (:targets (:request (w/state ed))))
+        ed (act ed "generated" {:id id :edits edits :summary "More space"})]
+    (is (= 6 (count (filter :supported (t/roots ed)))))
+    (is (= "checking" (:phase (w/state ed))))
+    (is (= fixture (t/source ed)))
+    (let [ed (act ed "checked" {:id id})]
+      (is (nil? (:error (w/state ed))) (pr-str (w/state ed)))
+      (is (not= fixture (t/source ed)))
+      (is (= "changed" (get-in (w/state ed) [:entries 0 :status])))
+      (is (= 2 (count (get-in (w/state ed) [:entries 0 :after-targets]))))
+      (is (= fixture (t/source (m/handle ed {:type :key :key "u"})))))))
+(deftest questions-and-history-remain-source-read-only
+  (let [ed (pick (fresh) "melody" false) history (:history ed)
+        ed (act ed "submit" {:mode "ask" :prompt "Why this rhythm?"}) id (:serial (w/state ed))
+        ed (act ed "answered" {:id id :answer "Four events over eight beats."})]
+    (is (= fixture (t/source ed))) (is (= history (:history ed)))
+    (is (= "answered" (get-in (w/state ed) [:entries 0 :status])))
+    (let [ed (act ed "submit" {:surface "session" :mode "ask" :prompt "And its duration?"})]
+      (is (= 1 (count (:context (:request (w/state ed))))))
+      (is (= id (:conversation (:request (w/state ed))))))))
+(deftest presentation-and-unload-use-the-real-editor-contract
+  (let [ed (act (fresh) "layout" {}) view (m/render ed)]
+    (is (some (fn [line] (= "component" (:kind (:host line)))) (:lines view)))
+    (let [removed (pkg/unuse ed "pelagic")]
+      (is (= fixture (t/source removed)))
+      (is (nil? (get (:pkg-state removed) "pelagic")))
+      (is (not-any? :host (:lines (m/render removed)))))))
+(deftest inline-peek-and-local-request-render-in-the-existing-presentation
+  (let [ed (pick (fresh) "melody" false)
+        ed (act ed "layout" {}) ed (w/peek-source ed)
+        view (m/render ed)]
+    (is (some (fn [line] (some? (:row line))) (:lines view)))
+    (let [ed (w/ask ed) view (m/render ed)]
+      (is (some (fn [slot] (= "prompt" (:kind (:host slot)))) (get-in view [:screen :slots]))))))
+(deftest multi-target-prompt-stays-at-the-focused-object-through-submission
+  (let [ed (pick (pick (fresh) "kick-pattern" false) "bass-pattern" true)
+        ed (w/ask ed) anchor (get-in (w/state ed) [:local :anchor])
+        current (:root-id (t/current ed))
+        ed (act ed "submit" {:mode "ask" :prompt "How do these fit?"})]
+    (is (= current anchor))
+    (is (= anchor (get-in (w/state ed) [:local :anchor])))))
+(deftest a-question-can-continue-about-captured-code-after-a-file-visit
+  (let [ed (pick (fresh) "melody" false)
+        ed (act ed "submit" {:mode "ask" :prompt "Explain this"}) id (:serial (w/state ed))
+        ed (act ed "answered" {:id id :answer "A phrase"})
+        ed (m/handle ed {:type :doc :path "notes.bl.org" :text "Other notes\n" :rev "two" :visit? true :read-only? false :objects []})
+        ed (act ed "submit" {:surface "session" :mode "ask" :prompt "And its second event?"})]
+    (is (= "composer.bl.org" (get-in (w/state ed) [:request :document])))
+    (is (= "melody" (get-in (w/state ed) [:request :targets 0 :label])))
+    (is (= "Other notes\n" (t/source ed)))))
+(deftest source-peek-keeps-its-edit-span-through-empty-and-incomplete-input
+  (let [ed (fresh) root (first (filter (fn [x] (= "glass" (:label x))) (t/roots ed))) id (:id root)
+        ed (act ed "edit-start" {:id id})
+        empty (act ed "edit" {:id id :code ""})
+        partial (act empty "edit" {:id id :code "(o/definst glass [freq 440"})
+        restored (act partial "edit" {:id id :code (:code root)})
+        restored (act restored "edit-end" {})]
+    (is (= 6 (count (:roots (w/model empty)))))
+    (is (= "" (:code (first (:roots (w/model empty))))))
+    (is (includes? (t/source partial) "(defn bass-pattern"))
+    (is (= fixture (t/source restored)))
+    (is (= fixture (t/source (c/undo restored))))))
+(deftest opening-a-request-on-another-document-enters-the-same-workspace
+  (let [ed (m/handle (first (m/take-effects (m/boot "Some code notes\n" "notes.bl.org"))) {:type :use :package p/bl-package})
+        ed (w/ask ed)]
+    (is (w/enabled? ed))
+    (is (= "Some code notes\n" (t/source ed)))
+    (is (some (fn [effect] (= :frame-layout (:kind effect))) (:effects ed)))))

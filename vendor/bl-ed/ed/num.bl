@@ -29,11 +29,11 @@
     (if (nil? i)
       nil
       (let [whole (subs s 0 i) frac (subs s (inc i))
-            neg? (starts-with? whole "-")
+            negative-sign? (starts-with? whole "-")
             w (parse-int (if (or (= whole "") (= whole "-")) "0" whole))
             f (parse-int frac)]
         (if (or (nil? w) (nil? f) (= frac "") (starts-with? frac "-") (starts-with? frac "+"))
           nil
           (let [scale (reduce (fn [acc _] (* acc 10)) 1 (range (count frac)))
                 mag (+ (* 1.0 (if (neg? w) (- 0 w) w)) (/ f scale))]
-            (if (or neg? (neg? w)) (- 0.0 mag) mag)))))))
+            (if (or negative-sign? (neg? w)) (- 0.0 mag) mag)))))))

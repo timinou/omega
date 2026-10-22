@@ -1,4 +1,17 @@
 /* Owned by a mounted Pelagic view; exact unuse removes this stylesheet. */
+#panes:has([data-pelagic-workbench]) .sel.primary{background:#e3dced;outline:1px solid #b1a3bf;outline-offset:-1px;border-radius:2px}
+#panes:has([data-pelagic-workbench]) .pane.editor .page{padding-top:18px}
+#panes:has([data-pelagic-workbench])>.view-components,#panes:has([data-pelagic-workbench])>.view-session{min-width:0;overflow:hidden}
+@media(max-width:760px){
+ #panes:has([data-pelagic-workbench]){grid-template-columns:minmax(0,1fr)!important;grid-template-rows:minmax(0,1fr)!important}
+ #panes:has([data-pelagic-workbench])>[data-pane="stage"]{display:none}
+ #panes:has([data-pelagic-workbench])>[data-pane="session"]{position:fixed;inset:38px 0 30px;z-index:15;background:#f3eee7;box-shadow:-5px 0 24px #51443822}
+}
+#panes:has([data-pelagic-compose]) .sel.primary{background:#d8cfea;outline:1px solid #8e86ad;outline-offset:-1px;border-radius:2px}
+#panes:has([data-pelagic-compose]) .pane.editor .selections{mix-blend-mode:multiply}
+@media(max-width:700px){
+ #panes:has([data-pelagic-compose]){grid-template-columns:minmax(0,1fr)!important;grid-template-rows:minmax(240px,1fr) minmax(350px,1.3fr)!important}
+}
 @media(max-width:700px){
  #panes:has(>.view-host>[data-pelagic-stage]):not(:has(>[data-pane="observatory"])){
   grid-template-columns:minmax(0,1fr)!important;

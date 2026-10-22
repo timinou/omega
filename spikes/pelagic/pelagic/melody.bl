@@ -1,0 +1,34 @@
+; Prototype 1's deliberately small generation language. These are real BL
+; functions, with a finite vector body and bounded scalar arithmetic only.
+; Both the server and the browser check the same value before compilation.
+(ns pelagic.melody)
+(defn- fail [message] (throw (ex-info message {})))
+(defn scalar [x bindings depth]
+  (when (> depth 8) (fail "Arithmetic nesting exceeds eight levels"))
+  (cond
+    (number? x) (do (when (> (abs x) 4096) (fail "Numeric literal is too large")) x)
+    (symbol? x) (if (contains? bindings x) (get bindings x) (fail "Only root and seed are available"))
+    (seq? x)
+      (let [op (first x) args (rest x)]
+        (when-not (and (contains? #{'+ '- '* 'mod} op) (= 2 (count args)))
+          (fail "Use binary +, -, *, or mod in a melody expression"))
+        (let [a (scalar (first args) bindings (inc depth)) b (scalar (second args) bindings (inc depth))]
+          (case (str op) "+" (+ a b) "-" (- a b) "*" (* a b)
+            "mod" (do (when (or (not (int? a)) (not (int? b)) (zero? b)) (fail "mod needs integers and a nonzero divisor")) (mod a b)))))
+    :else (fail "Expected a number or a bounded arithmetic expression")))
+(defn validate [form]
+  (when-not (and (seq? form) (= 4 (count form)) (= 'defn (first form))
+                (= 'melody (second form)) (= '[root seed] (nth form 2)))
+    (fail "Keep (defn melody [root seed] ...) and one vector body"))
+  (let [body (nth form 3)]
+    (when-not (and (vector? body) (<= 1 (count body)) (<= (count body) 24))
+      (fail "A phrase needs 1–24 [beat midi duration] events"))
+    (let [notes (mapv (fn [event]
+                       (when-not (and (vector? event) (= 3 (count event))) (fail "Each event is [beat midi duration]"))
+                       (let [[beat midi duration] (mapv (fn [x] (scalar x {'root 62 'seed 7} 0)) event)]
+                         (when-not (and (<= 0 beat) (< beat 8) (int? midi) (<= 36 midi) (<= midi 96)
+                                       (<= 0.08 duration) (<= duration 2))
+                           (fail "Use beats 0–<8, MIDI 36–96 and durations 0.08–2 seconds"))
+                         [beat midi duration])) body)]
+      (when-not (= (mapv first notes) (vec (sort (map first notes)))) (fail "Events must be in beat order"))
+      notes)))

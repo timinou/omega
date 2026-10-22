@@ -1,0 +1,32 @@
+(ns music-gen-test (:require [omega.music-gen :as g] [pelagic.melody :as melody] [clojure.edn :as edn]))
+(def request {:prompt "More syncopation, same harmony" :code g/demo-one :definition g/demo-one})
+(deftest generated-function-is-real-finite-music
+  (is (= 6 (count (melody/validate (edn/read-string g/demo-one)))))
+  (is (= [1.5 69 0.24] (nth (melody/validate (edn/read-string g/demo-one)) 1)))
+  (is (= g/demo-one (g/validate-replacement g/demo-one))))
+(deftest rejects-execution-and-ambiguous-output-before-loading
+  (doseq [source ["(File/write! \"/tmp/must-not-write\" \"x\")"
+                  "(do (println 1) [0 62 1])" "1 2" "```clojure\n1\n```"
+                  "(defn melody [root seed] (loop [] (recur)))"
+                  "(defn other [root seed] [[0 root 1]])"
+                  "(defn melody [root seed] [[8 root 1]])"
+                  "(defn melody [root seed] [[0 128 1]])"
+                  "(defn melody [root seed] [[0 root 20]])"]]
+    (is (try (g/validate-replacement source) false (catch _ true)) source)))
+(deftest repair-uses-real-validation-feedback-and-stops-at-three
+  (let [calls (atom []) ask (fn [messages]
+                            (swap! calls conj messages)
+                            {:ok (if (= 1 (count @calls)) "(unknown 1)" g/demo-one)})
+        result (g/generate request ask "test transport")]
+    (is (= 2 (:attempts result)))
+    (is (= g/demo-one (:replacement result)))
+    (is (includes? (:content (last (second @calls))) "Validation failed")))
+  (let [calls (atom 0) result (g/generate request (fn [_] (swap! calls inc) {:ok "(unknown 1)"}) "test")]
+    (is (= 3 @calls)) (is (= false (:ok result)))))
+(deftest transport-failure-does-not-fabricate-a-candidate
+  (let [result (g/generate request (fn [_] {:error :offline}) "test")]
+    (is (= false (:ok result))) (is (nil? (:replacement result)))))
+(deftest actual-beam-compilation-and-execution-agree-with-profile
+  (let [form (edn/read-string g/demo-one) expected (melody/validate form)
+        result (BeamLisp/eval (str "(ns music-gen-test.candidate)\n" g/demo-one "\n(melody 62 7)"))]
+    (is (= expected result))))

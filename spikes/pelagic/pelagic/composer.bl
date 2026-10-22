@@ -1,0 +1,134 @@
+; Source attention, revision guards and proposals are pure editor operations.
+(ns pelagic.composer
+  (:require [ed.core :as c] [ed.text :as t] [ed.forms :as forms] [ed.num :as num]
+            [pelagic.melody :as melody]))
+(def slot [:pkg-state "pelagic" :composer])
+(defn state [ed] (get-in ed slot))
+(defn enabled? [ed] (boolean (:enabled (state ed))))
+(defn put [ed value] (assoc-in ed slot value))
+(defn source [ed] (t/to-string (:text ed)))
+(defn node-data [tx node]
+  (let [text (t/slice tx (:from node) (:to node)) kids (forms/navigable (:kids node))]
+    (case (:kind node)
+      :number (or (num/parse-int text) (num/parse-decimal text))
+      ; The pinned runtime's one-argument symbol drops qualifiers from strings.
+      ; Preserve the existing reader's complete symbol datum, including o/ calls.
+      :symbol (tuple :symbol text)
+      :vector (mapv (fn [n] (node-data tx n)) kids)
+      :list (apply list (map (fn [n] (node-data tx n)) kids))
+      (throw "This melody profile supports numbers, symbols, lists and vectors"))))
+(defn definition [ed]
+  (some (fn [[cell forest]]
+          (some (fn [i]
+                  (let [node (nth (forms/navigable forest) i) text (t/slice (:text ed) (:from node) (:to node))]
+                    (when (starts-with? text "(defn melody ") {:cell cell :forest forest :node node :path [i]})))
+                (range (count (forms/navigable forest))))) (:forms ed)))
+(defn notes [ed]
+  (try (when-let [d (definition ed)] (melody/validate (node-data (:text ed) (:node d)))) (catch _ [])))
+(defn selection [ed]
+  (when-let [fc (c/forest-at-cursor ed)]
+    (let [forest (:forest fc) path (forms/path-at forest (:anchor (c/primary ed)))
+          node (when path (forms/node-at forest path)) d (definition ed)]
+      (when (and node (not (:skip? node)) (not (:open? node)) (empty? (forms/problems [node])))
+        {:from (:from node) :to (:to node) :path path :kind (name (:kind node))
+         :code (t/slice (:text ed) (:from node) (:to node))
+         :supported (and d (t/pos<= (:from (:node d)) (:from node)) (t/pos<= (:to node) (:to (:node d))))
+         :trail (mapv (fn [depth]
+                       (let [n (forms/node-at forest (subvec path 0 depth))]
+                         {:label (if (= 1 depth)
+                                   (let [kids (:kids n) head (first kids) head-text (when head (t/slice (:text ed) (:from head) (:to head)))
+                                         label-node (if (contains? #{"defn" "def" "o/definst"} head-text) (second kids) head)]
+                                     (if label-node (t/slice (:text ed) (:from label-node) (:to label-node)) (name (:kind n))))
+                                   (if (= :number (:kind n)) (t/slice (:text ed) (:from n) (:to n)) (name (:kind n))))
+                          :path (subvec path 0 depth)})) (range 1 (inc (count path))))}))))
+(defn select-node [ed node]
+  (if node (-> ed (assoc :sels [{:anchor (:from node) :head (or (t/prev-pos (:text ed) (:to node)) (:from node))}] :primary 0)
+               c/scroll-to-cursor) ed))
+(defn select-melody [ed]
+  (let [ed (put ed (merge {:serial 0 :phase "idle" :versions []} (state ed) {:enabled true}))]
+    (select-node ed (:node (definition ed)))))
+(defn ask [ed]
+  (let [ed (if (enabled? ed) ed (select-melody ed))]
+    (c/effect ed {:kind :package-host :package "pelagic" :op :compose-focus :args {}})))
+(defn- emit [ed op args] (c/effect ed {:kind :package-host :package "pelagic" :op op :args args}))
+(defn candidate-source [request replacement]
+  (t/to-string (:text (t/replace-range (t/from-string (:source request)) (:from request) (:to request) replacement))))
+(defn valid-source [text]
+  (let [ed (c/new-editor text "candidate.bl.org") d (definition ed)]
+    (when-not d (throw "No melody definition"))
+    (when (seq (forms/problems [(:node d)])) (throw "Incomplete melody form"))
+    {:notes (melody/validate (node-data (:text ed) (:node d)))
+     :definition (t/slice (:text ed) (:from (:node d)) (:to (:node d)))}))
+(defn handle [ed ev]
+  (let [s (state ed) action (:action ev)]
+    (case action
+      "select" (select-melody ed)
+      "draft" (put ed (assoc s :draft (:prompt ev) :provider (:provider ev)))
+      "note" (if-let [d (definition ed)] (select-node ed (forms/node-at (:forest d) (into (:path d) [3 (:index ev)]))) ed)
+      "path" (if-let [fc (c/forest-at-cursor ed)] (select-node ed (forms/node-at (:forest fc) (:path ev))) ed)
+      "move" (if-let [fc (c/forest-at-cursor ed)]
+                (let [p (:path (selection ed)) r (forms/motion (:forest fc) p (keyword (:direction ev)))]
+                  (c/message (select-node ed (forms/node-at (:forest fc) (:path r))) (:cue r))) ed)
+      "generate"
+        (let [selected (selection ed) prompt (trim (or (:prompt ev) "")) id (inc (get s :serial 0))]
+          (if (or (not (:supported selected)) (empty? prompt) (> (count prompt) 2000))
+            (c/message ed "Select part of melody and enter a request")
+            (let [request (merge (select-keys selected [:from :to :code :kind])
+                           {:id id :source (source ed) :prompt prompt :provider (or (:provider ev) "gen")
+                            :definition (:definition (valid-source (source ed)))
+                            :previous (when (and (= (:from selected) (:from (:request s))) (= (:to selected) (:to (:request s))))
+                                        (some-> (:candidate s) :replacement))})]
+              (-> ed (put (assoc s :serial id :request request :phase "generating" :error nil :candidate nil))
+                  (emit :compose-generate request)))))
+      "cancel" (-> ed (put (assoc s :serial (inc (get s :serial 0)) :phase "idle" :request nil :candidate nil :error nil))
+                    (emit :compose-cancel {}))
+      "generated"
+        (if (and (= (:id ev) (:serial s)) (= "generating" (:phase s)) (= (source ed) (:source (:request s))))
+          (try
+            (let [request (:request s) text (candidate-source request (:replacement ev)) check (valid-source text)
+                  candidate (merge check {:id (:id ev) :source text :replacement (:replacement ev)
+                                           :before (:code request) :basis (:source request) :provider (:provider ev)
+                                           :attempts (:attempts ev) :prompt (:prompt request)})]
+              (-> ed (put (assoc s :phase "checking" :candidate candidate))
+                  (emit :compose-check candidate)))
+            (catch e (put ed (assoc s :phase "failed" :error (str e))))) ed)
+      "checked"
+        (if (and (= (:id ev) (:serial s)) (= "checking" (:phase s)) (= (source ed) (:basis (:candidate s))))
+          (let [candidate (assoc (:candidate s) :checks (:checks ev))]
+            (let [versions (conj (:versions s) candidate)]
+              (put ed (assoc s :phase "ready" :candidate candidate :versions (vec (drop (max 0 (- (count versions) 12)) versions)))))) ed)
+      "failed" (if (= (:id ev) (:serial s)) (put ed (assoc s :phase "failed" :error (:message ev))) ed)
+      "version" (let [candidate (nth (:versions s) (:index ev) nil)]
+                  (if (= (source ed) (:basis candidate)) (put ed (assoc s :phase "ready" :candidate candidate)) ed))
+      "audition"
+        (if (and (:candidate s) (= (source ed) (:basis (:candidate s))) (contains? #{"ready" "audition"} (:phase s)))
+          (-> ed (put (assoc s :phase "preparing")) (emit :compose-audition (assoc (:candidate s) :id (:serial s)))) ed)
+      "auditioned" (if (and (= (:id ev) (:serial s)) (= "preparing" (:phase s))) (put ed (assoc s :phase "audition")) ed)
+      "commit"
+        (if (and (= "audition" (:phase s)) (= (source ed) (:basis (:candidate s))))
+          (-> ed (put (assoc s :phase "committing")) (emit :compose-commit (assoc (:candidate s) :id (:serial s)))) ed)
+      "committed"
+        (if (and (= (:id ev) (:serial s)) (= "committing" (:phase s)) (= (source ed) (:basis (:candidate s))))
+          (let [updated (c/replace-text ed (:source (:candidate s)))]
+            (put (select-melody updated) (assoc s :phase "queued" :performance-revision (:revision ev)
+                                     :committed-source (:source (:candidate s))))) ed)
+      "undo" (if (and (= "active" (:phase s)) (= (source ed) (:committed-source s)))
+               (emit ed :compose-undo {:source (:basis (:candidate s)) :revision (:performance-revision s) :id (:serial s)}) ed)
+      "undone" (if (and (= (:id ev) (:serial s)) (= (source ed) (:committed-source s)))
+                 (put (select-melody (c/replace-text ed (:source ev)))
+                      (assoc s :phase "reverted" :candidate nil :committed-source nil)) ed)
+      "active" (if (= "queued" (:phase s)) (put ed (assoc s :phase "active")) ed)
+      ed)))
+(defn sync [old ed ev]
+  (if-not (enabled? ed) ed
+    (let [ed (if (and (= :click (:type ev)) (= :normal (:mode ed)))
+               (if-let [fc (c/forest-at-cursor ed)]
+                 (select-node ed (forms/node-at (:forest fc) (forms/path-at (:forest fc) (c/cursor ed)))) ed) ed)
+          changed (not= (:text old) (:text ed)) s (state ed)
+          own-commit (and (= :pelagic/compose (:type ev)) (contains? #{"committed" "undone"} (:action ev)))
+          s (if (and changed (not own-commit))
+              (assoc s :serial (inc (get s :serial 0)) :phase "stale" :candidate nil :request nil) s)
+          ed (put ed s) selected (selection ed)]
+      (put ed (assoc s :selection selected :notes (notes ed))))))
+(defn model [ed]
+  (when (enabled? ed) (assoc (state ed) :path (:path ed) :dirty (c/dirty? ed))))

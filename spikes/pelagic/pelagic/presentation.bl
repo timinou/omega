@@ -1,0 +1,87 @@
+; Reuse the editor's existing source-backed marks and slot layout.
+(ns pelagic.presentation
+  (:require [pp.present :as p] [ed.text :as t] [ed.core :as c]
+            [pelagic.targets :as targets] [pelagic.workbench :as w]))
+(defn read-document [_ ed] {:type :doc :from 0 :to (t/line-count (:text ed)) :kids []})
+(defn host-mark [row key size model]
+  (p/line-mark row [] key {:size size :host (assoc model :package "pelagic")}))
+(defn present-document [_ ctx]
+  (let [ed (:ed ctx) s (w/state ed)
+        roots (filter :supported (targets/roots ed))
+        by-row (reduce (fn [m r] (assoc m (first (:from r)) r)) {} roots)
+        local (:local s) anchor (:anchor local)
+        anchor-root (first (filter (fn [r] (= anchor (:id r))) roots))
+        after-row (if anchor-root (first (:to anchor-root)) (first (c/cursor ed)))
+        prompt (when local (host-mark after-row "request" 10
+                         {:kind "prompt"}))
+        header (host-mark 0 "toolbar" 3 {:kind "toolbar"})]
+    (p/stack
+      (loop [row 0 out [header]]
+        (if (>= row (t/line-count (:text ed)))
+          (if (and prompt (>= after-row row)) (conj out prompt) out)
+          (let [root (get by-row row) inline? (and root (= "inline" (:layout s)))
+                peek? (and root (contains? (:peeks s) (:id root)))
+                end (if (and inline? (not peek?)) (inc (first (:to root))) (inc row))
+                mount (when inline? (host-mark row (:id root) (if (= "phrase" (:profile root)) 6 3)
+                    {:kind "component" :target (:id root)}))
+                out (cond
+                      (and inline? (not peek?)) (conj out mount)
+                      inline? (conj (conj out mount) (p/text-mark row))
+                      :else (conj out (p/text-mark row)))
+                out (if (and prompt (<= row after-row) (< after-row end)) (conj out prompt) out)]
+            (recur end out)))))))
+(def presentation
+  {:name "pelagic-document" :read read-document :readtable []
+   :table {:doc present-document} :isa p/ISA :around []
+   :lod-of (fn [_ _] (fn [_] 3))
+   ; Prompt text, history and request progress do not change slot geometry.
+   :focus-of (fn [ed _]
+     (let [s (w/state ed) local (:local s)
+           anchored? (some (fn [root] (and (:supported root) (= (:id root) (:anchor local)))) (targets/roots ed))]
+       [(:text ed) (when (and local (not anchored?)) (first (c/cursor ed))) (:layout s) (:peeks s)
+        (some? (:local s)) (:anchor (:local s))]))})
+(defn render [ed]
+  (when (w/enabled? ed)
+    (let [model (w/model ed)]
+      (update (p/render presentation ed) :lines
+        (fn [lines] (mapv (fn [line]
+          (if (:host line) (update line :host assoc :workbench model) line)) lines))))))
+(defn reveal-local [ed]
+  (if-not (:local (w/state ed)) ed
+    (let [v (p/render presentation ed)]
+      (if (some (fn [line] (= "prompt" (:kind (:host line)))) (:lines v)) ed
+        (let [slots (:slots (p/screen-of presentation ed))
+              y (first (filter (fn [i] (= "request" (:key (nth slots i)))) (range (count slots))))]
+          (if (nil? y) ed
+            (let [root (first (filter (fn [r] (= (:id r) (:anchor (:local (w/state ed))))) (targets/roots ed)))
+                  start (if root (p/first-slot-of-row slots (first (:from root))) 0)
+                  y (max start (max (- y 6) 0)) row (p/slot-row (nth slots y))]
+              (assoc ed :view (assoc (:view ed) :top row
+                :anchor {:row row :off (- y (p/first-slot-of-row slots row)) :sub 0})))))))))
+(defn- already-visible? [ed slots]
+  (let [view (:view ed) anchor (:anchor view) top (:top view)
+        y (+ (p/first-slot-of-row slots top) (if (= top (:row anchor)) (or (:off anchor) 0) 0))
+        target (p/slot-for-row slots (first (c/cursor ed)))
+        height (max 0 (dec (or (:height view) 0)))]
+    (loop [i y used 0]
+      (if (or (nil? target) (>= i (count slots))) false
+        (let [size (or (:size (nth slots i)) 1)]
+          (cond (> (+ used size) height) false
+                (= i target) true
+                :else (recur (inc i) (+ used size))))))))
+(defn reveal [ed]
+  (when (w/enabled? ed)
+    (let [slots (:slots (p/screen-of presentation ed))]
+      ; The Pelagic layout has no sticky/docked frames. Visibility can be
+      ; checked from its slots without painting/coloring the whole document.
+      (if (already-visible? ed slots) ed (p/reveal presentation ed)))))
+(defn rows [ed]
+  (when (w/enabled? ed) (vec (distinct (keep p/slot-row (:slots (p/screen-of presentation ed)))))))
+(defn scroll [ed ev]
+  (when (and (w/enabled? ed) (contains? #{:scroll-slots :scroll-to-slot} (:type ev)))
+    (let [v (p/render presentation ed) slots (:slots (:screen v))
+          y (max 0 (min (dec (count slots))
+              (if (= :scroll-to-slot (:type ev)) (:y ev)
+                (+ (:slot-top v) (if (pos? (:delta ev)) (max 1 (int (:delta ev))) (min -1 (int (:delta ev))))))))
+          row (p/slot-row (nth slots y))]
+      (assoc ed :view (assoc (:view ed) :top row :anchor {:row row :off (- y (p/first-slot-of-row slots row)) :sub 0})))))

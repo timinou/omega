@@ -1,0 +1,38 @@
+#+TITLE: Pelagic evidence integration / deferred follow-up
+#+DATE: 2026-10-21
+#+STATE: DEFERRED
+
+* Priority
+The next design priority is the ordinary editing and prompting experience:
+structural and component selection, one request over selected targets, local
+replacement, and switching between inline components and split source/component
+views. See experience.bl.org. Rich evidence is a later extension to that flow.
+
+* Retained proposal
+Extend candidate check names into structured records naming the exact source,
+property, assumptions, outcome and diagnostic or counterexample. Distinguish
+passed, failed, unsupported, unknown, timeout and error.
+
+An evidence inspector can open from a check next to the relevant object, keeping
+the source and music in context. Evidence values should have ordinary commands:
+select the originating expression, prepare an evaluation of a failing input,
+and request a bounded repair. Do not automatically send arbitrary witnesses to
+audio. Preserve previous attempts and their evidence as inspectable versions.
+
+For the existing scalar-helper probe, root 97 and offset 0 reproduce the
+unclamped pitch helper's out-of-range result. This is evidence about that helper
+under integer assumptions, not proof of a collection-valued melody or timing.
+
+* Integration outline
+- Use request-owned staging and revision-owned results.
+- Gather actual codebase and browser capability facts.
+- Run name/arity, signature/type, compiler and musical checks outside audio work.
+- Add supported scalar solver properties with explicit assumptions.
+- Attach diagnostics and witnesses to ordinary repair requests.
+- Record source, requests, checks and decisions before introducing memoization.
+
+* Experience constraint
+Do not introduce mandatory evidence panels, proof review or additional approval
+steps into the immediate editing design. The musical object and local request
+remain the center of the experience. Existing analysis findings and limits are
+recorded in research.bl.md; the executable probe remains prototype2.bl.

@@ -1,0 +1,52 @@
+; A second, offline prototype: source facts + type diagnostics + a real solver
+; witness for a scalar music helper. No editor, model call, save or publication.
+(ns pelagic-gen.prototype2
+  (:require [codebase :as cb] [typed] [system.typecheck :as types]
+            [system.smt :as translate] [smt :as smt] [oracle] [z3]))
+(def good "(defn ^{:args [int int] :ret int} pitch [root offset] (min 96 (max 36 (+ root offset))))")
+(def bad "(defn ^{:args [int int] :ret int} pitch [root offset] (+ root offset))")
+(def property "(or (< (pitch root offset) 36) (> (pitch root offset) 96))")
+(defn codebase-check [source]
+  (let [conn (cb/connect-codebase)
+        sigs (merge typed/core-sigs typed/core-seeds-v2 typed/host-seeds)]
+    (cb/transact-source! conn sigs "pelagic-gen.probe" source)
+    (let [db (datom/db conn) unknown (vec (cb/unknown-callees db (cb/core-callee-names "pelagic-gen.probe")))
+          arity (vec (cb/arity-mismatches db))]
+      {:check :codebase :status (if (and (empty? unknown) (empty? arity)) :passed :failed)
+       :unknown unknown :arity arity})))
+(defn type-check [source]
+  (let [warnings (vec (types/check-source source))]
+    {:check :type-diagnostics :status (if (empty? warnings) :passed :failed) :warnings warnings
+     :scope "Upstream diagnostics; no claim of complete signature conformance"}))
+(defn proof-check [source]
+  (let [term (translate/of-source-inlining source ["root" "offset"] property)]
+    (if (= :untranslatable term)
+      {:check :pitch-range :status :unsupported :scope "Scalar ANF translator could not model this program"}
+      (let [obligation (oracle/obligation :pelagic-pitch-range
+                         [(smt/declare-const 'root 'Int) (smt/declare-const 'offset 'Int) (smt/assert term)])
+            verdict (oracle/ask obligation true)]
+        {:check :pitch-range :status (case (:status verdict) :unsat :passed :sat :failed :unknown :unknown :error)
+         :verdict verdict :witness (when (oracle/refuted? verdict) (oracle/witness verdict ["root" "offset"]))
+         :scope "For all integer root and offset: 36 <= pitch(root, offset) <= 96; no audio or browser claim"}))))
+(defn battery [source]
+  (let [facts (codebase-check source)]
+    (if (= :failed (:status facts)) [facts]
+      [facts (type-check source) (proof-check source)])))
+(defn run []
+  (z3/pool! 1)
+  (let [accepted (battery good) refused (battery bad)
+        unknown (codebase-check "(defn pitch [root offset] (missing-pitch root offset))")
+        wrong-arity (codebase-check "(defn helper [root] root) (defn pitch [root offset] (helper root offset))")
+        ordinary-plus (type-check "(defn pitch [root offset] (+ \"not-a-note\" 1))")
+        wrong-type (type-check "(defn text [] \"not-a-note\") (defn pitch [root offset] (erlang/+ (text) 1))")]
+    (println :accepted (pr-str accepted))
+    (println :refused (pr-str refused))
+    (println :unknown-callee (pr-str unknown))
+    (println :wrong-arity (pr-str wrong-arity))
+    (println :wrong-type (pr-str wrong-type))
+    (println :ordinary-plus-coverage (pr-str ordinary-plus))
+    (when-not (every? (fn [x] (= :passed (:status x))) accepted) (throw "Prototype 2 did not establish the accepted helper"))
+    (when-not (= :failed (:status (last refused))) (throw "Prototype 2 did not find the bad helper's witness"))
+    (when-not (every? (fn [x] (= :failed (:status x))) [unknown wrong-arity wrong-type])
+      (throw "Prototype 2 did not reject an invalid callee, arity or numeric argument"))
+    {:accepted accepted :refused refused :invalid [unknown wrong-arity wrong-type] :ordinary-plus-coverage ordinary-plus}))

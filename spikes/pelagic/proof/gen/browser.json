@@ -1,0 +1,113 @@
+{
+  "url": "http://127.0.0.1:8792/?use=pelagic&layout=pelagic-gen&file=composer.bl.org",
+  "checks": [
+    "music marks, source selection, structural parent and g a share one target",
+    "real configured model returns BL that passes browser compilation and graph validation",
+    "refinement retains versions; selecting an older candidate never changes source or playback",
+    "an intervening performance edit disables commit until the candidate is auditioned again",
+    "candidate audition produces a measured non-silent signal on its separate monitor bus",
+    "audition preserves active history; commit updates the draft and activates at a future bar",
+    "undo restores source and the previous performance through the same revision scheduler",
+    "invalid generated music leaves source and the active performance unchanged",
+    "cancel returns control immediately and drops the request-owned candidate",
+    "narrow layout preserves the real source pane and reachable phrase controls",
+    "real unuse closes audio/graphics and removes the workspace while preserving source and cursor"
+  ],
+  "errors": [],
+  "live_model": true,
+  "live_provider": "Gen / deepseek-flash",
+  "live_candidate": "{:attempts 1, :basis \"#+TITLE: PELAGIC / phrase studies\\n\\n#+begin_src beam-lisp\\n(o/definst glass [freq 440 amp 0.045 dur 0.6]\\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/sin-osc freq)))\\n\\n(def metro (o/metronome 122))\\n\\n(defn melody [root seed]\\n  [[0 root 0.38]\\n   [2 (+ root 7) 0.38]\\n   [4 (+ root 12) 0.5]\\n   [6 (+ root 7) 0.38]])\\n\\n(av/session\\n  (av/configure {:master 0.55})\\n  (av/pattern :melody 8\\n    (apply o/play\\n      (map (fn [event]\\n             (o/at (metro (nth event 0))\\n               (glass :freq (o/midi->hz (nth event 1))\\n                      :dur (nth event 2))))\\n           (melody 62 7)))))\\n#+end_src\\n\", :before \"(defn melody [root seed]\\n  [[0 root 0.38]\\n   [2 (+ root 7) 0.38]\\n   [4 (+ root 12) 0.5]\\n   [6 (+ root 7) 0.38]])\", :checks [\"Reader\" \"Scope\" \"Finite phrase\" \"Browser compile\" \"Audio graph\"], :definition \"(defn melody [root seed]\\n  [[0 root 0.45]\\n   [0.75 (+ root 3) 0.3]\\n   [1.5 (+ root 7) 0.35]\\n   [2.25 (+ root 10) 0.3]\\n   [3.5 (+ root 12) 0.5]\\n   [4.25 (+ root 7) 0.3]\\n   [5.0 (+ root 5) 0.4]\\n   [5.75 (+ root 3) 0.3]\\n   [6.5 (+ root 2) 0.35]\\n   [7.25 root 0.4]])\", :id 1, :notes [[0 62 0.45] [0.75 65 0.3] [1.5 69 0.35] [2.25 72 0.3] [3.5 74 0.5] [4.25 69 0.3] [5.0 67 0.4] [5.75 65 0.3] [6.5 64 0.35] [7.25 62 0.4]], :prompt \"Make this melody more syncopated. Keep eight beats, root and seed parameters, and D minor harmony. Use plain decimal literals.\", :provider \"Gen / deepseek-flash\", :replacement \"(defn melody [root seed]\\n  [[0 root 0.45]\\n   [0.75 (+ root 3) 0.3]\\n   [1.5 (+ root 7) 0.35]\\n   [2.25 (+ root 10) 0.3]\\n   [3.5 (+ root 12) 0.5]\\n   [4.25 (+ root 7) 0.3]\\n   [5.0 (+ root 5) 0.4]\\n   [5.75 (+ root 3) 0.3]\\n   [6.5 (+ root 2) 0.35]\\n   [7.25 root 0.4]])\", :source \"#+TITLE: PELAGIC / phrase studies\\n\\n#+begin_src beam-lisp\\n(o/definst glass [freq 440 amp 0.045 dur 0.6]\\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/sin-osc freq)))\\n\\n(def metro (o/metronome 122))\\n\\n(defn melody [root seed]\\n  [[0 root 0.45]\\n   [0.75 (+ root 3) 0.3]\\n   [1.5 (+ root 7) 0.35]\\n   [2.25 (+ root 10) 0.3]\\n   [3.5 (+ root 12) 0.5]\\n   [4.25 (+ root 7) 0.3]\\n   [5.0 (+ root 5) 0.4]\\n   [5.75 (+ root 3) 0.3]\\n   [6.5 (+ root 2) 0.35]\\n   [7.25 root 0.4]])\\n\\n(av/session\\n  (av/configure {:master 0.55})\\n  (av/pattern :melody 8\\n    (apply o/play\\n      (map (fn [event]\\n             (o/at (metro (nth event 0))\\n               (glass :freq (o/midi->hz (nth event 1))\\n                      :dur (nth event 2))))\\n           (melody 62 7)))))\\n#+end_src\\n\"}",
+  "audition_peak_rms": 0.022150849118704193,
+  "queued_receipt": {
+    "kind": "queued",
+    "audioTime": 30.546666666666667,
+    "beat": 60.80073333333333,
+    "revision": 3,
+    "targetBeat": 64,
+    "audioChanged": true
+  },
+  "committed_revision": 3,
+  "stats": {
+    "playing": true,
+    "audioTime": 39.096,
+    "nextStep": 346,
+    "lastEvaluation": {
+      "id": 6,
+      "ok": true,
+      "preview": true,
+      "baseRevision": 2,
+      "duration": 3.9344262295081966,
+      "edits": 2
+    },
+    "evalCount": 6,
+    "voices": 55,
+    "context": "running",
+    "audition": null,
+    "frames": 1302,
+    "recording": false,
+    "patterns": [
+      "melody"
+    ],
+    "pending": 0,
+    "mode": "performance",
+    "time": 38.45133333333333,
+    "beat": 78.18437777777777,
+    "revision": 4,
+    "phase": "ACTIVE",
+    "resources": {
+      "buildP95Ms": 6.199999809265137,
+      "buildMaxMs": 36.399999998509884,
+      "graphsCompletedAfterStart": 0,
+      "retiredNodes": 0,
+      "voices": 55,
+      "peakVoices": 59,
+      "triggered": 338,
+      "nodes": 653,
+      "buses": 6,
+      "intents": 256
+    },
+    "gpu": {
+      "worker": true,
+      "frames": 1302,
+      "revision": 4,
+      "clockSource": "audio-worklet",
+      "clockAgeMs": 2.100000001490116,
+      "gpuTime": {
+        "available": false,
+        "samples": 0,
+        "p95Ms": null,
+        "maxMs": 0,
+        "pending": 0,
+        "disjoint": 0
+      },
+      "frameP95": 102,
+      "frameP99": 143,
+      "workP95Ms": 1.1,
+      "workMaxMs": 32.400000002235174,
+      "frameMaxMs": 199.19999999925494,
+      "avSubmitP95Ms": 53,
+      "avSubmitMaxMs": 52.9071038251363,
+      "avSamples": 4,
+      "scale": 1,
+      "programs": 2,
+      "targets": 3,
+      "renderSize": [
+        2,
+        96
+      ],
+      "outputSize": [
+        2,
+        96
+      ],
+      "transition": false,
+      "inFlight": false,
+      "pending": 0,
+      "validationPrograms": 2
+    },
+    "diagnostics": {
+      "missed": 0,
+      "ticks": 1075,
+      "longTasks": 54
+    }
+  }
+}

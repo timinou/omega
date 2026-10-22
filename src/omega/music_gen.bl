@@ -1,0 +1,167 @@
+; Text transport and bounded repair for PELAGIC's first generation profile.
+; Model output is read as data, never evaluated on the host. Browser compilation
+; and musical validation are separate gates owned by the real instrument.
+(ns omega.music-gen
+  (:require [gen.llm :as gen] [omega.gen :as bounded] [omega.llm :as llm]
+            [credential.env :as credentials] [clojure.edn :as edn] [pelagic.melody :as melody]
+            [bl.json :as json] [pelagic.profiles :as profiles] [reader-node :as rn]))
+(def primer
+  "You transform a selected part of a Beam Lisp melody function. Return exactly ONE replacement form, no fences or prose. Preserve the selected syntactic role and change only the selected scope. The complete function must remain (defn melody [root seed] BODY). BODY is a finite vector of 1–24 [beat midi duration] vectors, sorted by beat. Beats: 0 <= beat < 8. MIDI: integer 36–96. Duration: 0.08–2 seconds. At performance time root=62 and seed=7. Scalar expressions may contain only numbers, root, seed, and binary + - * mod. No other calls, names, macros, bindings, IO, recursion, strings or reader forms. Keep the signature. For a selected event return an event vector; for a selected number return a number. Existing instrument, tempo and scheduling are outside your scope. Beam Lisp's compiler and the instrument will validate your answer.")
+(def demo-one "(defn melody [root seed]\n  [[0 root 0.38]\n   [1.5 (+ root 7) 0.24]\n   [2.75 (+ root 10) 0.24]\n   [4 (+ root 12) 0.5]\n   [5.5 (+ root 7) 0.28]\n   [7 (+ root 3) 0.38]])")
+(def demo-two "(defn melody [root seed]\n  [[0 root 0.5]\n   [2.75 (+ root 10) 0.3]\n   [5.5 (+ root 7) 0.28]\n   [7 (+ root 3) 0.38]])")
+(defn- allowed [form depth]
+  (when (> depth 10) (throw "Replacement is too deeply nested"))
+  (cond
+    (number? form) (when (> (abs form) 4096) (throw "Numeric literal is too large"))
+    (symbol? form) (when-not (contains? #{'root 'seed} form) (throw "Only root and seed are available"))
+    (vector? form) (do (when (> (count form) 24) (throw "Vector exceeds 24 elements")) (doseq [x form] (allowed x (inc depth))))
+    (seq? form) (if (= 'defn (first form)) (melody/validate form)
+                 (do (when-not (and (contains? #{'+ '- '* 'mod} (first form)) (= 3 (count form)))
+                       (throw "Only binary arithmetic calls are allowed"))
+                     (doseq [x (rest form)] (allowed x (inc depth)))))
+    :else (throw "Unsupported replacement form"))
+  form)
+(defn validate-replacement [text]
+  (when-not (and (string? text) (<= 1 (count text)) (<= (count text) 8000)) (throw "Replacement must be 1–8000 characters"))
+  (when-not (= 1 (count (to-list (BeamLisp.Reader/read_string text)))) (throw "Return exactly one complete form"))
+  (allowed (edn/read-string text) 0)
+  text)
+(defn provider [home]
+  (let [env (credentials/read-file (str home "/.env")) pick (fn [k] (or (System/get_env k) (credentials/lookup env k)))
+        key (pick "DEEPSEEK_API_KEY") base (pick "GEN_BASE_URL") model (pick "GEN_MODEL")]
+    (when (or key base)
+      (cond-> (assoc gen/deepseek :key (or key "") :timeout-ms 40000 :max-tokens 2400)
+        base (assoc :base-url base) model (assoc :model model)))))
+(defn transport [home]
+  (if-let [p (provider home)]
+    {:name (str "Gen / " (:model p)) :ask (fn [messages] (bounded/chat-bounded p gen/chat (to-list messages)))}
+    (let [p (assoc (llm/from-env home) :timeout-ms 40000 :retries 0 :max-tokens 2400) step (llm/step p)]
+      {:name (str "Omega / " (:model p))
+       :ask (fn [messages]
+              (let [result (step {:system (:content (first messages)) :tools []
+                                 :messages (mapv (fn [m] {:role (keyword (:role m)) :content [{:type :text :text (:content m)}]}) (rest messages))})]
+                (if (:error result) {:error :provider-unavailable}
+                  {:ok (apply str (map :text (filter (fn [b] (= :text (:type b))) (:content result))))})))})))
+(defn generate
+  "Explicit request only. ask is injectable; tests never require credentials."
+  [args ask provider-name]
+  (when-not (and (string? (:prompt args)) (<= 1 (count (:prompt args))) (<= (count (:prompt args)) 2000)
+                (string? (:code args)) (<= 1 (count (:code args))) (<= (count (:code args)) 8000)
+                (string? (:definition args)) (<= (count (:definition args)) 12000))
+    (throw "A bounded selection, definition and request are required"))
+  (let [base [{:role "system" :content primer}
+              {:role "user" :content (str "Current function:\n" (:definition args)
+                                           "\nSELECTED FORM:\n" (:code args) "\nREQUEST:\n" (:prompt args)
+                                           (when (:previous args) (str "\nPrevious candidate, refine it:\n" (:previous args))))}]]
+    (loop [attempt 1 messages base]
+      (let [result (ask messages)]
+        (if (:error result) {:ok false :message "Generation provider unavailable. Retry or explicitly select Demo." :provider provider-name}
+          (let [text (trim (:ok result)) checked (try (validate-replacement text) {:ok true} (catch e {:error (str e)}))]
+            (if (:ok checked) {:replacement text :provider provider-name :attempts attempt}
+              (if (< attempt 3)
+                (recur (inc attempt) (conj (conj messages {:role "assistant" :content text})
+                                           {:role "user" :content (str "Validation failed: " (:error checked) ". Correct the replacement only.")}))
+                {:ok false :message (:error checked) :provider provider-name :attempts attempt}))))))))
+(def explain-primer
+  "You are the musical coding partner in Pelagic, a live Beam Lisp instrument. Answer the question about the captured source and explicitly selected targets. Explain clearly and concretely, referring to the supplied definition names. Your answer is a conversation, not an edit. Do not claim to have heard audio or executed code. No tool calls, replacement edit protocol, or invented analysis results. Follow-up questions refer to this conversation and the current captured code.")
+(def change-primer
+  "Change ONLY the explicitly selected Beam Lisp targets. Return a JSON object: {\"edits\":[{\"id\":\"exact target id\",\"replacement\":\"one complete replacement form\"}],\"summary\":\"short musical change\"}. One edit per supplied target; no extra edits or fences. Preserve each definition name, function signature, instrument parameter names, and surrounding wiring. A phrase function has [root seed] arguments and a finite vector of 1–24 events ordered by beat. Beat is 0–<8; duration .08–2 seconds. melody and bass-pattern use [beat midi duration] with integer MIDI 36–96 at root=62 seed=7. kick-pattern uses [beat amplitude duration] with amplitude .001–.8. Scalar phrase expressions support numbers, root, seed and binary + - * mod. Instrument definitions use (o/definst name [parameter default ...] BODY) and existing browser synthesis calls: o/sin-osc, o/saw, o/pulse, o/lf-tri, o/white-noise, o/pink-noise, o/mix, o/lpf, o/hpf, o/rlpf, o/pan2, o/env-gen, o/perc, o/adsr, o/line, o/x-line and arithmetic. No new definitions, dependencies, IO, recursion or calls outside that vocabulary. A selected subform must retain its syntactic role; return only its replacement, not its enclosing function. The actual browser compiler validates the assembled document.")
+(defn- request-messages [args primer]
+  (when-not (and (string? (:prompt args)) (<= 1 (count (:prompt args))) (<= (count (:prompt args)) 2000)
+                (string? (:source args)) (<= (count (:source args)) 128000)
+                (vector? (:targets args)) (<= (count (:targets args)) 12)
+                (<= (count (pr-str (:context args))) 48000))
+    (throw "A bounded prompt, source and target set are required"))
+  [{:role "system" :content primer}
+   {:role "user" :content (str "CONVERSATION:\n" (pr-str (:context args))
+      "\nCURRENT DOCUMENT " (:document args) ":\n" (:source args)
+      "\nSELECTED TARGETS:\n" (pr-str (:targets args)) "\nREQUEST:\n" (:prompt args))}])
+(defn explain [args ask provider-name]
+  (let [result (ask (request-messages args explain-primer))]
+    (if (:error result) {:ok false :message "Question provider unavailable" :provider provider-name}
+      (let [answer (trim (or (:ok result) ""))]
+        (when (or (empty? answer) (> (count answer) 16000)) (throw "Answer exceeded the session limit"))
+        {:answer answer :provider provider-name}))))
+(defn- code-data [node]
+  ; Realize the existing reader's nodes as closed-profile data. The pinned EDN
+  ; realizer calls its old symbol constructor and loses namespace qualifiers.
+  (case (rn/node-tag node)
+    :scalar (rn/node-form node)
+    :symbol (tuple :symbol (rn/node-name node))
+    :vector (mapv code-data (rn/node-items node))
+    :list (apply list (map code-data (rn/node-items node)))
+    (throw "Unsupported code form")))
+(defn- read-code [text] (code-data (first (BeamLisp.Reader/read_all text))))
+(defn validate-edits [args text]
+  (let [result (json/decode text {:keys :keyword}) edits (:edits result)]
+    (when-not (and (vector? edits) (= (count edits) (count (:targets args)))
+                  (= (set (map :id edits)) (set (map :id (:targets args)))))
+      (throw "Return exactly one edit per selected target ID"))
+    (doseq [edit edits]
+      (profiles/read-one (:replacement edit))
+      (when-not (= 1 (count (to-list (BeamLisp.Reader/read_string (:replacement edit)))))
+        (throw "Each replacement must be exactly one Beam Lisp form"))
+      (let [target (first (filter (fn [x] (= (:id edit) (:id x))) (:targets args)))
+            form (read-code (:replacement edit))]
+        (when (= (:code target) (:definition target))
+          (let [before (read-code (:definition target))]
+            (when-not (= [(first before) (second before)] [(first form) (second form)]) (throw "Keep the selected definition's name"))
+            (when (= "phrase" (:profile target))
+              (when-not (= (nth before 2) (nth form 2)) (throw "Keep the function signature")))
+            (profiles/validate form (:profile target))))))
+    {:edits edits :summary (subs (str (or (:summary result) "Updated selected parts")) 0
+                                  (min 500 (count (str (or (:summary result) "Updated selected parts")))))}))
+(defn change [args ask provider-name]
+  (when (or (empty? (:targets args)) (some (fn [x] (not (contains? #{"phrase" "instrument"} (:profile x)))) (:targets args)))
+    (throw "Select supported instrument or pattern targets"))
+  (loop [attempt 1 messages (request-messages args change-primer)]
+    (let [result (ask messages)]
+      (if (:error result) {:ok false :message "Generation provider unavailable" :provider provider-name}
+        (let [text (trim (or (:ok result) "")) checked (try {:value (validate-edits args text)} (catch e {:error (str e)}))]
+          (if-let [value (:value checked)] (assoc value :provider provider-name :attempts attempt)
+            (if (< attempt 3)
+              (recur (inc attempt) (conj (conj messages {:role "assistant" :content text})
+                {:role "user" :content (str "Correct this JSON edit result: " (:error checked))}))
+              {:ok false :message (:error checked) :provider provider-name})))))))
+(defn- demo-change [args]
+  (json/encode {:summary "A little more space between the selected voices"
+    :edits (mapv (fn [target]
+      {:id (:id target) :replacement
+        (cond
+          (and (= "phrase" (:profile target)) (= (:code target) (:definition target)))
+            (let [form (edn/read-string (:code target)) body (nth form 3)
+                  events (vec (keep-indexed (fn [i event] (when (even? i) event)) body))]
+              (pr-str (apply list (assoc (vec form) 3 events))))
+          (= "number" (:kind target)) "0.25"
+          (= "instrument" (:profile target))
+            (let [text (:code target)] (String/replace text "0.008" "0.024"))
+          :else (:code target))}) (:targets args))}))
+(defn- request-data [x]
+  ; /api/intent keywordizes only its outer map. Normalize nested target/context
+  ; maps at this protocol boundary, retaining all source and ID string values.
+  (cond
+    (map? x) (reduce (fn [out [k v]] (assoc out (if (string? k) (keyword k) k) (request-data v))) {} x)
+    (vector? x) (mapv request-data x)
+    :else x))
+(defn intents [home]
+  {"pelagic/ask" (fn [raw] (let [args (request-data raw)]
+    (if (= "demo" (:provider args))
+      (explain args (fn [_] {:ok (str "This is the explicitly selected Demo provider.\n\n"
+        (if (seq (:context args)) "Continuing this conversation: " "Selected code: ")
+        (join ", " (map :label (:targets args)))
+        ". Patterns return events within an eight-beat cycle. Their beat values determine when the voice enters; instrument envelopes shape its attack and decay.\n\nYour question: " (:prompt args))}) "Demo / authored explanation")
+      (let [t (transport home)] (explain args (:ask t) (:name t))))))
+   "pelagic/change" (fn [raw] (let [args (request-data raw)]
+    (if (= "demo" (:provider args)) (change args (fn [_] {:ok (demo-change args)}) "Demo / authored fixtures")
+      (let [t (transport home)] (change args (:ask t) (:name t))))))
+   "pelagic/generate"
+   (fn [args]
+     (if (= "demo" (:provider args))
+       (generate args (fn [_]
+                        {:ok (cond
+                               (starts-with? (:code args) "(defn melody ") (if (:previous args) demo-two demo-one)
+                               (= "number" (:kind args)) "1.5"
+                               (starts-with? (:code args) "[[") "[[0 root 0.38] [1.5 (+ root 7) 0.24] [4 (+ root 12) 0.5] [7 (+ root 3) 0.38]]"
+                               (= "vector" (:kind args)) "[1.5 (+ root 7) 0.24]"
+                               :else "(+ root 10)")}) "Demo / authored fixtures")
+       (let [t (transport home)] (generate args (:ask t) (:name t)))))} )

@@ -1,0 +1,33 @@
+(ns music-conversation-test (:require [omega.music-gen :as g] [bl.json :as json]))
+(def source "(defn melody [root seed] [[0 root 0.3] [2 root 0.3]])")
+(def target {:id "melody" :label "melody" :profile "phrase" :kind "list" :code source :definition source})
+(def request {:prompt "More space" :source source :document "music.bl.org" :targets [target] :context []})
+(deftest questions-are-text-and-never-edits
+  (let [result (g/explain request (fn [_] {:ok "The second event starts two beats later."}) "test")]
+    (is (string? (:answer result))) (is (nil? (:edits result))) (is (= "test" (:provider result))))
+  (is (= false (:ok (g/explain request (fn [_] {:error :offline}) "test")))))
+(deftest structured-changes-preserve-target-identity-and-definition
+  (let [response (json/encode {:edits [{:id "melody" :replacement "(defn melody [root seed] [[0 root 0.3]])"}] :summary "More space"})
+        result (g/change request (fn [_] {:ok response}) "test")]
+    (is (= 1 (:attempts result))) (is (= "melody" (:id (first (:edits result))))) (is (= "More space" (:summary result))))
+  (doseq [replacement ["(defn other [root seed] [[0 root 0.3]])"
+                       "(defn melody [x] [[0 x 0.3]])" "1 2"
+                       "(defn melody [root seed] [[9 root 0.3]])"]]
+    (is (try (g/validate-edits request (json/encode {:edits [{:id "melody" :replacement replacement}]})) false (catch _ true)))))
+(deftest target-sets-and-repair-have-bounded-ownership
+  (is (try (g/validate-edits request (json/encode {:edits [{:id "different" :replacement source}]})) false (catch _ true)))
+  (let [calls (atom 0) result (g/change request (fn [_] (swap! calls inc) {:ok "{}"}) "test")]
+    (is (= 3 @calls)) (is (= false (:ok result)))))
+(deftest explicit-demo-supports-instruments-and-patterns-with-the-same-protocol
+  (let [code "(o/definst glass [freq 440 amp 0.045 dur 0.6] (* amp (o/env-gen (o/perc 0.008 dur)) (o/sin-osc freq)))"
+        args (assoc request :provider "demo" :targets [target {:id "glass" :label "glass" :profile "instrument" :kind "list" :code code :definition code}])
+        intents (g/intents "/tmp/no-model-configuration-needed")
+        result ((get intents "pelagic/change") args)]
+    (is (= 2 (count (:edits result))))
+    (is (includes? (:replacement (second (:edits result))) "0.024"))
+    (is (starts-with? (:provider result) "Demo"))))
+(deftest wire-targets-are-normalized-at-the-intent-boundary
+  (let [args (assoc request :provider "demo" :targets [{"id" "melody" "label" "melody" "profile" "phrase" "kind" "list" "code" source "definition" source}])
+        result ((get (g/intents "/tmp/no-config") "pelagic/change") args)]
+    (is (= 1 (count (:edits result))))
+    (is (= "melody" (:id (first (:edits result)))))))

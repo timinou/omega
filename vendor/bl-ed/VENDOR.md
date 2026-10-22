@@ -487,3 +487,43 @@ the vendored editor. Browser acceptance is `test/columns-browser.py`.
 DOM listeners explicitly return nil: the native ABI checks callback returns
 even when the DOM ignores them, so a BL state value returned by `swap!` must
 stay inside the controller. The browser gate rejects all page exceptions.
+
+### 2026-10-21 — decimal reader predicate shadowing
+
+`ed/num.bl` no longer binds the sign flag as `neg?`, which shadowed the numeric
+predicate and made decimal parsing call a boolean. The existing portable parser
+now accepts melody duration literals on both BEAM and browser targets. The
+regression cases in `test/num.test.mjs` cover positive/negative decimals, negative
+zero fractions and malformed input. No music vocabulary enters the editor.
+
+### Source-backed inline package mounts (2026-10-21)
+
+The generic browser host accepts an optional `:host` model on a presentation
+ornament row. It mounts the named package through the existing package-host
+resource manager inside that row, using the source pane as the event target.
+The presentation still owns source mapping, row height, scrolling and layout;
+package removal and disconnected-row cleanup use the existing mount lifetime.
+Native controls within a mount retain pointer/input ownership. Scrollable
+content can mark `data-package-scroll` so its wheel events stay local. Packages
+receive a generic `focusEditor` callback for returning from native inputs.
+No domain-specific renderer or policy is added to `ed.*`. Rows without `:host`
+keep the original painting path. Pelagic's workbench browser proof exercises
+inline/split transitions, native prompt input and exact package unloading.
+
+## Rendering responsiveness
+
+`ed.main` retains source token spans/segments across cursor, selection and
+package-only state updates. The bounded cache uses immutable text identity,
+forms and visible rows; text edits, parser updates and scrolling invalidate it.
+Base line maps are retained against source/structure/forms/folds/placements,
+cards, objects and visible rows. The current-row flag and cursor/status still
+derive from the current editor; changing cards or placement data invalidates
+the corresponding line projection. Structural
+problem scans are retained by immutable forest identity. `ed.memo/identity-value`
+supports a source identity plus a small value descriptor. These caches contain
+derived data only and have no domain-specific policy or effects.
+
+The host also retains an inline package mount when only its current-row or
+selection styling changes. Package/object identity, not the row's CSS class,
+owns the mounted view. Reusing a viewport slot for a different object still
+disposes/replaces that view through the existing package lifetime mechanism.

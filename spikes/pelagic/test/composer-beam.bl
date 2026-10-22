@@ -1,0 +1,42 @@
+(ns pelagic.composer-beam-test
+  (:require [ed.main :as m] [ed.core :as c] [ed.pkg :as pkg]
+            [pelagic.main :as pelagic] [pelagic.composer :as p]))
+(def fixture (File/read! "spikes/pelagic/composer.bl.org"))
+(def replacement "(defn melody [root seed]\n  [[0 root 0.38] [1.5 (+ root 7) 0.24] [4 (+ root 12) 0.5] [7 (+ root 3) 0.38]])")
+(defn fresh [] (m/handle (first (m/take-effects (m/boot fixture "composer.bl.org"))) {:type :use :package pelagic/bl-package}))
+(defn act [ed action args] (m/handle ed (merge {:type :pelagic/compose :action action} args)))
+(deftest target-selection-and-complete-candidate-lifecycle
+  (let [base (fresh) ed (act base "select" {}) source (p/source ed)]
+    (is (= [0 0] (c/cursor base)))
+    (is (= 4 (count (:notes (p/state ed)))))
+    (is (starts-with? (:code (:selection (p/state ed))) "(defn melody "))
+    (let [ed (act ed "note" {:index 1})]
+      (is (= "[2 (+ root 7) 0.38]" (:code (:selection (p/state ed))))))
+    (let [ed (act ed "generate" {:prompt "Syncopate" :provider "demo"}) id (:serial (p/state ed))
+          ed (act ed "generated" {:id id :replacement replacement :provider "Demo" :attempts 1})]
+      (is (= "checking" (:phase (p/state ed))))
+      (is (= source (p/source ed)))
+      (let [ed (act ed "checked" {:id id :checks ["Reader" "Browser compile"]})
+            ed (act (act ed "audition" {}) "auditioned" {:id id})]
+        (is (= "audition" (:phase (p/state ed))))
+        (let [ed (act (act ed "commit" {}) "committed" {:id id :revision 3})]
+          (is (= "queued" (:phase (p/state ed))))
+          (is (includes? (p/source ed) replacement))
+          (let [ed (act (act ed "active" {}) "undone" {:id id :source source})]
+            (is (= "reverted" (:phase (p/state ed))))
+            (is (= source (p/source ed)))))))))
+(deftest stale-results-and-invalid-music-never-publish
+  (let [ed (act (fresh) "select" {}) ed (act ed "generate" {:prompt "Change"}) id (:serial (p/state ed))
+        canceled (act ed "cancel" {}) late (act canceled "generated" {:id id :replacement replacement})]
+    (is (= "idle" (:phase (p/state late))))
+    (is (nil? (:candidate (p/state late))))
+    (let [bad (act ed "generated" {:id id :replacement "(defn melody [root seed] [[8 root 1]])"})]
+      (is (= "failed" (:phase (p/state bad)))) (is (= fixture (p/source bad))))
+    (let [changed (m/handle ed {:type :text :text "x"})
+          late (act changed "generated" {:id id :replacement replacement})]
+      (is (= "stale" (:phase (p/state late)))) (is (nil? (:candidate (p/state late)))))))
+(deftest passive-unuse-is-exact
+  (let [ed (fresh) removed (pkg/unuse ed "pelagic")]
+    (is (= fixture (p/source removed)))
+    (is (= [0 0] (c/cursor removed)))
+    (is (nil? (get (:pkg-state removed) "pelagic")))))

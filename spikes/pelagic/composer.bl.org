@@ -1,0 +1,56 @@
+#+TITLE: PELAGIC / phrase studies
+
+#+begin_src beam-lisp
+(o/definst glass [freq 440 amp 0.045 dur 0.6]
+  (* amp (o/env-gen (o/perc 0.008 dur)) (o/sin-osc freq)))
+
+(o/definst low [freq 110 amp 0.055 dur 0.35]
+  (* amp (o/env-gen (o/perc 0.008 dur))
+     (o/lpf (o/saw freq) 650)))
+
+(o/definst pulse [amp 0.22 dur 0.25]
+  (* amp (o/env-gen (o/perc 0.008 dur))
+     (o/sin-osc (o/x-line 140 48 0.06))))
+
+(def metro (o/metronome 122))
+
+(defn kick-pattern [root seed]
+  [[0 0.22 0.25]
+   [2 0.19 0.25]
+   [4 0.22 0.25]
+   [6 0.19 0.25]])
+
+(defn bass-pattern [root seed]
+  [[0.5 (- root 12) 0.3]
+   [2.5 (- root 12) 0.25]
+   [4.5 (- root 5) 0.3]
+   [6.5 (- root 12) 0.25]])
+
+(defn melody [root seed]
+  [[0 root 0.38]
+   [2 (+ root 7) 0.38]
+   [4 (+ root 12) 0.5]
+   [6 (+ root 7) 0.38]])
+
+(av/session
+  (av/configure {:master 0.55})
+  (av/pattern :kick 8
+    (apply o/play
+      (map (fn [event]
+             (o/at (metro (nth event 0))
+               (pulse :amp (nth event 1) :dur (nth event 2))))
+           (kick-pattern 62 7))))
+  (av/pattern :bass 8
+    (apply o/play
+      (map (fn [event]
+             (o/at (metro (nth event 0))
+               (low :freq (o/midi->hz (nth event 1)) :dur (nth event 2))))
+           (bass-pattern 62 7))))
+  (av/pattern :melody 8
+    (apply o/play
+      (map (fn [event]
+             (o/at (metro (nth event 0))
+               (glass :freq (o/midi->hz (nth event 1))
+                      :dur (nth event 2))))
+           (melody 62 7)))))
+#+end_src

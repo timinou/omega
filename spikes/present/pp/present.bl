@@ -108,8 +108,9 @@
     (cond
       (= kind :text) (-> acc (assoc-in [:index (:row mk)] (count (:slots acc)))
                          (update :slots conj {:kind :text :row (:row mk)}))
-      (= kind :line) (update acc :slots conj {:kind :line :src (:src mk) :segs (:segs mk) :key (:key mk)
-                                              :size (or (:size mk) 1) :role (:role mk)})
+      (= kind :line) (update acc :slots conj (cond-> {:kind :line :src (:src mk) :segs (:segs mk) :key (:key mk)
+                                              :size (or (:size mk) 1) :role (:role mk)}
+                                             (:host mk) (assoc :host (:host mk))))
       (= kind :stack) (reduce (fn [a k] (flatten-mark a k depth)) acc (:kids mk))
       (contains? #{:card :sticky} kind)
         (let [y0 (count (:slots acc))
@@ -164,7 +165,11 @@
   (or (first (filter (fn [i] (= r (slot-row (nth slots i)))) (range (count slots)))) 0))
 
 (defn- first-slot-at-or-after [slots index top]
-  (or (get index top)
+  (or (when-let [i (get index top)]
+        ; A source row may follow ornaments with that same source identity.
+        ; Include those leading slots, rather than starting after the widget.
+        (loop [y i]
+          (if (and (pos? y) (= top (slot-row (nth slots (dec y))))) (recur (dec y)) y)))
       (first (filter (fn [i] (let [r (slot-row (nth slots i))] (and (some? r) (>= r top)))) (range (count slots))))
       (max 0 (dec (count slots)))))
 
@@ -300,7 +305,8 @@
                     (if (= :text (:kind s))
                       (merge (assoc (get by-row (:row s)) :y y :vy vy) flags)
                       (merge {:row nil :src (:src s) :key (:key s) :y y :vy vy :ornament? true :segments (:segs s)
-                              :role (:role s) :size (size-of s) :current? (= cur (:src s))} flags))))
+                              :role (:role s) :size (size-of s) :current? (= cur (:src s))}
+                             (when (:host s) {:host (:host s)}) flags))))
         body-rows (- h head-h pin-h)
         ; a frame's box: fixed ends stay, scrolling ends move with the body and
         ; stay inside it
@@ -346,7 +352,7 @@
 ; heading, a sticky card stays put. Only :view moves — the selection and
 ; :folds are never touched.
 
-(defn- slot-for-row
+(defn slot-for-row
   "The slot index drawn for source row `r`; when `r` is hidden (folded, or
    drawn only by ornaments) the first slot of its preceding represented source
    row. Wrapped continuations do not move the arrival point to a paragraph's end. nil before the first drawn row."

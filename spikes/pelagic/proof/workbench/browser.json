@@ -1,0 +1,356 @@
+{
+  "url": "http://127.0.0.1:8792/?use=pelagic&layout=pelagic-gen&file=composer.bl.org",
+  "checks": [
+    "mixed component selection and local Ask leave source unchanged",
+    "Session retains local exchanges and supports read-only conversational follow-ups",
+    "a question can become a coordinated Change; one undo and redo restore both patterns",
+    "inline/split and source peek preserve the document, conversation and unsent draft",
+    "the actual three-track document plays and Ask preserves its audio revision",
+    "real Gen answers a question and produces a coordinated multi-target Change",
+    "source peek and instrument controls edit the same draft with ordinary undo/redo",
+    "code and components share a mixed request; normal evaluation publishes the edited music",
+    "Ask supports code outside generation profiles and current-buffer questions without a selection",
+    "Session survives file visits and read-only questions can continue about captured code",
+    "narrow Session opens as a focused drawer and returns to the working document",
+    "unuse removes every owned view and leaves the ordinary source editor"
+  ],
+  "errors": [],
+  "audio_before_request": {
+    "playing": true,
+    "revision": 1,
+    "phase": "ACTIVE",
+    "beat": 8.058777777777777,
+    "patterns": [
+      "bass",
+      "kick",
+      "melody"
+    ],
+    "voices": 26,
+    "diagnostics": {
+      "sourceAvailable": true,
+      "take": "empty",
+      "explorations": [],
+      "replayRemaining": 0,
+      "audition": null,
+      "elapsedSeconds": 32.61379999999702,
+      "missedEvents": 0,
+      "schedulerTicks": 116,
+      "longTasks": 42,
+      "frameP95": 0,
+      "frameP99": 0,
+      "framesOver100Percent": 0,
+      "audioClock": {
+        "sampleRate": 48000,
+        "baseLatency": 0.010666666666666666,
+        "outputLatency": 0.04,
+        "outputTimestamp": {
+          "contextTime": 4.432622333333333,
+          "performanceTime": 37485.39999999106
+        },
+        "nativeSeconds": 4.469333333333333,
+        "wallSeconds": 4.697099999994039,
+        "rate": 0.9515090871684667
+      },
+      "avSubmitP95Ms": null,
+      "avSamples": 0,
+      "avHandoffP95Ms": null,
+      "activationMaxMs": 4.0999999940395355,
+      "renderMaxMs": 0,
+      "compileP95": 2388,
+      "preparation": {
+        "mode": "actor",
+        "budgetMs": 4,
+        "ready": true,
+        "done": false,
+        "rows": 308,
+        "workMs": 4062.000000089407,
+        "chunkMaxMs": 323.20000000298023,
+        "error": null,
+        "worker": true,
+        "graphs": 7,
+        "elapsedMs": 31248.29999999702,
+        "startupMs": 1558.699999988079,
+        "chunkP95Ms": 31.099999994039536,
+        "nativeTurnP95Ms": 8,
+        "nativeTurnMaxMs": 235.20000000298023
+      },
+      "resources": {
+        "buildP95Ms": 7.199999809265137,
+        "buildMaxMs": 16.19999998807907,
+        "graphsCompletedAfterStart": 0,
+        "retiredNodes": 0,
+        "voices": 26,
+        "peakVoices": 26,
+        "triggered": 31,
+        "nodes": 352,
+        "buses": 4,
+        "intents": 28
+      },
+      "gpu": null,
+      "storageTransactions": 0,
+      "history": 1,
+      "namespaces": 0,
+      "evaluator": "worker",
+      "recording": null,
+      "audioTiming": {
+        "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+        "samples": 0,
+        "p95Ms": null,
+        "maxMs": null,
+        "ready": true,
+        "error": null
+      },
+      "avTiming": "audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured"
+    }
+  },
+  "audio_after_request": {
+    "playing": true,
+    "revision": 1,
+    "phase": "ACTIVE",
+    "beat": 14.028644444444442,
+    "patterns": [
+      "bass",
+      "kick",
+      "melody"
+    ],
+    "voices": 20,
+    "diagnostics": {
+      "sourceAvailable": true,
+      "take": "empty",
+      "explorations": [],
+      "replayRemaining": 0,
+      "audition": null,
+      "elapsedSeconds": 35.6445,
+      "missedEvents": 0,
+      "schedulerTicks": 138,
+      "longTasks": 48,
+      "frameP95": 0,
+      "frameP99": 0,
+      "framesOver100Percent": 0,
+      "audioClock": {
+        "sampleRate": 48000,
+        "baseLatency": 0.010666666666666666,
+        "outputLatency": 0.048,
+        "outputTimestamp": {
+          "contextTime": 7.360393666666667,
+          "performanceTime": 40521.19999998808
+        },
+        "nativeSeconds": 7.405333333333333,
+        "wallSeconds": 7.728,
+        "rate": 0.9582470669427191
+      },
+      "avSubmitP95Ms": null,
+      "avSamples": 0,
+      "avHandoffP95Ms": null,
+      "activationMaxMs": 4.0999999940395355,
+      "renderMaxMs": 0,
+      "compileP95": 2388,
+      "preparation": {
+        "mode": "actor",
+        "budgetMs": 4,
+        "ready": true,
+        "done": false,
+        "rows": 320,
+        "workMs": 4224.60000012815,
+        "chunkMaxMs": 323.20000000298023,
+        "error": null,
+        "worker": true,
+        "graphs": 7,
+        "elapsedMs": 34279.09999999404,
+        "startupMs": 1558.699999988079,
+        "chunkP95Ms": 31.099999994039536,
+        "nativeTurnP95Ms": 10,
+        "nativeTurnMaxMs": 235.20000000298023
+      },
+      "resources": {
+        "buildP95Ms": 10.600000381469727,
+        "buildMaxMs": 16.19999998807907,
+        "graphsCompletedAfterStart": 0,
+        "retiredNodes": 0,
+        "voices": 20,
+        "peakVoices": 26,
+        "triggered": 37,
+        "nodes": 255,
+        "buses": 4,
+        "intents": 34
+      },
+      "gpu": null,
+      "storageTransactions": 0,
+      "history": 1,
+      "namespaces": 0,
+      "evaluator": "worker",
+      "recording": null,
+      "audioTiming": {
+        "method": "AudioWorklet silent sample-onset probe in shared AudioContext; no physical loopback",
+        "samples": 0,
+        "p95Ms": null,
+        "maxMs": null,
+        "ready": true,
+        "error": null
+      },
+      "avTiming": "audio-clock activation to render submission acknowledgment (worker round trip is an upper bound); physical output latency is not measured"
+    }
+  },
+  "live_ask": {
+    "document": "composer.bl.org",
+    "mode": "ask",
+    "provider": "Gen / deepseek-flash",
+    "surface": "local",
+    "answer": "The `glass` envelope is built with `o/perc` using an 8 ms attack (`0.008`) and a total span of `dur` (default `0.6`), then shaped by `o/env-gen`. That envelope multiplies the `o/sin-osc` at `freq` and the `amp` value, so each `glass` note fades in almost immediately and decays over its `dur`.",
+    "prompt": "Explain this instrument envelope in two short sentences.",
+    "conversation": 5,
+    "targets": [
+      {
+        "cell": 2,
+        "from": [
+          3,
+          0
+        ],
+        "code": "(o/definst glass [freq 440 amp 0.045 dur 0.6]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/sin-osc freq)))",
+        "document": "composer.bl.org",
+        "path": [
+          0
+        ],
+        "label": "glass",
+        "root-id": "2/glass/0",
+        "to": [
+          4,
+          58
+        ],
+        "definition": "(o/definst glass [freq 440 amp 0.045 dur 0.6]\n  (* amp (o/env-gen (o/perc 0.008 dur)) (o/sin-osc freq)))",
+        "id": "2/glass/0",
+        "kind": "list",
+        "profile": "instrument",
+        "supported": true
+      }
+    ],
+    "id": 5,
+    "snapshot": null,
+    "status": "answered"
+  },
+  "live_change": {
+    "document": "composer.bl.org",
+    "summary": "Nudged all kick and bass hits a quarter beat later while preserving pitches, amplitudes, durations, and the eight-beat phrase.",
+    "after-targets": [
+      {
+        "cell": 2,
+        "from": [
+          16,
+          0
+        ],
+        "code": "(defn kick-pattern [root seed] [[0.25 0.22 0.25] [4.25 0.22 0.25]])",
+        "document": "composer.bl.org",
+        "path": [
+          4
+        ],
+        "label": "kick-pattern",
+        "root-id": "2/kick-pattern/4",
+        "to": [
+          16,
+          67
+        ],
+        "definition": "(defn kick-pattern [root seed] [[0.25 0.22 0.25] [4.25 0.22 0.25]])",
+        "id": "2/kick-pattern/4",
+        "kind": "list",
+        "profile": "phrase",
+        "supported": true
+      },
+      {
+        "cell": 2,
+        "from": [
+          18,
+          0
+        ],
+        "code": "(defn bass-pattern [root seed] [[0.75 (- root 12) 0.3] [4.75 (- root 5) 0.3]])",
+        "document": "composer.bl.org",
+        "path": [
+          5
+        ],
+        "label": "bass-pattern",
+        "root-id": "2/bass-pattern/5",
+        "to": [
+          18,
+          78
+        ],
+        "definition": "(defn bass-pattern [root seed] [[0.75 (- root 12) 0.3] [4.75 (- root 5) 0.3]])",
+        "id": "2/bass-pattern/5",
+        "kind": "list",
+        "profile": "phrase",
+        "supported": true
+      }
+    ],
+    "mode": "change",
+    "provider": "Gen / deepseek-flash",
+    "surface": "local",
+    "prompt": "Shift each event a quarter beat later, keeping eight beats and both function signatures. Keep notes and amplitudes the same.",
+    "edits": [
+      {
+        "replacement": "(defn kick-pattern [root seed] [[0.25 0.22 0.25] [4.25 0.22 0.25]])",
+        "id": "2/kick-pattern/4"
+      },
+      {
+        "replacement": "(defn bass-pattern [root seed] [[0.75 (- root 12) 0.3] [4.75 (- root 5) 0.3]])",
+        "id": "2/bass-pattern/5"
+      }
+    ],
+    "conversation": 6,
+    "targets": [
+      {
+        "cell": 2,
+        "from": [
+          16,
+          0
+        ],
+        "code": "(defn kick-pattern [root seed] [[0 0.22 0.25] [4 0.22 0.25]])",
+        "document": "composer.bl.org",
+        "path": [
+          4
+        ],
+        "label": "kick-pattern",
+        "root-id": "2/kick-pattern/4",
+        "to": [
+          16,
+          61
+        ],
+        "definition": "(defn kick-pattern [root seed] [[0 0.22 0.25] [4 0.22 0.25]])",
+        "id": "2/kick-pattern/4",
+        "kind": "list",
+        "profile": "phrase",
+        "supported": true
+      },
+      {
+        "cell": 2,
+        "from": [
+          18,
+          0
+        ],
+        "code": "(defn bass-pattern [root seed] [[0.5 (- root 12) 0.3] [4.5 (- root 5) 0.3]])",
+        "document": "composer.bl.org",
+        "path": [
+          5
+        ],
+        "label": "bass-pattern",
+        "root-id": "2/bass-pattern/5",
+        "to": [
+          18,
+          76
+        ],
+        "definition": "(defn bass-pattern [root seed] [[0.5 (- root 12) 0.3] [4.5 (- root 5) 0.3]])",
+        "id": "2/bass-pattern/5",
+        "kind": "list",
+        "profile": "phrase",
+        "supported": true
+      }
+    ],
+    "id": 6,
+    "snapshot": null,
+    "status": "changed"
+  },
+  "evaluated_revision": 2,
+  "frame_timing": {
+    "frames": 60,
+    "p50": 271.70000000298023,
+    "p95": 681.5999999940395,
+    "max": 1702.699999988079
+  }
+}

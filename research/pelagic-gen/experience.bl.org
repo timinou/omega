@@ -1,0 +1,106 @@
+#+TITLE: Pelagic / ordinary editing and local generation
+#+DATE: 2026-10-21
+#+STATE: IMPLEMENTED / VERIFIED
+
+* Intent
+One document, with source and musical components as two presentations of the
+same editable objects. Prioritize selecting, asking, replacing and continuing.
+Implemented in the real pelagic bl-package; see
+[[file:../../spikes/pelagic/gen.bl.md][usage and screenshots]] and
+[[file:../../spikes/pelagic/proof/workbench/verification.txt][the executed verification record]].
+
+* Selection
+Click a component or select a syntax-tree form. Reuse the editor's existing
+structural motions to choose a larger or smaller form or adjacent form.
+Shift-click another component to add/remove it from the target set; offer a
+keyboard mark command for code forms. A set can mix components and source forms.
+Deduplicate targets that refer to the same source. Collapse overlapping source
+targets to their selected ancestor rather than proposing overlapping edits.
+Only selected objects carry a lavender outline; avoid a separate selection tray.
+
+* Ask in place
+Use the existing g a command from either presentation. Open a small local prompt
+at the focused target. Multiple targets share one prompt with compact target
+labels; the other selected objects retain matching outlines.
+The prompt has an explicit Ask / Change choice. Inline requests initially use
+Change, preserving direct transformation; the session sidebar initially uses
+Ask. The visible choice determines the action, never a guess from the wording.
+Ask returns an explanation into the same local area and session conversation;
+it never changes the document, saves, evaluates or alters playback. Questions
+can address any selected source, not only generation-supported musical forms.
+Enter submits; Shift-Enter adds a line; Escape dismisses the local request.
+During generation, the target's area becomes the working area: retain a subdued
+previous version, the request and a small butter progress mark. Keep scroll and
+neighboring content stable. The current performance continues.
+
+Completion of a Change replaces selected material in the editable draft and updates its
+component presentation. Briefly mark the new result in sage, return focus to the
+same object, and allow another request or direct editing immediately. A multi-
+target request applies as one coordinated edit and one undo step. Preserve
+unselected source between disjoint targets. Use the ordinary live evaluation
+action to publish sound at a musical boundary, without a new required review
+or audition workflow. Saving remains the ordinary editor save action.
+
+* Two presentations
+Inline / one column: recognized source forms display their musical components
+at those forms' document positions. Unrelated text and ordinary code remain in
+the document. This is not a full-stage page that hides the document structure.
+
+Split / two columns: source on the left, corresponding components on the right.
+Selection and navigation connect the same objects across both columns.
+
+A single layout command toggles between these views, preserving the selected
+object, focus and approximate scroll position. Proposed binding: g v, evolving
+Pelagic's existing stage command into this toggle.
+
+An independent Peek source command on a component reveals its editable source
+in that component's place. It works in either layout and folds back to the same
+component. Proposed binding: g c in normal mode; retain the editor's existing
+Space-prefix commands. Ordinary text entry keeps its existing behavior. A visible code toggle exposes
+the same command. Asking while peeked targets the selected form as usual.
+
+* Required recent session sidebar
+Provide a collapsible Session sidebar containing questions and change requests,
+their answers or concise change summaries, target labels, and expandable before/
+after source for changes. Group follow-ups into conversations in chronological
+order. Inline requests enter this same history automatically.
+
+Opening an entry shows its exchange and provides a reply composer. Clicking a
+source reference can reveal the relevant object without applying old source.
+A reply retains the conversation's targets unless Use current selection is
+chosen; the target labels remain visible. A Change reply captures current
+source for those resolved targets; previous snapshots remain historical context.
+Questions without a selection use the current buffer as visible context.
+
+Keep the recent 100 requests in memory for the current workspace session,
+surviving sidebar closure, source/component toggles and document visits within
+that workspace. Reloading or unloading the package ends the session. Do not
+write conversation data into the source file. Preserve unsent prompt text when
+switching layout, closing/reopening the sidebar or inspecting another entry.
+
+On wide screens the sidebar is an optional third column beside a split view,
+or a second column beside inline components. On narrow screens show it as a
+drawer/temporary focused surface with a clear return to the selected object.
+Opening it must preserve source, undo, selection, playback and prompt drafts.
+Use snow/coffee surfaces and restrained type; target selection is lavender,
+work in progress butter, and completed source changes sage.
+
+* Optional generation version browsing
+The Session sidebar is required. Previous/next controls that restore source
+versions remain optional. Ordinary undo/redo is required. Persistent history,
+cross-session recovery and branching are later work.
+
+* Implementation boundary
+Extend the existing Pelagic bl-ed package and use its layout/presentation seams;
+do not create another editor or independent render loop. Both presentations use
+the same document, target identities and structural selection commands.
+Capture a multi-target request as source-backed targets and stage a coordinated
+replacement. Start with recognized musical objects and leave other forms as code.
+The current generator supports a single finite melody profile; multiple
+instruments require explicit target profiles and multi-edit generation support.
+Neither that expansion nor inline components are already shipped by prototype 1.
+
+Richer evidence inspection is deferred to evidence-follow-up.bl.org.
+
+Full proposed build and acceptance plan:
+../../!tasks/plans/PLAN-024-pelagic-editing-and-session-history.bl.org.

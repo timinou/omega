@@ -1,0 +1,10 @@
+(ns pelagic.session)
+(defn tail [n xs] (vec (drop (max 0 (- (count xs) n)) xs)))
+(defn append [entries entry] (tail 100 (conj (vec entries) entry)))
+(defn finish [entries id fields]
+  (mapv (fn [entry] (if (= id (:id entry)) (merge entry fields) entry)) entries))
+(defn conversation [entries id]
+  (vec (filter (fn [entry] (= id (:conversation entry))) entries)))
+(defn context [entries id]
+  (mapv (fn [entry] (select-keys entry [:mode :prompt :answer :summary]))
+    (tail 10 (conversation entries id))))

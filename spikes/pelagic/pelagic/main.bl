@@ -1,4 +1,5 @@
-(ns pelagic.main (:require [ed.core :as c] [ed.text :as t] [pelagic.score :as score] [ed.pkg :as pkg]))
+(ns pelagic.main (:require [ed.core :as c] [ed.text :as t] [pelagic.score :as score] [ed.pkg :as pkg] [pelagic.composer :as composer]
+                          [pelagic.workbench :as w] [pelagic.presentation :as presentation]))
 (def stage {:name "pelagic" :doc "Live source beside the audiovisual stage."
             :panes [{:id :main :doc :linked :width [:fr 78]}
                     {:id :stage :view [:host :main] :width [:fr 160]}]
@@ -7,6 +8,15 @@
              :panes [{:id :main :doc :linked :width [:ch 36]}
                      {:id :stage :view [:host :main] :width :fill}]
              :links [] :focus :main})
+(def composing {:name "pelagic-gen" :doc "Source and a selectable musical phrase, with Gen candidates and safe audition."
+                :panes [{:id :main :doc :linked :width [:fr 3]}
+                        {:id :stage :view [:components :main] :width [:fr 2]}]
+                :links [] :focus :main})
+(def composing-session (assoc composing :name "pelagic-gen-session"
+  :panes (conj (:panes composing) {:id :session :view [:session :main] :width [:ch 38]})))
+(def inline {:name "pelagic-inline" :panes [{:id :main :doc :linked :width :fill}] :links [] :focus :main})
+(def inline-session (assoc inline :name "pelagic-inline-session"
+  :panes (conj (:panes inline) {:id :session :view [:session :main] :width [:ch 42]})))
 (defn state [ed] (merge score/defaults (get-in ed [:pkg-state "pelagic"])))
 (defn send [ed op args]
   (c/effect ed {:kind :package-host :package "pelagic" :op op :args args}))
@@ -28,8 +38,11 @@
         v (if bounds (max (first bounds) (min (second bounds) v)) v)]
     (if (or bounds (contains? #{:kick :bass :hat :snare :melody :freeze} k))
       (let [new (assoc-in ed [:pkg-state "pelagic" k] v)] (send new :configure (state new))) ed)))
-(defn intercept [ed ev]
+(defn- intercept-core [ed ev]
   (cond
+    (= :pelagic/work (:type ev)) (w/handle ed ev)
+    (presentation/scroll ed ev) (presentation/scroll ed ev)
+    (= :pelagic/compose (:type ev)) (composer/handle ed ev)
     (= :pelagic/runtime (:type ev))
      (if (some (fn [name] (= name "runtime")) (pkg/names ed))
       (c/effect (assoc-in ed [:pkg-state "runtime" :return] "pelagic") {:kind :frame-layout :layout "runtime-pelagic" :keep {:main :origin}})
@@ -50,11 +63,28 @@
     (and (= :key (:type ev)) (= "C-Enter" (:key ev))
          (contains? #{:normal :insert} (:mode ed))) (evaluate ed)
     :else nil))
+(defn- sync-composer [old ed ev]
+  ; The workbench owns its own selection/components. Do not derive the earlier
+  ; melody-only presentation for its unrelated events. An explicitly pending
+  ; legacy request must still be invalidated when the source changes.
+  (if (and (w/enabled? ed) (not= :pelagic/compose (:type ev))
+           (or (identical? (:text old) (:text ed)) (nil? (:request (composer/state ed)))))
+    ed (composer/sync old ed ev)))
+(defn intercept [ed ev]
+  (when-let [next (intercept-core ed ev)]
+    (let [next (w/sync ed (sync-composer ed next ev) ev)]
+      (if (and (= :pelagic/work (:type ev)) (= "open" (:action ev))) (presentation/reveal-local next) next))))
 (defn leave [ed]
   (if (get-in ed [:pkg-state "pelagic" :playing]) (stop ed) ed))
 (def bl-package
   {:name "pelagic" :doc "Overtone-shaped live sound, Shadertone shaders and a two-deck narrative performance."
    :commands {:pelagic/play {:doc "Play the four-movement score" :run play}
+              :pelagic/compose {:doc "Open the phrase generation workspace" :run (fn [ed] (w/arrange (w/enable ed)))}
+              :pelagic/ask {:doc "Ask about or change selected source/components" :run (fn [ed] (presentation/reveal-local (w/ask ed)))}
+              :pelagic/mark {:doc "Add/remove the current form from request targets" :run w/mark}
+              :pelagic/peek {:doc "Peek component source" :run w/peek-source}
+              :pelagic/views {:doc "Toggle components inline / beside source" :run (fn [ed] (if (w/enabled? ed) (w/toggle-layout ed) (assoc ed :frame/layout stage)))}
+              :pelagic/session {:doc "Toggle recent session conversations" :run w/toggle-sidebar}
               :pelagic/perform {:doc "Start continuous performance" :run (fn [ed] (send ed :perform (state ed)))}
               :pelagic/panic {:doc "Stop voices and cancel pending edits" :run (fn [ed] (send ed :request {:kind "panic"}))}
               :pelagic/stop {:doc "Stop all voices" :run stop}
@@ -64,15 +94,25 @@
               :pelagic/eval {:doc "Evaluate live Beam Lisp / GLSL blocks" :run evaluate}
               :pelagic/stage {:doc "Show live source and stage" :run (fn [ed] (assoc ed :frame/layout stage))}
               :pelagic/cinema {:doc "Enlarge the stage" :run (fn [ed] (assoc ed :frame/layout cinema))}}
-   :keys {:normal {"g p" :pelagic/play "g P" :pelagic/perform "g !" :pelagic/panic "g s" :pelagic/stop "g e" :pelagic/eval "g v" :pelagic/stage}}
+   :keys {:normal {"g p" :pelagic/play "g P" :pelagic/perform "g !" :pelagic/panic "g s" :pelagic/stop "g e" :pelagic/eval
+                   "g v" :pelagic/views "g a" :pelagic/ask "g m" :pelagic/mark "g c" :pelagic/peek "g q" :pelagic/session}}
    :intercept intercept :on-unuse leave
-   :on-event (fn [_ ed ev]
-     (cond
+   :on-event (fn [old ed ev]
+     (let [next (cond
       (= :session-leave (:type ev)) (leave ed)
       (and (get-in ed [:pkg-state "pelagic" :open-runtime]) (some (fn [name] (= name "runtime")) (pkg/names ed)))
        (-> ed (update-in [:pkg-state "pelagic"] dissoc :open-runtime)
            (assoc-in [:pkg-state "runtime" :return] "pelagic")
            (c/effect {:kind :frame-layout :layout "runtime-pelagic" :keep {:main :origin}}))
-      :else ed))
-   :provides {:layouts {"pelagic" stage "pelagic-cinema" cinema}
-              :views {:host (fn [ed] {:package "pelagic" :state (state ed)})}}})
+      :else ed)]
+       (w/sync old (sync-composer old next ev) ev)))
+   :render presentation/render
+   :adopt (fn [ed] (w/adopt (if (ends-with? (or (:path ed) "") "composer.bl.org")
+                    (composer/put ed (merge {:enabled true :serial 0 :phase "idle" :versions []} (composer/state ed))) ed))
+                    )
+   :provides {:layouts {"pelagic" stage "pelagic-cinema" cinema "pelagic-gen" composing
+                        "pelagic-gen-session" composing-session "pelagic-inline" inline "pelagic-inline-session" inline-session}
+              :navigation {:rows presentation/rows :reveal presentation/reveal}
+              :views {:host (fn [ed] {:package "pelagic" :state (state ed) :composer (composer/model ed)})
+                      :components (fn [ed] {:package "pelagic" :kind "components" :workbench (w/model ed)})
+                      :session (fn [ed] {:package "pelagic" :kind "session" :workbench (w/model ed)})}}})

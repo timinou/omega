@@ -1,0 +1,82 @@
+Pelagic editing responsiveness correction — executed verification, 2026-10-22
+
+Final immutable frontend: f87532fcf3095dfd61095699a01f25ff86100481a7e5c48d072e4758b18c7bd3
+Compiled BL graph: 54bc6319014bc1dd1a848fab4a251e6129ce4c00038ca502b7155e2c1f37ee42
+Pinned compiler: 65c25b33
+
+The request was to fix apparent hanging generation and interaction/DOM refresh
+latency in the real workbench. Browser tests used an offline memory world on
+8792. No writes were sent to the user's worlds on 8790 or 8814; the existing
+shared host was not stopped or replaced.
+
+Changes
+- Native prompt typing no longer runs an editor transaction per character.
+  A draft is synchronized after 250 ms idle and before blur, submit or Escape.
+  Pending native text is retained across unrelated model updates.
+- Bounded caches retain target discovery, musical component models and unchanged
+  source line data. Cursor, status, errors, folds, placement/card/object changes,
+  source edits and undo remain current. Pelagic slot geometry no longer depends
+  on prompt text/history/progress or unrelated selection changes.
+- Reveal checks an already-visible component using the existing slot geometry,
+  without painting/coloring the document just to establish visibility.
+- The inactive earlier melody-only presentation no longer recomputes for every
+  workbench interaction. Explicit legacy requests retain stale-source protection.
+- Inline native package views retain DOM identity when only row/selection
+  styling changes. A reproduced one-line-form selection previously detached
+  its component control; that control now remains connected.
+- Generation shows elapsed time and supports cancellation. A network/body stall
+  fails after 60 s. Browser checks have a 30 s deadline; thrown worker/check
+  errors now finish the request with an inline error instead of a busy state.
+
+Measured browser results
+  Same 13-character input: 5,290 ms before -> 75.85 ms after.
+  During continuous input: 0 editor renders; after idle: 1 synchronized render.
+  Input to next paint: 1.2–12.8 ms.
+  Selection sequence: 196.5, 79.6, 58.9, 69.9, 150.4, 271.3 ms.
+  In-view selections measured about 59–80 ms; source reveals about 150–271 ms.
+  Exact user request: "make it like a drunk drummer making a simple polyrhythm"
+  Real Gen / deepseek-flash + browser validation: 12.056 s, status changed.
+  See responsiveness/browser.json and responsiveness/baseline.json.
+  The baseline included CPU profiling. These timings describe this integration
+  environment; no universal timing/physical audio-output guarantee is claimed.
+
+Passing delivery checks
+  83 Pelagic/package tests; 87 vendored editor tests; 30 Omega test files.
+  34 workbench + 20 legacy + 5 rendering BEAM assertions.
+  48 default-presentation variants, zero differences; checker unchanged.
+  12 full browser scenarios + 6 responsiveness/failure scenarios, no page errors.
+  Actual audio continues during questions; audio revision unchanged by Ask;
+  observed missedEvents was 0. Ordinary evaluation publishes edited source.
+  Actual package use and unuse screenshots are retained beside browser.json.
+
+Commands (repository root)
+  bin/bl --cold pelagic.build
+  bin/bl --cold test
+  bin/bl --cold test -p vendor/bl-ed -p spikes/present spikes/pelagic/test/workbench-beam.bl spikes/pelagic/test/composer-beam.bl spikes/pelagic/proof/workbench/responsiveness/colors-check.bl
+  frontend=spikes/pelagic/dist/frontend/f87532fcf3095dfd61095699a01f25ff86100481a7e5c48d072e4758b18c7bd3
+  PELAGIC_OUT="$PWD/$frontend/out" node --test --test-concurrency=1 spikes/pelagic/test/*.test.mjs
+  BLED_OUT="$PWD/$frontend/out" BLED_ROOT=/home/user/code/undefine/beam-lisp node --test --test-concurrency=1 vendor/bl-ed/test/*.test.mjs
+  PP_OUT=/tmp/pelagic-speed-final-equivalence node spikes/present/test/check.mjs spikes/pelagic/composer.bl.org spikes/pelagic/demo.bl.org research/pelagic-gen/research.bl.md
+  PELAGIC_WORKBENCH_LIVE=1 python3 spikes/pelagic/test/workbench-browser.py
+  PELAGIC_WORKBENCH_LIVE=1 python3 spikes/pelagic/test/workbench-responsive-browser.py
+
+The unchanged presentation checker uses a temporary core.mjs facade exporting
+all of the final artifact's core.mjs and re-exporting printStr as pr_str from
+its rt.mjs. Other files in that directory link to the checked final out/.
+BLED_ROOT supplies the real Beam Lisp corpus used by the editor drive suite.
+
+Installation and review
+  All final artifact out/ files, pkg/pelagic assets and loader are installed
+  into vendor/bl-ed/web and match the immutable artifact. Unrelated generated
+  modules were preserved. Vendored changes are documented in VENDOR.md.
+  A clean copy of the example is provided in /tmp/omega-pelagic-fixed.
+  Review: http://localhost:8792/?use=pelagic&layout=pelagic-gen&file=composer.bl.org
+
+To update the user's 8814 foreground session: save/copy unsaved source, stop
+that foreground process, then rerun from the repository root and refresh:
+  bin/bl-ed --offline --memory --port 8814 --root "$PWD"
+  http://localhost:8814/?use=pelagic&layout=pelagic-gen&file=spikes/pelagic/composer.bl.org
+The existing session pins its previous frontend, so refreshing alone does not
+switch that server to this generation. Session history still ends on reload.
+
+Machine-readable identity, source/log/screenshot hashes: proofreport.json.

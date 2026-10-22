@@ -1,3 +1,15 @@
 ; Root task: bl pelagic.dev [--port N] [--live].
 (ns pelagic.dev-task (:require [pelagic.launch :as launch]))
-(launch/dev! (vec (BeamLisp/argv)))
+(try
+ (launch/dev! (vec (BeamLisp/argv)))
+ (catch error
+  ; The pinned warm task runner returns exit 1 without forwarding its exception
+  ; diagnostic. Emit it as ordinary task IO before retaining the failing exit.
+  (println
+   (str "PELAGIC: launch failed: "
+    (if (or (= :service-identity-conflict (:error (ex-data error)))
+            (String/contains? (ex-message error) "belongs to an incompatible host"))
+     "This checkout already owns a different Omega world. Changing --port does not create a second shared world."
+     (ex-message error))))
+  (println "For a separate foreground session: bin/bl-ed --offline --memory --port 8814 --root \"$PWD\"")
+  (throw error)))
