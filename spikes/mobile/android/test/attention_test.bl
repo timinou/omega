@@ -1,0 +1,37 @@
+(ns pocket.attention-test (:require [pocket.attention :as a]))
+(def doc {"ok" true
+          "objects" [{"type" "desk/scope" "key" "workspace:all"}
+                     {"type" "omega/task" "key" "t-1" "title" "Ship it" "ask" "Bump version?\nmore"}
+                     {"type" "omega/task" "key" "t-2" "title" "Idle" "ask" nil}
+                     {"type" "omega/task" "key" "t-3" "goal" "Blank" "ask" "  "}
+                     {"type" "omega/task" "key" "t-4" "goal" "Other" "ask" "Proceed?"}]})
+(def items (a/needing doc))
+(assert (= ["t-1" "t-4"] (map :key items)))
+(assert (= "Bump version?" (:ask (first items))))
+(assert (= "Other" (:title (second items))))
+(assert (= 240 (count (:ask (first (a/needing {"objects" [{"type" "omega/task" "key" "x" "ask" (apply str (repeat 400 "a"))}]}))))))
+(assert (= [] (a/needing {})))
+;; first sight announces everything; an unchanged poll announces nothing
+(let [n1 (a/news {} items) n2 (a/news (:seen n1) items)]
+  (assert (= 2 (count (:fresh n1))))
+  (assert (= [] (:fresh n2)))
+  (assert (= [] (:gone n2)))
+  ;; a changed question is news again; a resolved task is withdrawn
+  (let [n3 (a/news (:seen n2) [(assoc (first items) :ask "Different?")])]
+    (assert (= ["t-1"] (map :key (:fresh n3))))
+    (assert (= ["t-4"] (:gone n3)))))
+(let [n (a/notification (first items))]
+  (assert (= (a/id-of "t-1") (:id n)))
+  (assert (= "omega-attention" (:channel n)))
+  (assert (= "Ship it" (:title n)))
+  (assert (= "Bump version?" (:text n))))
+(assert (not= (a/id-of "t-1") (a/id-of "t-4")))
+(assert (= "https://h.ts.net/?q=1&pocket=task&at=task%3At-1" (a/task-url "https://h.ts.net" "/?q=1" "t-1")))
+(assert (= (a/id-of "t-1") (a/tapped [:android :notify/action {"notification" (a/id-of "t-1") "action" "tap"}])))
+(assert (= 7 (a/tapped (tuple :android :notify/action {"notification" 7}))))
+(assert (nil? (a/tapped [:android :notify/posted {"notification" 7}])))
+(assert (nil? (a/tapped :poll)))
+(assert (a/parse {:status 200 :body "{\"ok\":true,\"objects\":[]}"}))
+(assert (nil? (a/parse {:status 500 :body "{}"})))
+(assert (nil? (a/parse {:status 200 :body "nope"})))
+(println "attention assertions passed")

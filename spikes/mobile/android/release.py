@@ -45,13 +45,17 @@ def configure():
     manifest = MAIN / "AndroidManifest.xml"
     tree = ET.parse(manifest)
     root = tree.getroot()
-    keep = {"android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"}
+    # POST_NOTIFICATIONS and the notify receiver carry Pocket's "Needs you"
+    # notifications; the listener, reader and overlay services stay out.
+    keep = {"android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE",
+            "android.permission.POST_NOTIFICATIONS"}
+    keep_components = {"io.beamlisp.android.BlNotifyReceiver"}
     for entry in list(root):
         if entry.tag == "uses-permission" and entry.get(ANDROID + "name") not in keep:
             root.remove(entry)
     application = root.find("application")
     for entry in list(application):
-        if entry.tag in {"receiver", "service"}:
+        if entry.tag in {"receiver", "service"} and entry.get(ANDROID + "name") not in keep_components:
             application.remove(entry)
     application.set(ANDROID + "usesCleartextTraffic", "false")
     tree.write(manifest, encoding="utf-8", xml_declaration=True)

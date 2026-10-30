@@ -195,4 +195,26 @@ connection is needed. Bundle upgrades preserve the saved server address and
 replace the bundled runtime together. The release build disables Erlang
 distribution.
 
+### Notifications
+
+While a server is connected (including a remembered one at launch), the native
+screen polls the host's own `workspace:all` document every 30 s
+(`pocket.attention`, pure) and posts one notification per task that is waiting
+for an answer, on the high-importance channel "Needs you". An unchanged
+question is announced once; a changed question re-announces; a task that is
+answered, cancelled or finished is withdrawn. Tapping a notification brings the
+app forward and opens that task (`?pocket=task&at=task:<id>`, the editor's
+existing route parameters). Android 13+ asks for `POST_NOTIFICATIONS` on first
+connection. No new host API, credential or port: the poll uses the same
+Tailscale-HTTPS origin as the WebView. `release.py` keeps that permission and
+beam-lisp's `BlNotifyReceiver`; the listener, reader and overlay services remain
+stripped.
+
+Limit: polling runs only while the app process is alive. There is no push
+service, so a task that asks while the app is fully stopped is announced on the
+next launch.
+
+Status: desk tests only (`attention_test.bl`, `home_test.bl`). The APK has not
+been rebuilt with this change and nothing is verified on a device.
+
 Validation and screenshots are recorded in `proof/android-standalone/`.
