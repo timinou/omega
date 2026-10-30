@@ -6,10 +6,14 @@ import {homedir} from 'node:os';
 import path from 'node:path';
 import {chromium} from 'playwright-core';
 const host=readFileSync(process.env.HOST_TEST_MODULE||new URL('../host/host.mjs',import.meta.url));
+const out=process.env.BLED_OUT;if(!out)throw new Error('BLED_OUT names the compiled frontend out/ directory');
 const server=createServer((req,res)=>{
- if(req.url==='/host.mjs'){res.setHeader('Content-Type','text/javascript');res.end(host);}
+ if(req.url.startsWith('/out/')){res.setHeader('Content-Type','text/javascript');try{res.end(readFileSync(path.join(out,req.url.slice(5).split('?')[0])));}catch{res.statusCode=404;res.end();}}
+ else if(req.url==='/host.mjs'||req.url==='/pkg/mobile/host.mjs'){res.setHeader('Content-Type','text/javascript');res.end(host);}
+ else if(/^\/[a-z-]+\.css$/.test(req.url)&&req.url!=='/style.css'){res.setHeader('Content-Type','text/css');res.end(readFileSync(new URL('../host/'+req.url.slice(1),import.meta.url)));}
  else if(req.url==='/style.css'){res.setHeader('Content-Type','text/css');res.end(readFileSync(new URL('../host/style.css',import.meta.url)));}
- else if(/^\/[a-z-]+\.mjs$/.test(req.url)){res.setHeader('Content-Type','text/javascript');res.end(readFileSync(new URL('../host/'+req.url.slice(1),import.meta.url)));}
+ else if(/^\/(pkg\/mobile\/)?[a-z-]+\.(mjs|css)$/.test(req.url)){res.setHeader('Content-Type',req.url.endsWith('.css')?'text/css':'text/javascript');res.end(readFileSync(new URL('../host/'+req.url.split('/').pop(),import.meta.url)));}
+ else if(req.url.startsWith('/api/intent')){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({ok:true,home:'/home/test',repos:[]}));}
  else if(req.url.startsWith('/api/doc')){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({ok:true,text:req.url.includes('launch:identity')?JSON.stringify({root:'/tmp/test',db:'/tmp/test/db',live:false}):''}));}
  else res.end('<!doctype html><html><head><style>#rail{height:100dvh}body{margin:0}</style></head><body><div id="rail"></div><div id="task"></div><div id="file"></div></body></html>');
 });
@@ -19,7 +23,7 @@ const executablePath=process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE||readdirSync(cac
 const browser=await chromium.launch({headless:true,executablePath}),page=await browser.newPage(),errors=[];
 page.on('pageerror',e=>errors.push(e.stack));
 const start=async(at=123,screen='task')=>page.evaluate(async ({at,screen})=>{
- const {createHost}=await import('/host.mjs');
+ const {createHost}=await import('/pkg/mobile/host.mjs');
  window.ms={rail:{role:'rail',path:'workspace:all',state:{screen,tab:'conversation','task-path':screen==='task'?'task:1':undefined,connection:{online:true}},objects:[],text:''},task:{role:'task',path:'task:1',draft:'',data:{desk:'task','task-id':'1','task-at':at,'task-status':'done','task-title':'Task'},state:{},text:'',objects:[]},file:{role:'file',path:'work:test/doc',revision:'1',text:'Selected words\nNext line',state:{},objects:[]}};
  window.events=[];window.host=createHost({dispatch(e){events.push(e);if(e.type==='mobile/draft')ms.task.draft=e.text;if(e.type==='mobile/selection')ms.rail.state.selection=e.selection;if(e.type==='mobile/connection')ms.rail.state.connection={online:e.online,checked:e.checked};if(e.type==='mobile/new-field')(ms.rail.state.new??={})[e.field]=e.value;if(e.type==='mobile/field')ms.rail.state[e.field]=e.value;if(e.type==='mobile/modal')ms.rail.state.modal=e.value;if(e.type==='mobile/nav')Object.assign(ms.rail.state,{screen:e.screen,'task-path':e.screen==='task'?e.path:ms.rail.state['task-path']});if(e.type==='mobile/document'){Object.assign(ms.rail.state,{screen:'document','file-path':e.path});ms.file.path=e.path;}window.update();}});
  window.views=Object.fromEntries(['rail','task','file'].map(k=>[k,host.mount(document.getElementById(k))]));
@@ -33,23 +37,24 @@ try{
  await page.waitForTimeout(100);
  await page.setViewportSize({width:390,height:844});
  await page.evaluate(()=>{ms.task.data['task-title']='Review the project brief';ms.task.data['place-name']='Research';ms.task.data.cwd='/tmp/test/research';ms.task.data.artifacts=[{path:'work:test/brief.org',kind:'input'},{path:'work:test/brief.org',block:'section',kind:'input'},{path:'work:test/output.org',kind:'output'}];ms.task.data['changed-files']=['work:test/output.org'];update();});
- assert.equal(await page.locator('.mobile-header .task-title').innerText(),'Review the project brief');
- assert.equal(await page.locator('.mobile-content .task-title,.mobile-content .tabs').count(),0,'session chrome lives outside the scrolling content');
- assert.equal(await page.locator('[data-act="tab-plan"] .tab-count').innerText(),'2','anchored references count as one file');
- assert.equal(await page.locator('[data-act="tab-changes"] .tab-count').innerText(),'1','only recorded edits count');
- assert.equal(await page.locator('.bottom-nav').count(),0,'session reserves no bottom navigation space');
- await page.locator('.session-place').click();assert.match(await page.locator('[role="dialog"]').innerText(),/Research[\s\S]*\/tmp\/test\/research/);await page.locator('button[data-act="dismiss"]').first().click();
+ assert.equal(await page.locator('.hdr .id b').innerText(),'Review the project brief');
+ assert.equal(await page.locator('.mobile-content .hdr,.mobile-content .seg').count(),0,'session chrome lives outside the scrolling content');
+ assert.equal(await page.locator('.mobile-content :text("Review the project brief")').count(),0,'the title appears once, in the header');
+ assert.equal(await page.locator('[data-act="tab-plan"] .count').innerText(),'2','anchored references count as one file');
+ assert.equal(await page.locator('[data-act="tab-changes"] .count').innerText(),'1','only recorded edits count');
+ assert.equal(await page.locator('.tabs').count(),0,'session reserves no bottom navigation space');
+ await page.locator('[data-act="details"]').click();assert.match(await page.locator('[role="dialog"]').innerText(),/Research[\s\S]*\/tmp\/test\/research/);await page.locator('button[data-act="dismiss"]').first().click();
  await page.evaluate(()=>{ms.task.text='A long conversation\n'.repeat(300);update();});
- const tabsTop=await page.locator('.tabs').evaluate(e=>e.getBoundingClientRect().top);
+ const tabsTop=await page.locator('.seg').evaluate(e=>e.getBoundingClientRect().top);
  await page.locator('.mobile-scroll').evaluate(e=>e.scrollTop=400);
- assert.equal(await page.locator('.tabs').evaluate(e=>e.getBoundingClientRect().top),tabsTop,'tabs stay pinned while reading');
- for(const tab of ['plan','changes']){await page.evaluate(tab=>{ms.rail.state.tab=tab;update();},tab);assert.equal(await page.locator('.bottom-nav').count(),0);assert.equal(await page.locator('.task-title').innerText(),'Review the project brief');}
+ assert.equal(await page.locator('.seg').evaluate(e=>e.getBoundingClientRect().top),tabsTop,'tabs stay pinned while reading');
+ for(const tab of ['plan','changes']){await page.evaluate(tab=>{ms.rail.state.tab=tab;update();},tab);assert.equal(await page.locator('.tabs').count(),0);assert.equal(await page.locator('.hdr .id b').innerText(),'Review the project brief');}
  await page.locator('[aria-label="Back to Work"]').click();
- assert.equal(await page.locator('.bottom-nav').isVisible(),true);
- assert.equal(await page.locator('.bottom-nav').evaluate(e=>getComputedStyle(e).animationName),'nav-return');
- await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await page.locator('.bottom-nav').evaluate(e=>getComputedStyle(e).animationName),'none');await page.emulateMedia({reducedMotion:'no-preference'});
+ assert.equal(await page.locator('.tabs').isVisible(),true);
+ assert.equal(await page.locator('.mobile-scroll').evaluate(e=>getComputedStyle(e).animationName),'pocket-enter','returning to Work eases in');
+ await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await page.locator('.mobile-scroll').evaluate(e=>getComputedStyle(e).animationName),'none');await page.emulateMedia({reducedMotion:'no-preference'});
  await page.evaluate(()=>{ms.rail.state.screen='task';ms.rail.state.tab='conversation';ms.task.text='';update();});
- await page.setViewportSize({width:320,height:740});assert.equal(await page.evaluate(()=>document.body.scrollWidth<=innerWidth),true,'session header and badges fit narrow screens');
+ await page.setViewportSize({width:320,height:740});if(process.env.DEBUG_WIDTH)console.log(await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+0.5).map(e=>e.tagName+'.'+e.className+' '+Math.round(e.getBoundingClientRect().right)).slice(0,12)));await page.setViewportSize({width:320,height:740});assert.equal(await page.evaluate(()=>document.body.scrollWidth<=innerWidth),true,'session header and badges fit narrow screens');
  await page.setViewportSize({width:390,height:844});
  await page.locator('[data-field="reply"]').fill('Keep this reply');
  await page.locator('[data-field="reply"]').focus();
@@ -69,9 +74,9 @@ try{
  assert.equal(await page.locator('.execution').evaluate(e=>e.open),true,'execution remains expanded across background updates');
  assert.equal(await disclosure.evaluate(e=>e.isConnected),true,'execution retains its DOM identity');
  await page.evaluate(()=>{ms.task.data.turns=[{n:1,role:'user',content:[{type:'text',text:'A full prompt'}]},{n:2,role:'assistant',content:[{type:'text',text:'## Answer\n\n**Readable** with `code`.\n\n- First\n- Second'}]}];ms.task.data['task-result']='## Answer\n\n**Readable** with `code`.\n\n- First\n- Second';update();});
- assert.equal(await page.locator('.message.agent h2').innerText(),'Answer','typed turns render structured responses');
- assert.equal(await page.locator('.message.agent strong').innerText(),'Readable');
- assert.equal(await page.locator('.message.agent li').count(),2);
+ assert.equal(await page.locator('.msg.agent h2').innerText(),'Answer','typed turns render structured responses');
+ assert.equal(await page.locator('.msg.agent strong').innerText(),'Readable');
+ assert.equal(await page.locator('.msg.agent li').count(),2);
  assert.equal(await page.locator('.result-card').count(),0,'one canonical response');
  // The thin prompt follows the visible user turn in both scroll directions.
  await page.evaluate(()=>{
@@ -88,7 +93,7 @@ try{
  assert.ok((await prompt.boundingBox()).height<=24,'prompt is one thin line');
  assert.equal(await prompt.locator('safe').count(),0,'prompt text is escaped');
  const promptTop=(await prompt.boundingBox()).y;
- await page.locator('.message.human').nth(1).evaluate(el=>{
+ await page.locator('.msg.you').nth(1).evaluate(el=>{
   const scroll=el.closest('.mobile-scroll');scroll.scrollTop+=el.getBoundingClientRect().top-scroll.getBoundingClientRect().top+2;
  });
  await page.waitForFunction(()=>document.querySelector('.conversation-prompt')?.textContent.startsWith('Next prompt'));
@@ -113,12 +118,14 @@ try{
  await page.evaluate(()=>{ms.task.objects=[];ms.task.data.questions=[];update();});
 
  await page.evaluate(()=>{ms.task.data.turns.push({n:3,role:'assistant',content:[{type:'tool-use',id:'full',name:'eval',input:{code:'(read \"brief.org\")'}}]},{n:4,role:'user',content:[{type:'tool-result',id:'full',content:'<script>danger()</script>\n'+('Full evidence\n'.repeat(200))}]});update();});
- await page.locator('[data-key="step:full"] summary').click();
- assert.equal(await page.locator('.tool-result').innerText().then(x=>x.includes('Full evidence\n'.repeat(199))),true,'execution shows the full recorded result');
- assert.equal(await page.locator('.tool-result script').count(),0,'model evidence remains escaped');
+ await page.locator('[data-key="steps:full"] > summary').click();
+ assert.equal(await page.locator('[data-key="step:full"]').innerText().then(x=>x.startsWith('Read brief.org')),true,'steps read as actions, not code');
+ await page.locator('[data-key="steps:full"] details.raw > summary').click();
+ assert.equal(await page.locator('.raw-step pre.out').innerText().then(x=>x.includes('Full evidence\n'.repeat(199))),true,'execution shows the full recorded result');
+ assert.equal(await page.locator('.raw-step script').count(),0,'model evidence remains escaped');
 
  await page.evaluate(()=>{ms.rail.state.screen='places';update();});
- assert.equal(await page.locator('[data-act="add-place"]').count(),1,'places exposes attachment');
+ assert.ok(await page.locator('[data-act="add-places"]').count()>=1,'places exposes attachment');
  await page.evaluate(()=>{ms.rail.state.modal='place';ms.rail.message='Could not save place: missing directory';update();});
  assert.equal(await page.locator('[role="dialog"] [role="alert"]').count(),1,'form errors appear inside the active dialog');
  await page.evaluate(()=>{ms.rail.state.modal=null;ms.rail.message=null;update();});
@@ -133,21 +140,26 @@ try{
 
 
  await page.evaluate(()=>{ms.rail.state.modal='commands';update();});
- await page.locator('[data-field="address"]').fill('work:test/slowly-typed.org');
+ await page.locator('[data-field="palette-query"]').fill('@work:test/slowly-typed.org');
  await page.evaluate(()=>{ms.rail.state.connection.checked=Date.now()+1;update();});
- assert.equal(await page.locator('[data-field="address"]').inputValue(),'work:test/slowly-typed.org','unfinished address survives background updates');
+ assert.equal(await page.locator('[data-field="palette-query"]').inputValue(),'@work:test/slowly-typed.org','unfinished address survives background updates');
+ assert.equal(await page.locator('.palette-list .cmd').last().innerText().then(x=>x.startsWith('Open work:test/slowly-typed.org')),true,'@ opens any address');
  await page.locator('.sheet button').last().focus();await page.keyboard.press('Tab');
  assert.equal(await page.evaluate(()=>!!document.activeElement.closest('[role="dialog"]')),true,'modal contains keyboard focus');
  await page.keyboard.press('Escape');assert.equal(await page.locator('[role="dialog"]').count(),0,'Escape dismisses sheet');
- await page.evaluate(()=>{ms.rail.state.modal='new';ms.rail.state.places=[{place:'test',title:'Test'}];update();});
+ await page.evaluate(()=>{ms.rail.state.screen='launch';ms.rail.objects=[{type:'desk/scope',place:'test',title:'Test',root:'/tmp/test',branch:'main'}];update();});
+ assert.match(await page.locator('details.run summary').innerText(),/Opus 5\.5 · on main · can edit & run/,'launch says how the session runs');
  await page.locator('[data-field="new-goal"]').fill('An unsent goal');
  await dispose();await start(456);await page.waitForTimeout(100);
- await page.evaluate(()=>{ms.rail.state.modal='new';ms.rail.state.places=[{place:'test',title:'Test'}];update();});
+ await page.evaluate(()=>{ms.rail.state.screen='launch';ms.rail.objects=[{type:'desk/scope',place:'test',title:'Test',root:'/tmp/test',branch:'main'}];update();});
  assert.equal(await page.locator('[data-field="new-goal"]').inputValue(),'An unsent goal','new work survives host recreation');
- await page.evaluate(()=>{ms.rail.state.modal=null;update();});
+ await page.locator('[data-act="launch-start"]').click();
+ const created=await page.evaluate(()=>events.filter(e=>e.type==='mobile/create').at(-1));
+ assert.deepEqual([created.place,created.goal,created.run.model,created.run.may],['test','An unsent goal','claude-opus-5-5','run'],'Start sends the goal with its run settings');
+ await page.evaluate(()=>{ms.rail.state.screen='task';ms.rail.objects=[];update();});
  await page.evaluate(()=>{ms.task={...ms.task,path:'links:task/1',text:'References opened by a native command',data:{},'read-only':true};update();});
  assert.equal(await page.locator('.reader').innerText(),'References opened by a native command','native command navigation exposes its resulting document');
- assert.equal(await page.locator('.mobile-header .task-title').innerText(),'Task','reference reading keeps its session title');
+ assert.equal(await page.locator('.hdr .id b').innerText(),'Task','reference reading keeps its session title');
  await page.locator('[data-act="tab-conversation"]').click();assert.equal(await page.evaluate(()=>events.filter(e=>e.type==='mobile/nav').at(-1).path),'task:1','Conversation returns from a reference to its session');
  await page.evaluate(()=>{ms.rail.state.screen='document';update();});
  await page.locator('.reader-line').first().evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);el.dispatchEvent(new PointerEvent('pointerup',{bubbles:true}));});

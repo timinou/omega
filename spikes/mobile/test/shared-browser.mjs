@@ -18,9 +18,9 @@ const doc=async address=>{const r=await desktop.request.get(base+'/api/doc?path=
 const intent=async(name,args)=>{const r=await desktop.request.post(base+'/api/intent',{data:{intent:name,args}});return r.json();};
 const pane=async(p,id)=>p.evaluate(id=>{const ed=blEd.F.d_editor(blEd.frame(),blEd.K(id));return{path:ed.get(blEd.K('path')),text:ed.get(blEd.K('text')).get(blEd.K('lines')).toArray().join('\n'),saved:ed.get(blEd.K('saved-text')).get(blEd.K('lines')).toArray().join('\n'),data:ed.get(blEd.K('doc'))?.get(blEd.K('data'))};},id);
 const waitTask=(p,title)=>p.waitForFunction(title=>blEd.F.d_editor(blEd.frame(),blEd.K('task')).get(blEd.K('doc'))?.get(blEd.K('data'))?.get(blEd.K('task-title'))===title,title,{timeout:90000});
-const openTask=async(p,title)=>{await click(p,'work');await ui(p).locator('[data-act="open-task"]').filter({hasText:title}).first().click();await waitTask(p,title);await ui(p).locator('h1.task-title').filter({hasText:title}).waitFor();};
-const openDocument=async(p,address)=>{const expected=await doc(address);await click(p,'commands');await ui(p).locator('[data-field="address"]').fill(address);await ui(p).locator('form[data-form="open"] button').click();await p.waitForFunction(({address,rev})=>{const ed=blEd.F.d_editor(blEd.frame(),blEd.K('file'));return ed.get(blEd.K('path'))===address&&ed.get(blEd.K('doc'))?.get(blEd.K('rev'))===rev;},{address,rev:expected.rev});await ui(p).locator('.reader').waitFor();};
-const create=async(p,goal)=>{await click(p,'work');await click(p,'new');await ui(p).locator('[data-field="new-place"]').selectOption('test');await ui(p).locator('[data-field="new-goal"]').fill(goal);await ui(p).locator('form[data-form="new"] button[type="submit"]').click();await waitTask(p,goal);await ui(p).locator('.task-title').filter({hasText:goal}).waitFor();return(await pane(p,'task')).path;};
+const openTask=async(p,title)=>{await click(p,'work');await ui(p).locator('[data-act="open-task"]').filter({hasText:title}).first().click();await waitTask(p,title);await ui(p).locator('.hdr .id b').filter({hasText:title}).waitFor();};
+const openDocument=async(p,address)=>{const expected=await doc(address);await click(p,'commands');await ui(p).locator('[data-field="palette-query"]').fill('@'+address);await ui(p).locator('[data-field="palette-query"]').press('Enter');await p.waitForFunction(({address,rev})=>{const ed=blEd.F.d_editor(blEd.frame(),blEd.K('file'));return ed.get(blEd.K('path'))===address&&ed.get(blEd.K('doc'))?.get(blEd.K('rev'))===rev;},{address,rev:expected.rev});await ui(p).locator('.reader').waitFor();};
+const create=async(p,goal)=>{await click(p,'work');await click(p,'new');await ui(p).locator('[data-act="launch-place"][data-path="test"]').click();await ui(p).locator('[data-field="new-goal"]').fill(goal);await click(p,'launch-start');await waitTask(p,goal);await ui(p).locator('.hdr .id b').filter({hasText:goal}).waitFor();return(await pane(p,'task')).path;};
 const waitText=async(p,text)=>ui(p).getByText(text,{exact:false}).filter({visible:true}).first().waitFor();
 const checks=[];
 try{
@@ -30,15 +30,15 @@ try{
  assert.equal((await intent('place/put',{text:`{:id "test" :name "Test" :root ${JSON.stringify(root)}}`})).ok,true);
  // Start on desktop, answer on both clients; exactly one reply survives.
  const taskPath=await create(a,'Desktop work');await openTask(b,'Desktop work');
- await Promise.all([ui(a).locator('.question-card').waitFor(),ui(b).locator('.question-card').waitFor()]);
+ await Promise.all([ui(a).locator('.next').waitFor(),ui(b).locator('.next').waitFor()]);
  const taskDoc=await doc(taskPath),ask=taskDoc.objects.find(o=>o.type==='omega/msg').key;
  const results=await Promise.all([intent('msg/answer',{msg:ask,text:'yes'}),intent('msg/answer',{msg:ask,text:'no'})]);
  assert.equal(results[0].ok,true);assert.equal(results[0].reply,results[1].reply);
  await Promise.all([waitText(a,'Offline run finished'),waitText(b,'Offline run finished')]);
- await Promise.all([ui(a).locator('.question-card').waitFor({state:'detached'}),ui(b).locator('.question-card').waitFor({state:'detached'})]);
+ await Promise.all([ui(a).locator('.next').waitFor({state:'detached'}),ui(b).locator('.next').waitFor({state:'detached'})]);
  checks.push('desktop task, same ID, shared answer/result, concurrent answer resolves once');
  // A phone task remains alive while the phone loses its network.
- const phoneTask=await create(b,'Phone work');await ui(b).locator('.question-card').waitFor();
+ const phoneTask=await create(b,'Phone work');await ui(b).locator('.next').waitFor();
  const reply=ui(b).locator('[data-field="reply"]');await reply.fill('Retained through disconnection');
  await phone.setOffline(true);await waitText(b,'Offline · draft retained');
  assert.equal(await ui(b).locator('[data-act="send"]').isDisabled(),true);await openTask(a,'Phone work');
@@ -48,16 +48,16 @@ try{
  assert.equal((await pane(a,'task')).path,phoneTask);
  await b.reload();await waitText(b,'Host connected');await openTask(b,'Phone work');assert.equal(await ui(b).locator('[data-field="reply"]').inputValue(),'Retained through disconnection');checks.push('phone task, disconnected view, host continues, retained reply, revision convergence');
  // Existing editor prompts remain usable through native phone controls.
- await click(b,'commands');await ui(b).locator('[data-field="command-pane"]').selectOption('task');
- await ui(b).locator('[data-field="command-query"]').fill('desk/link');await ui(b).locator('[data-name="desk/link"]').click();
+ await click(b,'commands');await ui(b).locator('[data-field="palette-query"]').fill('>desk/link');await ui(b).locator('[data-act="palette-pane"][data-value="task"]').click();
+ await ui(b).locator('[data-act="palette-pane"][data-value="task"].on').waitFor();await ui(b).locator('[data-name="desk/link"]').click();
  await ui(b).locator('[data-field="prompt"]').fill('i');await ui(b).locator('form[data-form="prompt"] button').click();
  await ui(b).locator('[data-field="prompt"]').fill('long.bl.org');await ui(b).locator('form[data-form="prompt"] button').click();
  await ui(b).locator('form[data-form="prompt"]').waitFor({state:'detached'});
  await ui(b).locator('.reader').waitFor();
  assert.ok((await doc('links:task/'+phoneTask.split(':')[1])).objects.some(o=>o.key==='work:test/long.bl.org'));
  checks.push('native overlay drives the existing multi-step reference prompt');
- await click(b,'commands');await ui(b).locator('[data-field="command-pane"]').selectOption('file');
- await ui(b).locator('[data-field="eval-code"]').fill('(+ 1 2)');await ui(b).locator('form[data-form="eval"] button[value="editor"]').click();
+ await click(b,'commands');await ui(b).locator('[data-field="palette-query"]').fill('>');await ui(b).locator('[data-act="palette-pane"][data-value="file"]').click();
+ await ui(b).locator('[data-field="palette-query"]').fill(':(+ 1 2)');await ui(b).locator('[data-act="palette-eval"][data-value="editor"]').click();
  await ui(b).locator('pre[role="status"]').filter({hasText:'3'}).waitFor();await click(b,'dismiss');
  checks.push('editor Lisp loads and evaluates through the ordinary command API');
  // Actual long document reading independent of the task conversation.
@@ -74,15 +74,15 @@ try{
  const selected=ui(b).locator('[data-row="3"]');await selected.scrollIntoViewIfNeeded();
  await selected.evaluate(el=>{const r=document.createRange();r.selectNodeContents(el);const s=window.getSelection();s.removeAllRanges();s.addRange(r);el.dispatchEvent(new PointerEvent('pointerup',{bubbles:true}));});
  assert.equal(await b.evaluate(()=>window.getSelection().toString()),'Selected words for the model.');
- await click(b,'ask-passage');await ui(b).locator('[data-field="new-place"]').selectOption('test');
- await ui(b).locator('[data-field="new-goal"]').fill('Explain selected text');await ui(b).locator('form[data-form="new"] button[type="submit"]').click();
- await ui(b).locator('.task-title').filter({hasText:'Explain selected text'}).waitFor();
+ await click(b,'ask-passage');await ui(b).locator('[data-act="launch-place"][data-path="test"]').click();
+ await ui(b).locator('[data-field="new-goal"]').fill('Explain selected text');await click(b,'launch-start');
+ await ui(b).locator('.hdr .id b').filter({hasText:'Explain selected text'}).waitFor();
  await waitTask(b,'Explain selected text');
  const selectedTask=await doc((await pane(b,'task')).path);assert.equal(selectedTask.data.cwd,root);assert.equal(selectedTask.data.home.path,'work:test/long.bl.org');
  assert.match(selectedTask.text,/Selected passage from/);
  checks.push('long document outline, search, follow/back reading position, explicit checked passage and cwd');
- await ui(b).locator('.question-card').waitFor();await click(b,'actions');await ui(b).locator('[data-act=object-action][data-command="desk/cancel"]').click();await ui(b).locator('[data-field=prompt]').fill('cancel');await ui(b).locator('form[data-form=prompt] button').click();
- await ui(b).locator('.question-card').waitFor({state:'detached'});
+ await ui(b).locator('.next').waitFor();await click(b,'details');await click(b,'cancel-task');await click(b,'confirm-cancel');
+ await ui(b).locator('.next').waitFor({state:'detached'});
  assert.equal((await doc((await pane(b,'task')).path)).data['task-status'],'cancelled');
  checks.push('cancel closes the task and removes its actionable question');
  // Both editors retain overlapping drafts, and neither publication overwrites.
@@ -100,18 +100,13 @@ try{
  // Explicitly withdraw our desktop draft before its later package-unload test.
  const clearAck=draftAck(a,'Original shared text\n');await ui(a).locator('[data-field="file"]').fill('Original shared text\n');assert.equal((await(await clearAck).json()).ok,true);
  // Commands and the live machine share the same host, including full world data.
- await click(a,'commands');await ui(a).locator('[data-field="eval-code"]').fill('(count (omega.task/all world))');
- await ui(a).locator('form[data-form="eval"] button[value="machine"]').click();
- await ui(a).locator('pre[role="status"]').filter({hasText:'3'}).waitFor();
- await ui(a).locator('[data-field="eval-code"]').fill('(def pocket-proof 41)');
- await ui(a).locator('form[data-form="eval"] button[value="machine"]').click();
- await ui(a).locator('pre[role="status"]').filter({hasText:'41'}).waitFor();
- await click(b,'commands');await ui(b).locator('[data-field="eval-code"]').fill('(inc pocket-proof)');
- await ui(b).locator('form[data-form="eval"] button[value="machine"]').click();
- await ui(b).locator('pre[role="status"]').filter({hasText:'42'}).waitFor();await click(b,'dismiss');
+ const world=async(p,code,expect)=>{const q=ui(p).locator('[data-field="palette-query"]');await q.fill(':'+code);await q.press('Enter');await ui(p).locator('pre[role="status"]').filter({hasText:expect}).waitFor();};
+ await click(a,'commands');await world(a,'(count (omega.task/all world))','3');
+ await world(a,'(def pocket-proof 41)','41');
+ await click(b,'commands');await world(b,'(inc pocket-proof)','42');await click(b,'dismiss');
  checks.push('machine evaluation sees the shared task world');
  await click(a,'dismiss');await a.screenshot({path:path.join(proof,'01-used-desktop.png')});
- await click(a,'host');await click(a,'unload');await a.waitForFunction(()=>!document.documentElement.classList.contains('omega-mobile'));
+ await click(a,'buffers');await click(a,'unload');await a.waitForFunction(()=>!document.documentElement.classList.contains('omega-mobile'));
  assert.equal(await a.locator('[data-mobile-resource]').count(),0);assert.equal(await a.locator('.pane.editor').count(),1);
  await a.screenshot({path:path.join(proof,'03-unused-desktop.png')});
  assert.equal(await ui(b).locator('[data-field="file"]').inputValue(),'Phone overlapping draft\n');

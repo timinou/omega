@@ -2,7 +2,7 @@
 #+subtitle: Design review, findings and implementation roster
 #+date: 2026-10-30
 #+todo: TODO NEXT DOING | DONE DROP
-#+status: Design proposal; nothing implemented yet
+#+status: Implemented 2026-10-31 in the mobile package, Omega host and Android app; see Implementation
 
 * About this document
 This file is the single source of truth. The page at =index.html= next to it
@@ -159,7 +159,7 @@ Phases ship independently. Each item names the findings it closes, the
 prototype it follows, and where the work lives.
 
 ** Phase 1 — Clarity, no new host data
-*** TODO R1 One status vocabulary
+*** DONE R1 One status vocabulary
 :PROPERTIES:
 :FINDINGS: F2
 :AREA: host + package + CLI
@@ -168,7 +168,7 @@ prototype it follows, and where the work lives.
 Your turn · Running · Failed · Done · Cancelled, everywhere: cards, sheets,
 =omega list=. "Answered" and "idle" go away.
 
-*** TODO R2 Titles from goals
+*** DONE R2 Titles from goals
 :PROPERTIES:
 :FINDINGS: F2
 :AREA: host
@@ -176,7 +176,7 @@ Your turn · Running · Failed · Done · Cancelled, everywhere: cards, sheets,
 Never show task ids as titles; derive a short title from the goal and let the
 user rename it later.
 
-*** TODO R3 Work as an inbox
+*** DONE R3 Work as an inbox
 :PROPERTIES:
 :FINDINGS: F2 F5
 :AREA: package
@@ -186,14 +186,14 @@ Sections Needs you / Running / Done-today (collapsed), place chips as the
 filter, relative times, inline question and next-step chips, one "New session"
 button.
 
-*** TODO R4 Header tells the truth
+*** DONE R4 Header tells the truth
 :PROPERTIES:
 :FINDINGS: F4
 :AREA: package
 :END:
 The subtitle derives from the current view and filter only.
 
-*** TODO R5 Session chrome
+*** DONE R5 Session chrome
 :PROPERTIES:
 :FINDINGS: F8 F10
 :AREA: package
@@ -203,7 +203,7 @@ Back control; title once; state strip with Stop; no bottom navigation inside a
 session; details sheet replaces the 11-item action list; fix label spacing;
 relative times instead of hours.
 
-*** TODO R6 Grouped, humanised tool calls
+*** DONE R6 Grouped, humanised tool calls
 :PROPERTIES:
 :FINDINGS: F9
 :AREA: package (+ host summaries)
@@ -212,7 +212,7 @@ relative times instead of hours.
 Consecutive tool calls collapse to "Ran 5 commands, read 3 files"; each row has
 a one-line human label with the raw form underneath.
 
-*** TODO R7 Full-screen launch
+*** DONE R7 Full-screen launch
 :PROPERTIES:
 :FINDINGS: F5 F6 F7
 :AREA: package
@@ -222,7 +222,7 @@ Place chips, goal first, no Title field, context shown inline under the place,
 references as chips. Drafts survive leaving and returning.
 
 ** Phase 2 — Places from the machine
-*** TODO R8 Repo discovery on the host
+*** DONE R8 Repo discovery on the host
 :PROPERTIES:
 :FINDINGS: F1
 :AREA: host
@@ -231,7 +231,7 @@ Find git repos under =~= (depth-limited, ignoring =node_modules=, =.git=
 internals, Nix outputs), with branch and last-commit time. Exposed as facts;
 the package only reads them.
 
-*** TODO R9 Add-places sheet
+*** DONE R9 Add-places sheet
 :PROPERTIES:
 :FINDINGS: F1
 :AREA: package
@@ -240,7 +240,7 @@ the package only reads them.
 Filter, recent first, multi-select, "already a place" section, parent prefix
 for duplicate names, "Folder…" for non-git places. Places carry a =kind=.
 
-*** TODO R10 Place page opens on sessions
+*** DONE R10 Place page opens on sessions
 :PROPERTIES:
 :FINDINGS: F3 F5
 :AREA: package
@@ -250,7 +250,7 @@ Sessions | Files | Settings; inline starter; files without internal ids and
 with git status; header shows the place.
 
 ** Phase 3 — How a session runs
-*** TODO R11 Run settings at launch
+*** DONE R11 Run settings at launch
 :PROPERTIES:
 :FINDINGS: F7
 :AREA: host + package
@@ -259,7 +259,7 @@ with git status; header shows the place.
 Model, checkout or worktree, permission (read / edit / edit & run), notify
 choices. Place settings supply defaults; the summary line shows them.
 
-*** TODO R12 Run identity in the session
+*** DONE R12 Run identity in the session
 :PROPERTIES:
 :FINDINGS: F8
 :AREA: package
@@ -269,7 +269,7 @@ Subtitle =place · branch · model=; details sheet adds permission, start time a
 usage.
 
 ** Phase 4 — Notifications with next steps
-*** TODO R13 Next-step actions from the agent
+*** DONE R13 Next-step actions from the agent
 :PROPERTIES:
 :FINDINGS: F14
 :AREA: host
@@ -278,7 +278,7 @@ When a session stops for the user it records up to three structured proposals
 (label + instruction). The inbox, session and notifications all render the same
 proposals.
 
-*** TODO R14 Android delivery
+*** DONE R14 Android delivery
 :PROPERTIES:
 :FINDINGS: F14
 :AREA: android
@@ -287,7 +287,7 @@ proposals.
 Your turn, finished, failed with actions and inline reply; one ongoing
 notification summarising running sessions. Transport is an open question.
 
-*** TODO R15 One Android header
+*** DONE R15 One Android header
 :PROPERTIES:
 :FINDINGS: F13
 :AREA: android + package
@@ -297,7 +297,7 @@ Drop the native bar; the ω mark carries connection state and opens the server
 sheet; offline is a banner with Retry.
 
 ** Phase 5 — The power layer
-*** TODO R16 ⌘K with sections and prefixes
+*** DONE R16 ⌘K with sections and prefixes
 :PROPERTIES:
 :FINDINGS: F11
 :AREA: package
@@ -306,7 +306,7 @@ sheet; offline is a banner with Retry.
 This session first, then Go to, editor commands on demand; =:= evaluates Lisp
 in the world, =>= editor commands, =@= files. One labelled entry in the header.
 
-*** TODO R17 Open replaces Buffers
+*** DONE R17 Open replaces Buffers
 :PROPERTIES:
 :FINDINGS: F12
 :AREA: package
@@ -315,14 +315,18 @@ in the world, =>= editor commands, =@= files. One labelled entry in the header.
 Tools (Machine, Pelagic, Runtime) as tiles above recent buffers, each labelled
 by kind and place. Room for future experiences.
 
-* Open questions
-1. Which run settings does the host already support — model choice, worktrees,
-   a read-only permission — and which need host work first?
-2. Notification transport: a foreground connection held by the app's own BEAM
-   runtime, or a self-hosted push relay (ntfy / UnifiedPush) on Work?
-3. Should next-step proposals be able to start a /new/ session (e.g. "Deploy
-   preview" in another place), or only continue the current one?
-4. Discovery scope: only =~/projects= and =~/code=, or all of =~= with an ignore
-   list?
-5. Is "Open" the right name for the third tab, or do you prefer keeping
-   "Buffers" for continuity with bl-ed?
+* Answers (2026-10-31)
+| Question | Answer | What was built |
+|----------+--------+----------------|
+| Which run settings does the host support? | Check, and implement | =:task/run= per task: model override per request, read/edit permission as an agent instruction, worktree under =<repo>/.worktrees/=, notify choices |
+| Notification transport? | Check again | The app already polled =workspace:all= every 30 s; it now also posts finished/failed and sends actions back over the same private HTTPS |
+| Can next steps start a new session? | Yes | A proposal on a finished session continues it; quick replies on finished sessions open a follow-up session in the same place |
+| Discovery scope? | =~= for now, simple | One =find= pass under =~= to depth 4, hidden folders and build output pruned |
+| Third tab name? | Buffers | Kept "Buffers"; it now leads with tools |
+
+* Implementation
+- *Modular BL views:* =spikes/mobile/mob/{status,chrome,inbox,session,launch,places,buffers,view,html}.bl= build hiccup; =host/view.mjs= serializes it.
+- *Host:* =src/omega/{task,loop,llm,schema,workspace}.bl=, =spikes/workspace/ws/{repos,next,desk_server}.bl=.
+- *Android:* =spikes/mobile/android/src/pocket/{attention,home}.bl=.
+- *Home on phones:* =spikes/home/host/{host.mjs,style.css,content.css}=.
+- *Notes and proof:* [[file:../mobile.bl.md][mobile.bl.md]] · [[file:../proof/pocket-redesign/][proof/pocket-redesign]].

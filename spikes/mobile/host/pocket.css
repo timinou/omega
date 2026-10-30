@@ -51,7 +51,7 @@
 .pocket .st.fail {color:var(--fail-ink)} .pocket .st.fail i {border:2px solid var(--fail)}
 
 /* Layout */
-.pocket.mobile-app {max-width:560px}
+.pocket.mobile-app {max-width:560px;overflow:hidden}
 .pocket .mobile-scroll {flex:1;min-height:0;overflow:auto;overscroll-behavior-y:contain;animation:pocket-enter .32s var(--ease) both}
 .pocket[data-screen=task] .mobile-scroll,.pocket[data-screen=place] .mobile-scroll {animation-name:pocket-push}
 .pocket .mobile-content {padding:0}
@@ -122,7 +122,7 @@
 .pocket .state .grow {flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--soft)}
 .pocket .stop {min-height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--edge);font-size:13px;display:inline-flex;align-items:center;gap:6px;background:var(--bg);transition:transform .12s}
 .pocket .stop:active {transform:scale(.95)}
-.pocket .conversation-prompt {flex-shrink:0;height:26px;padding:3px 16px;border-bottom:1px solid var(--line);background:var(--bg);color:var(--soft);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pocket .conversation-prompt {flex-shrink:0;height:24px;padding:2px 16px;line-height:20px;border-bottom:1px solid var(--line);background:var(--bg);color:var(--soft);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* Conversation */
 .pocket .msg {padding:14px 16px 4px;animation:pocket-rise .38s var(--ease) both;overflow-wrap:anywhere}
@@ -277,5 +277,9 @@
 @keyframes pocket-typing {0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
 @media(min-width:700px){.pocket.mobile-app {border-inline:1px solid var(--line)}}
 @media(prefers-reduced-motion:reduce){.pocket *,.pocket.mobile-app {animation:none!important;transition:none!important}}
-.pocket .sheet-commands .sheet-close{display:none}
-.pocket .sheet-commands .field{margin-top:10px}
+.pocket .sheet-commands .field{margin:10px 56px 8px 16px}
+.pocket .snoozed {display:block;margin:12px auto;padding:6px 14px;font-size:13px;color:var(--soft);border-radius:999px;border:1px dashed var(--edge)}
+.pocket .eval-targets,.pocket .pane-targets {margin:8px 0;align-items:center}
+.pocket .pane-targets {padding:0 16px}
+.pocket .unload {display:block;margin:24px 16px 32px;font-size:13px;color:var(--soft);text-decoration:underline;text-underline-offset:3px}
+.pocket .sr-only {position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}

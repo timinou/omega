@@ -79,6 +79,70 @@ maps the 54-point review to behavior and tests. The proof uses isolated worlds.
 
 ## Current proof
 
+### Pocket redesign (2026-10-31)
+
+The [design review](design-review/design-review.bl.org) audited live Pocket on a
+phone and proposed one inbox, places from the machine, a goal-first launch, sessions
+that say what they are doing, notifications with next steps, and a shaped power
+layer. This pass implements all of it, accurately to the reviewed prototypes.
+
+**Modular Beam Lisp.** The screens are pure BL namespaces that build hiccup from
+plain view data: `mob.status` (one vocabulary: Your turn · Running · Failed · Done ·
+Cancelled; relative time; place hue and monogram), `mob.chrome` (header, tiles,
+pills, tab bar), `mob.inbox`, `mob.session`, `mob.launch`, `mob.places`,
+`mob.buffers` (Buffers and ⌘K) and `mob.view`, which composes a whole screen.
+`mob.html` is the reference serializer on the BEAM. In the browser the host calls
+`mob.view/tree` and serializes natively in `host/view.mjs`, because the JS target is
+slow at string building but fine at structure (40 sessions: 470 ms → 16 ms). The
+host keeps its DOM, field, scroll and IO boundary; reader, file review and Machine
+remain host fragments placed inside the BL frame.
+
+**Screens.**
+- Work is an inbox: Needs you, Running, Done (collapsed). Place chips filter
+  client-side; cards show the question and proposed next steps, answered in place
+  (`:mobile/quick`) without opening the session.
+- Places lists attached places with live counts; "Add places" discovers git repos
+  under `~` (hidden folders and build output pruned), recent first, multi-select,
+  with duplicate names prefixed by their parent and a Folder… escape hatch.
+- A place opens on its sessions, with Files (git status letters, Omega data
+  labelled) and Settings (launch defaults stored in the place's config).
+- Launch is full screen: place chips, a large goal, references, and one summary
+  line — model · checkout or worktree · permission — that expands into choices.
+- A session shows its title once with place, branch and model below; a state
+  strip with Stop while running; tool calls grouped as "Ran 2 commands, read 3
+  files", humanised per step, raw code and output one tap away; the question ends
+  with proposed next steps. Details replace the old eleven-item action sheet.
+- Buffers puts Machine, Pelagic and Runtime above recent buffers. ⌘K lists this
+  session's actions first, then Go to; `:` evaluates in the world (or this editor),
+  `>` runs editor commands in a chosen pane, `@` opens files or any address.
+
+**Motion.** Screens ease or push in, cards rise in sequence, the needs-you accent
+grows, running state breathes, sheets spring up, the New session button folds to
+its mark while scrolling, tab indicators slide. Reduced-motion turns all of it off.
+
+**Host.** Each task may carry `:task/run` — `{:model :may :branch :worktree
+:notify}`. The model overrides the provider per request; read/edit permission is an
+instruction to the agent, not a sandbox, and the UI says so; a worktree is created
+at `<repo>/.worktrees/<name>` on `omega/<name>` and excluded locally. Agents end
+decision points with `#+next: label | instruction`, parsed by `ws.next` into
+proposals for the inbox, the session and notifications. `ws.repos` serves repo
+discovery and place git info as intents.
+
+**Android.** `pocket.attention` now classifies every session, primes on first poll
+so history never floods the shade, honours each session's notify choice, posts
+your turn / finished / failed with next steps as actions and an inline reply sent
+back as `msg/answer` or `task/say`, and keeps one quiet ongoing summary. The native
+toolbar is gone: Pocket's ω mark opens a native connection panel through a
+reserved blocked navigation, so the page still has no JavaScript bridge.
+
+**Home.** On phone widths Home hides its own header and dock while Work is active,
+so Pocket's chrome shows; instruments keep the workbench chrome.
+
+Proof: [screens in the real editor](proof/pocket-redesign/), [verification
+receipt](proof/pocket-redesign/verification.log). BL tests:
+`spikes/mobile/test/view_test.bl`, `run_settings_test.bl`; Android:
+`android/test/home_test.bl`, `attention_test.bl`.
+
 ### Pinned user prompt (2026-10-17)
 
 The session title occupies the fixed top bar, with its place immediately below;

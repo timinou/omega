@@ -7,6 +7,13 @@
 (defn- finish [d data]
   {:text (str (str/join "\n" (:lines d)) "\n") :objects (:objects d) :data data :read-only? true})
 (declare task-context task-context-base folder-address)
+(defn latest-step
+  "The code of a running task's most recent tool call, which the phone humanises."
+  [sys id]
+  (try (some (fn [t] (some (fn [b] (when (= :tool-use (:type b)) (str (or (get-in b [:input :code]) (get-in b [:input :command]) ""))))
+                           (reverse (:content t))))
+             (reverse (loop/turns sys id)))
+       (catch _ nil)))
 (defn scope-doc [sys scope]
   (let [e (:env sys) places (place/all e) all? (= scope "all")
         ids (when-not all? (place/descendants places scope))
@@ -18,7 +25,8 @@
         d (emit d "* Places" nil)
         d (emit d "All places" {:type "desk/scope" :key "workspace:all" :title "All places" :active all? :depth 0})
         d (reduce (fn [d [id p]] (emit d (:name p) {:type "desk/scope" :key (str "workspace:" id) :place id :title (:name p)
-                                                  :root (place/root places id) :branch (some-> (place/root places id) repos/head-branch) :cwd (when-let [r (place/root places id)] (Path/expand (or (get-in (place/settings places id) [:cwd :value]) ".") r)) :settings (place/settings places id) :active (= scope id) :depth (inc (dec (count (place/ancestors places id))))}))
+                                                  :root (place/root places id) :branch (some-> (place/root places id) repos/head-branch)
+                                                  :agents (boolean (some-> (place/root places id) (str "/AGENTS.md") File/regular?)) :cwd (when-let [r (place/root places id)] (Path/expand (or (get-in (place/settings places id) [:cwd :value]) ".") r)) :settings (place/settings places id) :active (= scope id) :depth (inc (dec (count (place/ancestors places id))))}))
                   d (sort-by (fn [[id _]] (str/join "/" (map :id (reverse (place/ancestors places id))))) places))
         d (reduce (fn [d [label rs]]
                     (if (empty? rs) d
@@ -27,6 +35,7 @@
                          :place-name (get-in places [(:place r) :name]) :place (:place r) :home (:home r) :cwd (:cwd r) :folder (folder-address sys r) :artifacts (:artifacts (task-context-base sys (:id r)))
                          :ask (some-> (:asks r) first :text) :ask-id (some-> (:asks r) first :id)
                          :age-ms (:age-ms r) :model (get-in r [:run :model]) :branch (get-in r [:run :branch]) :notify (get-in r [:run :notify])
+                         :step (when (contains? #{:running :open} (:status r)) (latest-step sys (:id r)))
                          :proposals (when (= :idle (:status r)) (next/proposals (str (:result r))))
                          :summary (or (some-> (:asks r) first :text) (some-> (:result r) str next/strip) (:goal r))}))
                         (emit d (str "* " label " (" (count rs) ")") nil) rs))) d groups)
@@ -69,6 +78,7 @@
      :proposals (when (= :idle (:status t)) (next/proposals (str (:result t))))
      :model (get-in t [:run :model]) :branch (get-in t [:run :branch]) :may (get-in t [:run :may]) :worktree (get-in t [:run :worktree])
      :started-ms (when (:at t) (- (System/os_time :millisecond) (:at t)))
+     :step (when (contains? #{:running :open} (:status t)) (latest-step sys id))
      :age-ms (some-> (model/task-rows e [id]) first :age-ms)
      :tokens (when-let [c (:cost t)] (+ (or (:input c) 0) (or (:output c) 0) (or (:cache-read c) 0)))
      :ask (some-> (model/task-rows e [id]) first :asks first :text)

@@ -37,7 +37,8 @@
          [:span.glyph (:glyph t)] [:span [:b (:title t)] [:span (:kind t)]]])]
      [:div.sec [:span "Recent"]]
      (if (seq ordered) (map (fn [b] (buffer-row vm b)) ordered)
-       [:p.muted.pad "Sessions, files and places you open appear here."])]))
+       [:p.muted.pad "Sessions, files and places you open appear here."])
+     [:button.unload {:data-act "unload" :data-key "unload"} "Return to bl·ed"]]))
 
 ; --- palette ----------------------------------------------------------------------
 
@@ -80,9 +81,18 @@
         [:div.lisp {:data-key "lisp"}
          [:div.group-h [:span (str "Evaluate in world" (when (:namespace vm) (str " · " (:namespace vm))))]]
          [:pre.code (let [c (s/trim (subs q 1))] (if (s/blank? c) "(count (omega.task/all world))" c))]
+         [:div.chips.eval-targets
+          [:button.chip.primary {:data-act "palette-eval" :data-value "machine" :data-key "ev-m"} "World ⏎"]
+          [:button.chip {:data-act "palette-eval" :data-value "editor" :data-key "ev-e"} "This editor"]]
          (cond (:evaluating vm) [:div.res.muted "Evaluating…"]
-               (:eval-result vm) [:pre.res (str "⇒ " (:eval-result vm))]
+               (= "editor" (:eval-target vm)) [:pre.res {:role "status"} (str "⇒ " (or (:editor-result vm) ""))]
+               (:eval-result vm) [:pre.res {:role "status"} (str "⇒ " (:eval-result vm))]
                :else [:div.res.muted "Enter evaluates on the machine"])]
+        (list
+         (when (s/starts-with? q ">")
+           [:div.chips.pane-targets {:data-key "targets"} [:span.tiny.muted "Run in"]
+            (for [[k l] [["rail" "Work"] ["task" "Conversation"] ["file" "Document"]]]
+              [:button {:class ["chip" (when (= k (:command-pane vm)) "on")] :data-act "palette-pane" :data-value k} l])])
         (loop [xs rows i 0 group nil out []]
           (if (empty? xs) (if (seq out) out [[:p.muted.pad "No matches"]])
             (let [x (first xs)]
@@ -92,5 +102,5 @@
                        true (conj [:button (merge {:class ["cmd" (when (= i sel) "sel")] :role "option" :aria-selected (str (= i sel))
                                                    :data-act "palette-pick" :data-run (:act x) :data-index (str i)}
                                                   (or (:attrs x) {}))
-                                   [:span.grow [:b (:label x)] [:span (:sub x)]]])))))))]
+                                   [:span.grow [:b (:label x)] [:span (:sub x)]]]))))))))]
      [:div.hintbar [:span [:span.kbd ":"] " Lisp in this world"] [:span [:span.kbd ">"] " editor commands"] [:span [:span.kbd "@"] " files"]])))

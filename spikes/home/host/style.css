@@ -32,4 +32,5 @@ body.omega-workbench-window #panes>.pane{border:0}
 
 /* On a phone, Work is Pocket: its own header, tabs and sheets replace this chrome.
    Instruments keep the workbench header and dock to return. */
-@media(max-width:720px){body.omega-workbench-window[data-activity=work]>#panes>[data-pane=home],body.omega-workbench-window[data-activity=work]>#panes>[data-pane=navigation]{display:none!important}}
+@media(max-width:720px){body.omega-workbench-window[data-activity=work]>#panes>[data-pane=home],body.omega-workbench-window[data-activity=work]>#panes>[data-pane=navigation]{display:none!important}
+ body.omega-workbench-window[data-activity=work]>#panes{grid-template-rows:0 100dvh 0!important}}

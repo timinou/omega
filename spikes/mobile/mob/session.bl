@@ -37,7 +37,7 @@
     [:div {:class ["state" (str "is-" state)] :data-key "state" :role "status"}
      (case state
        "you" (list (ui/pill t) [:span.grow (str "waiting since " age)])
-       "run" (list (ui/pill t (str "Running " age)) [:span.grow.mono.tiny (or (:activity d) "")]
+       "run" (list (ui/pill t (str "Running " age)) [:span.grow.tiny (or (:activity d) (when (:step d) (step-label (:step d))) "")]
                    [:button.stop {:data-act "cancel-task" :data-key "stop"} (ui/icon :stop "sm") "Stop"])
        "fail" (list (ui/pill t) [:span.grow (st/one-line (:task-result d) 80)])
        (list (ui/pill t) [:span.grow (str age " ago")]))]))
@@ -117,7 +117,7 @@
        (cond failed "!" (and pending running?) "…" :else "✓")]]
      [:div.tool-list (map step-row ss)
       [:details.raw {:data-key "raw"} [:summary "Show code and output"]
-       (map (fn [x] [:div.raw-step [:pre (:code x)] (when (:result x) [:pre.out (st/one-line (:content (:result x)) 4000)])]) ss)]]]))
+       (map (fn [x] [:div.raw-step [:pre (:code x)] (when (:result x) [:pre.out (str (:content (:result x)))])]) ss)]]]))
 
 (defn message [g]
   (let [you? (= "user" (:role g))]

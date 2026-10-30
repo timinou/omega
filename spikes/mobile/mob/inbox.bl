@@ -1,5 +1,5 @@
 ; Work is an inbox: what needs you, what is running, what finished today.
-(ns mob.inbox (:require [mob.html :as h] [mob.status :as st] [mob.chrome :as ui] [clojure.string :as s]))
+(ns mob.inbox (:require [mob.html :as h] [mob.status :as st] [mob.chrome :as ui] [mob.session :as session] [clojure.string :as s]))
 
 (defn- place-of [vm task]
   (or (first (filter (fn [p] (= (:id p) (:place task))) (:places vm)))
@@ -33,7 +33,9 @@
      [:h3 (st/one-line (or (:title task) (:goal task)) 90)]
      (cond
        (and (= s "you") (:ask task)) [:div.ask (:ask task)]
-       (and (= s "run") (:activity task)) [:div.live (ui/icon :edit "sm") [:span (:activity task)]]
+       (and (= s "run") (or (:activity task) (:step task)))
+       [:div.live (ui/icon (if (= "read" (session/step-kind (:step task))) :search :edit) "sm")
+        [:span (or (:activity task) (session/step-label (:step task)))]]
        (not (s/blank? (str (:summary task))))
        (when-not (= (s/trim (str (:summary task))) (s/trim (str (:title task)))) [:p (:summary task)]))
      (when needs? (chips task))]))
@@ -70,6 +72,8 @@
        [:details.done {:data-key "g-done"}
         [:summary.sec [:span "Done"] [:span (str (count done)) [:span.chev "⌄"]]]
         (map (fn [t] (card vm t)) done)])
+     (when (pos? (or (:snoozed vm) 0))
+       [:button.snoozed {:data-act "unsnooze" :data-key "snoozed"} (str (:snoozed vm) " snoozed · Show")])
      (when (empty? tasks)
        [:div.empty {:data-key "empty"} [:div.empty-mark "ω"]
         [:h2 (if (:filter vm) "Nothing here yet" "No sessions yet")]

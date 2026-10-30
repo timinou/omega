@@ -15,7 +15,7 @@ done
 caller_root=$(cd "$caller_root" && pwd -P)
 mode=(--live); client_mode=()
 if $offline; then mode=(); client_mode=(--offline); fi
-"$ROOT/bin/bl" pocket -- "${mode[@]}" "${args[@]}"
+bash "$ROOT/bin/bl" pocket -- "${mode[@]}" "${args[@]}"
 if [ "$caller_root" != "$ROOT" ]; then
-  "$ROOT/bin/omega" --no-start "${client_mode[@]}" --url "http://127.0.0.1:$port" attach "$caller_root"
+  bash "$ROOT/bin/omega" --no-start "${client_mode[@]}" --url "http://127.0.0.1:$port" attach "$caller_root"
 fi

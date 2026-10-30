@@ -48,7 +48,8 @@
      [:button.back {:data-act (:act back) :data-path (:path back) :aria-label (:label back)} (icon :back)]
      ;; In the Android app the mark opens the native connection panel instead.
      [:button.mark {:data-act (if (:app mark) "app-server" "work") :aria-label (if (:app mark) "Connection" "Work")}
-      "ω" (when mark [:span {:class ["conn" (when-not (:online mark) "off")]}])])
+      "ω" (when mark (list [:span {:class ["conn" (when-not (:online mark) "off")]}]
+                           [:span.sr-only (if (:online mark) "Host connected" "Reconnecting")]))])
    [:div.id [:b title] (when context [:span context])]
    actions])
 

@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='omega-pocket-proof-') as temp:
     db = str(Path(temp) / 'world/db')
     base = f'http://127.0.0.1:{port}'
     def run(name, *args, good=True):
-        result = subprocess.run([str(ROOT/'bin/bl'), name, '--', *args], cwd=ROOT, env=env, text=True, capture_output=True, timeout=1800)
+        result = subprocess.run(['bash', str(ROOT/'bin/bl'), name, '--', *args], cwd=ROOT, env=env, text=True, capture_output=True, timeout=1800)
         with (PROOF/'launch.log').open('a') as output:
             output.write(result.stdout + result.stderr)
         assert (result.returncode == 0) == good, (name, result.returncode, result.stdout, result.stderr)
@@ -58,18 +58,18 @@ with tempfile.TemporaryDirectory(prefix='omega-pocket-proof-') as temp:
             run(name, '--port', str(port), '--db', db)
             assert owners() == initial
             assert doc('launch:identity')['text'] == identity
-        subprocess.run([str(ROOT/'bin/omega-ui'), '--demo', '--port', str(port), '--db', db, '--root', str(work)], cwd=ROOT, env=env, check=True, capture_output=True, text=True, timeout=120)
+        subprocess.run(['bash', str(ROOT/'bin/omega-ui'), '--demo', '--port', str(port), '--db', db, '--root', str(work)], cwd=ROOT, env=env, check=True, capture_output=True, text=True, timeout=120)
         assert owners() == initial and doc('launch:identity')['text'] == identity
         # Mode/store disagreements are refused before any mutation.
         run('pocket', '--port', str(port), '--db', db, '--live', good=False)
         assert doc('launch:identity')['text'] == identity
-        mismatch = subprocess.run([str(ROOT/'bin/omega'), '--no-start', '--url', base, 'list'], env=env, capture_output=True, text=True)
+        mismatch = subprocess.run(['bash', str(ROOT/'bin/omega'), '--no-start', '--url', base, 'list'], env=env, capture_output=True, text=True)
         assert mismatch.returncode == 2 and 'scripted' in mismatch.stderr
         with (PROOF/'browser.log').open('w') as output:
             subprocess.run(['node', str(ROOT/'spikes/mobile/test/shared-browser.mjs')], cwd=ROOT, env={**env, 'POCKET_TEST_URL': base, 'POCKET_TEST_ROOT': str(work)}, check=True, timeout=300, stdout=output, stderr=subprocess.STDOUT)
         with (PROOF/'touch-browser.log').open('w') as output:
             subprocess.run(['node', str(ROOT/'spikes/mobile/test/touch-browser.mjs')], cwd=ROOT, env={**env, 'POCKET_TEST_URL': base, 'POCKET_TEST_ROOT': str(work)}, check=True, timeout=300, stdout=output, stderr=subprocess.STDOUT)
-        cli = subprocess.run([str(ROOT/'bin/omega'), '--no-start', '--offline', '--url', base, '--root', str(work), '--json', 'Shell work'], cwd=work, env=env, check=True, capture_output=True, text=True)
+        cli = subprocess.run(['bash', str(ROOT/'bin/omega'), '--no-start', '--offline', '--url', base, '--root', str(work), '--json', 'Shell work'], cwd=work, env=env, check=True, capture_output=True, text=True)
         opened = json.loads(cli.stdout)
         task_doc = doc(opened['path'])
         assert task_doc['data']['cwd'] == str(work)
