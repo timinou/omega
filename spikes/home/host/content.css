@@ -25,3 +25,10 @@ html.omega-workbench-content .mobile-content,html.omega-workbench-content .mobil
 .workbench-preview-list button[aria-current=true] strong:before{content:'▸ ';color:var(--mocha)}
 /* Pocket paints owned editor prompts as sheets; retain the generic prompt in tools. */
 html.omega-workbench-content body:has(.mobile-app) #minibuf{display:none!important}
+/* Wide workbench: the frame owns the header and dock; a phone-width Work shows Pocket's own. */
+@media(min-width:721px){html.omega-workbench-content .pocket>.hdr,html.omega-workbench-content .pocket>.tabs{display:none}}
+html.omega-workbench-content .pocket.mobile-app{max-width:none}
+@media(max-width:720px){html.omega-workbench-content .pocket.mobile-app{max-width:560px}}
+@media(max-width:720px){html.omega-workbench-content .pocket .mobile-content{padding:0}
+ html.omega-workbench-content .pocket.is-session .mobile-content{padding:4px 0 24px}
+ html.omega-workbench-content .pocket:is(.is-document,.is-machine,.is-host) .mobile-content{padding:16px 16px 24px}}

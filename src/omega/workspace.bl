@@ -3,7 +3,7 @@
   (:require [place.model :as place] [place.server :as places]
             [links.model :as link] [links.server :as links]
             [buffer.model :as buffer] [buffer.server :as buffers]
-            [ws.desk-server :as desk] [omega.ed.providers :as pv]
+            [ws.desk-server :as desk] [ws.repos :as repos] [omega.ed.providers :as pv]
             [bl-ed.serve :as serve] [clojure.string :as str]
             [omega.env :as env] [harness]))
 (def schema (vec (concat place/schema link/schema buffer/schema)))
@@ -22,6 +22,25 @@
 (defn- selection [value]
   ;; HTTP keywordizes the intent's outer map only; internal callers use keywords.
   (into {} (map (fn [[k v]] [(if (keyword? k) k (keyword k)) v]) value)))
+(def ^:private MODELS #{"claude-opus-5-5" "claude-sonnet-5-5" "claude-haiku-5-5" "claude-fable-5-1"})
+(defn- run-settings
+  "Validate launch settings and create a requested worktree. Unknown keys are dropped."
+  [sys args]
+  (let [run (selection (or (:run args) {}))
+        model (when (contains? MODELS (:model run)) (:model run))
+        may (when (contains? #{"read" "edit" "run"} (:may run)) (:may run))
+        notify (vec (filter #{"you" "done"} (or (:notify run) [])))
+        base (:cwd (places/context sys (:path args) (:cwd args)))
+        tree (when (true? (:worktree run))
+               (repos/worktree! base (str (subs (str/replace (str/lower-case (str (or (:title args) (:goal args))))
+                                                              #"[^a-z0-9]+" "-") 0
+                                                 (min 24 (count (str (or (:title args) (:goal args))))))
+                                          "-" (mod (System/os_time :millisecond) 100000))))
+        run (cond-> {} model (assoc :model model) may (assoc :may may) (seq notify) (assoc :notify notify)
+              tree (assoc :worktree true :branch (:branch tree))
+              (not tree) (assoc :branch (repos/branch-of base)))]
+    (cond-> (assoc args :run (into {} (remove (fn [[_ v]] (nil? v)) run)))
+      tree (assoc :cwd (:cwd tree)))))
 (defn options [sys server opts]
   (let [base (assoc (select-keys opts [:state]) :task-context (fn [path cwd] (places/context sys path cwd)))
         cfg {:root (:root sys) :providers (providers sys server base)}]
@@ -29,6 +48,7 @@
       :prepare-task
       (fn [args]
         (when (str/blank? (str (:goal args))) (throw (ex-info "Write a goal." {})))
+        (let [args (run-settings sys args)]
         (if-let [value (:selection args)]
           (let [s (selection value) d (serve/read-doc cfg (:path s))
                 lines (str/split (or (:text d) "") "\n")
@@ -41,7 +61,7 @@
               :title (or (:title args) (first (str/split (str (:goal args)) "\n")))
               :goal (str (:goal args) "\n\nSelected passage from " (:path s) " (revision " (:rev s)
                          ", lines " (inc start) "–" end "):\n" (:text s))))
-          args))
+          args)))
       :task-opened
       (fn [id args]
         (when-let [s (:selection args)]
@@ -64,5 +84,5 @@
               {:namespace ns :result (str (:stdout r) (:value r))}))
           (finally (BeamLisp.Env/undefine_var ns "world")))))))
 (defn intents [sys server]
-  (assoc (merge (places/intents sys) (links/intents sys) (buffers/intents sys server))
+  (assoc (merge (places/intents sys) (links/intents sys) (buffers/intents sys server) (repos/intents sys))
     "world/eval" (fn [{:keys [code]}] (evaluate! sys code))))

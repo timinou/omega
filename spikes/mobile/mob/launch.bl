@@ -1,0 +1,89 @@
+; Launch: the place, the goal first, and how it runs in one quiet line.
+(ns mob.launch (:require [mob.html :as h] [mob.status :as st] [mob.chrome :as ui] [clojure.string :as s]))
+
+(def models st/models)
+(defn model-name [id] (st/model-name id))
+(def mays [["read" "Only read" "read-only"] ["edit" "Edit" "can edit"] ["run" "Edit & run" "can edit & run"]])
+
+(defn defaults
+  "Launch settings: the draft's choices over the place's saved defaults."
+  [place draft]
+  (let [c (or (:config place) {})]
+    {:model (or (:model draft) (:model c) "claude-opus-5-5")
+     :may (or (:may draft) (:may c) "run")
+     :worktree (if (contains? draft :worktree) (:worktree draft) (= "worktree" (:work-on c)))
+     :notify-you (if (contains? draft :notify-you) (:notify-you draft) true)
+     :notify-done (if (contains? draft :notify-done) (:notify-done draft) true)}))
+
+(defn summary [settings place]
+  (h/join " · " [(model-name (:model settings))
+                 (if (:worktree settings) "in a worktree" (str "on " (or (:branch place) "the checkout")))
+                 (some (fn [[k _ short]] (when (= k (:may settings)) short)) mays)]))
+
+(defn- opt-chip [field value label on]
+  [:button {:class ["chip" (when on "on")] :data-act "launch-set" :data-field field :data-value value
+            :aria-pressed (str (boolean on)) :data-key (str field "-" value)} label])
+
+(defn- where [vm place]
+  (when place
+    (str (st/tilde (:home vm) (or (:root place) (:cwd place)))
+         (when (:branch place) (str " · ⎇ " (:branch place)))
+         (when (:agents place) " · reads AGENTS.md"))))
+
+(defn screen [vm]
+  (let [draft (or (:draft vm) {})
+        places (:places vm)
+        place (or (first (filter (fn [p] (= (:id p) (:place draft))) places)) (first places))
+        settings (defaults place draft)
+        refs (:refs draft)]
+    (list
+     (ui/header {:key "launch-hdr" :title "New session"
+                 :back {:act "launch-close" :label "Close"}})
+     [:main.mobile-scroll.launch {:data-key "launch"}
+      [:div.place-chips {:role "radiogroup" :aria-label "Place"}
+       (for [p places]
+         [:button {:class ["chip" (when (= (:id p) (:id place)) "on")] :role "radio" :aria-checked (str (= (:id p) (:id place)))
+                   :data-act "launch-place" :data-path (:id p) :data-key (str "lp-" (:id p))}
+          (ui/tile p) (:name p)])
+       [:button.chip {:data-act "add-places" :data-key "lp-other"} "Other…"]]
+      [:div.where (where vm place)]
+      [:textarea.goal {:data-field "new-goal" :placeholder "What should happen?" :aria-label "Goal" :rows "5"} (or (:goal draft) "")]
+      (when (seq refs)
+        [:div.refs (map-indexed (fn [i r] [:span.ref {:data-key (str "ref" i)} (ui/icon :file "sm") (:label r)
+                                           [:button {:data-act "launch-unref" :data-value (str i) :aria-label (str "Remove " (:label r))} "×"]]) refs)])
+      [:div.attach
+       [:button.chip {:data-act "launch-ref-file" :data-key "a-file"} "+ File"]
+       [:button.chip {:data-act "launch-ref-selection" :data-key "a-sel" :disabled (nil? (:selection vm))} "+ Selection"]
+       [:button.chip {:data-act "launch-ref-session" :data-key "a-session"} "+ Session"]]
+      [:details.run {:data-key "run"}
+       [:summary (ui/icon :tune "sm") [:span.sum (summary settings place)] [:span.edit "Change"]]
+       [:div.opt [:label "Model"]
+        [:div.chips (for [[k label] models] (opt-chip "model" k label (= k (:model settings))))]]
+       [:div.opt [:label "Work on"]
+        [:div.chips (opt-chip "worktree" "false" (or (:branch place) "Checkout") (not (:worktree settings)))
+         (opt-chip "worktree" "true" "New worktree" (:worktree settings))]
+        [:div.hint "A worktree keeps this session's edits off your checkout until you merge."]]
+       [:div.opt [:label "May"]
+        [:div.chips (for [[k label] mays] (opt-chip "may" k label (= k (:may settings))))]
+        [:div.hint "Asked of the agent, not enforced by a sandbox."]]
+       [:div.opt [:label "Tell me when"]
+        [:div.chips (opt-chip "notify-you" (str (not (:notify-you settings))) "It needs me" (:notify-you settings))
+         (opt-chip "notify-done" (str (not (:notify-done settings))) "It finishes" (:notify-done settings))]]]]
+     [:div.go {:data-key "launch-go"}
+      [:span.tiny.muted "Title comes from the goal"]
+      [:button.btn {:data-act "launch-start" :disabled (or (:creating vm) (s/blank? (str (:goal draft))) (nil? place))}
+       (if (:creating vm) "Starting…" "Start") (ui/icon :arrow)]])))
+
+(defn launch-args
+  "The task/open intent arguments for a draft."
+  [vm]
+  (let [draft (or (:draft vm) {})
+        place (or (first (filter (fn [p] (= (:id p) (:place draft))) (:places vm))) (first (:places vm)))
+        settings (defaults place draft)
+        goal (s/trim (str (:goal draft)))
+        refs (:refs draft)]
+    {:place (:id place)
+     :goal (if (seq refs) (str goal "\n\nReferences:\n" (h/join "\n" (map (fn [r] (str "- " (:text r))) refs))) goal)
+     :title (st/one-line goal 72)
+     :run {:model (:model settings) :may (:may settings) :worktree (boolean (:worktree settings))
+           :notify (vec (remove nil? [(when (:notify-you settings) "you") (when (:notify-done settings) "done")]))}}))

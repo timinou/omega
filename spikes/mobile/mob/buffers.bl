@@ -1,0 +1,96 @@
+; Buffers: tools above recent buffers. ⌘K: this session first, then Go to; prefixes switch mode.
+(ns mob.buffers (:require [mob.html :as h] [mob.status :as st] [mob.chrome :as ui] [clojure.string :as s]))
+
+(def tools [{:id "machine" :glyph "λ" :title "Machine" :kind "World REPL"}
+            {:id "music" :glyph "∿" :title "Pelagic" :kind "Instrument"}
+            {:id "runtime" :glyph "◎" :title "Runtime" :kind "Inspector"}])
+
+(defn- kind-of [path]
+  (cond (s/starts-with? (str path) "task:") "session" (s/starts-with? (str path) "place:") "place"
+        (= path "machine:") "tool" :else "file"))
+
+(defn- buffer-row [vm b]
+  (let [k (kind-of (:path b)) task (when (= k "session") (first (filter (fn [t] (= (str "task:" (:key t)) (:path b))) (:tasks vm))))
+        pinned (contains? (set (:pins vm)) (:path b))]
+    [:div.buf-row {:data-key (str "buf:" (:path b))}
+     [:button.buf {:data-act "buffer" :data-path (:path b)}
+      (if task [:span {:class ["st" (st/state task)]} [:i]] (ui/icon (if (= k "place") :folder :file)))
+      [:span.grow [:b (or (:title task) (:title b) (last (s/split (str (:path b)) #"/")))]
+       [:span (h/join " · " (remove nil? [k (or (:place-name task) (:place b)) (when task (st/ago (:age-ms task)))]))]]]
+     [:button.pin {:data-act "pin" :data-path (:path b) :aria-pressed (str pinned) :aria-label (if pinned "Unpin" "Pin")}
+      (ui/icon :star (when pinned "filled"))]]))
+
+(defn header [vm]
+  (ui/header {:title "Buffers" :context "Sessions, files and tools" :mark {:online (:online vm)}
+              :actions (ui/palette-button)}))
+
+(defn body [vm]
+  (let [pins (set (:pins vm))
+        recent (:recent vm)
+        ordered (concat (filter (fn [b] (contains? pins (:path b))) recent) (remove (fn [b] (contains? pins (:path b))) recent))]
+    [:div.buffers
+     [:div.sec [:span "Tools"]]
+     [:div.tool-grid {:data-key "tools"}
+      (for [t tools]
+        [:button.tool-tile {:data-act "tool" :data-value (:id t) :data-key (str "tool-" (:id t))
+                       :data-parent-buffer (when (and (:embedded vm) (not= "machine" (:id t))) (:id t))}
+         [:span.glyph (:glyph t)] [:span [:b (:title t)] [:span (:kind t)]]])]
+     [:div.sec [:span "Recent"]]
+     (if (seq ordered) (map (fn [b] (buffer-row vm b)) ordered)
+       [:p.muted.pad "Sessions, files and places you open appear here."])]))
+
+; --- palette ----------------------------------------------------------------------
+
+(defn- match? [q & xs] (or (s/blank? q) (some (fn [x] (s/includes? (s/lower-case (str x)) q)) xs)))
+
+(defn entries
+  "Palette rows for query `q` as [{:group :label :sub :act :attrs}] in display order."
+  [vm q]
+  (let [mode (cond (s/starts-with? q ":") :lisp (s/starts-with? q ">") :editor (s/starts-with? q "@") :files :else :all)
+        term (s/lower-case (s/trim (if (= mode :all) q (subs q 1))))
+        d (:session vm)
+        session (when d
+                  [{:label "Stop session" :sub (str (:place-name d) " · " (:task-title d)) :act "cancel-task"}
+                   {:label "Steer" :sub "Redirect without stopping" :act "answer"}
+                   {:label "Attach reference" :sub "File, selection or session" :act "object-action" :attrs {:data-command "desk/link" :data-pane "task"}}
+                   {:label "Open working folder" :sub (st/tilde (:home vm) (:cwd d)) :act "folder"}])
+        go (concat (map (fn [t] {:label (:title t) :sub (str "session · " (or (:place-name t) "home")) :act "open-task" :attrs {:data-path (str "task:" (:key t))}}) (:tasks vm))
+                   (map (fn [p] {:label (:name p) :sub "place" :act "open-place" :attrs {:data-path (str "place:" (:id p))}}) (:places vm))
+                   (map (fn [b] {:label (or (:title b) (:path b)) :sub (str "file · " (:path b)) :act "open-file" :attrs {:data-path (:path b)}})
+                        (filter (fn [b] (= "file" (kind-of (:path b)))) (:recent vm)))
+                   (map (fn [t] {:label (:title t) :sub "tool" :act "tool" :attrs {:data-value (:id t)}}) tools))
+        editor (map (fn [c] {:label (:label c) :sub (:name c) :act "run-command" :attrs {:data-name (:name c)}}) (:commands vm))
+        pick (fn [group xs] (map (fn [x] (assoc x :group group)) (filter (fn [x] (match? term (:label x) (:sub x))) xs)))]
+    (case mode
+      :lisp []
+      :editor (take 60 (pick "Editor" editor))
+      :files (concat (pick "Files" (filter (fn [x] (= "open-file" (:act x))) go))
+                     (when-not (s/blank? term) [{:group "Open" :label (str "Open " (s/trim (subs q 1))) :sub "document address" :act "open-address" :attrs {:data-path (s/trim (subs q 1))}}]))
+      (concat (pick "This session" session) (take 30 (pick "Go to" go)) (when-not (s/blank? term) (take 20 (pick "Editor" editor)))))))
+
+(defn palette [vm]
+  (let [q (str (:palette-query vm)) lisp (s/starts-with? q ":") rows (vec (entries vm q))
+        sel (min (or (:palette-index vm) 0) (max 0 (dec (count rows))))]
+    (list
+     [:label.field.palette-field [:span.mode (cond lisp "λ" (s/starts-with? q ">") ">" (s/starts-with? q "@") "@" :else "⌘")]
+      [:input {:data-field "palette-query" :placeholder "Go to, run a command, or : for Lisp" :value q :autocomplete "off"
+               :autofocus true :spellcheck "false" :aria-label "Command"}]]
+     [:div.sheet-scroll.palette-list {:data-key "palette-list" :role "listbox"}
+      (if lisp
+        [:div.lisp {:data-key "lisp"}
+         [:div.group-h [:span (str "Evaluate in world" (when (:namespace vm) (str " · " (:namespace vm))))]]
+         [:pre.code (let [c (s/trim (subs q 1))] (if (s/blank? c) "(count (omega.task/all world))" c))]
+         (cond (:evaluating vm) [:div.res.muted "Evaluating…"]
+               (:eval-result vm) [:pre.res (str "⇒ " (:eval-result vm))]
+               :else [:div.res.muted "Enter evaluates on the machine"])]
+        (loop [xs rows i 0 group nil out []]
+          (if (empty? xs) (if (seq out) out [[:p.muted.pad "No matches"]])
+            (let [x (first xs)]
+              (recur (rest xs) (inc i) (:group x)
+                     (cond-> out
+                       (not= group (:group x)) (conj [:div.group-h {:data-key (str "g-" (:group x))} [:span (:group x)]])
+                       true (conj [:button (merge {:class ["cmd" (when (= i sel) "sel")] :role "option" :aria-selected (str (= i sel))
+                                                   :data-act "palette-pick" :data-run (:act x) :data-index (str i)}
+                                                  (or (:attrs x) {}))
+                                   [:span.grow [:b (:label x)] [:span (:sub x)]]])))))))]
+     [:div.hintbar [:span [:span.kbd ":"] " Lisp in this world"] [:span [:span.kbd ">"] " editor commands"] [:span [:span.kbd "@"] " files"]])))

@@ -1,0 +1,89 @@
+(ns pocket-view-test
+  (:require [mob.html :as h] [mob.status :as st] [mob.view :as view] [mob.session :as session]
+            [mob.launch :as launch] [mob.buffers :as buffers] [ws.next :as next] [omega.loop :as loop]
+            [clojure.string :as str]))
+
+(def places [{:id "om" :name "omega" :root "/h/projects/omega" :branch "main"}
+             {:id "bl" :name "beam-lisp" :root "/h/projects/beam-lisp" :branch "main"}])
+(def tasks [{:key "t-1" :title "Notify" :status "idle" :ask "Rebuild?" :place "om" :age-ms 120000
+             :proposals [{:label "Rebuild APK" :text "Rebuild it"}]}
+            {:key "t-2" :title "Port" :status "failed" :place "bl" :summary "3 tests fail" :age-ms 840000}
+            {:key "t-3" :title "Hero" :status "running" :place "om" :age-ms 60000}
+            {:key "t-4" :title "Hotels <b>" :status "done" :place "om" :summary "Haarlem" :age-ms 10800000}
+            {:key "t-5" :title "Answered" :status "idle" :place "om" :summary "Here it is"}])
+(def vm {:home "/h" :online true :places places :tasks tasks})
+(defn page [m] (view/render (merge vm m)))
+
+(deftest one-state-vocabulary
+  (is (= ["you" "fail" "run" "done" "done"] (mapv st/state tasks)))
+  (is (= ["Your turn" "Failed" "Running" "Done" "Done"] (mapv st/label tasks)))
+  (is (= ["now" "4m" "3h" "2d" "5w"] (mapv st/ago [0 240000 10800000 172800000 3024000000])))
+  (is (= ["om" "bl" "~"] (mapv st/monogram [{:name "omega"} {:name "beam-lisp"} {:name "x" :home? true}])))
+  (is (= "Opus 5.5" (st/model-name "claude-opus-5-5"))))
+
+(deftest html-escapes-text-and-attributes-but-not-raw
+  (is (= "<a class=\"x y\" data-v=\"&quot;q&quot;\">&lt;b&gt;</a>" (h/html [:a.x {:class "y" :data-v "\"q\""} "<b>"])))
+  (is (= "<i></i><b>ok</b>" (h/html (list [:i] nil false (h/raw "<b>ok</b>"))))))
+
+(deftest work-is-an-inbox-with-next-steps
+  (let [w (page {:screen "work"})]
+    (is (str/includes? w "Needs you"))
+    (is (< (str/index-of w "Needs you") (str/index-of w "Running") (str/index-of w ">Done<")))
+    (is (str/includes? w "data-act=\"propose\""))
+    (is (str/includes? w "Rebuild APK"))
+    (is (str/includes? w "Hotels &lt;b&gt;"))
+    (is (str/includes? w "class=\"badge\">2<"))
+    (is (str/includes? w "New session")))
+  (is (str/includes? (page {:screen "work" :filter "bl"}) "class=\"chip on\" data-act=\"scope-choice\" data-key=\"f-bl\"")))
+
+(deftest tool-steps-are-grouped-and-readable
+  (let [turns [{:n 1 :role "user" :content [{:type "text" :text "Go"}]}
+               {:n 2 :role "assistant" :content [{:type "tool-use" :id "a" :input {:code "(sh \"git status --short | head\")"}}
+                                                 {:type "tool-use" :id "b" :input {:code "(File/read! \"app.bl\")"}}]}
+               {:n 3 :role "tool" :content [{:type "tool-result" :id "a" :content "ok"} {:type "tool-result" :id "b" :content "x"}]}
+               {:n 4 :role "assistant" :content [{:type "text" :text "Done."}]}]
+        groups (session/group-turns turns)]
+    (is (= [:text :steps :text] (mapv :kind groups)))
+    (is (= "Ran git status --short" (session/step-label "(sh \"git status --short | head\")")))
+    (is (= "Read app.bl" (session/step-label "(File/read! \"app.bl\")")))
+    (is (= "Ran 1 command, read 1 file" (session/steps-summary ["(sh \"x\")" "(slurp \"y\")"])))))
+
+(deftest a-session-says-what-it-is-doing
+  (let [d {:task-title "Notify" :task-status "idle" :ask "Rebuild?" :place-name "omega" :model "claude-opus-5-5"
+           :branch "main" :age-ms 120000 :proposals [{:label "Rebuild APK" :text "go"}] :turns []}
+        s (page {:screen "task" :session d})]
+    (is (= 1 (count (re-seq #"Notify" s))) "the title appears once")
+    (is (str/includes? s "Opus 5.5"))
+    (is (str/includes? s "waiting since 2m"))
+    (is (str/includes? s "data-answer=\"go\""))
+    (is (str/includes? (page {:screen "task" :session (assoc d :task-status "running" :ask nil :proposals nil)}) ">Stop<"))))
+
+(deftest launch-summarises-how-a-session-runs
+  (let [m (merge vm {:screen "launch" :draft {:place "om" :goal "Ship it"}})]
+    (is (str/includes? (view/render m) "Opus 5.5 · on main · can edit &amp; run"))
+    (is (= {:place "om" :goal "Ship it" :title "Ship it"
+            :run {:model "claude-opus-5-5" :may "run" :worktree false :notify ["you" "done"]}}
+           (view/launch-args m)))
+    (is (= "Sonnet 5.5 · in a worktree · read-only"
+           (launch/summary (launch/defaults (first places) {:model "claude-sonnet-5-5" :worktree true :may "read"}) (first places))))))
+
+(deftest places-and-the-picker-come-from-the-machine
+  (let [repos [{:name "ora-website" :parent "~/projects" :path "/h/projects/ora-website" :branch "master" :age-ms 1}
+               {:name "ora-website" :parent "~/projects/general" :path "/h/projects/general/ora-website" :added true}]
+        s (page {:screen "places" :modal "add-places" :repos repos :picked ["/h/projects/ora-website"]})]
+    (is (str/includes? s "general/</span>ora-website"))
+    (is (str/includes? s "Add 1 place<"))
+    (is (str/includes? s "Already places"))))
+
+(deftest the-palette-puts-this-session-first-and-switches-modes
+  (let [m (merge vm {:session {:task-title "Notify" :place-name "omega"} :commands [{:name "WORD-next" :label "WORD next"}]})]
+    (is (= ["This session" "Go to"] (vec (distinct (map :group (buffers/entries m ""))))))
+    (is (= ["Editor"] (vec (distinct (map :group (buffers/entries m ">word"))))))
+    (is (= [] (vec (buffers/entries m ":(+ 1 2)"))))))
+
+(deftest agents-leave-structured-next-steps
+  (is (= [{:label "Rebuild APK" :text "Rebuild and sign 0.1.2"} {:label "Not yet" :text "Not yet"}]
+         (next/proposals "Merged.\n#+next: Rebuild APK | Rebuild and sign 0.1.2\n#+next: Not yet")))
+  (is (= "Merged." (next/strip "Merged.\n#+next: Rebuild APK | x")))
+  (is (str/includes? (loop/run-context {:may "read"}) "read-only"))
+  (is (str/includes? (loop/run-context {}) "#+next:")))

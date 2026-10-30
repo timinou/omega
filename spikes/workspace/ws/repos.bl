@@ -1,0 +1,85 @@
+; Git repositories on this machine, for choosing places from a phone.
+; One shell pass per request; nothing is cached or written except a requested worktree.
+(ns ws.repos (:require [clojure.string :as str] [place.model :as place]))
+
+(def ^:private pruned
+  ["node_modules" ".cache" ".local" ".npm" ".cargo" ".rustup" ".nix-profile" ".nix-defexpr"
+   ".worktrees" "dist" "target" "build" ".venv" "venv" "__pycache__" ".git"])
+
+(defn- sh [script]
+  (let [r (System/cmd "sh" (list "-c" script) (list (tuple :stderr_to_stdout false)))]
+    (when (= 0 (elem r 1)) (elem r 0))))
+
+(defn- quote-arg [s] (str "'" (str/replace (str s) "'" "'\\''") "'"))
+
+(defn discover-script [home depth]
+  ;; A repo's own .git is printed before hidden directories are pruned.
+  (str "find " (quote-arg home) " -mindepth 1 -maxdepth " depth " \\( -name .git -print -prune \\) -o \\( \\( -name '.*' -o "
+       (str/join " -o " (map (fn [n] (str "-name " (quote-arg n))) (remove #{".git"} pruned)))
+       " \\) -prune \\) 2>/dev/null | while read g; do d=${g%/.git}; "
+       "b=$(git -C \"$d\" symbolic-ref --short -q HEAD || git -C \"$d\" rev-parse --short HEAD 2>/dev/null); "
+       "t=$(git -C \"$d\" log -1 --format=%ct 2>/dev/null); printf '%s\\t%s\\t%s\\n' \"$d\" \"$b\" \"$t\"; done"))
+
+(defn parse-line [home line]
+  (let [[path branch at] (str/split line "\t")]
+    (when-not (str/blank? path)
+      {:path path :name (Path/basename path)
+       :parent (let [p (Path/dirname path)] (if (= p home) "~" (str "~" (subs p (count home)))))
+       :branch (when-not (str/blank? branch) branch)
+       :at (when-not (str/blank? (str at)) (* 1000 (String/to_integer (str/trim at))))})))
+
+(defn discover
+  "Repos under home, most recently committed first, marking those already places."
+  [sys home]
+  (let [places (place/all (:env sys))
+        roots (set (keep (fn [[id _]] (some-> (place/root places id) Path/expand)) places))
+        out (or (sh (discover-script home 4)) "")
+        now (System/os_time :millisecond)]
+    (->> (str/split out "\n")
+         (keep (fn [l] (parse-line home l)))
+         (map (fn [r] (assoc r :added (contains? roots (Path/expand (:path r)))
+                             :age-ms (when (:at r) (- now (:at r))))))
+         (sort-by (fn [r] (- (or (:at r) 0))))
+         vec)))
+
+(defn info
+  "Branch, number of changed paths and last commit age of a directory, when it is a repo."
+  [dir]
+  (when (and dir (File/dir? dir))
+    (let [out (sh (str "cd " (quote-arg dir) " && git rev-parse --is-inside-work-tree >/dev/null 2>&1 && "
+                       "printf '%s\\t%s\\t%s\\n' \"$(git symbolic-ref --short -q HEAD || git rev-parse --short HEAD)\" "
+                       "\"$(git status --porcelain 2>/dev/null | wc -l)\" \"$(git log -1 --format=%ct 2>/dev/null)\""))]
+      (when out
+        (let [[branch changed at] (str/split (str/trim out) "\t")
+              now (System/os_time :millisecond)]
+          {:branch branch :changed (try (String/to_integer (str/trim (str changed))) (catch _ 0))
+           :age-ms (try (- now (* 1000 (String/to_integer (str/trim (str at))))) (catch _ nil))})))))
+
+(defn worktree!
+  "A fresh worktree of the repo containing `dir`, inside it at .worktrees/<name> and
+   ignored there. Returns {:cwd :branch} or throws with git's message."
+  [dir name]
+  (let [top (some-> (sh (str "git -C " (quote-arg dir) " rev-parse --show-toplevel")) str/trim)
+        _ (when (str/blank? top) (throw (ex-info "A worktree needs a git repository." {:cwd dir})))
+        branch (str "omega/" name)
+        path (str top "/.worktrees/" name)
+        r (System/cmd "sh" (list "-c" (str "cd " (quote-arg top) " && x=\"$(git rev-parse --git-common-dir)/info\" && mkdir -p \"$x\" && "
+                                             "(grep -qx '.worktrees/' \"$x/exclude\" 2>/dev/null || echo '.worktrees/' >> \"$x/exclude\") && "
+                                             "git worktree add -q -b " (quote-arg branch) " " (quote-arg path) " HEAD"))
+                      (list (tuple :stderr_to_stdout true)))]
+    (when-not (= 0 (elem r 1)) (throw (ex-info (str "Could not create a worktree: " (str/trim (elem r 0))) {:cwd dir})))
+    {:cwd path :branch branch}))
+
+(defn branch-of [dir] (:branch (info dir)))
+
+(defn head-branch
+  "The checked-out branch read from .git/HEAD, without running git. Cheap enough per read."
+  [root]
+  (try (let [head (str/trim (File/read! (str root "/.git/HEAD")))]
+         (when (str/starts-with? head "ref: refs/heads/") (subs head 16)))
+       (catch _ nil)))
+
+(defn intents [sys]
+  {"pocket/home" (fn [_] {:home (System/fetch_env! "HOME")})
+   "pocket/repos" (fn [_] {:repos (discover sys (System/fetch_env! "HOME")) :home (System/fetch_env! "HOME")})
+   "pocket/place-info" (fn [{:keys [dir]}] (or (info dir) {}))})

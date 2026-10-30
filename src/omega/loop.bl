@@ -337,18 +337,32 @@
         (env/tx! e [[:db/add (env/eid e :turn/id (str id "/" (:n t))) :turn/content content]])
         (assoc (vec ts) i (assoc t :content content))))))
 
+(def ^:private MAY
+  {"read" "\nThis session was launched read-only: inspect, run read-only commands and report, but do not modify files, commit, push or deploy."
+   "edit" "\nThis session may edit files in its working directory, but must not commit, push, deploy or run commands that change state outside it."})
+
+(defn run-context
+  "System-prompt lines for a task's launch settings. Permission is an instruction to
+   the agent, not a sandbox; the person sees it as such."
+  [run]
+  (str (get MAY (:may run))
+       (when (:worktree run) (str "\nThis session works in its own git worktree on branch " (:branch run) "; the person merges it when ready."))
+       "\nWhen you stop for the person's input or decision, end with up to three proposed next steps, one per line, as `#+next: Short label | exact instruction to send back`."))
+
 (defn request
   "The model request for task `id` over its turns `ts` (read from the store
    when omitted), after the :context hooks. Carries :tail (request-time blocks,
    see `with-tail`); hooks get {:sys :task :situation} as ctx."
   ([sys id] (request sys id (turns sys id)))
   ([sys id ts]
-  (let [cwd (:task/cwd (env/pull (:env sys) [:task/cwd] (env/eid (:env sys) :task/id id)))
+  (let [{cwd :task/cwd run :task/run} (env/pull (:env sys) [:task/cwd :task/run] (env/eid (:env sys) :task/id id))
         req {:system (str (or (:system-prompt sys) "You are omega, a coding agent.")
-                          (when cwd (str "\nTask working directory: " cwd ". Relative file paths and shell commands resolve here.")))
+                          (when cwd (str "\nTask working directory: " cwd ". Relative file paths and shell commands resolve here."))
+                          (run-context run))
              :messages (messages ts)
              :tools (vec (map (fn [t] (select-keys t [:name :description :input-schema])) (tool-table sys)))
-             :tail [] :record []}]
+             :tail [] :record []}
+        req (if (:model run) (assoc req :model (:model run)) req)]
     (hook sys :context req {:sys sys :task id :situation (situation sys id ts)}))))
 
 (defn- add-cost!

@@ -72,7 +72,8 @@
     :db/doc "Refinements of the goal, appended by follow-ups and steers that change what 'done' means."}
    {:db/ident :task/result :db/doc "The final answer or outcome, any term."}
    {:db/ident :task/cost :db/doc "Accumulated usage {:input :output :cache-read :cache-write} — summed by the loop."}
-   {:db/ident :task/at :db/valueType :db.type/long :db/doc "Creation time (ms)."}])
+   {:db/ident :task/at :db/valueType :db.type/long :db/doc "Creation time (ms)."}
+   {:db/ident :task/run :db/doc "How the task runs, chosen at launch: {:model :may :branch :worktree :notify}. Absent keys use the world's defaults."}])
 
 (def msg
   [{:db/ident :msg/id :db/valueType :db.type/string :db/unique :db.unique/identity}

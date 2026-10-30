@@ -1,0 +1,133 @@
+; Places come from the machine; a place opens on its sessions.
+(ns mob.places (:require [mob.html :as h] [mob.status :as st] [mob.chrome :as ui] [mob.inbox :as inbox]
+                         [mob.launch :as launch] [clojure.string :as s]))
+
+(defn- counts [vm place]
+  (frequencies (map st/state (filter (fn [t] (= (:place t) (:id place))) (:tasks vm)))))
+
+(defn- newest [vm place]
+  (let [ages (keep :age-ms (filter (fn [t] (= (:place t) (:id place))) (:tasks vm)))]
+    (when (seq ages) (st/ago (apply min ages)))))
+
+(defn place-row [vm p]
+  (let [c (counts vm p)]
+    [:button.place {:data-act "open-place" :data-path (str "place:" (:id p)) :data-key (str "place:" (:id p))}
+     (ui/tile p "lg")
+     [:span.grow [:b (:name p)]
+      [:span.mono (str (st/tilde (:home vm) (:root p)) (if (:branch p) (str " · " (:branch p)) " · folder"))]]
+     [:span.counts
+      (for [[k] [["you"] ["fail"] ["run"]] :when (get c k)]
+        [:span {:class ["st" k]} [:i] (get c k)])
+      (when-not (some (fn [k] (get c k)) ["you" "fail" "run"]) [:span.muted (newest vm p)])]]))
+
+(defn list-header [vm]
+  (let [more (count (remove :added (:repos vm)))]
+    (ui/header {:title "Places"
+                :context (str (count (:places vm)) " places"
+                              (when (pos? more) (str " · " more " more on this machine")))
+                :mark {:online (:online vm)}
+                :actions (ui/act-button "add-places" "Add places" :plus)})))
+
+(defn list-body [vm]
+  [:div.places-list
+   (map (fn [p] (place-row vm p)) (:places vm))
+   [:button.add-row {:data-act "add-places" :data-key "add-row"} (ui/icon :plus) "Add places from this machine"]])
+
+; --- add places sheet ----------------------------------------------------------
+
+(defn- dup-names [repos] (set (keep (fn [[n c]] (when (> c 1) n)) (frequencies (map :name repos)))))
+
+(defn- repo-row [dups picked r]
+  (let [on (contains? picked (:path r))]
+    [:div {:class ["row" "pick" (when (:added r) "added") (when on "on")] :role "checkbox" :aria-checked (str (or on (:added r)))
+           :data-act (when-not (:added r) "repo-toggle") :data-path (:path r) :data-key (str "repo:" (:path r))}
+     [:span.check (when (or on (:added r)) (ui/icon :check "sm"))]
+     [:span.grow [:b (when (contains? dups (:name r)) [:span.parent (str (last (s/split (:parent r) #"/")) "/")]) (:name r)]
+      [:span.mono (str (:parent r) "/" (:name r) (when (:branch r) (str " · " (:branch r))))]]
+     [:span.tiny.muted (if (:added r) "added" (if (:age-ms r) (st/ago (:age-ms r)) "—"))]]))
+
+(defn add-sheet [vm]
+  (let [q (s/lower-case (str (:repo-query vm)))
+        repos (filter (fn [r] (or (s/blank? q) (s/includes? (s/lower-case (str (:parent r) "/" (:name r))) q))) (:repos vm))
+        dups (dup-names (:repos vm)) picked (set (:picked vm))
+        fresh (remove :added repos) added (filter :added repos) n (count picked)]
+    (list
+     [:h2 "Add places"]
+     [:label.field (ui/icon :search) [:input {:data-field "repo-query" :placeholder "Filter repos and folders" :value (or (:repo-query vm) "") :autocomplete "off"}]]
+     [:div.sheet-scroll {:data-key "repo-list"}
+      (cond (:repos-loading vm) [:div.loading {:data-key "loading"} [:i] [:i] [:i]]
+            (empty? (:repos vm)) [:p.muted.pad "No git repositories found in your home folder."]
+            :else (list
+                   [:div.group-h [:span "Git repos in ~ · recent first"] [:span (count fresh)]]
+                   (map (fn [r] (repo-row dups picked r)) fresh)
+                   (when (seq added) (list [:div.group-h [:span "Already places"]] (map (fn [r] (repo-row dups picked r)) added)))))]
+     [:div.foot
+      [:button.btn.ghost {:data-act "add-place" :title "Any folder, not just git repos"} "Folder…"]
+      [:button.btn {:data-act "repos-add" :disabled (or (zero? n) (:saving-places vm))}
+       (cond (:saving-places vm) "Adding…" (zero? n) "Add" :else (str "Add " n " place" (when (> n 1) "s")))]])))
+
+; --- one place -------------------------------------------------------------------
+
+(defn place-header [vm p]
+  (ui/header {:key "place-hdr" :title (:name p) :context [:span.mono (st/tilde (:home vm) (:root p))]
+              :back {:act "places" :label "Back to Places"}
+              :actions [:button.act {:data-act "pin" :data-path (str "place:" (:id p)) :aria-pressed (str (boolean (:pinned p)))
+                                     :aria-label (if (:pinned p) "Unpin" "Pin")} (ui/icon :star (when (:pinned p) "filled"))]}))
+
+(defn- sessions-pane [vm p]
+  (let [mine (filter (fn [t] (= (:place t) (:id p))) (:tasks vm))
+        active (filter (fn [t] (contains? #{"needs" "running"} (st/section t))) mine)
+        earlier (remove (set active) mine)]
+    (list
+     [:button.starter {:data-act "new" :data-path (:id p) :data-key "starter"} (ui/icon :plus) (str "Start a session in " (:name p) "…")]
+     (when (seq active) (list [:div.sec [:span "Active"]] (map (fn [t] (inbox/card vm t)) active)))
+     (when (seq earlier) (list [:div.sec [:span "Earlier"]] (map (fn [t] (inbox/card vm t)) earlier)))
+     (when (empty? mine) [:p.muted.pad {:data-key "none"} "No sessions here yet."]))))
+
+(defn- files-pane [vm p]
+  (let [entries (:entries vm)]
+    (list
+     [:div.crumbs {:data-key "crumbs"} (str (:name p) " / " (or (:subpath vm) ""))]
+     (if (empty? entries)
+       [:p.muted.pad "Opening…"]
+       (for [e entries]
+         [:button {:class ["file" (when (:data? e) "muted")] :data-act (if (:dir? e) "open-place" "open-file")
+                   :data-path (:path e) :data-key (str "f:" (:path e))}
+          (ui/icon (if (:dir? e) :folder :file)) [:span.grow (:name e)]
+          (cond (:git e) [:span {:class ["gs" (s/lower-case (:git e))]} (:git e)]
+                (= "AGENTS.md" (:name e)) [:span.tiny.muted "read by every session"]
+                (:data? e) [:span.tiny "omega data"])])))))
+
+(defn- setting [field label value choices]
+  [:details.setting {:data-key (str "set-" field)}
+   [:summary [:span.label label] [:span.value (some (fn [[k l]] (when (= k value) l)) choices)] (ui/icon :chevron "sm chev")]
+   [:div.chips (for [[k l] choices]
+                 [:button {:class ["chip" (when (= k value) "on")] :data-act "place-default" :data-field field :data-value k} l])]])
+
+(defn- settings-pane [vm p]
+  (let [c (or (:config p) {})]
+    [:div.settings
+     (setting "model" "Default model" (or (:model c) "claude-opus-5-5") launch/models)
+     (setting "may" "New sessions may" (or (:may c) "run") (map (fn [[k l]] [k l]) launch/mays))
+     (setting "work-on" "Work on" (or (:work-on c) "checkout") [["checkout" (str "The checkout" (when (:branch p) (str " (" (:branch p) ")")))] ["worktree" "A new worktree"]])
+     (setting "notify" "Notify me when" (or (:notify c) "both") [["both" "It needs me · it finishes"] ["you" "It needs me"] ["none" "Never"]])
+     [:button.setting-link {:data-act "open-file" :data-path (str "work:" (:id p) "/AGENTS.md")}
+      [:span.label "Instructions"] [:span.value.mono "AGENTS.md"] (ui/icon :chevron "sm")]
+     [:button.setting-link {:data-act "edit-place"} [:span.label "Name and folder"] [:span.value (:name p)] (ui/icon :chevron "sm")]]))
+
+(defn place-body [vm p]
+  (let [which (or (:place-tab vm) "sessions") info (:info vm)
+        n (count (filter (fn [t] (= (:place t) (:id p))) (:tasks vm)))]
+    [:div.place-page
+     [:div.ident {:data-key "ident"} (ui/tile p "lg")
+      [:div.sub (if (:branch info)
+                  (list [:span.mono (str "⎇ " (:branch info))]
+                        (when (pos? (or (:changed info) 0)) [:span (str "· " (:changed info) " changed")])
+                        (when (:age-ms info) [:span (str "· last commit " (st/ago-long (:age-ms info)))]))
+                  [:span "Folder"])]]
+     [:div.seg {:role "tablist" :data-key "place-tabs"}
+      (for [[id label c] [["sessions" "Sessions" n] ["files" "Files" nil] ["settings" "Settings" nil]]]
+        [:button {:role "tab" :data-act "place-tab" :data-value id :aria-selected (str (= id which)) :data-key (str "pt-" id)}
+         label (when (and c (pos? c)) [:span.count c])])]
+     [:div.pane {:data-key (str "pane-" which)}
+      (case which "files" (files-pane vm p) "settings" (settings-pane vm p) (sessions-pane vm p))]]))

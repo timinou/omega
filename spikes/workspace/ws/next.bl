@@ -1,0 +1,26 @@
+; Proposed next steps an agent leaves when it stops for the person:
+;   #+next: Short label | exact instruction to send back
+; Pure; the lines stay in the transcript and readers hide them.
+(ns ws.next (:require [clojure.string :as str]))
+
+(def ^:private prefix "#+next:")
+
+(defn proposals
+  "Up to three {:label :text} from the final lines of `text`."
+  [text]
+  (->> (str/split (str (or text "")) "\n")
+       (map str/trim)
+       (filter (fn [l] (str/starts-with? l prefix)))
+       (keep (fn [l] (let [body (str/trim (subs l (count prefix)))
+                           bar (str/index-of body "|")
+                           label (str/trim (if bar (subs body 0 bar) body))
+                           instruction (when bar (str/trim (subs body (inc bar))))]
+                       (when-not (str/blank? label)
+                         {:label (if (> (count label) 40) (str (subs label 0 39) "…") label)
+                          :text (if (str/blank? instruction) label instruction)}))))
+       (take 3) vec))
+
+(defn strip
+  "The text without its proposal lines."
+  [text]
+  (str/trim (str/join "\n" (remove (fn [l] (str/starts-with? (str/trim l) prefix)) (str/split (str (or text "")) "\n")))))

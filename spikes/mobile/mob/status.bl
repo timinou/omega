@@ -1,0 +1,70 @@
+; One vocabulary for session state, time and place identity, everywhere.
+; Your turn · Running · Failed · Done · Cancelled. "Answered" and "idle" are host words.
+(ns mob.status (:require [clojure.string :as s]))
+
+(defn- status [task] (let [x (:status task)] (if (keyword? x) (name x) (str x))))
+
+(defn state
+  "The person-facing state of a task row or task document: you, run, fail, done, cancel."
+  [task]
+  (let [st (status task)]
+    (cond (= st "failed") "fail"
+          (= st "cancelled") "cancel"
+          (= st "done") "done"
+          (or (not (s/blank? (str (or (:ask task) "")))) (seq (:proposals task))) "you"
+          (contains? #{"running" "open" "waiting"} st) "run"
+          :else "done")))
+
+(def models [["claude-opus-5-5" "Opus 5.5"] ["claude-sonnet-5-5" "Sonnet 5.5"] ["claude-haiku-5-5" "Haiku 5.5"]])
+(defn model-name [id] (when id (or (some (fn [[k v]] (when (= k id) v)) models) id)))
+
+(def labels {"you" "Your turn" "run" "Running" "fail" "Failed" "done" "Done" "cancel" "Cancelled"})
+(defn label [task] (get labels (state task)))
+
+(defn section [task]
+  (get {"you" "needs" "fail" "needs" "run" "running" "done" "done" "cancel" "done"} (state task)))
+
+(defn ago
+  "Compact relative time: now, 4m, 3h, 2d, 5w."
+  [ms]
+  (let [m (quot (max 0 (or ms 0)) 60000)]
+    (cond (< m 1) "now" (< m 60) (str m "m") (< m 1440) (str (quot m 60) "h")
+          (< m 20160) (str (quot m 1440) "d") :else (str (quot m 10080) "w"))))
+
+(defn ago-long [ms]
+  (let [m (quot (max 0 (or ms 0)) 60000)
+        unit (fn [n one] (str n " " one (when-not (= n 1) "s") " ago"))]
+    (cond (< m 1) "just now" (< m 60) (unit m "minute") (< m 1440) (unit (quot m 60) "hour")
+          :else (unit (quot m 1440) "day"))))
+
+(def hues ["slate" "sage" "clay" "plum" "ochre" "mocha"])
+
+; Character codes differ between targets; a fixed alphabet keeps hues identical.
+(def ^:private alphabet (zipmap (map str "abcdefghijklmnopqrstuvwxyz0123456789-_.") (range)))
+(defn- code-sum [text]
+  (reduce (fn [n ch] (mod (+ (* n 31) (get alphabet (s/lower-case (str ch)) 40)) 9973)) 7 (str text)))
+
+(defn hue [place]
+  (if (contains? #{"home" "othman" "~"} (:name place)) "mocha"
+    (nth hues (mod (code-sum (or (:id place) (:name place))) (dec (count hues))))))
+
+(defn monogram
+  "Two quiet letters: beam-lisp → bl, omega → om, the home folder → ~."
+  [place]
+  (let [n (str (or (:name place) "?"))
+        parts (remove s/blank? (s/split n #"[-_. /]+"))]
+    (cond (or (:home? place) (= n "~")) "~"
+          (>= (count parts) 2) (s/lower-case (str (subs (first parts) 0 1) (subs (second parts) 0 1)))
+          :else (s/lower-case (subs n 0 (min 2 (count n)))))))
+
+(defn tilde
+  "A path relative to home, for display."
+  [home path]
+  (let [p (str path)]
+    (cond (s/blank? home) p (= p home) "~"
+          (s/starts-with? p (str home "/")) (str "~" (subs p (count home)))
+          :else p)))
+
+(defn one-line [text n]
+  (let [t (s/trim (first (s/split (str (or text "")) #"\n")))]
+    (if (> (count t) n) (str (subs t 0 (dec n)) "…") t)))

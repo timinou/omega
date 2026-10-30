@@ -1,0 +1,48 @@
+; Hiccup to HTML text for Pocket's views. Pure, and identical on BEAM and JS.
+; [:tag {:attr v} child…]; a :tag may carry .classes; nil/false children vanish;
+; (raw s) passes trusted markup (icons, host-formatted prose) through unescaped.
+(ns mob.html (:require [clojure.string :as s]))
+
+(defn raw [text] {:raw-html (str text)})
+
+(defn esc [x]
+  (-> (str x) (s/replace "&" "&amp;") (s/replace "<" "&lt;") (s/replace ">" "&gt;")
+      (s/replace "\"" "&quot;") (s/replace "'" "&#39;")))
+
+; clojure.string/join with a separator is not portable to the JS target.
+(defn join
+  ([xs] (apply str xs))
+  ([sep xs] (apply str (interpose sep xs))))
+
+(def ^:private void #{"input" "img" "br" "hr" "meta" "link"})
+
+(defn- attr-text [[k v]]
+  (cond (or (nil? v) (= false v)) ""
+        (= true v) (str " " (name k))
+        (map? v) (str " " (name k) "=\"" (esc (join ";" (map (fn [[a b]] (str (name a) ":" b)) v))) "\"")
+        (sequential? v) (str " " (name k) "=\"" (esc (join " " (remove nil? v))) "\"")
+        :else (str " " (name k) "=\"" (esc v) "\"")))
+
+(defn- tag-parts [tag]
+  (let [[t & classes] (s/split (name tag) #"\.")] [t classes]))
+
+(declare html)
+
+(defn- element [[tag & more]]
+  (let [[t classes] (tag-parts tag)
+        attrs (when (map? (first more)) (first more))
+        kids (if attrs (rest more) more)
+        cls (remove nil? (concat classes (let [c (:class attrs)] (if (sequential? c) c [c]))))
+        attrs (cond-> (dissoc (or attrs {}) :class) (seq cls) (assoc :class (join " " cls)))]
+    (str "<" t (join (map attr-text (sort-by (fn [[k _]] (name k)) attrs))) ">"
+         (when-not (contains? void t) (str (join (map html kids)) "</" t ">")))))
+
+(defn html [node]
+  (cond (nil? node) ""
+        (= false node) ""
+        (string? node) (esc node)
+        (number? node) (str node)
+        (and (map? node) (contains? node :raw-html)) (:raw-html node)
+        (vector? node) (if (keyword? (first node)) (element node) (join (map html node)))
+        (sequential? node) (join (map html node))
+        :else (esc node)))

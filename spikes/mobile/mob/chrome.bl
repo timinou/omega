@@ -1,0 +1,65 @@
+; Pocket's line icons and shared chrome pieces: header, place tile, status, tab bar.
+(ns mob.chrome (:require [mob.html :as h] [mob.status :as st]))
+
+(def paths
+  {:search "<circle cx=\"11\" cy=\"11\" r=\"6\"/><path d=\"m20 20-4.5-4.5\"/>"
+   :plus "<path d=\"M12 5v14M5 12h14\"/>"
+   :back "<path d=\"m15 5-7 7 7 7\"/>"
+   :close "<path d=\"M6 6l12 12M18 6 6 18\"/>"
+   :chevron "<path d=\"m9 6 6 6-6 6\"/>"
+   :dots "<circle cx=\"5\" cy=\"12\" r=\"1\"/><circle cx=\"12\" cy=\"12\" r=\"1\"/><circle cx=\"19\" cy=\"12\" r=\"1\"/>"
+   :inbox "<path d=\"M4 13h4l2 3h4l2-3h4M4 13l2-8h12l2 8v6H4z\"/>"
+   :folder "<path d=\"M3 7h6l2 2h10v10H3z\"/>"
+   :grid "<rect x=\"4\" y=\"4\" width=\"7\" height=\"7\" rx=\"1.5\"/><rect x=\"13\" y=\"4\" width=\"7\" height=\"7\" rx=\"1.5\"/><rect x=\"4\" y=\"13\" width=\"7\" height=\"7\" rx=\"1.5\"/><rect x=\"13\" y=\"13\" width=\"7\" height=\"7\" rx=\"1.5\"/>"
+   :file "<path d=\"M6 3h8l4 4v14H6z\"/>"
+   :star "<path d=\"m12 4 2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 16.2 7 19l1.2-5.6L4 9.6 9.6 9z\"/>"
+   :send "<path d=\"M12 19V5M6 11l6-6 6 6\"/>"
+   :arrow "<path d=\"M5 12h14M13 6l6 6-6 6\"/>"
+   :stop "<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1.5\" fill=\"currentColor\"/>"
+   :edit "<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>"
+   :tune "<path d=\"M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12\"/><circle cx=\"16\" cy=\"6\" r=\"2\"/><circle cx=\"10\" cy=\"12\" r=\"2\"/><circle cx=\"18\" cy=\"18\" r=\"2\"/>"
+   :check "<path d=\"m5 12 5 5 9-10\"/>"
+   :branch "<circle cx=\"6\" cy=\"5\" r=\"2\"/><circle cx=\"6\" cy=\"19\" r=\"2\"/><circle cx=\"18\" cy=\"8\" r=\"2\"/><path d=\"M6 7v10M18 10c0 4-6 3-12 7\"/>"})
+
+(defn icon
+  ([k] (icon k nil))
+  ([k cls]
+   (h/raw (str "<svg class=\"icon" (when cls (str " " cls)) "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+               (get paths k (:file paths)) "</svg>"))))
+
+(defn tile
+  "A place's monogram in its stable hue."
+  ([place] (tile place nil))
+  ([place size]
+   [:span {:class ["tile" (str "h-" (st/hue place)) size] :aria-hidden "true"} (st/monogram place)]))
+
+(defn pill
+  "A state with its glyph: filled diamond (your turn), pulse (running), ring (done/failed)."
+  ([task] (pill task nil))
+  ([task text]
+   (let [s (st/state task)]
+     [:span {:class ["st" s]} [:i] (or text (st/label task))])))
+
+(defn header
+  "Identity line and context line, with an optional back control and trailing actions."
+  [{:keys [title context back actions mark key]}]
+  [:header.hdr {:data-key (or key "hdr")}
+   (if back
+     [:button.back {:data-act (:act back) :data-path (:path back) :aria-label (:label back)} (icon :back)]
+     [:button.mark {:data-act "work" :aria-label "Work"} "ω" (when mark [:span {:class ["conn" (when-not (:online mark) "off")]}])])
+   [:div.id [:b title] (when context [:span context])]
+   actions])
+
+(defn act-button [act label k & [attrs]]
+  [:button.act (merge {:data-act act :aria-label label :title label} attrs) (icon k)])
+
+(defn palette-button [] [:button.act.kbd-act {:data-act "commands" :aria-label "Commands" :title "Commands (⌘K)"} [:span.kbd "⌘K"]])
+
+(defn tabs
+  "Work · Places · Buffers. Work carries how many sessions need you."
+  [current needs]
+  [:nav.tabs {:data-key "navigation" :aria-label "Main navigation"}
+   (for [[id label k] [["work" "Work" :inbox] ["places" "Places" :folder] ["buffers" "Buffers" :grid]]]
+     [:button {:data-act id :data-key (str "nav-" id) :aria-current (when (= id current) "page")}
+      (icon k) [:span label]
+      (when (and (= id "work") (pos? (or needs 0))) [:span.badge needs])])])

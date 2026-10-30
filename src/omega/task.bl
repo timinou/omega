@@ -60,7 +60,7 @@
 (def ^:private PULL
   [:task/id :task/goal :task/title :task/status :task/scope :task/refined
    :task/place :task/cwd :task/home-path :task/home-block
-   :task/result :task/cost :task/at
+   :task/result :task/cost :task/at :task/run
    {:task/owner [:task/id]} {:task/opened-by [:actor/id]} {:task/waits-on [:task/id]}])
 
 (defn view
@@ -76,7 +76,7 @@
          :cwd (or (:task/cwd m) (:root sys) (File/cwd!))
          :home (when (:task/home-path m) {:path (:task/home-path m) :block (:task/home-block m)})
          :refined (vec (or (:task/refined m) []))
-         :result (:task/result m) :cost (:task/cost m) :at (:task/at m)
+         :result (:task/result m) :cost (:task/cost m) :at (:task/at m) :run (:task/run m)
          :owner (get-in m [:task/owner :task/id])
          :opened-by (get-in m [:task/opened-by :actor/id])
          :waits-on (vec (map :task/id (or (:task/waits-on m) [])))}))))
@@ -227,6 +227,7 @@
      :cwd        working directory; defaults to owner's cwd, then world's root
      :place      place id; children inherit owner place
      :home       {:path document-address :block stable-block-id}, optional
+     :run        {:model :may :branch :worktree :notify}, optional; see omega.loop/run-context
    Returns the task id."
   [sys m]
   (let [cwd (Path/expand (or (:cwd m) (when (:owner m) (:cwd (view sys (:owner m))))
@@ -247,7 +248,8 @@
                (some? owner) (assoc :task/owner owner)
                (get-in m [:home :path]) (assoc :task/home-path (get-in m [:home :path]))
                (get-in m [:home :block]) (assoc :task/home-block (get-in m [:home :block]))
-               (seq (:scope m)) (assoc :task/scope (vec (:scope m))))]
+               (seq (:scope m)) (assoc :task/scope (vec (:scope m)))
+               (seq (:run m)) (assoc :task/run (:run m)))]
     (env/tx! e [fact])
     (actor/ensure! e id :task (:task/title fact))
     ;; the goal is the first prompt in the task's inbox — one path for all prompts

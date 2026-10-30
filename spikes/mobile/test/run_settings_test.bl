@@ -1,0 +1,37 @@
+(ns pocket-run-settings-test
+  (:require [omega.ed.main :as host] [omega.loop :as loop] [omega.task :as task]
+            [omega.workspace :as workspace] [omega.packages :as packages] [ws.repos :as repos]
+            [ws.desk-server :as desk] [clojure.string :as str]))
+
+(defn- sh! [dir cmd] (System/cmd "sh" (list "-c" (str "cd '" dir "' && " cmd)) (list (tuple :stderr_to_stdout true))))
+
+(deftest a-launch-carries-model-permission-and-a-fresh-worktree
+  (let [root (str (System/tmp_dir!) "/pocket-run-" (System/unique_integer (list :positive)))
+        _ (File/mkdir_p! root)
+        _ (sh! root "git init -q -b main && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init")
+        h (host/start! {:root root :port 8893 :memory? true :offline? true
+                       :step (loop/scripted [(loop/say "Merged.\n#+next: Rebuild APK | Rebuild and sign it")])})]
+    (try
+      (let [intents (merge (workspace/intents (:sys h) (:buffers h)) (packages/intents (:packages h) (:sys h)))
+            opened ((get intents "task/open") {:goal "Ship the notifications" :path "place:project"
+                                                :run {"model" "claude-sonnet-5-5" "may" "read" "worktree" true "notify" ["you"]}})
+            t (task/view (:sys h) (:id opened))]
+        (is (= "claude-sonnet-5-5" (get-in t [:run :model])))
+        (is (= "read" (get-in t [:run :may])))
+        (is (= ["you"] (get-in t [:run :notify])))
+        (is (str/starts-with? (:cwd t) (str root "/.worktrees/")))
+        (is (str/starts-with? (get-in t [:run :branch]) "omega/"))
+        (is (= (get-in t [:run :branch]) (repos/branch-of (:cwd t))))
+        (is (str/includes? (File/read! (str root "/.git/info/exclude")) ".worktrees/"))
+        (is (= "main" (repos/branch-of root)) "the checkout itself is untouched")
+        (let [req (loop/request (:sys h) (:id opened))]
+          (is (= "claude-sonnet-5-5" (:model req)))
+          (is (str/includes? (:system req) "launched read-only")))
+        (let [plain ((get intents "task/open") {:goal "Look around" :path "place:project" :run {"model" "nope"}})]
+          (is (= {:branch "main"} (:run (task/view (:sys h) (:id plain)))) "unknown models are dropped"))
+        (let [doc (desk/scope-doc (:sys h) "all")
+              scope (first (filter (fn [o] (= "project" (:place o))) (:objects doc)))]
+          (is (= "main" (:branch scope))))
+        (let [found (repos/discover (:sys h) (Path/dirname root))]
+          (is (some (fn [r] (and (= root (:path r)) (:added r) (= "main" (:branch r)))) found))))
+      (finally (host/stop! h) (File/rm_rf! root)))))

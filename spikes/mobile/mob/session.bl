@@ -1,0 +1,171 @@
+; A session says what it is doing: title once, run identity, state, grouped steps, next steps.
+(ns mob.session (:require [mob.html :as h] [mob.status :as st] [mob.chrome :as ui] [clojure.string :as s]))
+
+(defn task-of
+  "A task document's data, in the shape mob.status reads."
+  [d]
+  {:status (:task-status d) :ask (:ask d) :proposals (:proposals d)})
+
+(defn run-line
+  "model · branch · permission, only what is known."
+  [d]
+  (remove nil? [(st/model-name (:model d)) (when (:branch d) (str "on " (:branch d)))
+                (get {"read" "read-only" "edit" "can edit" "run" "can edit & run"} (:may d))]))
+
+(defn header [vm d]
+  (let [place {:id (:place d) :name (or (:place-name d) "home")}]
+    (ui/header {:key "session-hdr"
+                :title (or (:task-title d) "Session")
+                :back {:act "work" :label "Back to Work"}
+                :context (list (ui/tile place "xs") [:span (:name place)]
+                               (when (:branch d) (list [:span.sep "·"] [:span.mono (str "⎇ " (:branch d))]))
+                               (when (:model d) (list [:span.sep "·"] [:span (st/model-name (:model d))])))
+                :actions (ui/act-button "details" "Session details" :dots)})))
+
+(defn tabs [vm d]
+  (let [files (count (distinct (keep :path (:artifacts d))))
+        changes (count (distinct (or (:changed-files d) [])))
+        which (or (:tab vm) "conversation")]
+    [:div.seg {:role "tablist" :aria-label "Session views" :data-key "session-tabs"}
+     (for [[id label n] [["conversation" "Conversation" nil] ["plan" "Files" files] ["changes" "Changes" changes]]]
+       [:button {:role "tab" :data-act (str "tab-" id) :data-key (str "tab-" id) :aria-selected (str (= which id))}
+        label (when (and n (pos? n)) [:span.count n])
+        (when (and (nil? n) (:unseen vm)) [:span.tab-dot {:aria-label "Unread output"}])])]))
+
+(defn strip [vm d]
+  (let [t (task-of d) state (st/state t) age (st/ago (:age-ms d))]
+    [:div {:class ["state" (str "is-" state)] :data-key "state" :role "status"}
+     (case state
+       "you" (list (ui/pill t) [:span.grow (str "waiting since " age)])
+       "run" (list (ui/pill t (str "Running " age)) [:span.grow.mono.tiny (or (:activity d) "")]
+                   [:button.stop {:data-act "cancel-task" :data-key "stop"} (ui/icon :stop "sm") "Stop"])
+       "fail" (list (ui/pill t) [:span.grow (st/one-line (:task-result d) 80)])
+       (list (ui/pill t) [:span.grow (str age " ago")]))]))
+
+; --- steps -------------------------------------------------------------------
+
+(defn- quoted [code] (second (s/split (str code) "\"")))
+(defn- has? [code & xs] (some (fn [x] (s/includes? code x)) xs))
+
+(defn step-kind [code]
+  (let [c (str code)]
+    (cond (has? c "(send \"human") "ask"
+          (has? c "File/write!" "(spit " "(write " "(edit " "(replace-in") "edit"
+          (has? c "(sh " "(shell " "(exec ") "command"
+          (has? c "File/read!" "(slurp " "(read " "(cat ") "read"
+          (has? c "(ls" "File/ls" "(find ") "list"
+          (has? c "(trace ") "note"
+          :else "eval")))
+
+(defn step-label [code]
+  (let [c (str code) q (quoted c) short (fn [x] (st/one-line x 60))]
+    (case (step-kind c)
+      "command" (if q (str "Ran " (short (first (s/split q #"[;|&]")))) "Ran a command")
+      "read" (if q (str "Read " (short q)) "Read a file")
+      "edit" (if q (str "Edited " (short q)) "Edited a file")
+      "list" (if q (str "Listed " (short q)) "Listed files")
+      "ask" "Asked you"
+      "note" (if q (str "Noted " (short (nth (s/split c "\"") 3 q))) "Noted progress")
+      (str "Evaluated " (short (first (s/split (s/trim c) #"\n")))))))
+
+(defn- plural [n one many] (str n " " (if (= n 1) one many)))
+
+(defn steps-summary [codes]
+  (let [k (frequencies (map step-kind codes))
+        parts (remove nil? [(when (k "command") (str "ran " (plural (k "command") "command" "commands")))
+                            (when (k "read") (str "read " (plural (k "read") "file" "files")))
+                            (when (k "edit") (str "edited " (plural (k "edit") "file" "files")))
+                            (when (k "list") (str "listed " (plural (k "list") "folder" "folders")))
+                            (let [n (+ (or (k "eval") 0) (or (k "note") 0) (or (k "ask") 0))]
+                              (when (pos? n) (str "took " (plural n "step" "steps"))))])
+        text (h/join ", " parts)]
+    (str (s/upper-case (subs text 0 1)) (subs text 1))))
+
+(defn- tool-code [block]
+  (let [i (:input block)] (str (or (:code i) (:command i) (when (string? i) i) ""))))
+
+(defn group-turns
+  "Turns → [{:kind :text …} {:kind :steps :steps […]}], merging adjacent tool turns."
+  [turns]
+  (let [results (into {} (for [t turns b (:content t) :when (= "tool-result" (:type b))] [(:id b) b]))]
+    (reduce (fn [out t]
+              (reduce (fn [out b]
+                        (cond
+                          (and (= "text" (:type b)) (not (s/blank? (str (:text b)))))
+                          (conj out {:kind :text :role (:role t) :html (:html b) :text (:text b) :n (:n t)})
+                          (= "tool-use" (:type b))
+                          (let [step {:id (:id b) :name (:name b) :code (tool-code b) :result (get results (:id b))}
+                                last-group (peek out)]
+                            (if (= :steps (:kind last-group))
+                              (conj (pop out) (update last-group :steps conj step))
+                              (conj out {:kind :steps :n (:n t) :steps [step]})))
+                          :else out))
+                      out (:content t)))
+            [] turns)))
+
+(defn- step-row [step]
+  (let [r (:result step) failed (:error? r)]
+    [:div {:class ["tool" (when failed "failed")] :data-key (str "step:" (:id step))}
+     [:span.grow (step-label (:code step)) [:code (st/one-line (:code step) 120)]]
+     [:span {:class ["step-mark" (cond failed "bad" r "ok" :else "wait")]} (cond failed "!" r "✓" :else "…")]]))
+
+(defn- steps [g running?]
+  (let [ss (:steps g) failed (some (fn [x] (:error? (:result x))) ss) pending (some (fn [x] (nil? (:result x))) ss)]
+    [:details.tools {:data-key (str "steps:" (:id (first ss)))}
+     [:summary (ui/icon :chevron "sm chev") [:span.grow (steps-summary (map :code ss))]
+      [:span {:class ["step-mark" (cond failed "bad" (and pending running?) "wait" :else "ok")]}
+       (cond failed "!" (and pending running?) "…" :else "✓")]]
+     [:div.tool-list (map step-row ss)
+      [:details.raw {:data-key "raw"} [:summary "Show code and output"]
+       (map (fn [x] [:div.raw-step [:pre (:code x)] (when (:result x) [:pre.out (st/one-line (:content (:result x)) 4000)])]) ss)]]]))
+
+(defn message [g]
+  (let [you? (= "user" (:role g))]
+    [:article {:class ["msg" (if you? "you" "agent")] :data-key (str "turn:" (:n g))
+               :data-user-prompt (when you? (st/one-line (:text g) 200))}
+     [:div.who (if you? "You" "ω")
+      [:button.copy {:data-act "copy" :data-copy (:text g) :aria-label "Copy message"} "Copy"]]
+     [:div.body (if (:html g) (h/raw (:html g)) (:text g))]]))
+
+(defn next-card
+  "The question the agent stopped on, with its proposed next steps."
+  [vm d]
+  (let [t (task-of d)]
+    (when (= "you" (st/state t))
+      [:section.next {:data-key "next"}
+       [:div.q (or (:ask d) "Your turn")]
+       (when (:hint d) [:div.hint (:hint d)])
+       [:div.chips
+        (if (seq (:proposals d))
+          (map-indexed (fn [i p] [:button {:class ["chip" (when (= i 0) "primary")] :data-act "choice"
+                                           :data-answer (or (:text p) (:label p)) :data-key (str "p" i)} (:label p)])
+                       (take 3 (:proposals d)))
+          (list [:button.chip.primary {:data-act "choice" :data-answer "yes" :data-key "yes"} "Yes"]
+                [:button.chip {:data-act "choice" :data-answer "no" :data-key "no"} "No"]))
+        [:button.chip.ghost {:data-act "answer" :data-key "answer"} "Answer…"]
+        [:button.chip.ghost {:data-act "snooze" :data-key "later"} "Later"]]])))
+
+(defn conversation [vm d]
+  (let [groups (group-turns (:turns d)) running? (= "run" (st/state (task-of d)))]
+    [:div.conversation
+     (map (fn [g] (if (= :steps (:kind g)) (steps g running?) (message g))) groups)
+     (when (and (:task-result d) (not (some (fn [g] (and (= :text (:kind g)) (s/includes? (str (:text g)) (str (:task-result d))))) groups)))
+       [:article.msg.agent.outcome {:data-key "outcome"} [:div.who "Outcome"] [:div.body (:task-result d)]])
+     (when running? [:div.working {:data-key "working" :role "status"} [:i] [:i] [:i]])
+     (next-card vm d)]))
+
+(defn details-sheet [vm d]
+  (let [place-root (:cwd d)]
+    (list
+     [:h2 "Session"]
+     [:dl.facts
+      [:dt "Place"] [:dd (or (:place-name d) "home") " " [:span.mono.tiny.muted (st/tilde (:home vm) place-root)]]
+      (when (seq (run-line d)) (list [:dt "Running as"] [:dd (h/join " · " (run-line d))]))
+      [:dt "Started"] [:dd (st/ago-long (:started-ms d))
+                       (when (:tokens d) (str " · " (:tokens d) " tokens"))]]
+     [:button.row {:data-act "folder" :data-key "r-folder"} [:span.grow [:b "Open working folder"]] (ui/icon :chevron "sm")]
+     [:button.row {:data-act "object-action" :data-command "desk/link" :data-pane "task" :data-key "r-ref"}
+      [:span.grow [:b "Attach a reference"] [:span "File, selection or another session"]] (ui/icon :chevron "sm")]
+     [:button.row {:data-act "commands" :data-key "r-cmd"} [:span.grow [:b "All commands"] [:span "Steer, inspect source, references…"]] [:span.kbd "⌘K"]]
+     (when-not (contains? #{"done" "cancel"} (st/state (task-of d)))
+       [:button.row.danger {:data-act "cancel-task" :data-key "r-cancel"} [:span.grow [:b "Cancel session"]]]))))

@@ -21,7 +21,7 @@
   300000)
 
 (def ^:private TASK-PULL
-  [:task/id :task/goal :task/title :task/status :task/scope :task/result :task/cost :task/at
+  [:task/id :task/goal :task/title :task/status :task/scope :task/result :task/cost :task/at :task/run
    :task/cwd :task/home-path :task/home-block
    {:task/place [:place/id]} {:task/owner [:task/id]} {:task/waits-on [:task/id]}])
 
@@ -48,6 +48,7 @@
      :scope (vec (or (:task/scope m) []))
      :result (:task/result m)
      :cost (:task/cost m)
+     :run (:task/run m)
      :age-ms (- now last-at)
      :stale? (and (contains? #{:running :waiting} st) (> (- now last-at) STALE-MS))
      :asks (vec my-asks)

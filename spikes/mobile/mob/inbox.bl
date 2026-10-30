@@ -1,0 +1,83 @@
+; Work is an inbox: what needs you, what is running, what finished today.
+(ns mob.inbox (:require [mob.html :as h] [mob.status :as st] [mob.chrome :as ui] [clojure.string :as s]))
+
+(defn- place-of [vm task]
+  (or (first (filter (fn [p] (= (:id p) (:place task))) (:places vm)))
+      {:id (:place task) :name (or (:place-name task) "home") :home? (nil? (:place task))}))
+
+(defn- path [task] (str "task:" (:key task)))
+
+(defn chips
+  "Proposed next steps first (the first is primary), then a way to answer in words."
+  [task]
+  (let [ps (take 3 (:proposals task)) p (path task) s (st/state task)]
+    [:div.chips
+     (map-indexed (fn [i x] [:button {:class ["chip" (when (= i 0) "primary")] :data-act "propose" :data-path p
+                                     :data-text (or (:text x) (:label x)) :data-key (str "p" i)} (:label x)])
+                  ps)
+     (when (and (empty? ps) (= s "you") (:ask task))
+       (list [:button.chip.primary {:data-act "quick" :data-path p :data-text "Yes" :data-key "yes"} "Yes"]
+             [:button.chip {:data-act "quick" :data-path p :data-text "No" :data-key "no"} "No"]))
+     (if (= s "fail")
+       [:button.chip {:data-act "open-task" :data-path p :data-key "log"} "Open log"]
+       [:button.chip {:data-act "reply" :data-path p :data-key "reply"} "Reply…"])]))
+
+(defn card [vm task]
+  (let [s (st/state task) place (place-of vm task)
+        needs? (= "needs" (st/section task))]
+    [:div {:class ["card" (when needs? "you") (str "is-" s)] :role "link" :tabindex "0"
+           :data-act "open-task" :data-path (path task) :data-key (path task)
+           :aria-label (str (:title task) " · " (st/label task) " · " (:name place))}
+     [:div.meta (ui/tile place) [:span.pname (:name place)] [:span.grow]
+      (ui/pill task) [:span.time (str "· " (st/ago (:age-ms task)))]]
+     [:h3 (st/one-line (or (:title task) (:goal task)) 90)]
+     (cond
+       (and (= s "you") (:ask task)) [:div.ask (:ask task)]
+       (and (= s "run") (:activity task)) [:div.live (ui/icon :edit "sm") [:span (:activity task)]]
+       (not (s/blank? (str (:summary task))))
+       (when-not (= (s/trim (str (:summary task))) (s/trim (str (:title task)))) [:p (:summary task)]))
+     (when needs? (chips task))]))
+
+(defn- group [vm id label tasks]
+  (when (seq tasks)
+    [:section.group {:data-key (str "g-" id)}
+     [:div.sec [:span label] [:span (count tasks)]]
+     (map (fn [t] (card vm t)) tasks)]))
+
+(defn filter-chips [vm]
+  (let [current (:filter vm)]
+    [:div.filter {:role "tablist" :aria-label "Filter by place" :data-key "filter"}
+     [:button {:class ["chip" (when (nil? current) "on")] :data-act "scope-choice" :data-path "workspace:all" :aria-selected (str (nil? current))} "All"]
+     (for [p (:places vm)]
+       [:button {:class ["chip" (when (= current (:id p)) "on")] :data-act "scope-choice" :data-key (str "f-" (:id p))
+                 :data-path (str "workspace:" (:id p)) :aria-selected (str (= current (:id p)))}
+        (ui/tile p) (:name p)])]))
+
+(defn context-line [vm]
+  (let [n (count (:places vm)) run (count (filter (fn [t] (= "run" (st/state t))) (:tasks vm)))]
+    (list (str n " place" (when-not (= n 1) "s"))
+          (when (pos? run) (list " · " [:span.st.run [:i] (str run " running")])))))
+
+(defn body [vm]
+  (let [tasks (:tasks vm)
+        by (group-by st/section tasks)
+        done (get by "done")]
+    [:div.inbox
+     (filter-chips vm)
+     (group vm "needs" "Needs you" (get by "needs"))
+     (group vm "running" "Running" (get by "running"))
+     (when (seq done)
+       [:details.done {:data-key "g-done"}
+        [:summary.sec [:span "Done"] [:span (str (count done)) [:span.chev "⌄"]]]
+        (map (fn [t] (card vm t)) done)])
+     (when (empty? tasks)
+       [:div.empty {:data-key "empty"} [:div.empty-mark "ω"]
+        [:h2 (if (:filter vm) "Nothing here yet" "No sessions yet")]
+        [:p "Start one in any place. It keeps working while you're away."]])
+     [:div.tail]]))
+
+(defn fab [] [:button.fab {:data-act "new" :data-key "fab"} (ui/icon :plus) [:span "New session"]])
+
+(defn header [vm]
+  (ui/header {:title "Work" :context (context-line vm) :mark {:online (:online vm)}
+              :actions (ui/act-button "commands" "Search and commands" :search)}))

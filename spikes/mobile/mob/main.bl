@@ -25,12 +25,16 @@
 (defn visit-pane [ed pane path goto]
   (c/effect ed {:kind :visit :pane pane :path path :goto goto}))
 (defn navigate [ed ev]
+  ;; The rail stays on the whole workspace: Work filters, Places and a place page
+  ;; are projections of it, so every screen sees every session.
   (let [screen (:screen ev) target (:path ev)]
     (cond-> (put ed :screen screen)
       (= screen "task") (put :tab "conversation")
       (and target (= screen "task")) (put :task-path target)
       (and target (= screen "task")) (visit-pane :task target nil)
-      (and target (contains? #{"places" "work"} screen)) (docs/visit target))))
+      (and target (= screen "place")) (put :place-id (if (starts-with? target "place:") (subs target 6) target))
+      (= screen "place") (put :place-tab (or (:tab ev) "sessions"))
+      (and target (= screen "work") (not= target (:path ed))) (docs/visit target))))
 (defn send-reply [ed answer]
   (let [d (task-data ed) text (or answer (draft ed))
         question (first (filter (fn [o] (= "omega/msg" (:type o))) (objects ed)))
@@ -65,9 +69,31 @@
       :else (-> ed (put :creating true)
                 (c/effect {:kind :intent :intent "task/open"
                            :args (cond-> {:goal goal :title (if (blank? (:title ev)) (compact-title goal) (:title ev)) :path (str "place:" id)}
+                                   (map? (:run ev)) (assoc :run (:run ev))
                                    (:selection (state ed))
                                    (assoc :selection (:selection (state ed)) :path (get-in (state ed) [:selection :path]) :cwd (str "@" id)))
                            :then :mobile-created})))))
+(defn quick-reply
+  "Answer from a Work card without opening the session: the question, a follow-up, or a steer."
+  [ed ev]
+  (let [text (trim (str (:text ev))) id (:task ev)
+        [op args] (cond (not (blank? (str (:msg ev)))) ["msg/answer" {:msg (:msg ev) :text text}]
+                        (contains? #{"done" "failed" "cancelled"} (:status ev))
+                        ["task/open" {:goal text :title (compact-title text) :path (str "place:" (:place ev)) :cwd (:cwd ev)}]
+                        :else ["task/say" {:id id :text text}])]
+    (if (or (blank? text) (blank? (str id))) ed
+      (-> ed (assoc-in [:pkg-state "mobile" :quick id] text)
+          (c/effect {:kind :intent :intent op :args args :then :mobile-quick})
+          (c/message "Sending…")))))
+(defn add-places
+  "One place per chosen repository; the host's place table stays the authority."
+  [ed ev]
+  (let [ps (vec (:places ev))]
+    (if (empty? ps) ed
+      (reduce (fn [ed p]
+                (c/effect ed {:kind :intent :intent "place/put" :then :mobile-place-added
+                              :args {:text (pr-str {:id (:id p) :name (:name p) :root (:root p) :directory :adopt})}}))
+              (-> ed (put :adding (count ps)) (put :added 0)) ps))))
 (defn choose-tab [ed ev]
   (if (and (:dirty ev) (:path ev) (not= (:path ev) (:current-file ev)))
     (c/message ed "Publish the file before opening another document. Your edits are retained.")
@@ -99,6 +125,8 @@
                             (c/effect {:kind :intent :intent "world/eval" :args {:code (:text ev)} :then :mobile-evaluated}))
     :mobile/new-field (assoc-in ed [:pkg-state "mobile" :new (:field ev)] (:value ev))
     :mobile/create (create-task ed ev)
+    :mobile/quick (quick-reply ed ev)
+    :mobile/add-places (add-places ed ev)
     :mobile/place-save (save-place ed ev)
     :mobile/draft (assoc-in ed [:pkg-state "mobile" :drafts (:path ed)] (:text ev))
     :mobile/send (send-reply ed (:answer ev))
@@ -114,9 +142,17 @@
     (and (:open-runtime (state ed)) (some (fn [name] (= name "runtime")) (pkg/names ed)))
       (-> ed (put :open-runtime false) (assoc-in [:pkg-state "runtime" :return] "mobile")
           (c/effect {:kind :frame-layout :layout "runtime-pocket" :keep {:rail :rail :task :task :file :file}}))
+    (and (= :intent-result (:type ev)) (= :mobile-place-added (:then ev)))
+    (let [done (inc (or (:added (state ed)) 0)) all (or (:adding (state ed)) 0)
+          ed (-> ed (put :added done) (cond-> (not (:ok? ev)) (c/message (str "Could not add a place: " (:message ev)))))]
+      (if (>= done all)
+        (-> ed (put :adding nil) (put :modal nil) (put :screen "places") (c/message (str "Added " all " place" (when-not (= all 1) "s") ".")))
+        ed))
+    (and (= :intent-result (:type ev)) (= :mobile-quick (:then ev)))
+    (if (:ok? ev) (c/message ed "Sent.") (c/message ed (str "Not sent: " (:message ev))))
     (and (= :intent-result (:type ev)) (= :mobile-place-saved (:then ev)))
     (let [ed (put ed :saving-place false)]
-      (if (:ok? ev) (-> ed (put :modal nil) (navigate {:screen "places" :path (get-in ev [:data :path])}))
+      (if (:ok? ev) (-> ed (put :modal nil) (cond-> (not= "place" (:screen (state ed))) (navigate {:screen "places"})))
           (c/message ed (str "Could not save place: " (:message ev)))))
     (and (= :intent-result (:type ev)) (= :mobile-evaluated (:then ev)))
     (-> ed (put :evaluating false) (put :eval-namespace (get-in ev [:data :namespace]))

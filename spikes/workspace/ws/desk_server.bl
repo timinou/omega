@@ -1,7 +1,7 @@
 ; Domain documents remain plain text plus typed provider objects.
 (ns ws.desk-server
   (:require [omega.task :as task] [omega.loop :as loop] [omega.env :as env] [omega.ui.model :as model] [place.model :as place] [links.model :as link]
-            [ws.server :as ws] [bl-ed.serve :as serve] [clojure.string :as str]))
+            [ws.server :as ws] [ws.next :as next] [ws.repos :as repos] [bl-ed.serve :as serve] [clojure.string :as str]))
 (defn- emit [d text object]
   (cond-> (update d :lines conj text) object (update :objects conj (assoc object :row (count (:lines d))))))
 (defn- finish [d data]
@@ -18,15 +18,17 @@
         d (emit d "* Places" nil)
         d (emit d "All places" {:type "desk/scope" :key "workspace:all" :title "All places" :active all? :depth 0})
         d (reduce (fn [d [id p]] (emit d (:name p) {:type "desk/scope" :key (str "workspace:" id) :place id :title (:name p)
-                                                  :root (place/root places id) :cwd (when-let [r (place/root places id)] (Path/expand (or (get-in (place/settings places id) [:cwd :value]) ".") r)) :settings (place/settings places id) :active (= scope id) :depth (inc (dec (count (place/ancestors places id))))}))
+                                                  :root (place/root places id) :branch (some-> (place/root places id) repos/head-branch) :cwd (when-let [r (place/root places id)] (Path/expand (or (get-in (place/settings places id) [:cwd :value]) ".") r)) :settings (place/settings places id) :active (= scope id) :depth (inc (dec (count (place/ancestors places id))))}))
                   d (sort-by (fn [[id _]] (str/join "/" (map :id (reverse (place/ancestors places id))))) places))
         d (reduce (fn [d [label rs]]
                     (if (empty? rs) d
                       (reduce (fn [d r] (emit d (str (:id r) " · " (name (:status r)) " · " (:title r) " · " (or (some-> (:asks r) first :text) (:result r) (:goal r)))
                         {:type "omega/task" :key (:id r) :title (:title r) :goal (:goal r) :status (name (:status r))
                          :place-name (get-in places [(:place r) :name]) :place (:place r) :home (:home r) :cwd (:cwd r) :folder (folder-address sys r) :artifacts (:artifacts (task-context-base sys (:id r)))
-                         :ask (some-> (:asks r) first :text)
-                         :summary (or (some-> (:asks r) first :text) (:result r) (:goal r))}))
+                         :ask (some-> (:asks r) first :text) :ask-id (some-> (:asks r) first :id)
+                         :age-ms (:age-ms r) :model (get-in r [:run :model]) :branch (get-in r [:run :branch])
+                         :proposals (when (= :idle (:status r)) (next/proposals (str (:result r))))
+                         :summary (or (some-> (:asks r) first :text) (some-> (:result r) str next/strip) (:goal r))}))
                         (emit d (str "* " label " (" (count rs) ")") nil) rs))) d groups)
         d (if (empty? rows) (emit d "No tasks here yet. Press n to start one." {:type "desk/empty" :key "empty"}) d)]
     (finish (emit d "n new task · Enter open · g f place" {:type "desk/hint" :key "hint"})
@@ -63,7 +65,12 @@
                                                 (ws/resolve-file roots (subs address 5))))
                                     (catch _ false))))
                         (distinct (keep :path artifacts)))]
-    {:desk "task" :task-id id :task-at (:at t) :task-title (:title t) :task-status (name (:status t)) :task-result (:result t)
+    {:desk "task" :task-id id :task-at (:at t) :task-title (:title t) :task-status (name (:status t)) :task-result (some-> (:result t) str next/strip)
+     :proposals (when (= :idle (:status t)) (next/proposals (str (:result t))))
+     :model (get-in t [:run :model]) :branch (get-in t [:run :branch]) :may (get-in t [:run :may]) :worktree (get-in t [:run :worktree])
+     :started-ms (when (:at t) (- (System/os_time :millisecond) (:at t)))
+     :age-ms (some-> (model/task-rows e [id]) first :age-ms)
+     :tokens (when-let [c (:cost t)] (+ (or (:input c) 0) (or (:output c) 0) (or (:cache-read c) 0)))
      :ask (some-> (model/task-rows e [id]) first :asks first :text)
      :place-name (get-in (place/all e) [(:place t) :name]) :place (:place t) :cwd (:cwd t) :folder (folder-address sys t) :home home
      :artifacts artifacts :changed-files (vec changed)}))

@@ -87,7 +87,7 @@
   [p req]
   (let [sys (vec (keep identity [(when (:identity p) {:type "text" :text (:identity p)})
                                  (when (:system req) {:type "text" :text (:system req)})]))]
-    (cond-> {:model (:model p)
+    (cond-> {:model (or (:model req) (:model p))
              :max_tokens (:max-tokens p)
              :messages (vec (map (fn [m] {:role (name (:role m))
                                           :content (vec (map block->wire (:content m)))})

@@ -1,0 +1,278 @@
+/* Pocket: the BL-rendered screens (mob.view). Snow-and-coffee tokens from the editor theme;
+   state carries colour, motion carries change. Older host fragments keep style.css. */
+.pocket {
+  --bg:var(--snow,#f7f3ee); --paper:var(--snow-2,#f1ebe3); --line:var(--oat,#e8dfd3); --edge:var(--latte,#d9c8b4);
+  --ink:var(--espresso,#3b2c24); --soft:var(--roast,#5a463b); --accent:var(--mocha,#a68a73);
+  --you:var(--apricot,#c4875a); --you-ink:#9c5c33; --you-bg:#f6e8dc;
+  --run:var(--sage,#7f9a7a); --run-ink:#55704f;
+  --fail:var(--rose,#c98f8c); --fail-ink:#a24d48;
+  --h-slate:var(--mist,#6e93a8); --h-sage:var(--sage,#7f9a7a); --h-clay:var(--apricot,#c4875a);
+  --h-plum:var(--lavender,#8e86ad); --h-ochre:var(--butter,#b39552); --h-mocha:var(--mocha,#a68a73);
+  --ease:cubic-bezier(.2,.8,.2,1); --spring:cubic-bezier(.32,.72,0,1);
+  font:15px/1.55 var(--font-text,system-ui,sans-serif); color:var(--ink); background:var(--bg);
+}
+.pocket * {box-sizing:border-box}
+/* Zero-specificity reset: host fragments (composer, reader) keep their own button styles. */
+:where(.pocket) :where(button) {font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;min-height:0;border-radius:0}
+.pocket :focus-visible {outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.pocket .mono {font-family:var(--font-code,ui-monospace,monospace)}
+.pocket .tiny {font-size:12px} .pocket .muted {color:var(--soft);opacity:.78} .pocket .pad {padding:16px}
+.pocket .icon {width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.pocket .icon.sm {width:15px;height:15px} .pocket .icon.filled {fill:currentColor}
+.pocket .kbd {font:12px var(--font-code,monospace);border:1px solid var(--edge);border-radius:6px;padding:1px 6px;color:var(--soft)}
+
+/* Header: identity, then context. The ω mark carries the connection. */
+.pocket .hdr {display:flex;align-items:center;gap:10px;min-height:56px;padding:max(6px,env(safe-area-inset-top)) 8px 6px 12px;border-bottom:1px solid var(--line);flex-shrink:0;background:var(--bg);position:relative;z-index:2}
+.pocket .hdr .mark {font:26px Georgia,serif;line-height:1;width:32px;height:44px;display:grid;place-items:center;position:relative}
+.pocket .hdr .conn {position:absolute;right:1px;bottom:9px;width:8px;height:8px;border-radius:50%;background:var(--run);box-shadow:0 0 0 2px var(--bg);transition:background .4s}
+.pocket .hdr .conn.off {background:var(--you);animation:pocket-blink 1.4s ease-in-out infinite}
+.pocket .hdr .back {width:40px;height:44px;display:grid;place-items:center;margin-left:-6px;border-radius:22px}
+.pocket .hdr .id {flex:1;min-width:0;animation:pocket-fade .28s var(--ease) both}
+.pocket .hdr .id b {display:block;font-weight:550;font-size:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pocket .hdr .id>span {display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--soft);white-space:nowrap;overflow:hidden}
+.pocket .hdr .id .sep {opacity:.45}
+.pocket .hdr .act {width:44px;height:44px;display:grid;place-items:center;border-radius:22px;transition:background .2s}
+.pocket .hdr .act:active,.pocket .hdr .back:active {background:var(--paper)}
+.pocket .hdr .kbd-act {width:auto;padding:0 6px}
+
+/* Place identity */
+.pocket .tile {width:22px;height:22px;border-radius:6px;display:inline-grid;place-items:center;font:600 11px var(--font-code,monospace);color:#fff;flex-shrink:0;letter-spacing:-.02em}
+.pocket .tile.lg {width:38px;height:38px;border-radius:10px;font-size:14px}
+.pocket .tile.xs {width:16px;height:16px;border-radius:4px;font-size:8px}
+.pocket .h-slate{background:var(--h-slate)} .pocket .h-sage{background:var(--h-sage)} .pocket .h-clay{background:var(--h-clay)}
+.pocket .h-plum{background:var(--h-plum)} .pocket .h-ochre{background:var(--h-ochre)} .pocket .h-mocha{background:var(--h-mocha)}
+
+/* State: needs-you is a warm diamond, running breathes, done recedes. */
+.pocket .st {display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;white-space:nowrap}
+.pocket .st i {width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.pocket .st.you {color:var(--you-ink)} .pocket .st.you i {background:var(--you);border-radius:1.5px;transform:rotate(45deg);animation:pocket-pop .5s var(--spring) both}
+.pocket .st.run {color:var(--run-ink)} .pocket .st.run i {background:var(--run);animation:pocket-pulse 1.6s ease-in-out infinite}
+.pocket .st.done,.pocket .st.cancel {color:var(--soft);opacity:.75} .pocket .st.done i,.pocket .st.cancel i {border:1.5px solid currentColor}
+.pocket .st.fail {color:var(--fail-ink)} .pocket .st.fail i {border:2px solid var(--fail)}
+
+/* Layout */
+.pocket.mobile-app {max-width:560px}
+.pocket .mobile-scroll {flex:1;min-height:0;overflow:auto;overscroll-behavior-y:contain;animation:pocket-enter .32s var(--ease) both}
+.pocket[data-screen=task] .mobile-scroll,.pocket[data-screen=place] .mobile-scroll {animation-name:pocket-push}
+.pocket .mobile-content {padding:0}
+.pocket.is-session .mobile-content {padding:4px 0 24px}
+.pocket.is-document .mobile-content,.pocket.is-machine .mobile-content,.pocket.is-host .mobile-content {padding:16px 18px 28px}
+.pocket.is-session .mobile-content>.task-body {padding:12px 16px}
+.pocket .sec {display:flex;justify-content:space-between;align-items:baseline;padding:20px 16px 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft)}
+.pocket .tail {height:120px}
+
+/* Filter chips */
+.pocket .filter,.pocket .place-chips {display:flex;gap:8px;padding:12px 16px 2px;overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent)}
+.pocket .filter::-webkit-scrollbar,.pocket .place-chips::-webkit-scrollbar {display:none}
+.pocket .chips {display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.pocket .chip {border:1px solid var(--edge);border-radius:999px;padding:5px 13px;font-size:13px;background:var(--bg);min-height:34px;display:inline-flex;align-items:center;gap:7px;flex-shrink:0;white-space:nowrap;transition:background .2s,border-color .2s,color .2s,transform .12s}
+.pocket .chip:active {transform:scale(.96)}
+.pocket .chip.primary {background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.pocket .chip.on {background:var(--paper);border-color:var(--accent);font-weight:500}
+.pocket .chip.ghost {border-color:transparent;color:var(--soft)}
+.pocket .chip:disabled {opacity:.4}
+
+/* Cards */
+.pocket .card {display:block;width:100%;text-align:left;padding:13px 16px 14px;border-bottom:1px solid var(--line);position:relative;cursor:pointer;animation:pocket-rise .42s var(--ease) both;transition:background .18s}
+.pocket .card:nth-child(2){animation-delay:30ms}.pocket .card:nth-child(3){animation-delay:60ms}.pocket .card:nth-child(4){animation-delay:90ms}.pocket .card:nth-child(5){animation-delay:120ms}.pocket .card:nth-child(n+6){animation-delay:150ms}
+.pocket .card:active {background:var(--paper)}
+.pocket .card.you::before {content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--you);transform-origin:top;animation:pocket-grow .5s var(--spring) .1s both}
+.pocket .card.is-fail::before {background:var(--fail)}
+.pocket .card .meta {display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--soft)}
+.pocket .card .meta .grow {flex:1} .pocket .card .time {opacity:.7}
+.pocket .card h3 {margin:5px 0 2px;font-size:16px;font-weight:500;line-height:1.35}
+.pocket .card p {margin:0;color:var(--soft);font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pocket .card .ask {margin-top:8px;padding:9px 11px;border-radius:9px;background:var(--you-bg);font-size:14px;line-height:1.45}
+.pocket .card .live {margin-top:6px;font:12.5px var(--font-code,monospace);color:var(--soft);display:flex;gap:6px;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pocket .card.is-done h3 {color:var(--soft)}
+.pocket details.done>summary {list-style:none;cursor:pointer} .pocket details.done>summary::-webkit-details-marker {display:none}
+.pocket .chev {display:inline-block;margin-left:6px;transition:transform .25s var(--ease)}
+.pocket details[open]>summary .chev {transform:rotate(180deg)}
+.pocket details[open]>summary~* {animation:pocket-fade .3s var(--ease) both}
+.pocket .empty {padding:56px 24px;text-align:center;color:var(--soft);animation:pocket-rise .5s var(--ease) both}
+.pocket .empty-mark {font:44px Georgia,serif;color:var(--edge);margin-bottom:6px}
+.pocket .empty h2 {font-size:18px;font-weight:500;color:var(--ink);margin:6px 0}
+
+/* Floating new-session button: shrinks to its mark while you scroll. */
+.pocket .fab {position:absolute;right:16px;bottom:calc(72px + env(safe-area-inset-bottom));height:52px;padding:0 20px 0 16px;border-radius:26px;background:var(--ink);color:var(--bg);display:flex;align-items:center;gap:8px;font-weight:500;box-shadow:0 8px 22px rgb(59 44 36 / .24);z-index:3;animation:pocket-fab .5s var(--spring) .15s both;transition:padding .3s var(--spring),gap .3s var(--spring),transform .15s}
+.pocket .fab span {max-width:140px;overflow:hidden;white-space:nowrap;transition:max-width .3s var(--spring),opacity .2s}
+.pocket.scrolled .fab {padding:0 14px;gap:0} .pocket.scrolled .fab span {max-width:0;opacity:0}
+.pocket .fab:active {transform:scale(.95)}
+
+/* Bottom navigation */
+.pocket .tabs {display:flex;border-top:1px solid var(--line);background:var(--paper);flex-shrink:0;padding:0 0 env(safe-area-inset-bottom);box-shadow:none;gap:0}
+.pocket .tabs button {flex:1;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11.5px;color:var(--soft);position:relative}
+.pocket .tabs button[aria-current] {color:var(--ink);font-weight:550}
+.pocket .tabs button::before {content:"";position:absolute;top:0;left:28%;right:28%;height:2px;background:var(--ink);border-radius:2px;transform:scaleX(0);transition:transform .35s var(--spring)}
+.pocket .tabs button[aria-current]::before {transform:scaleX(1)}
+.pocket .tabs .badge {position:absolute;top:7px;left:calc(50% + 6px);min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--you);color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:600;animation:pocket-pop .45s var(--spring) both}
+
+/* Segmented tabs (session, place) */
+.pocket .seg {display:flex;gap:22px;padding:0 16px;border-bottom:1px solid var(--line);flex-shrink:0;background:var(--bg)}
+.pocket .seg button {min-height:42px;font-size:14px;color:var(--soft);position:relative;display:flex;align-items:center;gap:4px}
+.pocket .seg button[aria-selected=true] {color:var(--ink);font-weight:550}
+.pocket .seg button::after {content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--ink);transform:scaleX(0);transition:transform .3s var(--spring)}
+.pocket .seg button[aria-selected=true]::after {transform:scaleX(1)}
+.pocket .seg .count {font-size:11px;color:var(--soft);font-weight:400;font-variant-numeric:tabular-nums}
+.pocket .tab-dot {width:6px;height:6px;border-radius:50%;background:var(--you);display:inline-block}
+
+/* Session state strip */
+.pocket .state {display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--line);min-height:44px;font-size:13.5px;background:var(--paper);flex-shrink:0;transition:background .4s}
+.pocket .state.is-you {background:var(--you-bg)}
+.pocket .state .grow {flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--soft)}
+.pocket .stop {min-height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--edge);font-size:13px;display:inline-flex;align-items:center;gap:6px;background:var(--bg);transition:transform .12s}
+.pocket .stop:active {transform:scale(.95)}
+.pocket .conversation-prompt {flex-shrink:0;height:26px;padding:3px 16px;border-bottom:1px solid var(--line);background:var(--bg);color:var(--soft);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Conversation */
+.pocket .msg {padding:14px 16px 4px;animation:pocket-rise .38s var(--ease) both;overflow-wrap:anywhere}
+.pocket .msg .who {display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--soft);margin-bottom:4px}
+.pocket .msg .copy {font-size:12px;color:var(--soft);opacity:0;transition:opacity .2s;min-height:28px;padding:0 4px}
+.pocket .msg:hover .copy,.pocket .msg:focus-within .copy {opacity:.8}
+@media(hover:none){.pocket .msg .copy {opacity:.55}}
+.pocket .msg.you .body {background:var(--paper);border-radius:12px;padding:10px 12px}
+.pocket .msg .body p {margin:0 0 8px;line-height:1.65}
+.pocket .msg.outcome .body {border-left:2px solid var(--run);padding-left:10px}
+.pocket details.tools {margin:6px 16px;border:1px solid var(--line);border-radius:11px;background:var(--bg);animation:pocket-rise .38s var(--ease) both;overflow:hidden}
+.pocket details.tools>summary {list-style:none;display:flex;gap:8px;align-items:center;padding:10px 12px;font-size:13.5px;color:var(--soft);cursor:pointer;min-height:44px}
+.pocket details.tools>summary::-webkit-details-marker {display:none}
+.pocket details.tools>summary .chev {margin:0;transition:transform .25s var(--ease)}
+.pocket details.tools[open]>summary .chev {transform:rotate(90deg)}
+.pocket details.tools .grow {flex:1;min-width:0}
+.pocket .tool {display:flex;gap:10px;padding:8px 12px;border-top:1px solid var(--line);font-size:13.5px;align-items:baseline}
+.pocket .tool .grow {flex:1;min-width:0}
+.pocket .tool code {display:block;font:11.5px var(--font-code,monospace);color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.pocket .tool.failed {background:var(--rose-bg,#f5e6e4)}
+.pocket .step-mark {font-size:12px;width:16px;text-align:center}
+.pocket .step-mark.ok {color:var(--run-ink)} .pocket .step-mark.bad {color:var(--fail-ink);font-weight:700} .pocket .step-mark.wait {color:var(--soft);animation:pocket-blink 1.2s infinite}
+.pocket details.raw {border-top:1px solid var(--line)} .pocket details.raw>summary {padding:8px 12px;font-size:12.5px;color:var(--soft);cursor:pointer}
+.pocket .raw-step {padding:0 12px 8px} .pocket .raw-step pre {font:11.5px/1.6 var(--font-code,monospace);white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0;background:var(--paper);padding:8px;border-radius:6px}
+.pocket .raw-step pre.out {border-left:2px solid var(--run);background:none}
+.pocket .working {display:flex;gap:5px;padding:14px 18px}
+.pocket .working i {width:6px;height:6px;border-radius:50%;background:var(--run);animation:pocket-typing 1.2s infinite both}
+.pocket .working i:nth-child(2){animation-delay:.15s}.pocket .working i:nth-child(3){animation-delay:.3s}
+.pocket .next {margin:12px 16px 16px;padding:13px 14px;border-radius:13px;border:1px solid var(--edge);background:var(--bg);box-shadow:0 2px 0 var(--line);animation:pocket-rise .45s var(--spring) .05s both}
+.pocket .next .q {font-weight:500;line-height:1.45}
+.pocket .next .hint {font-size:12px;color:var(--soft);margin-top:2px}
+.pocket .composer {padding:10px 12px max(10px,env(safe-area-inset-bottom));gap:10px}
+.pocket .composer textarea {border-radius:12px;background:var(--paper);border-color:var(--edge);padding:11px 12px;font-size:15px}
+.pocket .composer .send-button {border-radius:22px}
+
+/* Sheets */
+.pocket .scrim {position:absolute;inset:0;background:rgb(59 44 36 / .28);display:flex;align-items:flex-end;z-index:10;animation:pocket-fade .25s ease both}
+.pocket .sheet {width:100%;background:var(--bg);border-radius:18px 18px 0 0;box-shadow:0 -10px 30px rgb(59 44 36 / .18);max-height:88%;display:flex;flex-direction:column;position:relative;padding:0 0 env(safe-area-inset-bottom);animation:pocket-sheet .42s var(--spring) both;overflow:hidden}
+.pocket .sheet .grab {width:36px;height:4px;border-radius:2px;background:var(--edge);margin:8px auto 2px;flex-shrink:0}
+.pocket .sheet-close {position:absolute;top:8px;right:8px;width:40px;height:40px;display:grid;place-items:center;border-radius:20px;color:var(--soft)}
+.pocket .sheet h2 {font-size:18px;font-weight:550;margin:8px 56px 6px 16px;font-family:inherit}
+.pocket .sheet-scroll {flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+.pocket .field {margin:8px 16px;border:1px solid var(--edge);border-radius:12px;background:var(--paper);display:flex;align-items:center;gap:8px;padding:0 12px;min-height:46px;flex-shrink:0;transition:border-color .2s,box-shadow .2s}
+.pocket .field:focus-within {border-color:var(--accent);box-shadow:0 0 0 3px rgb(166 138 115 / .15)}
+.pocket .field input {flex:1;border:0;background:none;font:inherit;color:inherit;outline:none;padding:10px 0;min-height:0;width:auto}
+.pocket .field .mode {font:13px var(--font-code,monospace);color:var(--soft);width:16px;text-align:center}
+.pocket .btn {min-height:46px;padding:0 18px;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:500;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:opacity .2s,transform .12s}
+.pocket .btn:active {transform:scale(.98)} .pocket .btn:disabled {opacity:.35}
+.pocket .btn.ghost {background:none;color:var(--ink);border:1px solid var(--edge)}
+.pocket .row {display:flex;align-items:center;gap:12px;padding:10px 16px;min-height:56px;width:100%;text-align:left}
+.pocket .row+.row,.pocket .group-h+.row {border-top:1px solid var(--line)}
+.pocket .row .grow {flex:1;min-width:0}
+.pocket .row .grow b {display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pocket .row .grow>span {display:block;font-size:12.5px;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pocket .row.danger {color:var(--fail-ink)}
+.pocket .facts {margin:0;padding:2px 16px 10px} .pocket .facts dt {font-size:12px;color:var(--soft);margin-top:12px} .pocket .facts dd {margin:2px 0 0}
+.pocket .group-h {padding:14px 16px 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);display:flex;justify-content:space-between}
+.pocket .pick {cursor:pointer;transition:background .15s} .pocket .pick:active {background:var(--paper)}
+.pocket .pick.added {opacity:.5;cursor:default}
+.pocket .check {width:22px;height:22px;border-radius:7px;border:1.5px solid var(--edge);display:grid;place-items:center;flex-shrink:0;transition:background .2s,border-color .2s}
+.pocket .pick.on .check,.pocket .pick.added .check {background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.pocket .pick.on .check .icon {animation:pocket-pop .35s var(--spring) both}
+.pocket .parent {color:var(--soft);font-weight:400}
+.pocket .foot {padding:10px 16px 12px;border-top:1px solid var(--line);display:flex;gap:10px;flex-shrink:0}
+.pocket .foot .btn:last-child {flex:1}
+.pocket .loading {display:flex;gap:6px;justify-content:center;padding:32px}
+.pocket .loading i {width:7px;height:7px;border-radius:50%;background:var(--edge);animation:pocket-typing 1.2s infinite both}
+.pocket .loading i:nth-child(2){animation-delay:.15s}.pocket .loading i:nth-child(3){animation-delay:.3s}
+
+/* Places */
+.pocket .place {display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);width:100%;text-align:left;animation:pocket-rise .4s var(--ease) both;transition:background .18s}
+.pocket .place:active {background:var(--paper)}
+.pocket .place .grow {flex:1;min-width:0} .pocket .place b {font-weight:500;display:block}
+.pocket .place .grow>span {font-size:12.5px;color:var(--soft);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pocket .counts {display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:12.5px}
+.pocket .add-row {display:flex;gap:10px;align-items:center;padding:16px;color:var(--soft);width:100%}
+.pocket .ident {display:flex;gap:12px;align-items:center;padding:16px 16px 12px}
+.pocket .ident .sub {font-size:12.5px;color:var(--soft);display:flex;gap:6px;flex-wrap:wrap}
+.pocket .starter {margin:12px 16px 4px;display:flex;align-items:center;gap:10px;padding:13px 14px;border:1px dashed var(--edge);border-radius:13px;background:var(--paper);color:var(--soft);width:calc(100% - 32px);text-align:left;transition:border-color .2s,color .2s}
+.pocket .starter:active {border-color:var(--accent);color:var(--ink)}
+.pocket .crumbs {padding:10px 16px;font:12.5px var(--font-code,monospace);color:var(--soft)}
+.pocket .file {display:flex;align-items:center;gap:10px;padding:9px 16px;min-height:46px;border-bottom:1px solid var(--line);width:100%;text-align:left}
+.pocket .file .grow {flex:1;min-width:0;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pocket .gs {font:600 11px var(--font-code,monospace)} .pocket .gs.m {color:var(--h-ochre)} .pocket .gs.a {color:var(--run-ink)}
+.pocket .settings {padding:4px 0}
+.pocket details.setting,.pocket .setting-link {border-bottom:1px solid var(--line);display:block;width:100%;text-align:left}
+.pocket details.setting>summary,.pocket .setting-link {list-style:none;display:flex;align-items:center;gap:10px;padding:13px 16px;cursor:pointer;min-height:56px}
+.pocket details.setting>summary::-webkit-details-marker {display:none}
+.pocket .setting .label,.pocket .setting-link .label {flex:1;font-size:14px}
+.pocket .setting .value,.pocket .setting-link .value {color:var(--soft);font-size:13.5px}
+.pocket details.setting[open]>summary .chev {transform:rotate(90deg)}
+.pocket details.setting .chips {padding:0 16px 14px;margin:0}
+
+/* Launch */
+.pocket.is-launch {display:flex;flex-direction:column}
+.pocket .launch {flex:1;overflow:auto;animation:pocket-sheet .45s var(--spring) both}
+.pocket .where {padding:4px 16px 0;font:12px var(--font-code,monospace);color:var(--soft)}
+.pocket textarea.goal {display:block;width:calc(100% - 32px);margin:14px 16px 0;min-height:140px;border:0;outline:none;resize:none;background:none;font:19px/1.5 var(--font-text,system-ui);color:var(--ink);padding:0;field-sizing:content}
+.pocket textarea.goal::placeholder {color:var(--accent);opacity:.8}
+.pocket .attach {display:flex;gap:8px;padding:8px 16px;flex-wrap:wrap}
+.pocket .refs {display:flex;gap:8px;padding:6px 16px 0;flex-wrap:wrap}
+.pocket .ref {display:inline-flex;align-items:center;gap:6px;background:var(--paper);border-radius:8px;padding:4px 4px 4px 8px;font-size:13px;animation:pocket-pop .3s var(--spring) both}
+.pocket .ref button {width:24px;height:24px;border-radius:12px;color:var(--soft)}
+.pocket details.run {margin:8px 16px 16px;border-top:1px solid var(--line);padding-top:8px}
+.pocket details.run>summary {list-style:none;display:flex;align-items:center;gap:8px;min-height:42px;font-size:13.5px;color:var(--soft);cursor:pointer}
+.pocket details.run>summary::-webkit-details-marker {display:none}
+.pocket details.run .sum {flex:1}
+.pocket details.run .edit {font-size:12.5px;text-decoration:underline;text-underline-offset:3px}
+.pocket details.run[open] .edit {opacity:0}
+.pocket .opt {margin:10px 0 4px} .pocket .opt label {font-size:12px;color:var(--soft);display:block;margin-bottom:6px}
+.pocket .opt .chips {margin-top:0} .pocket .opt .hint {font-size:12px;color:var(--soft);margin-top:6px;opacity:.85}
+.pocket .go {padding:10px 16px max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-shrink:0;background:var(--bg)}
+.pocket .go .btn {flex:1}
+
+/* Buffers and palette */
+.pocket .tool-grid {display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:4px 16px}
+.pocket .tool-tile {border:1px solid var(--line);border-radius:13px;padding:12px 10px;text-align:left;background:var(--paper);min-height:88px;display:flex;flex-direction:column;justify-content:space-between;transition:transform .15s,border-color .2s;animation:pocket-rise .4s var(--ease) both}
+.pocket .tool-tile:active {transform:scale(.97);border-color:var(--accent)}
+.pocket .tool-tile .glyph {font:21px var(--font-code,monospace)}
+.pocket .tool-tile b {font-weight:550;font-size:14px;display:block} .pocket .tool-tile span span {font-size:11.5px;color:var(--soft)}
+.pocket .buf-row {display:flex;align-items:center;border-bottom:1px solid var(--line)}
+.pocket .buf {flex:1;min-width:0;display:flex;align-items:center;gap:12px;padding:10px 0 10px 16px;min-height:54px;text-align:left}
+.pocket .buf .grow {flex:1;min-width:0} .pocket .buf b {display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pocket .buf .grow>span {font-size:12px;color:var(--soft)}
+.pocket .pin {width:48px;height:48px;display:grid;place-items:center;color:var(--soft)}
+.pocket .pin[aria-pressed=true] {color:var(--you)}
+.pocket .sheet-commands {max-height:92%;min-height:60%}
+.pocket .cmd {display:flex;align-items:center;gap:12px;padding:8px 16px;min-height:50px;width:100%;text-align:left;transition:background .12s}
+.pocket .cmd.sel {background:var(--paper)}
+.pocket .cmd .grow {flex:1;min-width:0} .pocket .cmd b {font-weight:500;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pocket .cmd .grow>span {font-size:12px;color:var(--soft);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pocket .lisp {padding:0 16px 16px} .pocket .lisp pre {font:13px/1.6 var(--font-code,monospace);white-space:pre-wrap;margin:6px 0}
+.pocket .lisp .res {font:13px var(--font-code,monospace);color:var(--run-ink);animation:pocket-fade .3s both}
+.pocket .hintbar {display:flex;gap:14px;padding:8px 16px 10px;border-top:1px solid var(--line);font-size:12px;color:var(--soft);flex-wrap:wrap;flex-shrink:0}
+
+.pocket .notice {position:absolute;left:16px;right:16px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:4;background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 14px;font-size:13.5px;box-shadow:0 8px 24px rgb(59 44 36 / .25);animation:pocket-toast .4s var(--spring) both;max-height:30%;overflow:auto}
+.pocket.is-session .notice,.pocket.is-launch .notice {bottom:calc(84px + env(safe-area-inset-bottom))}
+.pocket .fab~.notice {bottom:calc(136px + env(safe-area-inset-bottom))}
+
+@keyframes pocket-enter {from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes pocket-push {from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@keyframes pocket-rise {from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes pocket-fade {from{opacity:0}to{opacity:1}}
+@keyframes pocket-sheet {from{transform:translateY(100%)}to{transform:none}}
+@keyframes pocket-toast {from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes pocket-grow {from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes pocket-pop {0%{opacity:0;scale:.4}70%{scale:1.15}100%{opacity:1;scale:1}}
+@keyframes pocket-fab {from{opacity:0;transform:translateY(24px) scale(.9)}to{opacity:1;transform:none}}
+@keyframes pocket-pulse {50%{opacity:.35;transform:scale(.7)}}
+@keyframes pocket-blink {50%{opacity:.35}}
+@keyframes pocket-typing {0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+@media(min-width:700px){.pocket.mobile-app {border-inline:1px solid var(--line)}}
+@media(prefers-reduced-motion:reduce){.pocket *,.pocket.mobile-app {animation:none!important;transition:none!important}}

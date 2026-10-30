@@ -1,0 +1,69 @@
+; Pocket's screens composed from plain view data. The host supplies models, local
+; preferences and any host-formatted fragments (:body-html, :composer-html, :sheet-html).
+(ns mob.view (:require [mob.html :as h] [mob.status :as st] [mob.chrome :as ui] [mob.inbox :as inbox]
+                       [mob.session :as session] [mob.launch :as launch] [mob.places :as places]
+                       [mob.buffers :as buffers]))
+
+(defn- needs [vm] (count (filter (fn [t] (= "needs" (st/section t))) (:tasks vm))))
+(defn- raw [x] (when x (h/raw x)))
+
+(defn- notice [vm]
+  (when (:notice vm) [:div.notice {:role "status" :data-key "notice"} (:notice vm)]))
+
+(defn- sheet-frame [vm id content]
+  [:div.scrim {:data-act "dismiss" :data-key (str "scrim-" id)}
+   [:section {:class ["sheet" (str "sheet-" id)] :role "dialog" :aria-modal "true" :aria-label id :data-key (str "sheet:" id)}
+    [:div.grab {:aria-hidden "true"}]
+    [:button.sheet-close {:data-act "dismiss" :aria-label "Close dialog"} (ui/icon :close)]
+    content]])
+
+(defn sheet [vm]
+  (case (:modal vm)
+    nil nil
+    "details" (sheet-frame vm "details" (session/details-sheet vm (:session vm)))
+    "add-places" (sheet-frame vm "add-places" (places/add-sheet vm))
+    "commands" (sheet-frame vm "commands" (buffers/palette vm))
+    (when (:sheet-html vm) (raw (:sheet-html vm)))))
+
+(defn- generic-header [vm title]
+  (ui/header {:key "generic-hdr" :title title :back {:act "buffers" :label "Back to Buffers"}
+              :actions (ui/palette-button)}))
+
+(defn- frame [vm {:keys [header before body after nav fab class]}]
+  [:div {:class ["mobile-app" "pocket" class (when (:modal vm) "has-sheet") (when (:scrolled vm) "scrolled")] :data-screen (:screen vm)}
+   header before
+   [:main.mobile-scroll {:data-key (str "content-" (:screen vm))}
+    (raw (:aside-html vm))
+    [:div.mobile-content body]]
+   after fab (notice vm)
+   (when nav (ui/tabs nav (needs vm)))
+   (sheet vm)])
+
+(defn tree
+  "The whole app as hiccup; mob.html or the host serializes it."
+  [vm]
+  (condp = (if (contains? #{"document" "machine" "host"} (:screen vm)) "generic" (:screen vm))
+     "launch" [:div {:class ["mobile-app" "pocket" "is-launch" (when (:modal vm) "has-sheet")] :data-screen "launch"}
+               (launch/screen vm) (notice vm) (sheet vm)]
+     "task" (let [d (:session vm)]
+              (frame vm {:class "is-session"
+                         :header (session/header vm d)
+                         :before (list (session/tabs vm d)
+                                       (when (= "conversation" (or (:tab vm) "conversation")) (session/strip vm d))
+                                       (when (:prompt-strip vm) [:div.conversation-prompt {:data-key "conversation-prompt" :aria-label "Current user message" :hidden true}]))
+                         :body (if (and (= "conversation" (or (:tab vm) "conversation")) (not (:body-html vm)))
+                                 (session/conversation vm d) (raw (:body-html vm)))
+                         :after (raw (:composer-html vm))}))
+     "places" (frame vm {:header (places/list-header vm) :body (places/list-body vm) :nav "places"})
+     "place" (let [p (:place vm)]
+               (frame vm {:header (places/place-header vm p) :body (places/place-body vm p) :nav "places"}))
+     "buffers" (frame vm {:header (buffers/header vm) :body (buffers/body vm) :nav "buffers"})
+     "generic" (frame vm {:header (generic-header vm (:title vm)) :body (raw (:body-html vm)) :nav "buffers"
+                                             :class (str "is-" (:screen vm))})
+     (frame vm {:header (inbox/header vm) :body (inbox/body vm) :fab (inbox/fab) :nav "work" :class "is-work"})))
+
+(defn render [vm] (h/html (tree vm)))
+
+(defn launch-args [vm] (launch/launch-args vm))
+(defn palette-count [vm] (count (buffers/entries vm (str (:palette-query vm)))))
+(defn model-name [id] (launch/model-name id))
