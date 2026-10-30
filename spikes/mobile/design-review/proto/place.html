@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Place</title><link rel="stylesheet" href="kit.css">
+<style>
+  .ident { display:flex; gap:12px; align-items:center; padding:16px 16px 12px; }
+  .ident h1 { margin:0; font-size:22px; font-weight:550; }
+  .ident .sub { font-size:12.5px; color:var(--roast); display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .starter { margin:12px 16px 4px; display:flex; align-items:center; gap:10px; padding:12px 14px; border:1px solid var(--latte);
+    border-radius:12px; background:var(--snow-2); color:var(--roast); width:calc(100% - 32px); text-align:left; }
+  .pane { display:none; } .pane.on { display:block; }
+  .file { display:flex; align-items:center; gap:10px; padding:9px 16px; min-height:44px; border-bottom:1px solid var(--oat); }
+  .file .grow { flex:1; min-width:0; font-size:14.5px; }
+  .gs { font:600 11px var(--font-code); width:16px; text-align:center; }
+  .gs.m { color:var(--ochre); } .gs.a { color:var(--sage); }
+  dl { margin:0; padding:8px 16px; } dt { font-size:12px; color:var(--roast); margin-top:14px; }
+  dd { margin:4px 0 0; display:flex; justify-content:space-between; align-items:center; }
+  .crumbs { padding:8px 16px; font:12.5px var(--font-code); color:var(--roast); }
+</style></head>
+<body>
+<div class="app">
+  <header class="hdr">
+    <a class="back" href="places.html" aria-label="Back to Places"><svg class="icon" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></a>
+    <div class="id"><b>omega</b><span class="mono">~/projects/omega</span></div>
+    <button class="act" aria-label="Pin"><svg class="icon" viewBox="0 0 24 24"><path d="m12 4 2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 16.2 7 19l1.2-5.6L4 9.6 9.6 9z" fill="currentColor"/></svg></button>
+  </header>
+  <div class="scroll">
+    <div class="ident">
+      <span class="tile lg h-slate">om</span>
+      <div><div class="sub"><span class="mono">⎇ main</span><span>· 2 changed</span><span>· last commit 13 days ago</span></div></div>
+    </div>
+    <div class="seg" role="tablist">
+      <button role="tab" aria-selected="true" data-p="s">Sessions<span class="count">5</span></button>
+      <button role="tab" aria-selected="false" data-p="f">Files</button>
+      <button role="tab" aria-selected="false" data-p="t">Settings</button>
+    </div>
+
+    <div class="pane on" id="s">
+      <a class="starter" href="launch.html"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Start a session in omega…</a>
+      <div class="sec"><span>Active</span></div>
+      <a class="card you" href="session.html"><div class="meta"><span class="st you"><i></i>Your turn</span><span>· 2m</span></div><h3>Add notifications to the Android app</h3><p>Rebuild and sign the 0.1.2 APK now?</p></a>
+      <a class="card" href="session.html"><div class="meta"><span class="st run"><i></i>Running</span><span>· 1m</span></div><h3>Explain how Places resolve their cwd</h3></a>
+      <div class="sec"><span>Earlier</span></div>
+      <a class="card" href="session.html"><div class="meta"><span class="st done"><i></i>Done</span><span>· 2d</span></div><h3>Compact Pocket session layout</h3></a>
+      <a class="card" href="session.html"><div class="meta"><span class="st done"><i></i>Done</span><span>· 4d</span></div><h3>Pin the user prompt in the session header</h3></a>
+    </div>
+
+    <div class="pane" id="f">
+      <div class="crumbs">omega /</div>
+      <div class="file"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span class="grow">spikes</span><span class="gs m">M</span></div>
+      <div class="file"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span class="grow">src</span><span class="gs"></span></div>
+      <div class="file"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span class="grow">research</span><span class="gs"></span></div>
+      <div class="file"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span class="grow">vendor</span><span class="gs"></span></div>
+      <div class="file"><svg class="icon" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/></svg><span class="grow">AGENTS.md</span><span class="tiny muted">read by every session</span></div>
+      <div class="file"><svg class="icon" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/></svg><span class="grow">README.md</span><span class="gs a">A</span></div>
+      <div class="file"><svg class="icon" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/></svg><span class="grow">omega.bl.md</span><span class="gs"></span></div>
+      <div class="file muted"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span class="grow">!sessions · !tasks</span><span class="tiny">omega data</span></div>
+    </div>
+
+    <div class="pane" id="t">
+      <dl>
+        <dt>Default model</dt><dd><span>Opus 5.5</span><span class="muted">›</span></dd>
+        <dt>New sessions may</dt><dd><span>Edit files, run commands</span><span class="muted">›</span></dd>
+        <dt>Work on</dt><dd><span>The checkout (main)</span><span class="muted">›</span></dd>
+        <dt>Notify me when</dt><dd><span>It needs me · it finishes</span><span class="muted">›</span></dd>
+        <dt>Instructions</dt><dd><span class="mono">AGENTS.md</span><span class="muted">›</span></dd>
+      </dl>
+    </div>
+    <div style="height:40px"></div>
+  </div>
+  <nav class="tabs">
+    <button onclick="location='inbox.html'"><svg class="icon" viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M4 13l2-8h12l2 8v6H4z"/></svg>Work<span class="badge">2</span></button>
+    <button aria-current="page" onclick="location='places.html'"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Places</button>
+    <button onclick="location='open.html'"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Open</button>
+  </nav>
+</div>
+<script>
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-selected', x === b));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === b.dataset.p));
+});
+const want = location.hash.slice(1); if (want) document.querySelector(`.seg [data-p="${want}"]`)?.click();
+</script>
+</body></html>

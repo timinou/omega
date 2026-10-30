@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Android shell</title><link rel="stylesheet" href="kit.css">
+<style>
+  .sb { height:28px; background:var(--snow); display:flex; justify-content:space-between; align-items:center; padding:0 18px; font:600 12.5px var(--font-text); flex-shrink:0; }
+  .markbtn { position:relative; width:36px; height:44px; display:grid; place-items:center; font:26px Georgia,serif; }
+  .markbtn .conn { position:absolute; right:3px; bottom:10px; width:8px; height:8px; border-radius:50%; background:var(--sage); box-shadow:0 0 0 2px var(--snow); }
+  .offline .markbtn .conn { background:var(--clay); }
+  .banner { display:none; padding:10px 16px; background:var(--snow-2); border-bottom:1px solid var(--oat); font-size:13.5px; gap:10px; align-items:center; }
+  .offline .banner { display:flex; }
+  .banner .grow { flex:1; color:var(--roast); }
+  .server dl { margin:0; padding:4px 16px; } .server dt { font-size:12px; color:var(--roast); margin-top:12px; } .server dd { margin:2px 0 0; }
+  .ghost-list .card { pointer-events:none; }
+</style></head>
+<body>
+<div class="app" id="app">
+  <div class="sb"><span>18:42</span><span>▴ ◔ 82%</span></div>
+  <header class="hdr" style="padding-left:6px">
+    <button class="markbtn" aria-label="Connection: Work, connected" onclick="app.classList.add('open')">ω<span class="conn"></span></button>
+    <div class="id"><b>Work</b><span>4 places · <span class="st run"><i></i>2 running</span></span></div>
+    <button class="act" aria-label="Commands"><span class="kbd">⌘K</span></button>
+  </header>
+  <div class="banner"><span class="st fail"><i></i></span><span class="grow">Can't reach Work. Is Tailscale on?</span><button class="chip" onclick="app.classList.remove('offline')">Retry</button></div>
+  <div class="scroll ghost-list">
+    <div class="sec"><span>Needs you</span><span>2</span></div>
+    <div class="card you"><div class="meta"><span class="tile h-slate">om</span><span>omega</span><span class="grow"></span><span class="st you"><i></i>Your turn</span></div><h3>Add notifications to the Android app</h3></div>
+    <div class="card you"><div class="meta"><span class="tile h-sage">bl</span><span>beam-lisp</span><span class="grow"></span><span class="st fail"><i></i>Failed</span></div><h3>Port the reader macros to the new compiler</h3></div>
+    <div class="sec"><span>Running</span><span>2</span></div>
+    <div class="card"><div class="meta"><span class="tile h-clay">ow</span><span>ora-website</span><span class="grow"></span><span class="st run"><i></i>Running</span></div><h3>Tighten the hero copy and fix mobile spacing</h3></div>
+  </div>
+  <nav class="tabs">
+    <button aria-current="page"><svg class="icon" viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M4 13l2-8h12l2 8v6H4z"/></svg>Work<span class="badge">2</span></button>
+    <button><svg class="icon" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Places</button>
+    <button><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Open</button>
+  </nav>
+  <div class="scrim" onclick="app.classList.remove('open')"></div>
+  <section class="sheet server" role="dialog" aria-label="Connection">
+    <div class="grab"></div>
+    <h2>Work</h2>
+    <dl>
+      <dt>Connected to</dt><dd class="mono small">work.tailcb5318.ts.net:18001</dd>
+      <dt>Status</dt><dd><span class="st run"><i></i>Live · 34 ms</span></dd>
+      <dt>Notifications</dt><dd>On · your turn, finished, failed</dd>
+      <dt>App</dt><dd class="small">Pocket 0.1.2 · server build 6977aaf</dd>
+    </dl>
+    <button class="row"><span class="grow"><b>Reload</b></span></button>
+    <button class="row" onclick="app.classList.remove('open');app.classList.add('offline')"><span class="grow"><b>Change server…</b><span>Simulate: shows the offline banner</span></span></button>
+    <div style="height:16px"></div>
+  </section>
+</div>
+<script>if (location.hash === '#server') app.classList.add('open'); if (location.hash === '#offline') app.classList.add('offline');</script>
+</body></html>

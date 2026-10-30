@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Launch a session</title><link rel="stylesheet" href="kit.css">
+<style>
+  .places { display:flex; gap:8px; padding:12px 16px 4px; overflow-x:auto; scrollbar-width:none; }
+  .places .chip { flex-shrink:0; }
+  .where { padding:2px 16px 0; font:12px var(--font-code); color:var(--roast); }
+  textarea.goal { display:block; width:calc(100% - 32px); margin:14px 16px 0; min-height:150px; border:0; outline:none; resize:none;
+    background:none; font:18px/1.5 var(--font-text); color:var(--espresso); }
+  textarea.goal::placeholder { color:var(--mocha); }
+  .attach { display:flex; gap:8px; padding:8px 16px; }
+  .run { margin:6px 16px 0; border-top:1px solid var(--oat); padding-top:10px; }
+  .run summary { list-style:none; display:flex; align-items:center; gap:8px; min-height:40px; font-size:13.5px; color:var(--roast); cursor:pointer; }
+  .run summary::-webkit-details-marker { display:none; }
+  .run summary .dot { opacity:.5; }
+  .run summary .edit { margin-left:auto; font-size:12.5px; text-decoration:underline; text-underline-offset:3px; }
+  .opt { margin:10px 0 4px; }
+  .opt label { font-size:12px; color:var(--roast); display:block; margin-bottom:6px; }
+  .opt .chips { margin-top:0; }
+  .opt .hint { font-size:12px; color:var(--roast); margin-top:6px; opacity:.8; }
+  .go { padding:10px 16px calc(12px + env(safe-area-inset-bottom)); border-top:1px solid var(--oat); display:flex; gap:12px; align-items:center; }
+  .go .btn { flex:1; }
+</style></head>
+<body>
+<div class="app">
+  <header class="hdr">
+    <a class="back" href="inbox.html" aria-label="Close"><svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
+    <div class="id"><b>New session</b></div>
+  </header>
+  <div class="scroll">
+    <div class="places" role="radiogroup" aria-label="Place">
+      <button class="chip on" role="radio" aria-checked="true"><span class="tile h-slate">om</span>omega</button>
+      <button class="chip" role="radio"><span class="tile h-sage">bl</span>beam-lisp</button>
+      <button class="chip" role="radio"><span class="tile h-clay">ow</span>ora-website</button>
+      <button class="chip" role="radio"><span class="tile h-mocha">~</span>home</button>
+      <a class="chip" href="places.html#add">Other…</a>
+    </div>
+    <div class="where">~/projects/omega · reads AGENTS.md</div>
+    <textarea class="goal" placeholder="What should happen?">Rebuild the Pocket APK with notifications and record the SHA-256 receipt</textarea>
+    <div class="attach">
+      <button class="chip">＋ File</button><button class="chip">＋ Selection</button><button class="chip">＋ Session</button>
+    </div>
+
+    <details class="run" id="run">
+      <summary><svg class="icon" style="width:16px;height:16px" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        <span id="sum">Opus 5.5 <span class="dot">·</span> on main <span class="dot">·</span> can edit &amp; run</span><span class="edit">Change</span></summary>
+      <div class="opt"><label>Model</label><div class="chips" data-k="m">
+        <button class="chip on">Opus 5.5</button><button class="chip">Sonnet 5.5</button><button class="chip">Haiku 5.5</button></div></div>
+      <div class="opt"><label>Work on</label><div class="chips" data-k="w">
+        <button class="chip on">main</button><button class="chip">New worktree</button></div>
+        <div class="hint">A worktree keeps this session's edits off your checkout until you merge.</div></div>
+      <div class="opt"><label>May</label><div class="chips" data-k="p">
+        <button class="chip">Only read</button><button class="chip">Edit</button><button class="chip on">Edit &amp; run</button></div></div>
+      <div class="opt"><label>Tell me when</label><div class="chips" data-k="n">
+        <button class="chip on">It needs me</button><button class="chip on">It finishes</button></div></div>
+    </details>
+  </div>
+  <div class="go">
+    <span class="tiny muted">Title comes from the goal</span>
+    <a class="btn" href="session.html">Start <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+  </div>
+</div>
+<script>
+const label = { m:x=>x, w:x=>x==='main'?'on main':'in a worktree', p:x=>({ 'Only read':'read-only','Edit':'can edit','Edit & run':'can edit & run'})[x] };
+function sum() {
+  const v = k => document.querySelector(`[data-k="${k}"] .on`)?.textContent;
+  document.getElementById('sum').innerHTML = ['m','w','p'].map(k=>label[k](v(k))).join(' <span class="dot">·</span> ');
+}
+document.querySelectorAll('[data-k]').forEach(g => g.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+  if (g.dataset.k === 'n') c.classList.toggle('on');
+  else { g.querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); }
+  sum();
+}));
+document.querySelectorAll('.places .chip[role=radio]').forEach(c => c.onclick = () => {
+  document.querySelectorAll('.places .chip[role=radio]').forEach(x=>x.classList.remove('on')); c.classList.add('on');
+  document.querySelector('.where').textContent = c.textContent.trim()==='home' ? '~ · folder' : `~/projects/${c.textContent.trim()} · reads AGENTS.md`;
+});
+if (location.hash === '#run') document.getElementById('run').open = true;
+</script>
+</body></html>

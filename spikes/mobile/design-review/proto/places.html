@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Places and picker</title><link rel="stylesheet" href="kit.css">
+<style>
+  .place { display:flex; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--oat); width:100%; text-align:left; }
+  .place .grow { flex:1; min-width:0; }
+  .place b { font-weight:500; display:block; }
+  .place span { font-size:12.5px; color:var(--roast); }
+  .place .act-n { font-size:12.5px; text-align:right; }
+  .add-row { display:flex; gap:10px; align-items:center; padding:14px 16px; color:var(--roast); width:100%; }
+  .group { padding:14px 16px 4px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--roast); display:flex; justify-content:space-between; }
+  .picker .row { cursor:pointer; }
+  .picker .row.added { opacity:.5; cursor:default; }
+  .picker .row .grow .parent { display:inline; color:var(--roast); font-weight:400; font-size:inherit; }
+  .foot { padding:10px 16px calc(12px + env(safe-area-inset-bottom)); border-top:1px solid var(--oat); display:flex; gap:10px; align-items:center; }
+  .foot .btn { flex:1; }
+  .kind { font:11px var(--font-code); border:1px solid var(--latte); border-radius:5px; padding:0 5px; color:var(--roast); }
+</style></head>
+<body>
+<div class="app" id="app">
+  <header class="hdr">
+    <div class="mark">ω</div>
+    <div class="id"><b>Places</b><span>4 pinned · 13 more on this machine</span></div>
+    <button class="act" aria-label="Add places" onclick="openPicker()"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  </header>
+  <div class="scroll">
+    <a class="place" href="place.html"><span class="tile lg h-slate">om</span><span class="grow"><b>omega</b><span class="mono">~/projects/omega · main</span></span><span class="act-n"><span class="st you"><i></i>1</span><br><span class="st run"><i></i>1</span></span></a>
+    <a class="place" href="place.html"><span class="tile lg h-sage">bl</span><span class="grow"><b>beam-lisp</b><span class="mono">~/projects/beam-lisp · main</span></span><span class="act-n"><span class="st fail"><i></i>1</span></span></a>
+    <a class="place" href="place.html"><span class="tile lg h-clay">ow</span><span class="grow"><b>ora-website</b><span class="mono">~/projects/ora-website · master</span></span><span class="act-n"><span class="st run"><i></i>1</span></span></a>
+    <a class="place" href="place.html"><span class="tile lg h-mocha">~</span><span class="grow"><b>home</b><span class="mono">~ · folder</span></span><span class="act-n muted">3h</span></a>
+    <button class="add-row" onclick="openPicker()"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add places from this machine</button>
+  </div>
+  <nav class="tabs">
+    <button onclick="location='inbox.html'"><svg class="icon" viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M4 13l2-8h12l2 8v6H4z"/></svg>Work<span class="badge">2</span></button>
+    <button aria-current="page"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Places</button>
+    <button onclick="location='open.html'"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Open</button>
+  </nav>
+
+  <div class="scrim" onclick="closePicker()"></div>
+  <section class="sheet picker" role="dialog" aria-label="Add places">
+    <div class="grab"></div>
+    <h2>Add places</h2>
+    <label class="field"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg><input id="q" placeholder="Filter repos and folders" oninput="filter()"></label>
+    <div class="scroll" id="list"></div>
+    <div class="foot">
+      <button class="btn ghost" title="Browse any folder, not just git repos">Folder…</button>
+      <button class="btn" id="go" disabled>Add</button>
+    </div>
+  </section>
+</div>
+<script>
+// Real repos found under ~ on Work, 2026-10-30. Same-named repos show their parent.
+const repos = [
+  ["wire-lite","code/myke","feat/tieto-sales-demo","4 min"],
+  ["backdesk-booking","code/products","prototype/datom-desk","25 min"],
+  ["beam-lisp--execution-protocol","code/undefine","feat/enforced-execution-protocol","38 min"],
+  ["knowledger","code/products","main","19 h"],
+  ["umriden-website","projects/umriden","main","30 h"],
+  ["umriden","projects","master","3 d"],
+  ["ora-survey","code/ora","main","3 d"],
+  ["ora-website","projects/general","main","3 d"],
+  ["wire-continuous-build","projects","master","4 d"],
+  ["blueprint","code/ora","main","5 d"],
+  ["wire-android-build","projects","local/wire-android-build","5 d"],
+  ["omega","code/undefine","main","8 d"],
+  ["foundry","code/undefine","main","11 d"],
+  ["claude-chat-mobile","projects","master","5 w"],
+  ["omega","projects","main","13 d",1],
+  ["beam-lisp","projects","main","2 w",1],
+  ["ora-website","projects","master","—",1],
+];
+const dup = n => repos.filter(r => r[0]===n).length > 1;
+const picked = new Set();
+function render(q="") {
+  const rows = repos.map((r,i)=>[r,i]).filter(([r])=>!q || (r[1]+"/"+r[0]).includes(q));
+  const fresh = rows.filter(([r])=>!r[4]), added = rows.filter(([r])=>r[4]);
+  const row = ([r,i]) => `<div class="row ${r[4]?'added':''} ${picked.has(i)?'on':''}" onclick="${r[4]?'':`tog(${i})`}">
+    <span class="check">${picked.has(i)||r[4]?'<svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>':''}</span>
+    <span class="grow"><b>${dup(r[0])?`<span class="parent">${r[1].split('/').pop()}/</span>`:''}${r[0]}</b>
+    <span class="mono">~/${r[1]}/${r[0]} · ${r[2]}</span></span>
+    <span class="tiny muted">${r[4]?'added':r[3]}</span></div>`;
+  document.getElementById('list').innerHTML =
+    `<div class="group"><span>Git repos in ~ · recent first</span><span>${fresh.length}</span></div>${fresh.map(row).join('')}`+
+    (added.length?`<div class="group"><span>Already places</span></div>${added.map(row).join('')}`:'');
+  const go = document.getElementById('go');
+  go.disabled = !picked.size; go.textContent = picked.size ? `Add ${picked.size} place${picked.size>1?'s':''}` : 'Add';
+}
+function tog(i){ picked.has(i)?picked.delete(i):picked.add(i); render(q.value); }
+function filter(){ render(q.value); }
+function openPicker(){ app.classList.add('open'); }
+function closePicker(){ app.classList.remove('open'); }
+render();
+if (location.hash === '#add') { openPicker(); tog(0); tog(2); }
+</script>
+</body></html>

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Work inbox</title><link rel="stylesheet" href="kit.css">
+<style>
+  .filter { display:flex; gap:8px; padding:10px 16px 2px; overflow-x:auto; scrollbar-width:none; }
+  .filter .chip { flex-shrink:0; }
+  .live { margin-top:6px; font:12.5px var(--font-code); color:var(--roast); display:flex; gap:6px; align-items:center;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ask { margin-top:8px; padding:8px 10px; border-radius:8px; background:var(--snow-2); font-size:14px; }
+  details.done summary { list-style:none; cursor:pointer; }
+  details.done summary::-webkit-details-marker { display:none; }
+</style></head>
+<body>
+<div class="app" id="app">
+  <header class="hdr">
+    <div class="mark">ω</div>
+    <div class="id"><b>Work</b><span>4 places · <span class="st run"><i></i>2 running</span></span></div>
+    <button class="act" aria-label="Search and commands (⌘K)" title="Commands"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg></button>
+  </header>
+  <div class="scroll">
+    <div class="filter" role="tablist" aria-label="Filter by place">
+      <button class="chip on">All</button>
+      <button class="chip"><span class="tile h-slate">om</span>omega</button>
+      <button class="chip"><span class="tile h-sage">bl</span>beam-lisp</button>
+      <button class="chip"><span class="tile h-clay">ow</span>ora-website</button>
+      <button class="chip"><span class="tile h-mocha">~</span>home</button>
+    </div>
+
+    <div class="sec"><span>Needs you</span><span>2</span></div>
+    <a class="card you" href="session.html">
+      <div class="meta"><span class="tile h-slate">om</span><span>omega</span><span class="grow"></span><span class="st you"><i></i>Your turn</span><span>· 2m</span></div>
+      <h3>Add notifications to the Android app</h3>
+      <div class="ask">Merged and pushed <span class="mono">69fe959</span>. Rebuild and sign the 0.1.2 APK now?</div>
+      <div class="chips"><button class="chip primary">Rebuild APK</button><button class="chip">Not yet</button><button class="chip">Reply…</button></div>
+    </a>
+    <a class="card you" href="session.html">
+      <div class="meta"><span class="tile h-sage">bl</span><span>beam-lisp</span><span class="grow"></span><span class="st fail"><i></i>Failed</span><span>· 14m</span></div>
+      <h3>Port the reader macros to the new compiler</h3>
+      <p>3 tests fail in reader_test.bl after the rewrite: quasiquote nesting is off by one.</p>
+      <div class="chips"><button class="chip primary">Fix the failures</button><button class="chip">Open log</button></div>
+    </a>
+
+    <div class="sec"><span>Running</span><span>2</span></div>
+    <a class="card" href="session.html">
+      <div class="meta"><span class="tile h-clay">ow</span><span>ora-website</span><span class="grow"></span><span class="st run"><i></i>Running</span><span>· 6m</span></div>
+      <h3>Tighten the hero copy and fix mobile spacing</h3>
+      <div class="live"><svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>Editing src/pages/index.astro</div>
+    </a>
+    <a class="card" href="session.html">
+      <div class="meta"><span class="tile h-slate">om</span><span>omega</span><span class="grow"></span><span class="st run"><i></i>Running</span><span>· 1m</span></div>
+      <h3>Explain how Places resolve their cwd</h3>
+      <div class="live"><svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>Reading src/omega/place.bl</div>
+    </a>
+
+    <details class="done">
+      <summary class="sec"><span>Done · today</span><span>3 ⌄</span></summary>
+      <a class="card" href="session.html">
+        <div class="meta"><span class="tile h-mocha">~</span><span>home</span><span class="grow"></span><span class="st done"><i></i>Done</span><span>· 3h</span></div>
+        <h3>Cheap hotels for Code BEAM Europe</h3>
+        <p>Haarlem is nearly full for 20–23 Oct; best value is €40–55/night in Amsterdam, 15 min by train.</p>
+      </a>
+      <a class="card" href="session.html">
+        <div class="meta"><span class="tile h-sage">bl</span><span>beam-lisp</span><span class="grow"></span><span class="st done"><i></i>Done</span><span>· 5h</span></div>
+        <h3>Explore BL</h3>
+        <p>Hashed every tracked file and mapped namespace cross-references.</p>
+      </a>
+      <a class="card" href="session.html">
+        <div class="meta"><span class="tile h-clay">ow</span><span>ora-website</span><span class="grow"></span><span class="st done"><i></i>Done</span><span>· 6h</span></div>
+        <h3>Make a new place for ora-website</h3>
+        <p>Added ~/projects/ora-website as a place.</p>
+      </a>
+    </details>
+    <div style="height:140px"></div>
+  </div>
+  <a class="fab" href="launch.html"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New session</a>
+  <nav class="tabs">
+    <button aria-current="page"><svg class="icon" viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M4 13l2-8h12l2 8v6H4z"/></svg>Work<span class="badge">2</span></button>
+    <button onclick="location='places.html'"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Places</button>
+    <button onclick="location='open.html'"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Open</button>
+  </nav>
+</div>
+</body></html>

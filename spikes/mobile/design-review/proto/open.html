@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Open and commands</title><link rel="stylesheet" href="kit.css">
+<style>
+  .exp { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:4px 16px 4px; }
+  .exp button { border:1px solid var(--oat); border-radius:12px; padding:12px 10px; text-align:left; background:var(--snow-2); min-height:84px; display:flex; flex-direction:column; justify-content:space-between; }
+  .exp b { font-weight:550; font-size:14px; } .exp span { font-size:11.5px; color:var(--roast); }
+  .exp .glyph { font:20px var(--font-code); }
+  .buf { display:flex; align-items:center; gap:12px; padding:10px 16px; min-height:52px; border-bottom:1px solid var(--oat); width:100%; text-align:left; }
+  .buf .grow { flex:1; min-width:0; }
+  .buf .grow b { display:block; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .buf .grow span { font-size:12px; color:var(--roast); }
+  .palette .field input { font-family:var(--font-text); }
+  .palette .mode { font:12px var(--font-code); color:var(--roast); }
+  .cmd { display:flex; align-items:center; gap:12px; padding:8px 16px; min-height:48px; width:100%; text-align:left; }
+  .cmd .grow { flex:1; min-width:0; }
+  .cmd .grow b { font-weight:500; display:block; }
+  .cmd .grow span { font-size:12px; color:var(--roast); display:block; }
+  .cmd.sel { background:var(--snow-2); }
+  .pgroup { padding:12px 16px 2px; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--roast); }
+  .hintbar { display:flex; gap:14px; padding:8px 16px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--oat); font-size:12px; color:var(--roast); flex-wrap:wrap; }
+  .lisp { padding:6px 16px; font:13px var(--font-code); }
+  .lisp .res { color:var(--sage); }
+</style></head>
+<body>
+<div class="app" id="app">
+  <header class="hdr">
+    <div class="mark">ω</div>
+    <div class="id"><b>Open</b><span>Buffers, sessions and tools</span></div>
+    <button class="act" aria-label="Commands" onclick="pal()"><span class="kbd">⌘K</span></button>
+  </header>
+  <div class="scroll">
+    <div class="sec"><span>Tools</span></div>
+    <div class="exp">
+      <button><span class="glyph">λ</span><span><b>Machine</b><br><span>World REPL</span></span></button>
+      <button><span class="glyph">∿</span><span><b>Pelagic</b><br><span>Instrument</span></span></button>
+      <button><span class="glyph">◎</span><span><b>Runtime</b><br><span>Inspector</span></span></button>
+    </div>
+    <div class="sec"><span>Recent</span></div>
+    <a class="buf" href="session.html"><span class="st you"><i></i></span><span class="grow"><b>Add notifications to the Android app</b><span>session · omega · 2m</span></span><svg class="icon" style="width:16px" viewBox="0 0 24 24"><path d="m12 4 2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 16.2 7 19l1.2-5.6L4 9.6 9.6 9z" fill="currentColor"/></svg></a>
+    <button class="buf"><svg class="icon" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/></svg><span class="grow"><b>mobile.bl.md</b><span>file · omega/spikes/mobile · edited by you</span></span></button>
+    <a class="buf" href="place.html"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span class="grow"><b>omega</b><span>place</span></span></a>
+    <button class="buf"><svg class="icon" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/></svg><span class="grow"><b>AGENTS.md</b><span>file · home</span></span></button>
+    <button class="buf"><span class="st done"><i></i></span><span class="grow"><b>Cheap hotels for Code BEAM Europe</b><span>session · home · 3h</span></span></button>
+  </div>
+  <nav class="tabs">
+    <button onclick="location='inbox.html'"><svg class="icon" viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M4 13l2-8h12l2 8v6H4z"/></svg>Work<span class="badge">2</span></button>
+    <button onclick="location='places.html'"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Places</button>
+    <button aria-current="page"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Open</button>
+  </nav>
+
+  <div class="scrim" onclick="app.classList.remove('open')"></div>
+  <section class="sheet palette" role="dialog" aria-label="Commands">
+    <div class="grab"></div>
+    <label class="field"><span class="mode" id="mode">⌘</span><input id="pq" placeholder="Go to, run a command, or : for Lisp" oninput="draw()" autocomplete="off"></label>
+    <div class="scroll" id="pl"></div>
+    <div class="hintbar"><span><span class="kbd">:</span> Lisp in this world</span><span><span class="kbd">&gt;</span> editor commands</span><span><span class="kbd">@</span> files</span></div>
+  </section>
+</div>
+<script>
+const ctx = [["Stop session","omega · Android notifications"],["Steer","Redirect without stopping"],["Attach reference","File, selection or session"],["Open working folder","~/projects/omega"]];
+const go = [["Add notifications to the Android app","session · omega"],["omega","place"],["mobile.bl.md","file"],["Machine","tool"],["Pelagic","tool"]];
+const ed = [["WORD next","WORD-next"],["Add cursor below","add-cursor-below"],["Inspect source","bl-ed/inspect"],["Link reference","desk/link"]];
+function list(t, xs){ return xs.length ? `<div class="pgroup">${t}</div>` + xs.map(([a,b],i)=>`<button class="cmd ${i===0&&t==='This session'?'sel':''}"><span class="grow"><b>${a}</b><span>${b}</span></span></button>`).join('') : ''; }
+function draw(){
+  const q = pq.value, m = document.getElementById('mode');
+  if (q.startsWith(':')) { m.textContent = 'λ';
+    pl.innerHTML = `<div class="pgroup">Evaluate in world · omega</div><div class="lisp">${q.slice(1)||'(count (tasks :status :running))'}<br><span class="res">⇒ 2</span></div>`; return; }
+  if (q.startsWith('>')) { m.textContent = '>'; pl.innerHTML = list('Editor', ed); return; }
+  m.textContent = '⌘';
+  const f = xs => xs.filter(([a,b]) => (a+b).toLowerCase().includes(q.toLowerCase()));
+  pl.innerHTML = list('This session', f(ctx)) + list('Go to', f(go)) + (q ? list('Editor', f(ed)) : '');
+}
+function pal(){ app.classList.add('open'); draw(); }
+if (location.hash === '#palette') pal();
+if (location.hash === '#lisp') { pq.value = ':(count (tasks :status :running))'; pal(); }
+</script>
+</body></html>

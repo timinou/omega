@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pocket design review</title>
+<style>
+:root { --bg:#f7f3ee; --paper:#f1ebe3; --line:#e8dfd3; --latte:#d9c8b4; --mocha:#a68a73; --muted:#5a463b; --ink:#3b2c24;
+  --sage:#6f8a6a; --clay:#b0654a; --slate:#5f7684; --ochre:#b08a3e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#1d1814; --paper:#26201b; --line:#352d26; --latte:#4a3f35; --muted:#c2ae9c; --ink:#f1e8de; --sage:#8fae88; --clay:#d98a6c; --slate:#8ea6b4; --ochre:#d2ac5c; } }
+:root[data-theme="dark"] { --bg:#1d1814; --paper:#26201b; --line:#352d26; --latte:#4a3f35; --muted:#c2ae9c; --ink:#f1e8de; --sage:#8fae88; --clay:#d98a6c; --slate:#8ea6b4; --ochre:#d2ac5c; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }
+a { color:var(--slate); text-underline-offset:3px; }
+code { font:.88em ui-monospace,Menlo,monospace; background:var(--paper); border:1px solid var(--line); border-radius:4px; padding:0 4px; overflow-wrap:anywhere; }
+.layout { display:grid; grid-template-columns:240px minmax(0,1fr); gap:40px; max-width:1240px; margin:auto; padding:32px 24px 80px; }
+main { min-width:0; }
+nav.toc { position:sticky; top:24px; align-self:start; max-height:calc(100vh - 48px); overflow:auto; font-size:14px; }
+nav.toc a { display:block; color:var(--muted); text-decoration:none; padding:3px 0; }
+nav.toc a.l2 { padding-left:12px; font-size:13px; }
+nav.toc a:hover { color:var(--ink); }
+.live { font:12px ui-monospace,monospace; color:var(--muted); margin-bottom:16px; display:flex; gap:6px; align-items:center; }
+.live i { width:7px; height:7px; border-radius:50%; background:var(--sage); display:inline-block; }
+header.doc h1 { font:500 34px/1.2 Georgia,serif; margin:0 0 6px; }
+header.doc .sub { color:var(--muted); }
+header.doc .meta { font:13px ui-monospace,monospace; color:var(--muted); margin-top:10px; display:flex; gap:14px; flex-wrap:wrap; }
+h2 { font:500 26px/1.25 Georgia,serif; margin:56px 0 12px; padding-top:12px; border-top:1px solid var(--line); }
+h3 { font-size:19px; font-weight:600; margin:32px 0 6px; }
+h4 { font-size:16px; font-weight:600; margin:22px 0 4px; }
+p, ul, ol { max-width:72ch; }
+table { border-collapse:collapse; margin:12px 0; font-size:14.5px; width:100%; display:block; overflow-x:auto; }
+th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-weight:600; border-bottom:1.5px solid var(--latte); }
+.kw { font:600 11px ui-monospace,monospace; padding:2px 6px; border-radius:4px; margin-right:8px; vertical-align:2px; letter-spacing:.04em; }
+.kw.TODO { border:1px solid var(--latte); color:var(--muted); }
+.kw.NEXT { background:var(--ochre); color:#fff; } .kw.DOING { background:var(--slate); color:#fff; }
+.kw.DONE { background:var(--sage); color:#fff; } .kw.DROP { color:var(--muted); text-decoration:line-through; border:1px solid var(--line); }
+.sev { font:600 11px ui-monospace,monospace; text-transform:uppercase; padding:2px 6px; border-radius:4px; vertical-align:2px; }
+.sev.high { background:var(--clay); color:#fff; } .sev.medium { background:var(--ochre); color:#fff; } .sev.low { border:1px solid var(--latte); color:var(--muted); }
+.props { display:flex; gap:6px; flex-wrap:wrap; margin:2px 0 6px; font-size:12.5px; }
+.props span { border:1px solid var(--line); background:var(--paper); border-radius:999px; padding:1px 9px; color:var(--muted); }
+.props b { font-weight:600; color:var(--ink); margin-right:4px; }
+.gallery { display:flex; gap:16px; overflow-x:auto; padding:8px 0 12px; margin:8px 0; }
+.gallery figure { margin:0; flex:0 0 auto; width:230px; }
+.gallery img { width:100%; border:1px solid var(--line); border-radius:10px; display:block; background:#fff; cursor:zoom-in; }
+.gallery figcaption { font-size:13px; color:var(--muted); margin-top:6px; }
+.protos { display:flex; gap:24px; overflow-x:auto; padding:12px 0 16px; margin:8px 0 8px; }
+.phone { flex:0 0 auto; width:390px; max-width:calc(100vw - 48px); }
+.phone .frame { height:760px; border:1px solid var(--latte); border-radius:28px; overflow:hidden; background:var(--bg); box-shadow:0 10px 30px rgb(59 44 36 / .12); }
+.phone iframe { width:100%; height:100%; border:0; display:block; }
+.phone .cap { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-top:8px; padding:0 6px; }
+.summary { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0 4px; }
+.summary .tile { border:1px solid var(--line); background:var(--paper); border-radius:10px; padding:10px 14px; min-width:110px; }
+.summary .tile b { font:500 24px Georgia,serif; display:block; }
+.summary .tile span { font-size:12.5px; color:var(--muted); }
+.bar { height:6px; border-radius:3px; background:var(--line); overflow:hidden; margin:10px 0 0; max-width:560px; display:flex; }
+.bar i { display:block; height:100%; }
+pre { background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; font-size:13px; }
+.lightbox { position:fixed; inset:0; background:rgb(29 24 20 / .82); display:none; place-items:center; z-index:9; cursor:zoom-out; }
+.lightbox img { max-height:94vh; max-width:94vw; border-radius:10px; }
+.lightbox.on { display:grid; }
+.theme { background:none; border:1px solid var(--line); color:var(--muted); border-radius:6px; font:12px ui-monospace,monospace; padding:2px 8px; cursor:pointer; }
+@media (max-width: 860px) {
+  .layout { grid-template-columns:1fr; padding:20px 16px 60px; gap:0; }
+  nav.toc { position:static; max-height:none; border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:12px; }
+  nav.toc a.l2 { display:none; }
+  .phone .frame { height:min(760px, 78vh); }
+  header.doc h1 { font-size:28px; }
+}
+</style></head>
+<body>
+<div class="layout">
+  <nav class="toc" id="toc"></nav>
+  <main>
+    <div class="live"><i></i><span id="stamp">loading…</span> · <a href="design-review.bl.org">source .bl.org</a> · <button class="theme" id="theme">theme</button></div>
+    <div id="doc"></div>
+  </main>
+</div>
+<div class="lightbox" id="lb" onclick="this.classList.remove('on')"><img alt=""></div>
+<script>
+const SRC = 'design-review.bl.org';
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+const isImg = u => /\.(png|jpe?g|gif|webp|svg)$/i.test(u);
+
+function inline(raw) {
+  const keep = [];
+  const stash = h => `\u0000${keep.push(h)-1}\u0000`;
+  let s = raw.replace(/\[\[([^\]]+)\](?:\[([^\]]+)\])?\]/g, (_, u, d) => {
+    const href = u.replace(/^file:/, '');
+    return stash(`<a href="${esc(href)}"${/^https?:/.test(href)?' target="_blank"':''}>${esc(d||href)}</a>`);
+  });
+  for (const q of ['=', '~'])
+    s = s.replace(new RegExp(`(^|[\\s(\\[|])\\${q}([^\\s${q}](?:[^${q}\\n]*?[^\\s${q}])?)\\${q}(?=[\\s.,;:)!?—|]|$)`, 'g'),
+      (_, pre, c) => pre + stash(`<code>${esc(c)}</code>`));
+  s = esc(s)
+    .replace(/(^|[\s(])\*([^\s*][^*\n]*?[^\s*]|[^\s*])\*(?=[\s.,;:)!?]|$)/g, '$1<strong>$2</strong>')
+    .replace(/(^|[\s(])\/([^\s\/][^\/\n]*?[^\s\/])\/(?=[\s.,;:)!?]|$)/g, '$1<em>$2</em>');
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => keep[+i]);
+}
+
+function linkOnly(line) {
+  const m = [...line.matchAll(/\[\[([^\]]+)\](?:\[([^\]]+)\])?\]/g)];
+  if (!m.length || line.replace(/\[\[[^\]]+\](?:\[[^\]]+\])?\]/g,'').trim()) return null;
+  return m.map(x => ({ url: x[1], desc: x[2] || '' }));
+}
+
+function render(text) {
+  const lines = text.split('\n');
+  const meta = {}, out = [], toc = [];
+  let todo = ['TODO','DONE'], i = 0, para = [], roster = null, inRoster = false, counts = {};
+  const flush = () => { if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = []; } };
+  while (i < lines.length) {
+    const L = lines[i];
+    let m;
+    if ((m = L.match(/^#\+(\w+):\s*(.*)$/))) {
+      flush(); meta[m[1].toLowerCase()] = m[2];
+      if (m[1].toLowerCase() === 'todo') todo = m[2].split(/\s+/).filter(w => w !== '|');
+      i++; continue;
+    }
+    if ((m = L.match(/^(\*+)\s+(.*)$/))) {
+      flush();
+      const lvl = m[1].length; let t = m[2], kw = '', tags = '';
+      const k = t.split(' ')[0]; if (todo.includes(k)) { kw = k; t = t.slice(k.length+1); }
+      t = t.replace(/\s+(:[\w:]+:)\s*$/, (_, g) => { tags = g; return ''; });
+      const id = slug(t);
+      if (lvl === 1) inRoster = /^roster$/i.test(t);
+      if (kw) counts[kw] = (counts[kw]||0) + 1;
+      let title = inline(t);
+      const sev = t.match(/^(F\d+) · (high|medium|low) · (.*)$/);
+      if (sev) title = `${sev[1]} <span class="sev ${sev[2]}">${sev[2]}</span> ${inline(sev[3])}`;
+      out.push(`<h${lvl+1} id="${id}">${kw?`<span class="kw ${kw}">${kw}</span>`:''}${title}</h${lvl+1}>`);
+      if (lvl <= 2) toc.push(`<a class="l${lvl}" href="#${id}">${esc(t)}</a>`);
+      if (lvl === 1 && inRoster) roster = { at: out.length };
+      i++; continue;
+    }
+    if (/^\s*:PROPERTIES:\s*$/.test(L)) {
+      flush(); const props = [];
+      for (i++; i < lines.length && !/^\s*:END:\s*$/.test(lines[i]); i++) {
+        const p = lines[i].match(/^\s*:(\w+):\s*(.*)$/); if (p) props.push(p);
+      }
+      i++;
+      out.push(`<div class="props">${props.map(([,k,v]) => `<span><b>${esc(k.toLowerCase())}</b>${
+        k === 'PROTO' ? `<a href="proto/${esc(v)}" target="_blank">${esc(v)}</a>`
+        : k === 'FINDINGS' ? v.split(/\s+/).map(f => `<a href="#${slug(lines.find(l => l.startsWith('** '+f+' '))?.slice(3) || f)}">${esc(f)}</a>`).join(' ')
+        : esc(v)}</span>`).join('')}</div>`);
+      continue;
+    }
+    if ((m = L.match(/^#\+begin_(\w+)/i))) {
+      flush(); const kind = m[1].toLowerCase(), body = [];
+      for (i++; i < lines.length && !/^#\+end_/i.test(lines[i]); i++) body.push(lines[i]);
+      i++;
+      out.push(kind === 'quote' ? `<blockquote>${inline(body.join(' '))}</blockquote>` : `<pre>${esc(body.join('\n'))}</pre>`);
+      continue;
+    }
+    if (/^\s*\|/.test(L)) {
+      flush(); const rows = [];
+      for (; i < lines.length && /^\s*\|/.test(lines[i]); i++) {
+        if (/^\s*\|[-+]+\|?\s*$/.test(lines[i])) { rows.head = rows.length; continue; }
+        rows.push(lines[i].trim().replace(/^\||\|$/g,'').split('|').map(c => c.trim()));
+      }
+      const h = rows.head ? rows.slice(0, rows.head) : [], b = rows.head ? rows.slice(rows.head) : rows;
+      out.push(`<table>${h.map(r => `<tr>${r.map(c => `<th>${inline(c)}</th>`).join('')}</tr>`).join('')}${b.map(r => `<tr>${r.map(c => `<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</table>`);
+      continue;
+    }
+    if ((m = L.match(/^(\s*)([-+]|\d+[.)])\s+(.*)$/))) {
+      flush(); const ordered = /\d/.test(m[2]), items = [];
+      while (i < lines.length && (m = lines[i].match(/^(\s*)([-+]|\d+[.)])\s+(.*)$/))) {
+        let item = m[3]; i++;
+        while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !/^\s*([-+]|\d+[.)])\s/.test(lines[i])) item += ' ' + lines[i++].trim();
+        items.push(item);
+      }
+      const links = items.map(linkOnly);
+      if (links.every(l => l && l.length === 1 && isImg(l[0].url.replace(/^file:/,'')))) {
+        out.push(`<div class="gallery">${links.map(([l]) => { const u = esc(l.url.replace(/^file:/,'')); return `<figure><img src="${u}" alt="${esc(l.desc)}" loading="lazy"><figcaption>${esc(l.desc)}</figcaption></figure>`; }).join('')}</div>`);
+      } else {
+        const tag = ordered ? 'ol' : 'ul';
+        out.push(`<${tag}>${items.map(it => `<li>${inline(it.replace(/^\[( |X|-)\]\s*/, (_, c) => c === 'X' ? '☑ ' : '☐ '))}</li>`).join('')}</${tag}>`);
+      }
+      continue;
+    }
+    const lk = linkOnly(L.trim());
+    if (lk && lk.every(l => l.url.startsWith('proto:'))) {
+      flush();
+      out.push(`<div class="protos">${lk.map(l => { const u = 'proto/' + l.url.slice(6);
+        return `<div class="phone"><div class="frame"><iframe src="${esc(u)}" loading="lazy" title="${esc(l.desc)}"></iframe></div><div class="cap"><span>${esc(l.desc)}</span><a href="${esc(u)}" target="_blank">Open ↗</a></div></div>`; }).join('')}</div>`);
+      i++; continue;
+    }
+    if (!L.trim()) { flush(); i++; continue; }
+    para.push(L.trim()); i++;
+  }
+  flush();
+  if (roster) {
+    const done = todo.slice(todo.indexOf('DONE')), total = Object.values(counts).reduce((a,b)=>a+b,0);
+    const col = { TODO:'var(--latte)', NEXT:'var(--ochre)', DOING:'var(--slate)', DONE:'var(--sage)', DROP:'var(--line)' };
+    out.splice(roster.at, 0, `<div class="summary">${todo.map(k => `<div class="tile"><b>${counts[k]||0}</b><span>${k.toLowerCase()}</span></div>`).join('')}</div>
+      <div class="bar">${['DONE','DOING','NEXT','TODO','DROP'].map(k => `<i style="width:${100*(counts[k]||0)/(total||1)}%;background:${col[k]}"></i>`).join('')}</div>`);
+  }
+  const head = `<header class="doc"><h1>${inline(meta.title||'Untitled')}</h1>${meta.subtitle?`<div class="sub">${inline(meta.subtitle)}</div>`:''}
+    <div class="meta">${meta.date?`<span>${esc(meta.date)}</span>`:''}${meta.status?`<span>${esc(meta.status)}</span>`:''}</div></header>`;
+  return { html: head + out.join('\n'), toc: toc.join(''), title: meta.title };
+}
+
+let last = '';
+async function load() {
+  try {
+    const r = await fetch(SRC, { cache: 'no-store' });
+    const text = await r.text();
+    document.getElementById('stamp').textContent = 'live · read ' + new Date().toLocaleTimeString();
+    if (text === last) return;
+    last = text;
+    const y = scrollY, { html, toc, title } = render(text);
+    document.getElementById('doc').innerHTML = html;
+    document.getElementById('toc').innerHTML = toc;
+    if (title) document.title = title.replace(/\s+—.*/, '') ;
+    scrollTo(0, y);
+    if (location.hash && !y) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  } catch (e) { document.getElementById('stamp').textContent = 'offline · ' + e.message; }
+}
+document.addEventListener('click', e => {
+  const img = e.target.closest('.gallery img'); if (!img) return;
+  const lb = document.getElementById('lb'); lb.querySelector('img').src = img.src; lb.classList.add('on');
+});
+document.getElementById('theme').onclick = () => {
+  const r = document.documentElement, dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const cur = r.dataset.theme || (dark ? 'dark' : 'light'); r.dataset.theme = cur === 'dark' ? 'light' : 'dark';
+};
+load(); setInterval(load, 4000);
+</script>
+</body></html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Notifications</title><link rel="stylesheet" href="kit.css">
+<style>
+  body { background:linear-gradient(160deg,#5b4a3f,#2c231d); }
+  .shade { max-width:480px; margin:auto; min-height:100dvh; padding:44px 10px 20px; color:#f5eee7; }
+  .clock { font:300 52px var(--font-text); padding:0 10px; }
+  .date { padding:0 12px 18px; opacity:.75; font-size:14px; }
+  .n { background:rgb(247 243 238 / .96); color:#3b2c24; border-radius:20px; padding:12px 14px 10px; margin:8px 0; }
+  .n .top { display:flex; align-items:center; gap:6px; font-size:12px; color:#5a463b; }
+  .n .top .app-i { width:18px; height:18px; border-radius:5px; background:#3b2c24; color:#f7f3ee; display:grid; place-items:center; font:13px Georgia,serif; }
+  .n .top .grow { flex:1; }
+  .n h4 { margin:6px 0 2px; font-size:15px; font-weight:600; display:flex; gap:6px; align-items:center; }
+  .n p { margin:0; font-size:14px; color:#5a463b; }
+  .n .acts { display:flex; gap:18px; margin-top:10px; padding-top:8px; border-top:1px solid #e8dfd3; }
+  .n .acts button { font-size:13.5px; font-weight:600; color:#3b2c24; min-height:36px; }
+  .n .acts button.pri { color:#b0654a; }
+  .reply { display:none; margin-top:10px; gap:8px; }
+  .reply input { flex:1; border:1px solid #d9c8b4; border-radius:18px; padding:8px 12px; font:inherit; background:#fff; }
+  .n.replying .reply { display:flex; } .n.replying .acts { display:none; }
+  .group-h { font-size:12px; opacity:.7; padding:12px 8px 0; }
+  .stack { position:relative; }
+  .stack::after { content:""; display:block; margin:-6px 12px 0; height:10px; border-radius:0 0 16px 16px; background:rgb(247 243 238 / .55); }
+</style></head>
+<body>
+<div class="shade">
+  <div class="clock">18:42</div>
+  <div class="date">Friday 30 October</div>
+
+  <div class="n" id="a">
+    <div class="top"><span class="app-i">ω</span><span class="grow">Pocket · omega</span><span>2m</span></div>
+    <h4><span class="st you"><i></i></span>Your turn · Android notifications</h4>
+    <p>Merged and pushed 69fe959. Rebuild and sign the 0.1.2 APK now?</p>
+    <div class="acts"><button class="pri">Rebuild APK</button><button>Not yet</button><button onclick="a.classList.add('replying')">Reply</button></div>
+    <div class="reply"><input placeholder="Reply to omega…" value="Yes, but bump the version to 0.2.0"><button class="chip primary">Send</button></div>
+  </div>
+
+  <div class="n">
+    <div class="top"><span class="app-i">ω</span><span class="grow">Pocket · ora-website</span><span>9m</span></div>
+    <h4><span class="st done"><i></i></span>Finished · Hero copy and mobile spacing</h4>
+    <p>3 files changed, preview is live. Next: review the diff, then deploy to the m2 preview.</p>
+    <div class="acts"><button class="pri">Review changes</button><button>Deploy preview</button><button>Open</button></div>
+  </div>
+
+  <div class="n">
+    <div class="top"><span class="app-i">ω</span><span class="grow">Pocket · beam-lisp</span><span>14m</span></div>
+    <h4><span class="st fail"><i></i></span>Failed · Reader macros port</h4>
+    <p>3 tests fail in reader_test.bl: quasiquote nesting is off by one.</p>
+    <div class="acts"><button class="pri">Fix the failures</button><button>Open log</button></div>
+  </div>
+
+  <div class="group-h">Ongoing</div>
+  <div class="n stack">
+    <div class="top"><span class="app-i">ω</span><span class="grow">Pocket</span><span>now</span></div>
+    <h4>2 sessions running</h4>
+    <p>ora-website · editing index.astro &nbsp;·&nbsp; omega · reading place.bl</p>
+  </div>
+</div>
+</body></html>
