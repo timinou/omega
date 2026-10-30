@@ -26,7 +26,7 @@
                         {:type "omega/task" :key (:id r) :title (:title r) :goal (:goal r) :status (name (:status r))
                          :place-name (get-in places [(:place r) :name]) :place (:place r) :home (:home r) :cwd (:cwd r) :folder (folder-address sys r) :artifacts (:artifacts (task-context-base sys (:id r)))
                          :ask (some-> (:asks r) first :text) :ask-id (some-> (:asks r) first :id)
-                         :age-ms (:age-ms r) :model (get-in r [:run :model]) :branch (get-in r [:run :branch])
+                         :age-ms (:age-ms r) :model (get-in r [:run :model]) :branch (get-in r [:run :branch]) :notify (get-in r [:run :notify])
                          :proposals (when (= :idle (:status r)) (next/proposals (str (:result r))))
                          :summary (or (some-> (:asks r) first :text) (some-> (:result r) str next/strip) (:goal r))}))
                         (emit d (str "* " label " (" (count rs) ")") nil) rs))) d groups)

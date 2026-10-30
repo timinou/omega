@@ -112,14 +112,14 @@ const restored=new Set(),restoring=new Set();
  function viewModel(){
   const s=shell(),screen=s.screen||'work',places=pocketPlaces(),pane=s['command-pane']||commandPane();
   const vm={screen,online:online(),home:homeDir,places,tasks:pocketTasks(),filter:session.filter||null,modal:s.modal||null,
-   embedded:!!s.workbench,pins:session.pins||[],recent:session.recent||[],repos:repoState.repos,picked:[...repoState.picked],
+   embedded:!!s.workbench,'in-app':new URL(location.href).searchParams.get('app')==='pocket',pins:session.pins||[],recent:session.recent||[],repos:repoState.repos,picked:[...repoState.picked],
    'repo-query':fields['repo-query']||'','repos-loading':repoState.loading,'saving-places':!!s.adding,
    'palette-query':fields['palette-query']||'','palette-index':fields['palette-index']||0,
    commands:(models.get(pane)?.commands||[]).map(c=>({name:c.name,label:commandLabel(c)})),
    evaluating:!!s.evaluating,'eval-result':s['eval-result']??null,namespace:s['eval-namespace']||session.namespace||null,
    selection:s.selection||null,creating:!!s.creating,scrolled:screen==='work'&&!!fields.scrolled,notice:null,tab:s.tab||'conversation',unseen:fields.unseen===s['task-path']};
   if(vm.filter)vm.tasks=vm.tasks.filter(t=>t.place===vm.filter);
-  if(screen==='place'){const id=s['place-id'],p=places.find(x=>x.id===id)||{id,name:id};Object.assign(vm,{place:p,'place-tab':s['place-tab']||'sessions',info:placeData[id]?.info||{},entries:placeData[id]?.entries||[],subpath:placeData[id]?.subpath||''});vm.tasks=pocketTasks();}
+  if(screen==='place'){const id=s['place-id'],p=places.find(x=>x.id===id)||{id,name:id};Object.assign(vm,{place:p,'place-tab':s['place-tab']||'sessions',info:placeData[id]?.info||{},entries:placeData[id]?.entries??null,subpath:placeData[id]?.subpath||''});vm.tasks=pocketTasks();}
   if(['places','buffers'].includes(screen))vm.tasks=pocketTasks();
   if(screen==='launch')vm.draft={...(s.new||{}),place:(s.new||{}).place||session.lastPlace||places[0]?.id};
   if(screen==='task'||vm.modal==='details'||(vm.modal==='commands'&&s['task-path']&&screen==='task'))vm.session=pocketSession();
@@ -130,7 +130,7 @@ const restored=new Set(),restoring=new Set();
   if(!id)return;const p=pocketPlaces().find(x=>x.id===id);const slot=placeData[id]=placeData[id]||{};
   try{const dir=p?.root||p?.cwd;if(dir&&!folder){const j=await intent('pocket/place-info',{dir});if(j.ok)slot.info=j;}}catch{}
   try{const path=folder||'folder:'+id,r=await fetch('/api/doc?path='+encodeURIComponent(path),{cache:'no-store'}),j=await r.json();
-   if(j.ok){slot.subpath=path.split('/').slice(1).join('/');slot.entries=(j.objects||[]).filter(o=>o.type==='workspace/folder'||o.type==='workspace/file').map(o=>{const name=String(o.label||o.key||'').split('/').filter(Boolean).pop();return {name,path:o.key,'dir?':o.type==='workspace/folder','data?':name?.startsWith('!')};}).sort((a,b)=>(b['dir?']-a['dir?'])||(a['data?']-b['data?'])||a.name.localeCompare(b.name));}}catch{}
+   if(j.ok){slot.subpath=path.split('/').slice(1).join('/');const sub=path.split('/').slice(1).join('/'),status=slot.info?.status||{};slot.entries=(j.objects||[]).filter(o=>o.type==='workspace/folder'||o.type==='workspace/file').map(o=>{const name=String(o.label||o.key||'').split('/').filter(Boolean).pop();return {name,path:o.key,'dir?':o.type==='workspace/folder','data?':name?.startsWith('!'),git:sub?null:status[name]||null};}).sort((a,b)=>(b['dir?']-a['dir?'])||(a['data?']-b['data?'])||a.name.localeCompare(b.name));}}catch{}
   forceRender();
  }
  const draft=(field,value)=>send('rail',{type:'mobile/new-field',field,value});
@@ -346,6 +346,7 @@ const restored=new Set(),restoring=new Set();
   if(screen==='machine'){vm['body-html']=machine();vm.title='Machine';}
   if(screen==='host'){vm['body-html']=host();vm.title='Connection';}
   vm.notice=fields.toast||message||null;
+  if(message&&message!==fields.noticeShown){fields.noticeShown=message;clearTimeout(fields.noticeTimer);fields.noticeTimer=setTimeout(()=>{for(const pane of ['rail','task','file'])send(pane,{type:'mobile/clear'});},3600);}
   reconcile(root,renderView(vm));
   root.querySelector('.mobile-scroll').scrollTop=positions.get(viewKey)||0;if(changedTask&&follow&&root._viewKey===viewKey&&screen==='task'&&which==='conversation')root.querySelector('.mobile-scroll').scrollTop=1e9;if(root._viewKey!==viewKey&&screen==='task'&&which==='plan'&&file().cursor>0&&!positions.has(viewKey)){const row=file().cursor;(root.querySelector(`[data-row="${row}"]`)||root.querySelector(`[data-row="${row+1}"]`))?.scrollIntoView({block:'start'});}root._viewKey=viewKey;
   syncPrompt(root);
@@ -382,6 +383,7 @@ const restored=new Set(),restoring=new Set();
    case 'place-tab':send('rail',{type:'mobile/field',field:'place-tab',value:el.dataset.value});if(el.dataset.value==='files'&&!placeData[shell()['place-id']]?.entries)loadPlace(shell()['place-id']);break;
    case 'place-default':{const id=shell()['place-id'];fetch('/api/doc?path='+encodeURIComponent('place:'+id),{cache:'no-store'}).then(r=>r.json()).then(j=>{const d=j.data||{};send('rail',{type:'mobile/place-save',id,name:d.name,root:d['own-root']||'',parent:d.parent||'',home:d.home?.path||'',cwd:d.config?.cwd||'',config:{...(d.config||{}),[el.dataset.field]:el.dataset.value}});});break;}
    case 'details':modal('details');break;
+   case 'app-server':location.href='https://pocket.invalid/server';break;
    case 'tool':{const id=el.dataset.value;if(id==='machine')nav('machine');else if(id==='runtime')send('rail',{type:'mobile/runtime'});else if(id==='music')location.href='/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org';break;}
    case 'open-address':modal(null);openDocument(el.dataset.path);break;
    case 'palette-pick':{

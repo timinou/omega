@@ -79,5 +79,5 @@
 (defn fab [] [:button.fab {:data-act "new" :data-key "fab"} (ui/icon :plus) [:span "New session"]])
 
 (defn header [vm]
-  (ui/header {:title "Work" :context (context-line vm) :mark {:online (:online vm)}
+  (ui/header {:title "Work" :context (context-line vm) :mark {:online (:online vm) :app (:in-app vm)}
               :actions (ui/act-button "commands" "Search and commands" :search)}))

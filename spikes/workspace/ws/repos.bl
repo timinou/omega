@@ -51,8 +51,16 @@
                        "\"$(git status --porcelain 2>/dev/null | wc -l)\" \"$(git log -1 --format=%ct 2>/dev/null)\""))]
       (when out
         (let [[branch changed at] (str/split (str/trim out) "\t")
-              now (System/os_time :millisecond)]
+              now (System/os_time :millisecond)
+              porcelain (or (sh (str "git -C " (quote-arg dir) " status --porcelain 2>/dev/null")) "")]
           {:branch branch :changed (try (String/to_integer (str/trim (str changed))) (catch _ 0))
+           ;; One letter per top-level entry: M modified, A added, ? untracked.
+           :status (reduce (fn [m line]
+                             (if (< (count line) 4) m
+                               (let [code (str/trim (subs line 0 2)) path (subs line 3)
+                                     top (first (str/split path "/"))]
+                                 (assoc m top (get {"??" "?" "A" "A" "D" "D"} code (if (str/includes? code "A") "A" "M"))))))
+                           {} (str/split porcelain "\n"))
            :age-ms (try (- now (* 1000 (String/to_integer (str/trim (str at))))) (catch _ nil))})))))
 
 (defn worktree!
@@ -75,7 +83,10 @@
 (defn head-branch
   "The checked-out branch read from .git/HEAD, without running git. Cheap enough per read."
   [root]
-  (try (let [head (str/trim (File/read! (str root "/.git/HEAD")))]
+  (try (let [git (str root "/.git")
+             ;; A worktree's .git is a file naming its private git directory.
+             dir (if (File/regular? git) (str/trim (subs (str/trim (File/read! git)) 8)) git)
+             head (str/trim (File/read! (str (Path/expand dir root) "/HEAD")))]
          (when (str/starts-with? head "ref: refs/heads/") (subs head 16)))
        (catch _ nil)))
 

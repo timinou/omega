@@ -25,7 +25,7 @@
     (ui/header {:title "Places"
                 :context (str (count (:places vm)) " places"
                               (when (pos? more) (str " · " more " more on this machine")))
-                :mark {:online (:online vm)}
+                :mark {:online (:online vm) :app (:in-app vm)}
                 :actions (ui/act-button "add-places" "Add places" :plus)})))
 
 (defn list-body [vm]
@@ -88,8 +88,10 @@
   (let [entries (:entries vm)]
     (list
      [:div.crumbs {:data-key "crumbs"} (str (:name p) " / " (or (:subpath vm) ""))]
-     (if (empty? entries)
-       [:p.muted.pad "Opening…"]
+     (cond
+       (nil? entries) [:div.loading {:data-key "loading"} [:i] [:i] [:i]]
+       (empty? entries) [:p.muted.pad {:data-key "empty"} "Nothing here yet."]
+       :else
        (for [e entries]
          [:button {:class ["file" (when (:data? e) "muted")] :data-act (if (:dir? e) "open-place" "open-file")
                    :data-path (:path e) :data-key (str "f:" (:path e))}
@@ -120,11 +122,11 @@
         n (count (filter (fn [t] (= (:place t) (:id p))) (:tasks vm)))]
     [:div.place-page
      [:div.ident {:data-key "ident"} (ui/tile p "lg")
-      [:div.sub (if (:branch info)
-                  (list [:span.mono (str "⎇ " (:branch info))]
-                        (when (pos? (or (:changed info) 0)) [:span (str "· " (:changed info) " changed")])
-                        (when (:age-ms info) [:span (str "· last commit " (st/ago-long (:age-ms info)))]))
-                  [:span "Folder"])]]
+      (if (:branch info)
+        [:div.subs [:div.sub [:span.mono (str "⎇ " (:branch info))]
+                    (when (pos? (or (:changed info) 0)) [:span (str "· " (:changed info) " changed")])]
+         (when (:age-ms info) [:div.sub.muted (str "Last commit " (st/ago-long (:age-ms info)))])]
+        [:div.sub "Folder"])]
      [:div.seg {:role "tablist" :data-key "place-tabs"}
       (for [[id label c] [["sessions" "Sessions" n] ["files" "Files" nil] ["settings" "Settings" nil]]]
         [:button {:role "tab" :data-act "place-tab" :data-value id :aria-selected (str (= id which)) :data-key (str "pt-" id)}

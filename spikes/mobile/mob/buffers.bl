@@ -21,7 +21,7 @@
       (ui/icon :star (when pinned "filled"))]]))
 
 (defn header [vm]
-  (ui/header {:title "Buffers" :context "Sessions, files and tools" :mark {:online (:online vm)}
+  (ui/header {:title "Buffers" :context "Sessions, files and tools" :mark {:online (:online vm) :app (:in-app vm)}
               :actions (ui/palette-button)}))
 
 (defn body [vm]
@@ -55,7 +55,7 @@
                    {:label "Attach reference" :sub "File, selection or session" :act "object-action" :attrs {:data-command "desk/link" :data-pane "task"}}
                    {:label "Open working folder" :sub (st/tilde (:home vm) (:cwd d)) :act "folder"}])
         go (concat (map (fn [t] {:label (:title t) :sub (str "session · " (or (:place-name t) "home")) :act "open-task" :attrs {:data-path (str "task:" (:key t))}}) (:tasks vm))
-                   (map (fn [p] {:label (:name p) :sub "place" :act "open-place" :attrs {:data-path (str "place:" (:id p))}}) (:places vm))
+                   (map (fn [p] {:label (:name p) :sub (str "place · " (st/tilde (:home vm) (:root p))) :act "open-place" :attrs {:data-path (str "place:" (:id p))}}) (:places vm))
                    (map (fn [b] {:label (or (:title b) (:path b)) :sub (str "file · " (:path b)) :act "open-file" :attrs {:data-path (:path b)}})
                         (filter (fn [b] (= "file" (kind-of (:path b)))) (:recent vm)))
                    (map (fn [t] {:label (:title t) :sub "tool" :act "tool" :attrs {:data-value (:id t)}}) tools))

@@ -46,7 +46,9 @@
   [:header.hdr {:data-key (or key "hdr")}
    (if back
      [:button.back {:data-act (:act back) :data-path (:path back) :aria-label (:label back)} (icon :back)]
-     [:button.mark {:data-act "work" :aria-label "Work"} "ω" (when mark [:span {:class ["conn" (when-not (:online mark) "off")]}])])
+     ;; In the Android app the mark opens the native connection panel instead.
+     [:button.mark {:data-act (if (:app mark) "app-server" "work") :aria-label (if (:app mark) "Connection" "Work")}
+      "ω" (when mark [:span {:class ["conn" (when-not (:online mark) "off")]}])])
    [:div.id [:b title] (when context [:span context])]
    actions])
 

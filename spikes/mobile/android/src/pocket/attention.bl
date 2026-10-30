@@ -1,13 +1,15 @@
 ;; Pure core of Pocket's native notifications. No Android, no IO: the screen
 ;; polls the host's existing `workspace:all` document, and this namespace says
-;; which tasks need the person, which of those are news, and what to post.
-;; A task needs the person exactly when the work document gives it an :ask.
+;; what needs the person, what finished or failed, what to post, and what a tapped
+;; action sends back. A task needs the person when it has a question or proposed
+;; next steps; per-session launch settings choose which of these reach the phone.
 (ns pocket.attention (:require [bl.json :as json]))
 
 (def channel {:id "omega-attention" :name "Needs you" :importance :high
-              :description "Tasks that are waiting for your answer."})
+              :description "Sessions waiting for you, and sessions that finished or failed."})
 (def poll-ms 30000)
 (def path "/api/doc?path=workspace:all")
+(def ongoing-id 999)
 
 (defn- blank-text? [s] (or (nil? s) (= "" (trim (str s)))))
 
@@ -15,29 +17,48 @@
   (let [t (trim (first (split (str (or s "")) "\n")))]
     (if (> (count t) n) (str (subs t 0 (- n 1)) "…") t)))
 
-(defn needing
-  "The tasks of a decoded work document (string keys) that wait on the person:
-   [{:key :title :ask}], in document order."
-  [doc]
-  (vec (keep (fn [o]
-               (let [ask (get o "ask")]
-                 (when (and (= "omega/task" (get o "type")) (not (blank-text? ask)) (get o "key"))
-                   {:key (str (get o "key"))
-                    :title (one-line (or (get o "title") (get o "goal") "Task") 80)
-                    :ask (one-line ask 240)})))
-             (get doc "objects"))))
+(defn task-item
+  "One omega/task object of a decoded work document (string keys), or nil."
+  [o]
+  (when (and (= "omega/task" (get o "type")) (get o "key"))
+    {:key (str (get o "key"))
+     :title (one-line (or (get o "title") (get o "goal") "Session") 80)
+     :ask (when-not (blank-text? (get o "ask")) (one-line (get o "ask") 240))
+     :ask-id (get o "ask-id")
+     :status (str (or (get o "status") "open"))
+     :place (or (get o "place-name") "home")
+     :summary (one-line (get o "summary") 240)
+     :proposals (vec (take 3 (keep (fn [p] (when (get p "label") {:label (str (get p "label")) :text (str (or (get p "text") (get p "label")))}))
+                                   (or (get o "proposals") []))))
+     :notify (when-let [n (get o "notify")] (set (map str n)))}))
 
-(defn parse
-  "Decoded work document from a transport response, or nil when it is not one."
-  [response]
-  (let [body (:body response) doc (if (string? body) (try (json/decode body) (catch _ nil)) body)]
-    (when (and (= 200 (:status response)) (map? doc) (get doc "ok")) doc)))
+(defn kind
+  "you · done · fail · run, or nil for tasks that ask nothing of the person."
+  [item]
+  (let [st (:status item)]
+    (cond (= st "failed") "fail"
+          (= st "done") "done"
+          (or (:ask item) (seq (:proposals item))) "you"
+          (contains? #{"running" "open" "waiting"} st) "run"
+          :else nil)))
+
+(defn wants? [item k]
+  (let [n (:notify item)] (or (nil? n) (contains? n (if (= k "you") "you" "done")))))
+
+(defn items
+  "Every session of a decoded work document."
+  [doc]
+  (vec (keep task-item (get doc "objects"))))
+
+(defn needing
+  "The sessions that wait on the person: [{:key :title :ask …}], in document order."
+  [doc]
+  (vec (keep (fn [i] (when (and (= "you" (kind i)) (:ask i)) i)) (items doc))))
 
 (defn news
   "Split `items` against `seen` ({key ask-text} of what was already announced).
    A task is news when it is new or its question changed. Returns
-   {:fresh items :gone keys :seen seen'} where :gone are announced tasks that no
-   longer wait, whose notifications should be withdrawn."
+   {:fresh items :gone keys :seen seen'}."
   [seen items]
   (let [now (into {} (map (fn [i] [(:key i) (:ask i)]) items))]
     {:fresh (vec (remove (fn [i] (= (get seen (:key i)) (:ask i))) items))
@@ -46,12 +67,79 @@
 
 (defn id-of [key] (+ 1000 (erlang/phash2 key 1000000)))
 
+(defn- signature [i] (str (kind i) "|" (:ask i) "|" (pr-str (map :label (:proposals i)))))
+
+(defn changes
+  "What to post and withdraw between two polls. `state` is
+   {:shown {key signature} :status {key status} :primed? bool}; the first poll
+   primes statuses silently, so history never floods the shade.
+   Returns {:post [item…] :cancel [key…] :state state'}."
+  [state all]
+  (let [shown (or (:shown state) {}) before (or (:status state) {}) primed? (:primed? state)
+        terminal? (fn [s] (contains? #{"done" "failed" "cancelled"} s))
+        post (filter (fn [i]
+                       (let [k (kind i)]
+                         (cond
+                           (= k "you") (and (wants? i "you") (not= (get shown (:key i)) (signature i)))
+                           (contains? #{"done" "fail"} k) (and primed? (wants? i "done") (contains? before (:key i))
+                                                               (not (terminal? (get before (:key i)))))
+                           :else false)))
+                     all)
+        showing (into {} (keep (fn [i] (when (and (= "you" (kind i)) (wants? i "you")) [(:key i) (signature i)])) all))
+        posted (set (map :key post))]
+    {:post (vec post)
+     :cancel (vec (remove (fn [k] (or (contains? showing k) (contains? posted k))) (keys shown)))
+     :state {:shown showing :status (into {} (map (fn [i] [(:key i) (:status i)]) all)) :primed? true}}))
+
+(defn- actions [item]
+  (let [ps (:proposals item) k (kind item)]
+    (vec (concat
+          (map-indexed (fn [n p] {:id (str "p" n) :title (:label p)}) (take 2 ps))
+          (cond
+            (and (= k "you") (empty? ps)) [{:id "yes" :title "Yes"} {:id "no" :title "No"}]
+            (and (contains? #{"done" "fail"} k) (empty? ps)) [{:id "tap" :title "Open"}]
+            :else [])
+          (when (= k "you") [{:id "reply" :title "Reply" :reply? true :placeholder (str "Reply to " (:place item) "…")}])))))
+
 (defn notification
-  "The android.notify/post! map for one waiting task."
+  "The android.notify/post! map for one session."
   [item]
-  {:id (id-of (:key item)) :channel (:id channel) :category :message
-   :title (:title item) :text (:ask item) :style {:big-text (:ask item)}
-   :sub-text "Needs you" :only-once? true})
+  (let [k (or (kind item) "you")
+        head (get {"you" "Your turn" "done" "Finished" "fail" "Failed"} k "Your turn")
+        text (or (when (= k "you") (:ask item)) (:summary item) (:ask item) "")]
+    {:id (id-of (:key item)) :channel (:id channel) :category :message
+     :title (str head " · " (:title item)) :text text :style {:big-text text}
+     :sub-text (:place item) :only-once? true :actions (actions item)}))
+
+(defn ongoing
+  "One quiet notification summarising running sessions, or nil when none run."
+  [all]
+  (let [running (filter (fn [i] (= "run" (kind i))) all)]
+    (when (seq running)
+      {:id ongoing-id :channel (:id channel) :silent? true :ongoing? true :auto-cancel? false
+       :title (str (count running) " session" (when (> (count running) 1) "s") " running")
+       :text (apply str (interpose " · " (map (fn [i] (str (:place i) " · " (one-line (:title i) 40))) running)))})))
+
+(defn reply-intent
+  "The host intent a notification action sends: an answer to the open question,
+   or a message to the session. nil for actions that only open Pocket."
+  [item action reply]
+  (let [p (:proposals item)
+        text (cond (= action "reply") reply
+                   (= action "yes") "Yes" (= action "no") "No"
+                   (and (string? action) (starts-with? action "p"))
+                   (:text (get p (try (String/to_integer (subs action 1)) (catch _ 99))))
+                   :else nil)]
+    (when-not (blank-text? text)
+      (if (:ask-id item)
+        {:intent "msg/answer" :args {:msg (:ask-id item) :text text}}
+        {:intent "task/say" :args {:id (:key item) :text text}}))))
+
+(defn parse
+  "Decoded work document from a transport response, or nil when it is not one."
+  [response]
+  (let [body (:body response) doc (if (string? body) (try (json/decode body) (catch _ nil)) body)]
+    (when (and (= 200 (:status response)) (map? doc) (get doc "ok")) doc)))
 
 (defn task-url
   "The workbench URL that opens task `key` directly (the host reads pocket/at)."
@@ -65,9 +153,15 @@
         (vector? msg) msg
         :else nil))
 
-(defn tapped
-  "The notification id when `msg` is a tap or action event on one, else nil."
+(defn action-event
+  "{:notification id :action a :reply text} when `msg` is a tap or action event, else nil."
   [msg]
   (let [p (parts msg)]
     (when (and p (= 3 (count p)) (= :android (nth p 0)) (= :notify/action (nth p 1)) (map? (nth p 2)))
-      (get (nth p 2) "notification"))))
+      (let [m (nth p 2)]
+        {:notification (get m "notification") :action (or (get m "action") "tap") :reply (get m "reply")}))))
+
+(defn tapped
+  "The notification id when `msg` is a tap or action event on one, else nil."
+  [msg]
+  (:notification (action-event msg)))

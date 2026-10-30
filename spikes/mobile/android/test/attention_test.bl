@@ -6,6 +6,9 @@
                      {"type" "omega/task" "key" "t-3" "goal" "Blank" "ask" "  "}
                      {"type" "omega/task" "key" "t-4" "goal" "Other" "ask" "Proceed?"}]})
 (def items (a/needing doc))
+(assert (= ["t-1" "t-2" "t-3" "t-4"] (map :key (a/items doc))))
+(assert (= "fail" (a/kind {:status "failed"})))
+(assert (= "you" (a/kind {:status "idle" :proposals [{:label "x"}]})))
 (assert (= ["t-1" "t-4"] (map :key items)))
 (assert (= "Bump version?" (:ask (first items))))
 (assert (= "Other" (:title (second items))))
@@ -23,7 +26,7 @@
 (let [n (a/notification (first items))]
   (assert (= (a/id-of "t-1") (:id n)))
   (assert (= "omega-attention" (:channel n)))
-  (assert (= "Ship it" (:title n)))
+  (assert (= "Your turn · Ship it" (:title n)))
   (assert (= "Bump version?" (:text n))))
 (assert (not= (a/id-of "t-1") (a/id-of "t-4")))
 (assert (= "https://h.ts.net/?q=1&pocket=task&at=task%3At-1" (a/task-url "https://h.ts.net" "/?q=1" "t-1")))
