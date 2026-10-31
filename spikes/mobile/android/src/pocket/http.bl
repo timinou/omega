@@ -1,0 +1,27 @@
+;; The two HTTPS calls Pocket's native shell makes, on OTP's httpc and ssl alone.
+;; The standalone runtime ships inets and ssl but not connector.transport, so an
+;; app-only update must not depend on it. Hosts are verified; no redirects; bounded.
+(ns pocket.http (:require [bl.json :as json]))
+
+(defn- options [timeout-ms]
+  (list (tuple :timeout timeout-ms) (tuple :connect_timeout (min timeout-ms 10000))
+        (tuple :autoredirect false) (tuple :ssl (httpc/ssl_verify_host_options true))))
+
+(defn- result [r]
+  (if (and (erlang/is_tuple r) (= :ok (elem r 0)))
+    (let [resp (elem r 1)]
+      {:status (elem (elem resp 0) 1) :body (erlang/list_to_binary (elem resp 2))})
+    {:status 0 :error :transport}))
+
+(defn request!
+  "{:method :get|:post :url s :body map :timeout-ms n} → {:status :body} with :body a
+   string, or {:status 0 :error :transport}. Run from a spawned process."
+  [{:keys [method url body timeout-ms] :or {method :get timeout-ms 15000}}]
+  (try
+    (Application/ensure_all_started :ssl) (Application/ensure_all_started :inets)
+    (let [u (String/to_charlist url)
+          req (if (= method :post)
+                (tuple u (list) (String/to_charlist "application/json") (json/encode body))
+                (tuple u (list)))]
+      (result (httpc/request method req (options timeout-ms) (list (tuple :body_format :string)))))
+    (catch _ {:status 0 :error :transport})))

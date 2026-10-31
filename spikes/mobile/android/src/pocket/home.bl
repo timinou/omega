@@ -2,7 +2,7 @@
 (ns pocket.home (:require [android.screen :refer [defscreen]] [android.ui :as ui]
                           [android.app :as app] [android.jvm :as jvm] [pocket.config :as config]
                           [pocket.attention :as attention] [android.notify :as notify]
-                          [android.events :as events] [connector.transport :as transport]))
+                          [android.events :as events] [pocket.http :as transport]))
 (defscreen)
 (def query "/?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile&app=pocket")
 ;; Pocket's ω mark navigates here inside the app; the blocked navigation opens the native panel.
@@ -64,8 +64,7 @@
 (defn fetch! [origin]
   (let [me (erlang/self)]
     (spawn (fn []
-             (let [doc (attention/parse (transport/request! {:method :get :url (str origin attention/path)
-                                                             :decode :bytes :timeout-ms 15000}))]
+             (let [doc (attention/parse (transport/request! {:method :get :url (str origin attention/path) :timeout-ms 15000}))]
                (erlang/send me (tuple :attention (when doc (attention/items doc)))))))))
 (defn begin-notifications! []
   (try (notify/channel! attention/channel) (events/subscribe! :notify)

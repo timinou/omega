@@ -99,3 +99,25 @@ its own signature permission for internal receivers. Development distribution,
 notification listeners, accessibility services, overlay services, microphone
 access and the remote page's native JavaScript bridge are absent from this
 release configuration.
+
+* 0.1.2 — Pocket redesign, notifications with next steps (2026-10-31)
+=~/omega-pocket-0.1.2-arm64-v8a.apk= (versionCode 2026103101), SHA-256 in the sibling
+=.sha256= file. Same signing certificate as 0.1.0/0.1.1
+(=479bdc5d…5d921d72=), so it installs over them with the saved server retained.
+
+An app-only update built with =app_update.py=: twelve AOT app modules (now including
+=pocket.attention= and =pocket.http=) replace or join the 0.1.1 runtime's app modules;
+the shell, native libraries and language runtime stay byte-identical. The manifest's
+version is patched in place; zipalign/apksigner come from build-tools 35 built through
+Nix on =build=. The key stays in =~/.local/share/omega-pocket/signing= (0700) on Work.
+
+0.1.1's runtime does not contain =connector.transport=, which the merged notification
+code used; =pocket.http= uses OTP httpc/ssl (both shipped) with verified hosts instead.
+
+Checks: every external call of the new modules resolves in the shipped runtime
+(=test/link.erl=, 49,586 exports); =test/packaged_pocket.exs= runs the modules inside
+the runtime extracted from the signed APK (host crypto/asn1 and lazy_memo NIFs
+substituted): connection rules, one header, live workspace parsing, notification
+actions, reply intents, verified TLS to Work and refusal of a bad certificate
+(=packaged-0.1.2.log=); =test/apk_contract.py= passes; Android BL tests pass.
+Not yet run on a physical phone.
