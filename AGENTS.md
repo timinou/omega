@@ -32,3 +32,17 @@ package. Contract and rationale: `research/domain/interface/packages.bl.md`.
 
 Never write to the user's running world (port 8790) to test. Use an offline one:
 `bin/bl-ed --offline --memory --port 8792 --root /tmp/x`.
+
+## Building and releasing
+
+Build steps are Nix derivations, and Nix runs them on the Build host. The
+compiled frontend is the flake output `.#frontend`: the same
+`pelagic.build/frontend-into!` the development cache uses, compiled by the drop of
+env.bl's `:bl` pin. Change `flake.nix`'s beam-lisp rev together with that pin.
+
+- Live account host: `bin/omega-frontend` (builds `.#frontend`, keeps the GC root
+  in `~/.local/state/omega/frontend`, writes `~/.config/omega/frontend.path`),
+  then `work restart omega`. Never compile the live frontend on Work.
+- Secrets never enter a derivation (the store is world-readable). Pocket's APK is
+  signed on Work after the build by `spikes/mobile/android/app_update.py`, with the
+  key in `~/.local/share/omega-pocket/signing` (0700).

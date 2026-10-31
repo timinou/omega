@@ -98,7 +98,7 @@
   ; helpers remain conservative inputs until upstream reports all dependencies.
   (and (not (starts-with? path (str (home) "/tutorials/")))
        (not (contains? #{(str (home) "/live-set.bl.org") (str (home) "/demo.bl.org")} path))
-       (not (contains? #{"/pelagic/launch.bl" "/dev.bl" "/frontend.bl" "/local-task.bl" "/bundle.bl" "/watch.bl"}
+       (not (contains? #{"/pelagic/launch.bl" "/dev.bl" "/frontend.bl" "/nix-frontend.bl" "/local-task.bl" "/bundle.bl" "/watch.bl"}
     (when (starts-with? path (home)) (subs path (count (home))))))))
 (defn graph-fingerprint []
   (let [entries (mapcat sources (:paths (assembly)))]
@@ -111,6 +111,28 @@
   (File/write! (str stage "/pelagic-build.json")
     (json/encode {:root (root) :compiler compiler :inputs identity
                   :files (:files (artifact/manifest stage))})))
+(defn- compile-graph-into!
+  "Compile the BL frontend graph and its preparation actors into `stage`."
+  [stage]
+  (println "PELAGIC: compiling shared editor, language and package graph")
+  (let [a (assembly) generated (str stage "/source")
+        entry (str generated "/omega/frontend-graph.bl")
+        _ (File/mkdir_p! (Path/dirname entry))
+        _ (File/write! entry
+            (str "(ns omega.frontend-graph (:require "
+                 (join " " (map (fn [n] (str "[" n "]")) (:namespaces a))) "))\n"))
+        result (js/build! "omega.frontend-graph"
+                 {:paths (to-list (cons generated (:paths a)))
+                  :stub "lower" :with "reader" :preload (:preload a)
+                  :host (:host a) :out (str stage "/out")})]
+    (doseq [module (:modules result)]
+      (let [alias (str stage "/out/" module ".mjs")]
+        (when-not (File/exists? alias)
+          (File/write! alias (str "export * from './ns/" module ".mjs';\n")))))
+    (File/write! (str stage "/build.json")
+      (json/encode {:name "pelagic-frontend" :compiler compiler :modules (count (:modules result))})))
+  (println "PELAGIC: linking preparation actors against the checked shared graph")
+  (actors/build! (home) (str stage "/out") (str stage "/pkg/pelagic/actor")))
 (defn- graph-unlocked!
   "Compile the BL graph once. Asset-only edits reuse these checked modules."
   []
@@ -122,25 +144,7 @@
       (let [stage (artifacts/stage! output)]
         (File/mkdir_p! stage)
         (try
-          (println "PELAGIC: compiling shared editor, language and package graph")
-          (let [a (assembly) generated (str stage "/source")
-                entry (str generated "/omega/frontend-graph.bl")
-                _ (File/mkdir_p! (Path/dirname entry))
-                _ (File/write! entry
-                    (str "(ns omega.frontend-graph (:require "
-                         (join " " (map (fn [n] (str "[" n "]")) (:namespaces a))) "))\n"))
-                result (js/build! "omega.frontend-graph"
-                         {:paths (to-list (cons generated (:paths a)))
-                          :stub "lower" :with "reader" :preload (:preload a)
-                          :host (:host a) :out (str stage "/out")})]
-            (doseq [module (:modules result)]
-              (let [alias (str stage "/out/" module ".mjs")]
-                (when-not (File/exists? alias)
-                  (File/write! alias (str "export * from './ns/" module ".mjs';\n")))))
-            (File/write! (str stage "/build.json")
-              (json/encode {:name "pelagic-frontend" :compiler compiler :modules (count (:modules result))})))
-          (println "PELAGIC: linking preparation actors against the checked shared graph")
-          (actors/build! here (str stage "/out") (str stage "/pkg/pelagic/actor"))
+          (compile-graph-into! stage)
           (File/write! (str stage "/.pelagic-graph") "PELAGIC compiled BL graph\n")
           (when-not (= identity (graph-fingerprint))
             (throw (ex-info "BL inputs changed during compilation; run the task again." {})))
@@ -153,6 +157,27 @@
   (artifacts/coordinated (str (home) "/dist/.graph.lock")
     (fn [] (let [output (graph-unlocked!)]
       (artifacts/collect! (Path/dirname output) ".pelagic-graph" 3 #{output}) output))))
+(defn- assemble-into!
+  "Lay out the served frontend in `stage` from a compiled graph directory."
+  [stage graph]
+  (File/cp_r! graph stage)
+  (when (File/exists? (str stage "/pelagic-build.json")) (File/rm! (str stage "/pelagic-build.json")))
+  (println "PELAGIC: staging session frontend assets")
+  (let [root (root)]
+  (copy-files! (str root "/vendor/bl-ed/web") stage [".mjs" ".css"])
+  (copy! (str root "/vendor/bl-ed/web/index.html") (str stage "/index.html"))
+  (copy! (str root "/vendor/bl-ed/web/welcome.bl.org") (str stage "/welcome.bl.org"))
+  (doseq [m (package-manifests)]
+    (doseq [asset (get-in m [:frontend :assets])]
+      (let [from (str root "/" (:from asset)) to (str stage "/" (:to asset))]
+        (if (:suffixes asset)
+          (copy-files! from to (:suffixes asset))
+          (copy! from to))))
+    (File/write! (str stage "/pkg/" (:name m) ".mjs") (frontend/loader m)))
+  (let [boot (Path/dirname (BeamLisp.Loader/source_path "core"))]
+    (doseq [name ["core.bl" "sugar.bl"]]
+      (copy! (str boot "/" name) (str stage "/out/src/priv/boot/" name)))))
+  (File/write! (str stage "/.pelagic-server") "PELAGIC shared frontend\n"))
 (defn- frontend-unlocked!
   "Return the shared, checked server frontend; compile only when inputs change."
   []
@@ -164,29 +189,30 @@
       (let [stage (artifacts/stage! output)]
         (File/mkdir_p! (Path/dirname stage))
         (try
-          (artifacts/reading (graph!) (fn [graph] (File/cp_r! graph stage)))
-          (File/rm! (str stage "/pelagic-build.json"))
-          (println "PELAGIC: staging session frontend assets")
-          (copy-files! (str root "/vendor/bl-ed/web") stage [".mjs" ".css"])
-          (copy! (str root "/vendor/bl-ed/web/index.html") (str stage "/index.html"))
-          (copy! (str root "/vendor/bl-ed/web/welcome.bl.org") (str stage "/welcome.bl.org"))
-          (doseq [m (package-manifests)]
-            (doseq [asset (get-in m [:frontend :assets])]
-              (let [from (str root "/" (:from asset)) to (str stage "/" (:to asset))]
-                (if (:suffixes asset)
-                  (copy-files! from to (:suffixes asset))
-                  (copy! from to))))
-            (File/write! (str stage "/pkg/" (:name m) ".mjs") (frontend/loader m)))
-          (let [boot (Path/dirname (BeamLisp.Loader/source_path "core"))]
-            (doseq [name ["core.bl" "sugar.bl"]]
-              (copy! (str boot "/" name) (str stage "/out/src/priv/boot/" name))))
-          (File/write! (str stage "/.pelagic-server") "PELAGIC shared frontend\n")
+          (artifacts/reading (graph!) (fn [graph] (assemble-into! stage graph)))
           (when-not (= identity (fingerprint))
             (throw (ex-info "Frontend inputs changed during staging; run the task again." {})))
           (seal! stage identity)
           (replace! stage output ".pelagic-server")
           output
           (finally (when (File/exists? stage) (File/rm_rf! stage))))))))
+(defn frontend-into!
+  "Build the checked frontend into the fresh directory `out`, with no cache, lock or
+   collection. Nix gives the result an immutable store path; Build gives it the CPU."
+  [out]
+  (check-tools!)
+  (let [identity (fingerprint)
+        graph (str (System/tmp_dir!) "/omega-graph-" (System/unique_integer (list :positive)))]
+    (File/mkdir_p! graph)
+    (try
+      (compile-graph-into! graph)
+      (File/mkdir_p! out)
+      (assemble-into! out graph)
+      (when-not (= identity (fingerprint))
+        (throw (ex-info "Frontend inputs changed during the build." {})))
+      (seal! out identity)
+      out
+      (finally (File/rm_rf! graph)))))
 (defn frontend! []
   (check-tools!)
   (artifacts/coordinated (str (home) "/dist/.frontend.lock")

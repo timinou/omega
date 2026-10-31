@@ -1,0 +1,90 @@
+{
+  "nodes": {
+    "beam-lisp": {
+      "inputs": {
+        "elixir-src": "elixir-src",
+        "nixpkgs": "nixpkgs",
+        "nixpkgs-rust": [
+          "beam-lisp",
+          "nixpkgs"
+        ],
+        "otp-src": "otp-src"
+      },
+      "locked": {
+        "lastModified": 1791914642,
+        "narHash": "sha256-ih7UaYzNWW6CnlYOAzwa50mj1uAPYP8Y5C05K7KhkBg=",
+        "ref": "refs/heads/main",
+        "rev": "65c25b33c90766829334033d77a30c0c5f33938a",
+        "revCount": 2746,
+        "type": "git",
+        "url": "ssh://git@github.com/timinou/beam-lisp"
+      },
+      "original": {
+        "rev": "65c25b33c90766829334033d77a30c0c5f33938a",
+        "type": "git",
+        "url": "ssh://git@github.com/timinou/beam-lisp"
+      }
+    },
+    "elixir-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1782216167,
+        "narHash": "sha256-KSRsXQhh3PX7SUNhuw/POg74XfjkPiZDsv9wdNwFrwA=",
+        "owner": "elixir-lang",
+        "repo": "elixir",
+        "rev": "545dddf138e4cb1ee874e6f2c26882c9b438f551",
+        "type": "github"
+      },
+      "original": {
+        "owner": "elixir-lang",
+        "ref": "v1.20.2",
+        "repo": "elixir",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1791594108,
+        "narHash": "sha256-XK4KceonkwD8LuMAt/vNrz982mXJM5jeHAxMwsUXXAQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "6510408d147d8c5e6d76043e899e9251756f6a75",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "6510408d147d8c5e6d76043e899e9251756f6a75",
+        "type": "github"
+      }
+    },
+    "otp-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779804512,
+        "narHash": "sha256-0I82VBCgA8KfdNYkNWyqcH+f0Kc6al11BAErtxfVDZo=",
+        "owner": "erlang",
+        "repo": "otp",
+        "rev": "f26c7e590c5d1b3afa0dee38093442df117822e3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "erlang",
+        "ref": "OTP-29.0.1",
+        "repo": "otp",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "beam-lisp": "beam-lisp",
+        "nixpkgs": [
+          "beam-lisp",
+          "nixpkgs"
+        ]
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

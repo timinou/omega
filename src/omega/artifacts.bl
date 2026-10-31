@@ -19,11 +19,18 @@
       (throw (ex-info "Cannot acquire frontend build lease" {:path path :reason (:error r)}))))))))
 
 (defn- generation-lock [directory] (str (Path/dirname directory) "/.generations.lock"))
+(defn store-path?
+ "A Nix store output: immutable, and kept alive by its GC root rather than a lease."
+ [directory]
+ (starts-with? (Path/expand directory) "/nix/store/"))
 (defn pin!
  "Keep a managed generation until the host stops or its process dies. Older
-  unmarked generations are never collected. Returns an OS-owned lease or nil."
+  unmarked generations are never collected. Returns an OS-owned lease, :store for
+  a Nix store output (nothing to collect), or nil."
  [directory]
  (let [directory (Path/expand directory)]
+  (if (and (store-path? directory) (File/regular? (str directory "/.omega-managed")))
+   :store
   (coordinated (generation-lock directory)
    (fn []
     (when-not (File/dir? directory) (throw (ex-info "Frontend retired before host startup; retry launch" {:path directory})))
@@ -32,8 +39,8 @@
            path (str pins "/" (System/pid) "-" (System/unique_integer (list :positive)) ".lock")]
       (File/mkdir_p! pins)
       (let [result (lease/acquire! path)]
-       (or (:ok result) (throw (ex-info "Cannot pin frontend generation" result))))))))))
-(defn unpin! [pin] (when pin (lease/release! pin)) :ok)
+       (or (:ok result) (throw (ex-info "Cannot pin frontend generation" result)))))))))))
+(defn unpin! [pin] (when (and pin (not= :store pin)) (lease/release! pin)) :ok)
 (defn reading
  "Read a generation under an owner pin; concurrent collection cannot retire it."
  [directory action]

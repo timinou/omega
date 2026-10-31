@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Release the compiled frontend as an immutable Nix output for the account host.
+# Nix builds `.#frontend` on Build; the out-link is its GC root; the host reads
+# ~/.config/omega/frontend.path at start. Then: work restart omega.
+set -euo pipefail
+ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
+state=${XDG_STATE_HOME:-$HOME/.local/state}/omega
+mkdir -p "$state" "$HOME/.config/omega"
+nix build "$ROOT#frontend" --out-link "$state/frontend" -L
+web=$(readlink -f "$state/frontend")
+test -f "$web/.omega-managed" && test -f "$web/.inputs"
+printf '%s\n' "$web" > "$HOME/.config/omega/frontend.path.next"
+mv "$HOME/.config/omega/frontend.path.next" "$HOME/.config/omega/frontend.path"
+echo "$web"
+echo "Frontend released. Apply with: work restart omega"

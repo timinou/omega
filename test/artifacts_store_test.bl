@@ -1,0 +1,10 @@
+(ns omega.artifacts-store-test (:require [omega.artifacts :as artifacts]))
+
+(deftest nix-store-frontends-are-kept-by-their-gc-root-not-a-lease
+  (is (artifacts/store-path? "/nix/store/abc-omega-frontend"))
+  (is (not (artifacts/store-path? "/home/me/omega/spikes/pelagic/dist/frontend/abc")))
+  (is (= :ok (artifacts/unpin! :store)) "nothing to release for a store output")
+  (let [dir (str (System/tmp_dir!) "/unmanaged-" (System/unique_integer (list :positive)))]
+    (File/mkdir_p! dir)
+    (try (is (nil? (artifacts/pin! dir)) "unmanaged directories are never pinned")
+         (finally (File/rm_rf! dir)))))
