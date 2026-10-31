@@ -1,0 +1,128 @@
+; Pocket, two people, one world: a Beam Lisp scenario witnessed in real browsers.
+; The world drives agent-browser sessions (Chromium over CDP), one per actor, against
+; a DISPOSABLE host. Run: POCKET_TEST_URL=http://127.0.0.1:PORT bl run … pocket_scenario.bl
+(ns pocket-scenario (:require [scenario :as sc] [bl.json :as json] [clojure.string :as str]))
+
+(def base (System/fetch_env! "POCKET_TEST_URL"))
+(when (str/includes? base ":8790") (throw (ex-info "Never the user's running world." {})))
+(def proof (or (System/get_env "POCKET_SCENARIO_PROOF") "spikes/mobile/proof/pocket-redesign/scenario"))
+(def entry "/?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile&pocket=work&at=workspace:all")
+(def sizes {:phone [390 844] :desktop [1280 860]})
+
+(defn- ab! [actor & args]
+  (let [r (System/cmd "agent-browser" (to-list (concat ["--session" (str "pocket-scenario-" (name actor))] (map str args)))
+                      (list (tuple :stderr_to_stdout true)))]
+    (when-not (= 0 (elem r 1)) (throw (ex-info (str "agent-browser " (str/join " " args) ": " (str/trim (elem r 0))) {:actor actor})))
+    (elem r 0)))
+
+(defn- js-str [s] (json/encode (str s)))
+
+; What an actor sees, as plain data: the screen, the header, every card and its state.
+(def snapshot-js
+  "JSON.stringify((()=>{const a=document.querySelector('[data-pane=phone] .mobile-app');if(!a)return {ready:false};
+   const t=s=>(s?.textContent||'').trim();
+   return {ready:true,screen:a.dataset.screen,title:t(a.querySelector('.hdr .id b')),context:t(a.querySelector('.hdr .id>span')),
+     online:!a.querySelector('.hdr .conn.off'),notice:t(a.querySelector('.notice')),
+     cards:[...a.querySelectorAll('.card')].map(c=>({title:t(c.querySelector('h3')),state:[...c.classList].find(x=>x.startsWith('is-'))?.slice(3),place:t(c.querySelector('.pname'))})),
+     places:[...a.querySelectorAll('button.place b')].map(t),on:[...a.querySelectorAll('.chip.on')].map(t),
+     text:t(a).slice(0,4000)};})())")
+
+(defn view [actor]
+  (let [out (str/trim (ab! actor "eval" snapshot-js))
+        decoded (json/decode out)
+        decoded (if (string? decoded) (json/decode decoded) decoded)]
+    decoded))
+
+(defn- shot! [actor n label]
+  (File/mkdir_p! proof)
+  (ab! actor "screenshot" (str proof "/" (if (< n 10) "0" "") n "-" (name actor) "-" label ".png")))
+
+(def counter (atom 0))
+
+(defn settle!
+  "Wait for finite motion (screens sliding in) to finish, as a person waits to tap a moving target."
+  [actor]
+  (ab! actor "eval" "Promise.race([Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>0))),new Promise(r=>setTimeout(r,2000))]).then(()=>1)"))
+
+(defn perform!
+  "Terms an actor can do, as a person would on the screen."
+  [actor term]
+  (let [[kind a b] term]
+    (case kind
+      :tap (do (settle! actor) (ab! actor "click" a))
+      :fill (ab! actor "fill" a b)
+      :press (ab! actor "press" a)
+      :open-card (ab! actor "eval" (str "(()=>{const c=[...document.querySelectorAll('[data-pane=phone] .card')].find(c=>c.querySelector('h3')?.textContent.trim()===" (js-str a) ");c.click();return 1})()"))
+      :card-chip (ab! actor "eval" (str "(()=>{const c=[...document.querySelectorAll('[data-pane=phone] .card')].find(c=>c.querySelector('h3')?.textContent.trim()===" (js-str a) ");[...c.querySelectorAll('.chip')].find(x=>x.textContent.trim()===" (js-str b) ").click();return 1})()"))
+      :wait (ab! actor "wait" (str a)))
+    (shot! actor (swap! counter inc) (name kind))
+    :ok))
+
+(defn eventually
+  "Live worlds converge in time: poll the actor's view until the claim holds (≤ 30 s)."
+  [actor claim ctx]
+  (loop [n 0]
+    (let [v (try (view actor) (catch _ nil))
+          held (and v (get v "ready") (try (claim v ctx) (catch _ false)))]
+      (cond held true
+            (> n 60) false
+            :else (do (Process/sleep 500) (recur (inc n)))))))
+
+(defn browser-world []
+  {:kind :browser
+   :open (fn [scen]
+           (doseq [actor (:actors scen)]
+             (let [[w h] (get sizes actor [390 844])]
+               (try (ab! actor "close") (catch _ nil))
+               (ab! actor "set" "viewport" w h)
+               (ab! actor "open" (str base entry))
+               (eventually actor (fn [v _] (get v "online")) {})))
+           {})
+   :step! (fn [_ ev] (perform! (nth ev 1) (nth ev 2)))
+   :claim! (fn [_ actor claim ctx] (eventually actor claim ctx))
+   :observe (fn [_ actor lens] (lens (view actor)))
+   :liveness (fn [_] nil)
+   :basis (fn [_] nil)
+   :close! (fn [_] (doseq [a [:phone :desktop]] (try (ab! a "close") (catch _ nil))) nil)
+   :views-fn (fn [_ _] nil)})
+
+; ── claims over a view ──────────────────────────────────────────────────────
+(defn card [v title] (first (filter (fn [c] (= title (get c "title"))) (get v "cards"))))
+(defn card-in [title state] (fn [v _] (= state (get (card v title) "state"))))
+(defn screen-is [s] (fn [v _] (= s (get v "screen"))))
+(defn shows [text] (fn [v _] (str/includes? (str (get v "text")) text)))
+
+(def goal "Summarise this folder for a newcomer")
+
+(def two-people
+  (sc/scenario "Pocket: launch on the phone, answer from the desktop" [:phone :desktop]
+    [(sc/sees :phone (screen-is "work") "Pocket opens on Work, the inbox")
+     (sc/does :phone [:tap ".fab"])
+     (sc/sees :phone (screen-is "launch") "New session opens the full-screen launch")
+     (sc/does :phone [:tap "[data-act=launch-place][data-path=test]"])
+     (sc/sees :phone (fn [v _] (some #{"teTest"} (get v "on"))) "Choosing a place is one tap")
+     (sc/does :phone [:fill "[data-field=new-goal]" goal])
+     (sc/does :phone [:tap "details.run > summary"])
+     (sc/does :phone [:tap "[data-act=launch-set][data-field=may][data-value=read]"])
+     (sc/sees :phone (shows "read-only") "How the session runs fits one line")
+     (sc/does :phone [:tap "[data-act=launch-start]"])
+     (sc/sees :phone (fn [v _] (and (= "task" (get v "screen")) (= goal (get v "title")))) "Start lands in the session, titled by its goal")
+     (sc/converges :phone [:wait 300]
+                   :desktop (fn [v ctx] (and ((card-in goal "you") v ctx) (= "Test" (get (card v goal) "place"))))
+                   "The desktop sees the phone's session waiting, with no message between them")
+     (sc/converges :desktop [:card-chip goal "Yes"]
+                   :phone (fn [v _] (str/includes? (str (get v "text")) "Offline run finished"))
+                   "Answering a card on the desktop finishes the phone's session")
+     (sc/does :phone [:tap "[data-act=work]"])
+     (sc/sees :phone (card-in goal "done") "The phone's inbox moves it to Done")
+     (sc/does :desktop [:tap ".tabs [data-act=places]"])
+     (sc/sees :desktop (fn [v _] (some #{"Test"} (get v "places"))) "Places lists the attached folder")
+]))
+
+(let [r (sc/run-world two-people (browser-world))
+      ok (and (:ok r) (every? (fn [v] (= :witnessed (:verdict v))) (:verdicts r)))]
+  (doseq [t (:trace r)]
+    (println (str (:step t) "\t" (name (or (:actor t) :-)) "\t" (if (= :n/a (:verdict t)) "act" (name (or (:verdict t) :act))) "\t"
+                  (or (:because t) (pr-str (nth (:action t) 2 nil))))))
+  (println (if ok "scenario: every claim witnessed" "scenario: REFUTED"))
+  (when-not ok (System/halt 1)))

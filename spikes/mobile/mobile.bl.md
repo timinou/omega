@@ -138,6 +138,14 @@ reserved blocked navigation, so the page still has no JavaScript bridge.
 **Home.** On phone widths Home hides its own header and dock while Work is active,
 so Pocket's chrome shows; instruments keep the workbench chrome.
 
+**Witnessed scenario.** `test/pocket_scenario.bl` states the two-client story with
+Beam Lisp's `scenario` module: the phone launches a read-only session in a chosen
+place, the desktop sees it waiting and answers from its card, both converge. Its
+world drives two real browser sessions through agent-browser (Chromium over CDP),
+waits for motion to settle before each tap, and records every claim as witnessed
+with a frame per step. It found and fixed a real race: asynchronous draft and route
+restoration no longer undo what the person did since the page loaded.
+
 Proof: [screens in the real editor](proof/pocket-redesign/), [verification
 receipt](proof/pocket-redesign/verification.log). BL tests:
 `spikes/mobile/test/view_test.bl`, `run_settings_test.bl`; Android:

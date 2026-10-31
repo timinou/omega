@@ -1,0 +1,22 @@
+Pocket redesign — verification receipt (2026-10-31)
+Runtime: Omega's pinned omega-bl (BL_USE=build:205c5a34); Chromium 155 from Nix; disposable worlds only
+(private XDG runtimes under /tmp/pocket-dev, ports 8830/8831). The running world and :8790 were never touched.
+
+PASS  BL tests (bin/bl --cold test): pocket view 37, run settings 13 (real worktree launch), shared world,
+      attention, actor, task, frontend, dev host — all green               (gate-raw.log)
+PASS  Android: pocket.home 43 assertions; pocket.attention assertions       (gate-raw.log)
+PASS  Package drive: 20/20 (node --test spikes/mobile/test/drive.test.mjs)  (gate-raw.log)
+PASS  Presentation equivalence (spikes/mobile/test/presentation-check.mjs) unchanged
+PASS  vendor/bl-ed drive, frame, frame-geometry, columns, pkg, rendering, omega, num, document-packages;
+      spikes/workspace drive + desk-drive; spikes/dwim drive               (gate-raw.log)
+PASS  host-browser (new DOM, same contracts)                                (journeys.log)
+PASS  touch journey in the real editor on a fresh world, ending in exact unuse; screenshots 00–15 here
+PASS  BL scenario (spikes/mobile/test/pocket_scenario.bl): phone launches, desktop answers, both converge;
+      10/10 claims witnessed in two real browser sessions; frames in scenario/   (scenario.log, journeys.log)
+
+NOT RUN TO GREEN, pre-existing or environmental (identical on the generation built before this work):
+      spikes/workspace buffer-drive, links-drive, place-drive: "no arity 1 on fn boot"
+      spikes/present scroll.test, vendor/bl-ed host.test: expect compiled copies under */web/out (absent here)
+      vendor/bl-ed serve-cold.test: spawns bin/bl directly (#!/bin/bash is absent on NixOS)
+      shared-launch.py/shared-browser.mjs: ported to the new screens; its first full run timed out under
+      load average ~60 and the renderer crashed; the same multi-client story now runs as the BL scenario.

@@ -26,7 +26,7 @@
     (when (:sheet-html vm) (raw (:sheet-html vm)))))
 
 (defn- generic-header [vm title]
-  (ui/header {:key "generic-hdr" :title title :back {:act "buffers" :label "Back to Buffers"}
+  (ui/header {:key "generic-hdr" :title title :back {:act "buffers" :label "Back to Buffers"} :mark {:online (:online vm)}
               :actions (ui/palette-button)}))
 
 (defn- frame [vm {:keys [header before body after nav fab class]}]

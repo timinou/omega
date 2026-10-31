@@ -1,0 +1,29 @@
+== host browser
+host browser: retained replies, task identity, native selection, disposal passed
+   exit 0
+== touch journey (real editor, phone)
+{"checks":["native place attach/settings/directory picker, current-place defaults, draft restore, compact title, stable full execution, typed question, explicit files","linked output file, attributed unified buffer history, exact operation preview and guarded undo","source-mapped reader, outline, URL/back, reload scroll, find count/previous/next, recent/pinned buffers","retained world namespace and REPL history across reload","command search focus, unfinished address survives probe, narrow/short/desktop geometry"]}
+   exit 0
+== BL scenario: two people, one world (agent-browser over CDP)
+1	phone	witnessed	Pocket opens on Work, the inbox
+2	phone	act	[:tap ".fab"]
+3	phone	witnessed	New session opens the full-screen launch
+4	phone	act	[:tap "[data-act=launch-place][data-path=test]"]
+5	phone	witnessed	Choosing a place is one tap
+6	phone	act	[:fill "[data-field=new-goal]" "Summarise this folder for a newcomer"]
+7	phone	act	[:tap "details.run > summary"]
+8	phone	act	[:tap "[data-act=launch-set][data-field=may][data-value=read]"]
+9	phone	witnessed	How the session runs fits one line
+10	phone	act	[:tap "[data-act=launch-start]"]
+11	phone	witnessed	Start lands in the session, titled by its goal
+12	phone	act	[:wait 300]
+13	desktop	witnessed	The desktop sees the phone's session waiting, with no message between them
+14	desktop	act	[:card-chip "Summarise this folder for a newcomer" "Yes"]
+15	phone	witnessed	Answering a card on the desktop finishes the phone's session
+16	phone	act	[:tap "[data-act=work]"]
+17	phone	witnessed	The phone's inbox moves it to Done
+18	desktop	act	[:tap ".tabs [data-act=places]"]
+19	desktop	witnessed	Places lists the attached folder
+scenario: every claim witnessed
+nil
+   exit 0

@@ -38,7 +38,7 @@
         refs (:refs draft)]
     (list
      (ui/header {:key "launch-hdr" :title "New session"
-                 :back {:act "launch-close" :label "Close"}})
+                 :back {:act "launch-close" :label "Close"} :mark {:online (:online vm)}})
      [:main.mobile-scroll.launch {:data-key "launch"}
       [:div.place-chips {:role "radiogroup" :aria-label "Place"}
        (for [p places]

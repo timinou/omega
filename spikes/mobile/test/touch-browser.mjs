@@ -14,7 +14,7 @@ p.setDefaultTimeout(30000);p.on('pageerror',e=>errors.push(e.stack));
 const ui=p.locator('[data-pane="phone"]'),click=act=>ui.locator(`${act==='dismiss'?'button':''}[data-act="${act}"]`).first().click();
 const doc=async address=>(await(await ctx.request.get(base+'/api/doc?path='+encodeURIComponent(address))).json());
 const intent=async(name,args)=>(await(await ctx.request.post(base+'/api/intent',{data:{intent:name,args}})).json());
-const open=async address=>{await click('commands');await ui.locator('[data-field="palette-query"]').fill('@'+address);await ui.locator('[data-field="palette-query"]').press('Enter');await ui.locator('.reader').waitFor();await p.waitForFunction(address=>blEd.F.d_editor(blEd.frame(),blEd.K('file')).get(blEd.K('path'))===address,address);};
+const open=async address=>{if(!await ui.locator('button[data-act="commands"]:visible').count())await click('details');await click('commands');await ui.locator('[data-field="palette-query"]').fill('@'+address);await ui.locator('[data-field="palette-query"]').press('Enter');await ui.locator('.reader').waitFor();await p.waitForFunction(address=>blEd.F.d_editor(blEd.frame(),blEd.K('file')).get(blEd.K('path'))===address,address);};
 const shot=name=>p.screenshot({path:path.join(proof,name+'.png')});
 try{
  await p.goto(base+(process.env.POCKET_FRONTEND?'/generations/'+process.env.POCKET_FRONTEND+'/':'/')+'?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile');
@@ -71,7 +71,7 @@ try{
  await p.waitForFunction(()=>!blEd.F.d_editor(blEd.frame(),blEd.K('file')).get(blEd.K('doc'))?.get(blEd.K('stale')));
  await p.waitForTimeout(300);assert.equal((await doc('work:design/review.bl.org')).text,'First line\nChanged detail\nLast line\n');
  assert.equal((await intent('links/put',{text:`{:id "touch-review" :from {:task "${taskPath.slice(5)}"} :kind :output :to {:path "work:design/review.bl.org"}}`})).ok,true);
- await click('work');assert.equal(await ui.locator('.tabs').isVisible(),true);await shot('01-work');await ui.locator('[data-act="open-task"][data-path="'+taskPath+'"]').click();await ui.locator('[data-act="tab-changes"] .count').filter({hasText:'1'}).waitFor();assert.equal(await ui.locator('[data-act="tab-plan"] .count').innerText(),String(new Set((await doc(taskPath)).data.artifacts.map(a=>a.path)).size));await click('tab-changes');
+ await click('work');assert.equal(await ui.locator('.tabs').isVisible(),true);await shot('01-work');await ui.locator('details.done').evaluate(d=>{d.open=true;}).catch(()=>{});await ui.locator('[data-act="open-task"][data-path="'+taskPath+'"]').click();await ui.locator('[data-act="tab-changes"] .count').filter({hasText:'1'}).waitFor();assert.equal(await ui.locator('[data-act="tab-plan"] .count').innerText(),String(new Set((await doc(taskPath)).data.artifacts.map(a=>a.path)).size));await click('tab-changes');
  await ui.locator('[data-act="review-file"][data-path="work:design/review.bl.org"]').click();await ui.locator('.change-card').first().waitFor();assert.equal(await ui.locator('.diff .added').filter({hasText:'Changed detail'}).count(),1);
  await shot('14-review');await ui.locator('[data-act="undo"]').first().click();
  await ui.getByRole('heading',{name:'Undo edit?',exact:true}).waitFor();assert.ok((await ui.locator('[role="dialog"]').innerText()).includes('review.bl.org'));

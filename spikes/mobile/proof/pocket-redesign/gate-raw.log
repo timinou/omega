@@ -1,0 +1,1563 @@
+frontend: spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out
+== BL: pocket view, run settings, shared world, attention, actor, task, frontend, dev host
+
+Testing pocket-view-test
+
+Testing pocket-run-settings-test
+
+23:44:00.390 [info] Running #Function<3.9708683/2 in BeamLisp.Ns.Fn.M26306.serve/1> with Bandit 1.12.4 at 127.0.0.1:8893 (http)
+
+Testing pocket-shared-world-test
+
+23:48:40.482 [info] Running #Function<3.9708683/2 in BeamLisp.Ns.Fn.M26306.serve/1> with Bandit 1.12.4 at 127.0.0.1:8892 (http)
+
+23:48:45.582 [info] Running #Function<3.9708683/2 in BeamLisp.Ns.Fn.M26306.serve/1> with Bandit 1.12.4 at 127.0.0.1:8892 (http)
+
+Testing pocket-attention-test
+
+Testing actor-test
+
+Testing task-test
+
+Testing omega.frontend-test
+
+Testing omega.dev-host-test
+
+23:48:54.507 [info] Running #Function<3.9708683/2 in BeamLisp.Ns.Fn.M26306.serve/1> with Bandit 1.12.4 at 127.0.0.1:54397 (http)
+
+23:48:54.930 [error] Running #Function<3.9708683/2 in BeamLisp.Ns.Fn.M26306.serve/1> with Bandit 1.12.4 at http failed, port 35571 already in use
+── ward: warm isolated test run ──
+
+  ✓ pocket-view-test  37 passed
+  ✓ pocket-run-settings-test  13 passed
+  ✓ pocket-shared-world-test  31 passed
+  ✓ pocket-attention-test  4 passed
+  ✓ actor-test  15 passed
+  ✓ task-test  37 passed
+  ✓ omega.frontend-test  15 passed
+  ✓ omega.dev-host-test  26 passed
+
+  8 file(s) passed, 0 failed, 0 incoherent
+  ✓ all green
+   exit 0
+== Android: home
+
+Testing pocket.home-test
+── ward: warm isolated test run ──
+
+  ✓ pocket.home-test  43 passed
+
+  1 file(s) passed, 0 failed, 0 incoherent
+  ✓ all green
+   exit 0
+== Android: attention
+attention assertions passed
+:ok
+   exit 0
+== package drive
+TAP version 13
+# Subtest: mobile is a removable layer and a real frame layout, with no user table mutation
+ok 1 - mobile is a removable layer and a real frame layout, with no user table mutation
+  ---
+  duration_ms: 150.785114
+  type: 'test'
+  ...
+# Subtest: drafts stay keyed to tasks and navigation leaves the conversation editor untouched
+ok 2 - drafts stay keyed to tasks and navigation leaves the conversation editor untouched
+  ---
+  duration_ms: 10.793874
+  type: 'test'
+  ...
+# Subtest: send uses the existing task intent, blocks duplicates and preserves drafts on failure
+ok 3 - send uses the existing task intent, blocks duplicates and preserves drafts on failure
+  ---
+  duration_ms: 8.406434
+  type: 'test'
+  ...
+# Subtest: quick answers keep a composed reply; successful text sends clear only the submitted draft
+ok 4 - quick answers keep a composed reply; successful text sends clear only the submitted draft
+  ---
+  duration_ms: 11.730441
+  type: 'test'
+  ...
+# Subtest: completed task follow-up carries its actual place and frozen directory
+ok 5 - completed task follow-up carries its actual place and frozen directory
+  ---
+  duration_ms: 4.626933
+  type: 'test'
+  ...
+# Subtest: mobile file input participates in the shared-buffer draft protocol and read-only guards
+ok 6 - mobile file input participates in the shared-buffer draft protocol and read-only guards
+  ---
+  duration_ms: 26.993565
+  type: 'test'
+  ...
+# Subtest: dirty file navigation keeps its current tab and exposes a publication message
+ok 7 - dirty file navigation keeps its current tab and exposes a publication message
+  ---
+  duration_ms: 5.174033
+  type: 'test'
+  ...
+# Subtest: task creation from a place document validates against the retained place choices
+ok 8 - task creation from a place document validates against the retained place choices
+  ---
+  duration_ms: 3.848566
+  type: 'test'
+  ...
+# Subtest: document navigation and explicit passage retain their address, revision and anchor
+ok 9 - document navigation and explicit passage retain their address, revision and anchor
+  ---
+  duration_ms: 4.945637
+  type: 'test'
+  ...
+# Subtest: command discovery includes core and package commands without shared table mutation
+ok 10 - command discovery includes core and package commands without shared table mutation
+  ---
+  duration_ms: 14.858747
+  type: 'test'
+  ...
+# Subtest: first editor eval can resume when the language arrives
+ok 11 - first editor eval can resume when the language arrives
+  ---
+  duration_ms: 5.737338
+  type: 'test'
+  ...
+# Subtest: native prompts expose data and submit through the existing editor
+ok 12 - native prompts expose data and submit through the existing editor
+  ---
+  duration_ms: 16.924202
+  type: 'test'
+  ...
+# Subtest: reading a task home does not manufacture unpublished edits when a task completes
+ok 13 - reading a task home does not manufacture unpublished edits when a task completes
+  ---
+  duration_ms: 16.403823
+  type: 'test'
+  ...
+# Subtest: long goals retain their complete instruction under a compact editable title
+ok 14 - long goals retain their complete instruction under a compact editable title
+  ---
+  duration_ms: 7.597251
+  type: 'test'
+  ...
+# Subtest: running task instructions steer the current turn
+ok 15 - running task instructions steer the current turn
+  ---
+  duration_ms: 4.728151
+  type: 'test'
+  ...
+# Subtest: place form invokes the existing place intent as ordinary data
+ok 16 - place form invokes the existing place intent as ordinary data
+  ---
+  duration_ms: 3.864355
+  type: 'test'
+  ...
+# Subtest: Files index clears an earlier file target without discarding that editor
+ok 17 - Files index clears an earlier file target without discarding that editor
+  ---
+  duration_ms: 3.433304
+  type: 'test'
+  ...
+# Subtest: clearing a local cwd setting restores inheritance
+ok 18 - clearing a local cwd setting restores inheritance
+  ---
+  duration_ms: 3.170027
+  type: 'test'
+  ...
+# Subtest: a newly visited document opens in reading mode without changing the retained editor text
+ok 19 - a newly visited document opens in reading mode without changing the retained editor text
+  ---
+  duration_ms: 20.921242
+  type: 'test'
+  ...
+# Subtest: closed work cannot advertise a stale question or waiting summary
+ok 20 - closed work cannot advertise a stale question or waiting summary
+  ---
+  duration_ms: 0.799828
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 704.711138
+   exit 0
+== host browser
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Research[\s\S]*\/tmp\/test\/research/. Input:
+
+'Session\n' +
+  'Place\n' +
+  'Research ~/test/research\n' +
+  'Started\n' +
+  'just now\n' +
+  'Open working folderAttach a referenceFile, selection or another sessionAll commandsSteer, inspect source, references…⌘K'
+
+    at file:///home/othman/code/undefine/omega/spikes/mobile/test/host-browser.mjs:46:60 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 'Session\n' +
+    'Place\n' +
+    'Research ~/test/research\n' +
+    'Started\n' +
+    'just now\n' +
+    'Open working folderAttach a referenceFile, selection or another sessionAll commandsSteer, inspect source, references…⌘K',
+  expected: /Research[\s\S]*\/tmp\/test\/research/,
+  operator: 'match',
+  diff: 'simple'
+}
+
+Node.js v22.23.3
+   exit 1
+== vendor/package: spikes/workspace/test/buffer-drive.test.mjs
+TAP version 13
+# Subtest: typing in a shared file sends an unpublished draft through an intent
+ok 1 - typing in a shared file sends an unpublished draft through an intent
+  ---
+  duration_ms: 74.91473
+  type: 'test'
+  ...
+# Subtest: remote disjoint text preserves local draft, mode and command draft
+ok 2 - remote disjoint text preserves local draft, mode and command draft
+  ---
+  duration_ms: 99.269845
+  type: 'test'
+  ...
+# Subtest: overlapping refresh retains local text and does not repeatedly emit invalid drafts
+ok 3 - overlapping refresh retains local text and does not repeatedly emit invalid drafts
+  ---
+  duration_ms: 31.08794
+  type: 'test'
+  ...
+# Subtest: publish never substitutes a stale remote revision to force overwrite
+ok 4 - publish never substitutes a stale remote revision to force overwrite
+  ---
+  duration_ms: 23.802055
+  type: 'test'
+  ...
+# Subtest: merged save acknowledgement installs returned text while preserving in-flight typing
+ok 5 - merged save acknowledgement installs returned text while preserving in-flight typing
+  ---
+  duration_ms: 36.356795
+  type: 'test'
+  ...
+# Subtest: change inspection and operation undo use ordinary visits and intents
+ok 6 - change inspection and operation undo use ordinary visits and intents
+  ---
+  duration_ms: 6.112849
+  type: 'test'
+  ...
+# Subtest: accepted disjoint merges commute; same-point insertions refuse
+ok 7 - accepted disjoint merges commute; same-point insertions refuse
+  ---
+  duration_ms: 4.295567
+  type: 'test'
+  ...
+# Subtest: unloading removes draft transport and leaves editor text intact
+not ok 8 - unloading removes draft transport and leaves editor text intact
+  ---
+  duration_ms: 26.265912
+  type: 'test'
+  location: '/home/othman/code/undefine/omega/spikes/workspace/test/buffer-drive.test.mjs:62:1'
+  failureType: 'testCodeFailure'
+  error: 'no arity 1 on fn boot'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    resolveCallee (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:597:11)
+    Module.invokeImmediate (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:1032:19)
+    file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/module.mjs:7:19
+    Module.boot (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:997:50)
+    TestContext.<anonymous> (file:///home/othman/code/undefine/omega/spikes/workspace/test/buffer-drive.test.mjs:65:14)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: a conflict acknowledgement retains the original publication base
+ok 9 - a conflict acknowledgement retains the original publication base
+  ---
+  duration_ms: 3.293465
+  type: 'test'
+  ...
+# Subtest: unload and page leave release draft resources as host effects
+ok 10 - unload and page leave release draft resources as host effects
+  ---
+  duration_ms: 22.6792
+  type: 'test'
+  ...
+# Subtest: frame-wide unload collects cleanup from every pane before collapse
+ok 11 - frame-wide unload collects cleanup from every pane before collapse
+  ---
+  duration_ms: 47.593446
+  type: 'test'
+  ...
+# Subtest: manual resolution requires explicit confirmation and the chosen remote revision
+ok 12 - manual resolution requires explicit confirmation and the chosen remote revision
+  ---
+  duration_ms: 6.587818
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 11
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 394.963014
+   exit 1
+== vendor/package: spikes/workspace/test/desk-drive.test.mjs
+TAP version 13
+# Subtest: rail presents provider objects as cards rather than raw task rows
+ok 1 - rail presents provider objects as cards rather than raw task rows
+  ---
+  duration_ms: 138.438009
+  type: 'test'
+  ...
+# Subtest: DWIM movement visits the next visible object, skipping header source rows
+ok 2 - DWIM movement visits the next visible object, skipping header source rows
+  ---
+  duration_ms: 128.351654
+  type: 'test'
+  ...
+# Subtest: Enter scopes a place and typing a goal creates a task without schema syntax
+ok 3 - Enter scopes a place and typing a goal creates a task without schema syntax
+  ---
+  duration_ms: 30.135649
+  type: 'test'
+  ...
+# Subtest: presentation is a removable layer and source inspection preserves text
+ok 4 - presentation is a removable layer and source inspection preserves text
+  ---
+  duration_ms: 77.754586
+  type: 'test'
+  ...
+# Subtest: desk has two populated panes, selection previews without stealing rail focus
+ok 5 - desk has two populated panes, selection previews without stealing rail focus
+  ---
+  duration_ms: 15.398846
+  type: 'test'
+  ...
+# Subtest: new-task result targets main without replacing the scoped rail
+ok 6 - new-task result targets main without replacing the scoped rail
+  ---
+  duration_ms: 17.429923
+  type: 'test'
+  ...
+# Subtest: a checklist is presented but toggles its actual editable source
+ok 7 - a checklist is presented but toggles its actual editable source
+  ---
+  duration_ms: 68.721466
+  type: 'test'
+  ...
+# Subtest: artifact expansion retains the rail and task; closing refuses a local draft
+ok 8 - artifact expansion retains the rail and task; closing refuses a local draft
+  ---
+  duration_ms: 188.768658
+  type: 'test'
+  ...
+# Subtest: context actions are package contributions; a later definition overrides and unload is exact
+ok 9 - context actions are package contributions; a later definition overrides and unload is exact
+  ---
+  duration_ms: 22.848992
+  type: 'test'
+  ...
+# Subtest: menu dispatches named commands and reference prompts produce data without replacing a draft
+ok 10 - menu dispatches named commands and reference prompts produce data without replacing a draft
+  ---
+  duration_ms: 88.108183
+  type: 'test'
+  ...
+# Subtest: guided subplace creation inherits its parent and removal cancels an owned prompt
+ok 11 - guided subplace creation inherits its parent and removal cancels an owned prompt
+  ---
+  duration_ms: 53.791821
+  type: 'test'
+  ...
+# Subtest: folder task creation carries the actual directory and headings wrap without modifying source
+ok 12 - folder task creation carries the actual directory and headings wrap without modifying source
+  ---
+  duration_ms: 44.49218
+  type: 'test'
+  ...
+# Subtest: a keyboard checklist toggle participates in the shared-buffer draft protocol
+ok 13 - a keyboard checklist toggle participates in the shared-buffer draft protocol
+  ---
+  duration_ms: 32.536097
+  type: 'test'
+  ...
+# Subtest: starting without a place asks for a valid place before the goal, with no hard-coded default
+ok 14 - starting without a place asks for a valid place before the goal, with no hard-coded default
+  ---
+  duration_ms: 12.949924
+  type: 'test'
+  ...
+# Subtest: checkbox edits only the heading state and leaves TODO words in its title and prose intact
+ok 15 - checkbox edits only the heading state and leaves TODO words in its title and prose intact
+  ---
+  duration_ms: 25.261599
+  type: 'test'
+  ...
+# Subtest: a reply draft becomes a scoped follow-up when its task finishes
+ok 16 - a reply draft becomes a scoped follow-up when its task finishes
+  ---
+  duration_ms: 67.63348
+  type: 'test'
+  ...
+# Subtest: source inspection renders the task org text and a busy command prompt blocks pointer edits
+ok 17 - source inspection renders the task org text and a busy command prompt blocks pointer edits
+  ---
+  duration_ms: 82.000751
+  type: 'test'
+  ...
+# Subtest: relative task references resolve in the actual nested working folder
+ok 18 - relative task references resolve in the actual nested working folder
+  ---
+  duration_ms: 14.725873
+  type: 'test'
+  ...
+# Subtest: long artifact prose wraps by pane width and remains raw while editing
+ok 19 - long artifact prose wraps by pane width and remains raw while editing
+  ---
+  duration_ms: 34.715867
+  type: 'test'
+  ...
+# Subtest: rail opening and task creation target the retained conversation beside a file
+ok 20 - rail opening and task creation target the retained conversation beside a file
+  ---
+  duration_ms: 41.236881
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1198.502584
+   exit 0
+== vendor/package: spikes/workspace/test/drive.test.mjs
+TAP version 13
+# Subtest: Alt+h/l moves spatially, clamps, and does not emit host IO
+ok 1 - Alt+h/l moves spatially, clamps, and does not emit host IO
+  ---
+  duration_ms: 217.011871
+  type: 'test'
+  ...
+# Subtest: pane focus preserves a command draft and an insert draft
+ok 2 - pane focus preserves a command draft and an insert draft
+  ---
+  duration_ms: 175.016136
+  type: 'test'
+  ...
+# Subtest: spatial focus skips passive view panes
+ok 3 - spatial focus skips passive view panes
+  ---
+  duration_ms: 66.691585
+  type: 'test'
+  ...
+# Subtest: task references in writable source drive the linked task pane
+ok 4 - task references in writable source drive the linked task pane
+  ---
+  duration_ms: 26.954646
+  type: 'test'
+  ...
+# Subtest: a task block sends cwd and stable home anchor through the existing intent
+ok 5 - a task block sends cwd and stable home anchor through the existing intent
+  ---
+  duration_ms: 20.488855
+  type: 'test'
+  ...
+# Subtest: g H returns to a task home by current source anchor
+ok 6 - g H returns to a task home by current source anchor
+  ---
+  duration_ms: 34.991869
+  type: 'test'
+  ...
+# Subtest: home arrival matches the complete block ID after surrounding source moves
+ok 7 - home arrival matches the complete block ID after surrounding source moves
+  ---
+  duration_ms: 12.993936
+  type: 'test'
+  ...
+# Subtest: workspace unload removes its layout, commands and keys in every pane
+ok 8 - workspace unload removes its layout, commands and keys in every pane
+  ---
+  duration_ms: 105.589457
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 676.636227
+   exit 0
+== vendor/package: spikes/workspace/test/links-drive.test.mjs
+TAP version 13
+# Subtest: references use place metadata or selected task identity
+not ok 1 - references use place metadata or selected task identity
+  ---
+  duration_ms: 0.794641
+  type: 'test'
+  location: '/home/othman/code/undefine/omega/spikes/workspace/test/links-drive.test.mjs:7:1'
+  failureType: 'testCodeFailure'
+  error: 'no arity 1 on fn boot'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    resolveCallee (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:597:11)
+    Module.invokeImmediate (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:1032:19)
+    file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/module.mjs:7:19
+    Module.boot (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:997:50)
+    TestContext.<anonymous> (file:///home/othman/code/undefine/omega/spikes/workspace/test/links-drive.test.mjs:8:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: add submits a data map through the existing minibuffer and unloading is exact
+not ok 2 - add submits a data map through the existing minibuffer and unloading is exact
+  ---
+  duration_ms: 0.165709
+  type: 'test'
+  location: '/home/othman/code/undefine/omega/spikes/workspace/test/links-drive.test.mjs:13:1'
+  failureType: 'testCodeFailure'
+  error: 'no arity 1 on fn boot'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    resolveCallee (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:597:11)
+    Module.invokeImmediate (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:1032:19)
+    file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/module.mjs:7:19
+    Module.boot (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:997:50)
+    TestContext.<anonymous> (file:///home/othman/code/undefine/omega/spikes/workspace/test/links-drive.test.mjs:14:19)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 15.025325
+   exit 1
+== vendor/package: spikes/workspace/test/place-drive.test.mjs
+TAP version 13
+# Subtest: parent uses provider context and requests a normal editor visit
+not ok 1 - parent uses provider context and requests a normal editor visit
+  ---
+  duration_ms: 0.779423
+  type: 'test'
+  location: '/home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:12:1'
+  failureType: 'testCodeFailure'
+  error: 'no arity 1 on fn boot'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    resolveCallee (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:597:11)
+    Module.invokeImmediate (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:1032:19)
+    file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/module.mjs:7:19
+    Module.boot (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:997:50)
+    boot (file:///home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:11:29)
+    TestContext.<anonymous> (file:///home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:13:9)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: place attachment submits a plain map as a host intent
+not ok 2 - place attachment submits a plain map as a host intent
+  ---
+  duration_ms: 0.163575
+  type: 'test'
+  location: '/home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:18:1'
+  failureType: 'testCodeFailure'
+  error: 'no arity 1 on fn boot'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    resolveCallee (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:597:11)
+    Module.invokeImmediate (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:1032:19)
+    file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/module.mjs:7:19
+    Module.boot (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:997:50)
+    boot (file:///home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:11:29)
+    TestContext.<anonymous> (file:///home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:19:20)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: place home forwards an anchor and unloading is exact
+not ok 3 - place home forwards an anchor and unloading is exact
+  ---
+  duration_ms: 0.125116
+  type: 'test'
+  location: '/home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:25:1'
+  failureType: 'testCodeFailure'
+  error: 'no arity 1 on fn boot'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    resolveCallee (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:597:11)
+    Module.invokeImmediate (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:1032:19)
+    file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/module.mjs:7:19
+    Module.boot (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:997:50)
+    boot (file:///home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:11:29)
+    TestContext.<anonymous> (file:///home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:26:9)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: new work names its selected place so inherited cwd defaults can resolve
+not ok 4 - new work names its selected place so inherited cwd defaults can resolve
+  ---
+  duration_ms: 0.170927
+  type: 'test'
+  location: '/home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:32:1'
+  failureType: 'testCodeFailure'
+  error: 'no arity 1 on fn boot'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    resolveCallee (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:597:11)
+    Module.invokeImmediate (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:1032:19)
+    file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/module.mjs:7:19
+    Module.boot (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:997:50)
+    boot (file:///home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:11:29)
+    TestContext.<anonymous> (file:///home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:33:9)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: unuse cancels the package-owned prompt and preserves a foreign draft
+not ok 5 - unuse cancels the package-owned prompt and preserves a foreign draft
+  ---
+  duration_ms: 0.11408
+  type: 'test'
+  location: '/home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:39:1'
+  failureType: 'testCodeFailure'
+  error: 'no arity 1 on fn boot'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    resolveCallee (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:597:11)
+    Module.invokeImmediate (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:1032:19)
+    file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/module.mjs:7:19
+    Module.boot (file:///home/othman/code/undefine/omega/spikes/pelagic/dist/frontend/8384401c51e3c21521a759527344b5043ad6e156b02383a5e290b30b6960a64e/out/actor/host.mjs:997:50)
+    boot (file:///home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:11:29)
+    TestContext.<anonymous> (file:///home/othman/code/undefine/omega/spikes/workspace/test/place-drive.test.mjs:40:25)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 0
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 16.488099
+   exit 1
+== vendor/package: spikes/dwim/test/drive.test.mjs
+TAP version 13
+# Subtest: dwim package shape: commands + command keys (counts and describe-key keep working)
+ok 1 - dwim package shape: commands + command keys (counts and describe-key keep working)
+  ---
+  duration_ms: 156.586225
+  type: 'test'
+  ...
+# Subtest: immediate use/unuse is exact: no adopt, user tables and pkg-state untouched
+ok 2 - immediate use/unuse is exact: no adopt, user tables and pkg-state untouched
+  ---
+  duration_ms: 14.238112
+  type: 'test'
+  ...
+# Subtest: command unload removes dwim's own state and falls back to raw source motion
+ok 3 - command unload removes dwim's own state and falls back to raw source motion
+  ---
+  duration_ms: 218.518479
+  type: 'test'
+  ...
+# Subtest: j/k step visible source rows: a folded section is one step, nested folds respected
+ok 4 - j/k step visible source rows: a folded section is one step, nested folds respected
+  ---
+  duration_ms: 187.798452
+  type: 'test'
+  ...
+# Subtest: counts: 3j == j j j, and the source topology is the same either way
+ok 5 - counts: 3j == j j j, and the source topology is the same either way
+  ---
+  duration_ms: 93.249544
+  type: 'test'
+  ...
+# Subtest: boundaries clamp: no wrap at the first/last visible row
+ok 6 - boundaries clamp: no wrap at the first/last visible row
+  ---
+  duration_ms: 120.939165
+  type: 'test'
+  ...
+# Subtest: goal column survives short rows and reversal; invalidated by horizontal/click/text/doc
+ok 7 - goal column survives short rows and reversal; invalidated by horizontal/click/text/doc
+  ---
+  duration_ms: 346.117077
+  type: 'test'
+  ...
+# Subtest: normal heading h: collapse, then h goes to the parent
+ok 8 - normal heading h: collapse, then h goes to the parent
+  ---
+  duration_ms: 45.745058
+  type: 'test'
+  ...
+# Subtest: normal heading l: expand retaining nested folds, then enter first visible content; leaf no-op
+ok 9 - normal heading l: expand retaining nested folds, then enter first visible content; leaf no-op
+  ---
+  duration_ms: 93.071532
+  type: 'test'
+  ...
+# Subtest: ordinary prose h/l stay character motion; insert mode types h j k l literally
+ok 10 - ordinary prose h/l stay character motion; insert mode types h j k l literally
+  ---
+  duration_ms: 153.036526
+  type: 'test'
+  ...
+# Subtest: select-mode j/k keep the anchor, including across a hidden folded span
+ok 11 - select-mode j/k keep the anchor, including across a hidden folded span
+  ---
+  duration_ms: 97.897258
+  type: 'test'
+  ...
+# Subtest: select-mode h/l are character motion, not fold mutation
+ok 12 - select-mode h/l are character motion, not fold mutation
+  ---
+  duration_ms: 78.421354
+  type: 'test'
+  ...
+# Subtest: multiple heads keep their own columns; the primary is retained
+ok 13 - multiple heads keep their own columns; the primary is retained
+  ---
+  duration_ms: 18.033097
+  type: 'test'
+  ...
+# Subtest: duplicate heads on one heading do not double-toggle
+ok 14 - duplicate heads on one heading do not double-toggle
+  ---
+  duration_ms: 40.804858
+  type: 'test'
+  ...
+# Subtest: a huge folded section: j lands on the destination and M.render actually draws it
+ok 15 - a huge folded section: j lands on the destination and M.render actually draws it
+  ---
+  duration_ms: 73.623948
+  type: 'test'
+  ...
+# Subtest: user bindings win over package bindings
+ok 16 - user bindings win over package bindings
+  ---
+  duration_ms: 74.670963
+  type: 'test'
+  ...
+# Subtest: explicit dwim commands are discoverable through the palette
+ok 17 - explicit dwim commands are discoverable through the palette
+  ---
+  duration_ms: 170.422063
+  type: 'test'
+  ...
+# Subtest: ed.view/source-rows: folds hide bodies; nested and sibling folds merge correctly
+ok 18 - ed.view/source-rows: folds hide bodies; nested and sibling folds merge correctly
+  ---
+  duration_ms: 14.492104
+  type: 'test'
+  ...
+# Subtest: ed.view/visible-rows: the viewport in source rows, fold-aware
+ok 19 - ed.view/visible-rows: the viewport in source rows, fold-aware
+  ---
+  duration_ms: 14.188031
+  type: 'test'
+  ...
+# Subtest: ed.view/reveal: keeps the head in visible space, idempotent, never mutates folds/sels
+ok 20 - ed.view/reveal: keeps the head in visible space, idempotent, never mutates folds/sels
+  ---
+  duration_ms: 22.914422
+  type: 'test'
+  ...
+# Subtest: ed.view/rows: latest provider first, nil declines, empty vector is accepted
+ok 21 - ed.view/rows: latest provider first, nil declines, empty vector is accepted
+  ---
+  duration_ms: 24.968785
+  type: 'test'
+  ...
+# Subtest: present provides a navigation topology that replaces source rows, and declines for text
+ok 22 - present provides a navigation topology that replaces source rows, and declines for text
+  ---
+  duration_ms: 27.539913
+  type: 'test'
+  ...
+# Subtest: present rail: j steps task to task and the frame link fires exactly one visit (both load orders)
+ok 23 - present rail: j steps task to task and the frame link fires exactly one visit (both load orders)
+  ---
+  duration_ms: 149.186196
+  type: 'test'
+  ...
+# Subtest: present conversation: pinned on open, and typed j on the composer is a draft, not dwim
+ok 24 - present conversation: pinned on open, and typed j on the composer is a draft, not dwim
+  ---
+  duration_ms: 416.587072
+  type: 'test'
+  ...
+# Subtest: present conversation: folded presentation exposes visible source rows and j lands on one
+ok 25 - present conversation: folded presentation exposes visible source rows and j lands on one
+  ---
+  duration_ms: 599.986375
+  type: 'test'
+  ...
+# Subtest: frame-wide packages: unuse in one pane removes dwim from every pane
+ok 26 - frame-wide packages: unuse in one pane removes dwim from every pane
+  ---
+  duration_ms: 95.35433
+  type: 'test'
+  ...
+# Subtest: off-topology movement enters the first task and returns to a hidden heading
+ok 27 - off-topology movement enters the first task and returns to a hidden heading
+  ---
+  duration_ms: 141.887146
+  type: 'test'
+  ...
+# Subtest: a click at the current clamped head resets the remembered goal
+ok 28 - a click at the current clamped head resets the remembered goal
+  ---
+  duration_ms: 33.450135
+  type: 'test'
+  ...
+# Subtest: a simultaneous parent collapse reveals another head on its representative
+ok 29 - a simultaneous parent collapse reveals another head on its representative
+  ---
+  duration_ms: 21.629043
+  type: 'test'
+  ...
+# Subtest: the pure BL contract also runs in the JS target
+ok 30 - the pure BL contract also runs in the JS target
+  ---
+  duration_ms: 87.108253
+  type: 'test'
+  ...
+# Subtest: present reveal keeps a visible wrapped source row and reveals the next row idempotently
+ok 31 - present reveal keeps a visible wrapped source row and reveals the next row idempotently
+  ---
+  duration_ms: 30.262253
+  type: 'test'
+  ...
+# Subtest: presentations that do not use source folds decline outline h/l
+ok 32 - presentations that do not use source folds decline outline h/l
+  ---
+  duration_ms: 153.690814
+  type: 'test'
+  ...
+# Subtest: all fold combinations agree with the original visibility predicate and reversible j/k
+ok 33 - all fold combinations agree with the original visibility predicate and reversible j/k
+  ---
+  duration_ms: 3775.992216
+  type: 'test'
+  ...
+# Subtest: counted horizontal actions equal repeated commands and stay in normal-mode policy
+ok 34 - counted horizontal actions equal repeated commands and stay in normal-mode policy
+  ---
+  duration_ms: 137.612009
+  type: 'test'
+  ...
+# Subtest: normal h/l use the visible heading when Tab hides the source head
+ok 35 - normal h/l use the visible heading when Tab hides the source head
+  ---
+  duration_ms: 48.330116
+  type: 'test'
+  ...
+# Subtest: rail counts and multiple heads use the navigation policy in either package load order
+ok 36 - rail counts and multiple heads use the navigation policy in either package load order
+  ---
+  duration_ms: 187.149955
+  type: 'test'
+  ...
+# Subtest: omega outline honors an explicit fold even while the cursor focuses its heading
+ok 37 - omega outline honors an explicit fold even while the cursor focuses its heading
+  ---
+  duration_ms: 230.566401
+  type: 'test'
+  ...
+# Subtest: oversized counts stop when every selection is stationary
+ok 38 - oversized counts stop when every selection is stationary
+  ---
+  duration_ms: 30.71562
+  type: 'test'
+  ...
+# Subtest: source topology memo ignores attention but invalidates folds and row count
+ok 39 - source topology memo ignores attention but invalidates folds and row count
+  ---
+  duration_ms: 7.003521
+  type: 'test'
+  ...
+# Subtest: rail navigation reuses its read-derived rows and follows a refreshed object index
+ok 40 - rail navigation reuses its read-derived rows and follows a refreshed object index
+  ---
+  duration_ms: 20.641296
+  type: 'test'
+  ...
+1..40
+# tests 40
+# suites 0
+# pass 40
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8274.015998
+   exit 0
+== vendor/package: spikes/present/test/scroll.test.mjs
+node:internal/modules/esm/resolve:275
+    throw new ERR_MODULE_NOT_FOUND(
+          ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/home/othman/code/undefine/omega/spikes/present/web/out/pp.main.mjs' imported from /home/othman/code/undefine/omega/spikes/present/test/scroll.test.mjs
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:865:10)
+    at defaultResolve (node:internal/modules/esm/resolve:989:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:747:20)
+    at ModuleLoader.resolve (node:internal/modules/esm/loader:724:38)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:320:38)
+    at onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:680:36)
+    at TracingChannel.tracePromise (node:diagnostics_channel:350:14)
+    at ModuleLoader.import (node:internal/modules/esm/loader:679:21)
+    at defaultImportModuleDynamicallyForModule (node:internal/modules/esm/utils:222:31) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///home/othman/code/undefine/omega/spikes/present/web/out/pp.main.mjs'
+}
+
+Node.js v22.23.3
+   exit 1
+== vendor/package: vendor/bl-ed/test/columns.test.mjs
+TAP version 13
+# Subtest: adjacent resizing conserves widths, skips hidden/docked panes and preserves a third column
+ok 1 - adjacent resizing conserves widths, skips hidden/docked panes and preserves a third column
+  ---
+  duration_ms: 54.339631
+  type: 'test'
+  ...
+# Subtest: incomplete/invalid measurements and nonadjacent boundaries cannot corrupt widths
+ok 2 - incomplete/invalid measurements and nonadjacent boundaries cannot corrupt widths
+  ---
+  duration_ms: 25.56949
+  type: 'test'
+  ...
+# Subtest: frame widths survive drawing and keys without changing editors or package layout; cancel/reset is exact
+ok 3 - frame widths survive drawing and keys without changing editors or package layout; cancel/reset is exact
+  ---
+  duration_ms: 131.826493
+  type: 'test'
+  ...
+# Subtest: late layout events and malformed width declarations are ignored
+ok 4 - late layout events and malformed width declarations are ignored
+  ---
+  duration_ms: 29.479441
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 256.563232
+   exit 0
+== vendor/package: vendor/bl-ed/test/document-packages.test.mjs
+TAP version 13
+# Subtest: file-local package declaration accepts installed names, orders dependencies and excludes executable/remote references
+ok 1 - file-local package declaration accepts installed names, orders dependencies and excludes executable/remote references
+  ---
+  duration_ms: 1.481005
+  type: 'test'
+  ...
+# Subtest: explicit unload is respected across refreshes until explicitly used again
+ok 2 - explicit unload is respected across refreshes until explicitly used again
+  ---
+  duration_ms: 0.242704
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9.50955
+   exit 0
+== vendor/package: vendor/bl-ed/test/drive.test.mjs
+TAP version 13
+# Subtest: normal-mode motions: hjkl, w selects a word, counts
+ok 1 - normal-mode motions: hjkl, w selects a word, counts
+  ---
+  duration_ms: 205.285475
+  type: 'test'
+  ...
+# Subtest: insert mode types, Escape returns, undo/redo round-trip
+ok 2 - insert mode types, Escape returns, undo/redo round-trip
+  ---
+  duration_ms: 99.801113
+  type: 'test'
+  ...
+# Subtest: multiple cursors: C adds a cursor below, typing goes to both
+ok 3 - multiple cursors: C adds a cursor below, typing goes to both
+  ---
+  duration_ms: 55.434952
+  type: 'test'
+  ...
+# Subtest: x selects lines; d deletes and yanks; p pastes
+ok 4 - x selects lines; d deletes and yanks; p pastes
+  ---
+  duration_ms: 69.698853
+  type: 'test'
+  ...
+# Subtest: org navigation: ]h [h g u ]b
+ok 5 - org navigation: ]h [h g u ]b
+  ---
+  duration_ms: 130.36374
+  type: 'test'
+  ...
+# Subtest: structural form motion inside a cell
+ok 6 - structural form motion inside a cell
+  ---
+  duration_ms: 167.503134
+  type: 'test'
+  ...
+# Subtest: paredit-style: wrap and raise
+ok 7 - paredit-style: wrap and raise
+  ---
+  duration_ms: 107.11757
+  type: 'test'
+  ...
+# Subtest: the command line evaluates Beam Lisp against the live editor
+ok 8 - the command line evaluates Beam Lisp against the live editor
+  ---
+  duration_ms: 152.104925
+  type: 'test'
+  ...
+# Subtest: the command line is the real language: macros, defn, destructuring, threading
+ok 9 - the command line is the real language: macros, defn, destructuring, threading
+  ---
+  duration_ms: 297.418529
+  type: 'test'
+  ...
+# Subtest: split cells: a local cell runs in the page; a beam cell becomes an effect
+ok 10 - split cells: a local cell runs in the page; a beam cell becomes an effect
+  ---
+  duration_ms: 278.604187
+  type: 'test'
+  ...
+# Subtest: the palette finds and runs commands by fuzzy name
+ok 11 - the palette finds and runs commands by fuzzy name
+  ---
+  duration_ms: 282.601389
+  type: 'test'
+  ...
+# Subtest: describe-key explains a binding
+ok 12 - describe-key explains a binding
+  ---
+  duration_ms: 41.769846
+  type: 'test'
+  ...
+# Subtest: search: / n N * with smart-case and wrap
+ok 13 - search: / n N * with smart-case and wrap
+  ---
+  duration_ms: 117.663513
+  type: 'test'
+  ...
+# Subtest: dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans
+ok 14 - dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans
+  ---
+  duration_ms: 72.300119
+  type: 'test'
+  ...
+# Subtest: save is an effect, not a side effect
+ok 15 - save is an effect, not a side effect
+  ---
+  duration_ms: 32.219163
+  type: 'test'
+  ...
+# Subtest: an eval reload keeps the cursor and is one undo step
+ok 16 - an eval reload keeps the cursor and is one undo step
+  ---
+  duration_ms: 54.910486
+  type: 'test'
+  ...
+# Subtest: render model: segments, problems, status
+ok 17 - render model: segments, problems, status
+  ---
+  duration_ms: 23.611885
+  type: 'test'
+  ...
+# Subtest: incremental structure == full derive, over random typing in real documents
+ok 18 - incremental structure == full derive, over random typing in real documents
+  ---
+  duration_ms: 122576.654735
+  type: 'test'
+  ...
+# Subtest: round trip: every repo .bl.org is reproduced byte-for-byte
+ok 19 - round trip: every repo .bl.org is reproduced byte-for-byte
+  ---
+  duration_ms: 3779.24626
+  type: 'test'
+  ...
+# Subtest: deferred language: Enter keeps the draft, one effect, replays once on ready
+ok 20 - deferred language: Enter keeps the draft, one effect, replays once on ready
+  ---
+  duration_ms: 42.389428
+  type: 'test'
+  ...
+# Subtest: deferred language: Escape or an edit cancels the parked run
+ok 21 - deferred language: Escape or an edit cancels the parked run
+  ---
+  duration_ms: 36.612734
+  type: 'test'
+  ...
+# Subtest: deferred language: a failed load keeps the draft and says so; Enter retries
+ok 22 - deferred language: a failed load keeps the draft and says so; Enter retries
+  ---
+  duration_ms: 28.888807
+  type: 'test'
+  ...
+# Subtest: deferred language: a local cell keeps its text and resumes once; edits cancel stale results
+ok 23 - deferred language: a local cell keeps its text and resumes once; edits cancel stale results
+  ---
+  duration_ms: 89.404008
+  type: 'test'
+  ...
+# Subtest: named command events use normal command lookup and retain the read-only guard
+ok 24 - named command events use normal command lookup and retain the read-only guard
+  ---
+  duration_ms: 12.420922
+  type: 'test'
+  ...
+1..24
+# tests 24
+# suites 0
+# pass 24
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 128786.383917
+   exit 0
+== vendor/package: vendor/bl-ed/test/frame-geometry.test.mjs
+TAP version 13
+# Subtest: docked views span columns without occupying an editor column
+ok 1 - docked views span columns without occupying an editor column
+  ---
+  duration_ms: 1.57967
+  type: 'test'
+  ...
+# Subtest: observation coalesces after painting; unsubscribe and listener failure are isolated
+ok 2 - observation coalesces after painting; unsubscribe and listener failure are isolated
+  ---
+  duration_ms: 0.401153
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10.131445
+   exit 0
+== vendor/package: vendor/bl-ed/test/frame.test.mjs
+TAP version 13
+# Subtest: one pane is today's bl-ed: the frame renders exactly ed.main/render
+ok 1 - one pane is today's bl-ed: the frame renders exactly ed.main/render
+  ---
+  duration_ms: 228.489421
+  type: 'test'
+  ...
+# Subtest: ed/layout arranges the window: the current editor is kept, other panes fetch their docs
+ok 2 - ed/layout arranges the window: the current editor is kept, other panes fetch their docs
+  ---
+  duration_ms: 142.470554
+  type: 'test'
+  ...
+# Subtest: a :select link: moving onto an object visits it in the linked pane (as an effect)
+ok 3 - a :select link: moving onto an object visits it in the linked pane (as an effect)
+  ---
+  duration_ms: 140.672117
+  type: 'test'
+  ...
+# Subtest: effects are tagged by pane; an answer for one pane changes only that pane
+ok 4 - effects are tagged by pane; an answer for one pane changes only that pane
+  ---
+  duration_ms: 74.084026
+  type: 'test'
+  ...
+# Subtest: space w w cycles focus over editor panes only; space w o keeps the focused editor
+ok 5 - space w w cycles focus over editor panes only; space w o keeps the focused editor
+  ---
+  duration_ms: 167.557524
+  type: 'test'
+  ...
+# Subtest: a view pane draws from the pane it views, through the package's :views
+ok 6 - a view pane draws from the pane it views, through the package's :views
+  ---
+  duration_ms: 88.046119
+  type: 'test'
+  ...
+# Subtest: (ed/layout nil) and unknown layouts
+ok 7 - (ed/layout nil) and unknown layouts
+  ---
+  duration_ms: 140.798587
+  type: 'test'
+  ...
+# Subtest: packages are frame-wide: unuse in one pane removes it everywhere, and its layout
+ok 8 - packages are frame-wide: unuse in one pane removes it everywhere, and its layout
+  ---
+  duration_ms: 103.543307
+  type: 'test'
+  ...
+# Subtest: boot layout without a command line: F.arrange(fr, layouts[name]) is what ed/layout does
+ok 9 - boot layout without a command line: F.arrange(fr, layouts[name]) is what ed/layout does
+  ---
+  duration_ms: 75.026869
+  type: 'test'
+  ...
+# Subtest: events for a pane that left (a late host answer) leave the frame untouched
+ok 10 - events for a pane that left (a late host answer) leave the frame untouched
+  ---
+  duration_ms: 86.672403
+  type: 'test'
+  ...
+# Subtest: a frame reuses unchanged pane models while another editor moves
+ok 11 - a frame reuses unchanged pane models while another editor moves
+  ---
+  duration_ms: 105.442793
+  type: 'test'
+  ...
+# Subtest: reconfigure retains named editors and blocks discarded text and prompt drafts
+ok 12 - reconfigure retains named editors and blocks discarded text and prompt drafts
+  ---
+  duration_ms: 43.108473
+  type: 'test'
+  ...
+# Subtest: source candidates keep an existing context or retain main when adding the first aside
+ok 13 - source candidates keep an existing context or retain main when adding the first aside
+  ---
+  duration_ms: 25.734754
+  type: 'test'
+  ...
+# Subtest: visit and focus candidates choose the existing pane and protect its file and prompt drafts
+ok 14 - visit and focus candidates choose the existing pane and protect its file and prompt drafts
+  ---
+  duration_ms: 56.588224
+  type: 'test'
+  ...
+# Subtest: a package that arranges the window on :use keeps the effects its :adopt emitted, tagged to the kept pane
+ok 15 - a package that arranges the window on :use keeps the effects its :adopt emitted, tagged to the kept pane
+  ---
+  duration_ms: 6.128323
+  type: 'test'
+  ...
+# Subtest: docked views carry geometry while preserving editor identity and ordinary view models
+ok 16 - docked views carry geometry while preserving editor identity and ordinary view models
+  ---
+  duration_ms: 9.95771
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1510.733537
+   exit 0
+== vendor/package: vendor/bl-ed/test/host.test.mjs
+node:internal/modules/esm/resolve:275
+    throw new ERR_MODULE_NOT_FOUND(
+          ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/home/othman/code/undefine/omega/vendor/bl-ed/web/out/rt.mjs' imported from /home/othman/code/undefine/omega/vendor/bl-ed/web/host.mjs
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:865:10)
+    at defaultResolve (node:internal/modules/esm/resolve:989:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:747:20)
+    at ModuleLoader.resolve (node:internal/modules/esm/loader:724:38)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:320:38)
+    at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///home/othman/code/undefine/omega/vendor/bl-ed/web/out/rt.mjs'
+}
+
+Node.js v22.23.3
+   exit 1
+== vendor/package: vendor/bl-ed/test/num.test.mjs
+TAP version 13
+# Subtest: portable decimal parsing keeps the numeric predicate callable
+ok 1 - portable decimal parsing keeps the numeric predicate callable
+  ---
+  duration_ms: 26.211507
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 34.013703
+   exit 0
+== vendor/package: vendor/bl-ed/test/omega.test.mjs
+TAP version 13
+# Subtest: C-Enter on a task block asks the world to open a task, then writes the reference
+ok 1 - C-Enter on a task block asks the world to open a task, then writes the reference
+  ---
+  duration_ms: 116.925925
+  type: 'test'
+  ...
+# Subtest: the reference row is drawn as a live card; the text stays the reference
+ok 2 - the reference row is drawn as a live card; the text stays the reference
+  ---
+  duration_ms: 58.826169
+  type: 'test'
+  ...
+# Subtest: y on a card answers its question; y elsewhere still yanks
+ok 3 - y on a card answers its question; y elsewhere still yanks
+  ---
+  duration_ms: 77.742654
+  type: 'test'
+  ...
+# Subtest: C-Enter again: same body focuses, an edited body refines, a finished task reopens
+ok 4 - C-Enter again: same body focuses, an edited body refines, a finished task reopens
+  ---
+  duration_ms: 231.288311
+  type: 'test'
+  ...
+# Subtest: a reference the world wrote (no digest) is adopted on C-Enter, not refined
+ok 5 - a reference the world wrote (no digest) is adopted on C-Enter, not refined
+  ---
+  duration_ms: 34.714112
+  type: 'test'
+  ...
+# Subtest: a finished task's reference is rewritten once with its summary
+ok 6 - a finished task's reference is rewritten once with its summary
+  ---
+  duration_ms: 18.886907
+  type: 'test'
+  ...
+# Subtest: visiting a read-only view: objects get their keys, edits are refused, C-o goes back
+ok 7 - visiting a read-only view: objects get their keys, edits are refused, C-o goes back
+  ---
+  duration_ms: 162.539178
+  type: 'test'
+  ...
+# Subtest: a refreshed read-only view keeps the cursor; a refreshed dirty file keeps your text
+ok 8 - a refreshed read-only view keeps the cursor; a refreshed dirty file keeps your text
+  ---
+  duration_ms: 137.076556
+  type: 'test'
+  ...
+# Subtest: a refresh of a read-only view keeps what you are typing in the minibuffer
+ok 9 - a refresh of a read-only view keeps what you are typing in the minibuffer
+  ---
+  duration_ms: 59.981152
+  type: 'test'
+  ...
+# Subtest: space a n opens a homeless task through the minibuffer
+ok 10 - space a n opens a homeless task through the minibuffer
+  ---
+  duration_ms: 54.591187
+  type: 'test'
+  ...
+# Subtest: ordinary cells still evaluate (C-Enter falls through to eval-cell)
+ok 11 - ordinary cells still evaluate (C-Enter falls through to eval-cell)
+  ---
+  duration_ms: 28.431625
+  type: 'test'
+  ...
+# Subtest: a refresh of a read-only view keeps your place: text above moves the row, the cursor follows its object
+ok 12 - a refresh of a read-only view keeps your place: text above moves the row, the cursor follows its object
+  ---
+  duration_ms: 86.388948
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1079.907029
+   exit 0
+== vendor/package: vendor/bl-ed/test/pkg.test.mjs
+TAP version 13
+# Subtest: a used package adds keys and commands; unuse removes exactly them
+ok 1 - a used package adds keys and commands; unuse removes exactly them
+  ---
+  duration_ms: 198.832961
+  type: 'test'
+  ...
+# Subtest: a package intercepts before the core, reacts after it, adopts visited documents
+ok 2 - a package intercepts before the core, reacts after it, adopts visited documents
+  ---
+  duration_ms: 49.79432
+  type: 'test'
+  ...
+# Subtest: ed/use asks the host for the module (an effect); a failed load is a message
+ok 3 - ed/use asks the host for the module (an effect); a failed load is a message
+  ---
+  duration_ms: 29.681447
+  type: 'test'
+  ...
+# Subtest: package observers see completed module installation and failed loads
+ok 4 - package observers see completed module installation and failed loads
+  ---
+  duration_ms: 3.957685
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 290.786561
+   exit 0
+== vendor/package: vendor/bl-ed/test/rendering.test.mjs
+TAP version 13
+# Subtest: cursor updates keep source colors stable while updating current row and position
+ok 1 - cursor updates keep source colors stable while updating current row and position
+  ---
+  duration_ms: 90.036941
+  type: 'test'
+  ...
+# Subtest: syntax edits and undo invalidate both token spans and structural diagnostics
+ok 2 - syntax edits and undo invalidate both token spans and structural diagnostics
+  ---
+  duration_ms: 101.976261
+  type: 'test'
+  ...
+# Subtest: visible row sets and alternating buffers do not reuse another projection’s tokens
+ok 3 - visible row sets and alternating buffers do not reuse another projection’s tokens
+  ---
+  duration_ms: 67.30637
+  type: 'test'
+  ...
+# Subtest: a placement update refreshes cached line metadata without changing the source
+ok 4 - a placement update refreshes cached line metadata without changing the source
+  ---
+  duration_ms: 38.506573
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 314.517895
+   exit 0
+== vendor/package: vendor/bl-ed/test/serve-cold.test.mjs
+TAP version 13
+# Subtest: a cold packaged server resolves virtual paths and serves changing task documents
+not ok 1 - a cold packaged server resolves virtual paths and serves changing task documents
+  ---
+  duration_ms: 152.212066
+  type: 'test'
+  location: '/home/othman/code/undefine/omega/vendor/bl-ed/test/serve-cold.test.mjs:20:1'
+  failureType: 'testCodeFailure'
+  error: 'spawn /home/othman/code/undefine/omega/bin/bl ENOENT'
+  code: 'ENOENT'
+  stack: |-
+    ChildProcess._handle.onexit (node:internal/child_process:285:19)
+    onErrorNT (node:internal/child_process:483:16)
+    process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 157.981579
+   exit 1
+== presentation equivalence
+spikes/dwim/test/outline.bl.org {:bad [], :variants 6}
+vendor/bl-ed/web/welcome.bl.org {:bad [], :variants 11}
+vendor/bl-ed/web/split-demo.bl.org {:bad [], :variants 8}
+spikes/present/web/welcome.bl.org {:bad [], :variants 11}
+   exit 0
+== shared launch (isolated world: shared-browser + touch-browser)
+Traceback (most recent call last):
+  File "/home/othman/code/undefine/omega/spikes/mobile/test/shared-launch.py", line 56, in <module>
+    identity = doc('launch:identity')['text']
+               ~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/othman/code/undefine/omega/spikes/mobile/test/shared-launch.py", line 40, in doc
+    with urlopen(base+'/api/doc?path='+address, timeout=10) as response:
+         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/lb41b0anx1f98y9y5s9mdv97gjgsq740-python3-3.14.7/lib/python3.14/urllib/request.py", line 187, in urlopen
+    return opener.open(url, data, timeout)
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/lb41b0anx1f98y9y5s9mdv97gjgsq740-python3-3.14.7/lib/python3.14/urllib/request.py", line 487, in open
+    response = self._open(req, data)
+  File "/nix/store/lb41b0anx1f98y9y5s9mdv97gjgsq740-python3-3.14.7/lib/python3.14/urllib/request.py", line 504, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+                              '_open', req)
+  File "/nix/store/lb41b0anx1f98y9y5s9mdv97gjgsq740-python3-3.14.7/lib/python3.14/urllib/request.py", line 464, in _call_chain
+    result = func(*args)
+  File "/nix/store/lb41b0anx1f98y9y5s9mdv97gjgsq740-python3-3.14.7/lib/python3.14/urllib/request.py", line 1349, in http_open
+    return self.do_open(http.client.HTTPConnection, req)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/lb41b0anx1f98y9y5s9mdv97gjgsq740-python3-3.14.7/lib/python3.14/urllib/request.py", line 1324, in do_open
+    r = h.getresponse()
+  File "/nix/store/lb41b0anx1f98y9y5s9mdv97gjgsq740-python3-3.14.7/lib/python3.14/http/client.py", line 1478, in getresponse
+    response.begin()
+    ~~~~~~~~~~~~~~^^
+  File "/nix/store/lb41b0anx1f98y9y5s9mdv97gjgsq740-python3-3.14.7/lib/python3.14/http/client.py", line 343, in begin
+    version, status, reason = self._read_status()
+                              ~~~~~~~~~~~~~~~~~^^
+  File "/nix/store/lb41b0anx1f98y9y5s9mdv97gjgsq740-python3-3.14.7/lib/python3.14/http/client.py", line 304, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/nix/store/lb41b0anx1f98y9y5s9mdv97gjgsq740-python3-3.14.7/lib/python3.14/socket.py", line 729, in readinto
+    return self._sock.recv_into(b)
+           ~~~~~~~~~~~~~~~~~~~~^^^
+TimeoutError: timed out
+   exit 1

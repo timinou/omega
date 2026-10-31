@@ -283,3 +283,5 @@
 .pocket .pane-targets {padding:0 16px}
 .pocket .unload {display:block;margin:24px 16px 32px;font-size:13px;color:var(--soft);text-decoration:underline;text-underline-offset:3px}
 .pocket .sr-only {position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+/* Back-control screens keep a quiet dot only when the host is unreachable. */
+.pocket .conn-mini {display:none} .pocket .conn-mini.off {display:block;width:8px;height:8px;border-radius:50%;background:var(--you);animation:pocket-blink 1.4s infinite;flex-shrink:0}

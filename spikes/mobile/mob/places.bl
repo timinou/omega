@@ -70,7 +70,7 @@
 
 (defn place-header [vm p]
   (ui/header {:key "place-hdr" :title (:name p) :context [:span.mono (st/tilde (:home vm) (:root p))]
-              :back {:act "places" :label "Back to Places"}
+              :back {:act "places" :label "Back to Places"} :mark {:online (:online vm)}
               :actions [:button.act {:data-act "pin" :data-path (str "place:" (:id p)) :aria-pressed (str (boolean (:pinned p)))
                                      :aria-label (if (:pinned p) "Unpin" "Pin")} (ui/icon :star (when (:pinned p) "filled"))]}))
 

@@ -16,7 +16,7 @@
   (let [place {:id (:place d) :name (or (:place-name d) "home")}]
     (ui/header {:key "session-hdr"
                 :title (or (:task-title d) "Session")
-                :back {:act "work" :label "Back to Work"}
+                :back {:act "work" :label "Back to Work"} :mark {:online (:online vm)}
                 :context (list (ui/tile place "xs") [:span (:name place)]
                                (when (:branch d) (list [:span.sep "·"] [:span.mono (str "⎇ " (:branch d))]))
                                (when (:model d) (list [:span.sep "·"] [:span (st/model-name (:model d))])))

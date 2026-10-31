@@ -16,7 +16,9 @@
      [:button.buf {:data-act "buffer" :data-path (:path b)}
       (if task [:span {:class ["st" (st/state task)]} [:i]] (ui/icon (if (= k "place") :folder :file)))
       [:span.grow [:b (or (:title task) (:title b) (last (s/split (str (:path b)) #"/")))]
-       [:span (h/join " · " (remove nil? [k (or (:place-name task) (:place b)) (when task (st/ago (:age-ms task)))]))]]]
+       [:span (h/join " · " (remove nil? [k (or (:place-name task) (:place b))
+                                          (when (= k "file") (last (s/split (str (:path b)) #"/")))
+                                          (when task (st/ago (:age-ms task)))]))]]]
      [:button.pin {:data-act "pin" :data-path (:path b) :aria-pressed (str pinned) :aria-label (if pinned "Unpin" "Pin")}
       (ui/icon :star (when pinned "filled"))]]))
 

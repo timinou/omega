@@ -51,6 +51,10 @@
       "ω" (when mark (list [:span {:class ["conn" (when-not (:online mark) "off")]}]
                            [:span.sr-only (if (:online mark) "Host connected" "Reconnecting")]))])
    [:div.id [:b title] (when context [:span context])]
+   ;; Screens with a back control still say whether the host is reachable.
+   (when (and back mark)
+     (list [:span {:class ["conn-mini" (when-not (:online mark) "off")] :aria-hidden "true"}]
+           [:span.sr-only (if (:online mark) "Host connected" "Reconnecting")]))
    actions])
 
 (defn act-button [act label k & [attrs]]
