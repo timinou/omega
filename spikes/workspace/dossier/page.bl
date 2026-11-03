@@ -49,7 +49,16 @@
 
 (defn- todo-chip [k] (when k [:span {:class (str "kw " k)} k]))
 
-(defn- node->h [nd]
+(defn- source-h [nd body]
+  ;; Annotate the existing element; preserve the renderer's layout/child shape.
+  (if (or (nil? body) (nil? (:from nd))) body
+    (if (and (vector? body) (keyword? (first body)))
+      (let [attrs? (map? (second body)) attrs (if attrs? (second body) {})
+            attrs (assoc attrs :data-source-from (:from nd) :data-source-to (:to nd))]
+        (into [(first body) attrs] (drop (if attrs? 2 1) body)))
+      [:div.source-unit {:data-source-from (:from nd) :data-source-to (:to nd)} body])))
+
+(defn- node-body [nd]
   (case (:t nd)
     :heading (let [tag (keyword (str "h" (min 6 (inc (:level nd)))))]
                [tag {:id (ui/slug (:title nd))}
@@ -65,13 +74,14 @@
             [:table
              (when (seq (:head nd)) [:thead (for [r (:head nd)] [:tr (for [c r] [:th (ui/md c)])])])
              [:tbody (for [r (:rows nd)] [:tr (for [c r] [:td (ui/md c)])])]]]
-    :props [:div.props (for [[k v] (:pairs nd)] [:span [:b k] (ui/md v)])]
+    :props (let [pairs (remove (fn [[k _]] (contains? #{"id" "custom_id"} k)) (:pairs nd))]
+             (when (seq pairs) [:div.props (for [[k v] pairs] [:span [:b k] (ui/md v)])]))
     :block (case (:lang nd)
              "film" (film/film-h nd)
              "run" (phone-h nd)
              "horizons" (hz/horizons-h nd)
              (or (design/block-h nd) (ui/block->h nd)))
-    :screens [:div.screens (map phone-h (:blocks nd))]
+    :screens [:div.screens (map (fn [b] (source-h b (phone-h b))) (:blocks nd))]
     :cell [:section {:class (str "cell" (if (:error? nd) " failed" "")) :id (str "cell-" (:id nd))}
            [:div.cell-head
             [:span.badge (cond (:error? nd) "✗ failed" (:result nd) "✓ ran" :else "not run")]
@@ -81,6 +91,8 @@
             [:pre.src (:code nd)]]]
     :code [:pre {:class (str "code " (:lang nd))} (:body nd)]
     nil))
+
+(defn- node->h [nd] (source-h nd (node-body nd)))
 
 (defn- sections
   "Nodes split at level-1 headings: [{:head h :nodes […]} …]."
@@ -177,7 +189,7 @@
          [:a.all {:href "#all"} "All"]]
         (map-indexed
           (fn [i s]
-            [:section.part {:id (sec-id s) :data-sec (sec-id s)}
+            [:section.part {:id (sec-id s) :data-sec (sec-id s) :data-source-from (or (:from (:head s)) 0)}
              (when (:head s) (node->h (:head s)))
              (when (and (:head s) (= "roster" (lower-case (:title (:head s))))) (roster-h (:nodes s)))
              (keep node->h (:nodes s))

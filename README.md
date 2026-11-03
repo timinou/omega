@@ -120,10 +120,12 @@ and [spike index](spikes/README.md). The
 describe the optional signed Pocket APK. Its builder is selected separately with
 `BEAM_LISP_MOBILE_BIN`; use the recorded builder revision when reproducing it.
 
-Planned: [consolidated document serving and dossier tasks](!tasks/plans/PLAN-025-consolidated-document-serving.bl.org),
-covering private project/full-file access, interactive dossier parity, and the
-first document-to-Pocket-to-task milestone.
-A [private dossier prototype](spikes/workspace/dossier/dossier.bl.md) is available with `bin/omega-documents`.
+[Documents and task starting points](!tasks/plans/PLAN-025-consolidated-document-serving.bl.org),
+covers project/full-file access, interactive dossiers, and ordinary tasks from any
+Org part, section or whole file. Saving answers remains independent.
+Try the [document prototype](spikes/workspace/document_tasks/document-tasks.bl.md)
+with `bin/omega-documents`; builds use `bin/omega-build` and run on Build with
+local fallback disabled.
 
 ## Layout
 

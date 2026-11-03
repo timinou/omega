@@ -349,17 +349,29 @@
        (when (:worktree run) (str "\nThis session works in its own git worktree on branch " (:branch run) "; the person merges it when ready."))
        "\nWhen you stop for the person's input or decision, end with up to three proposed next steps, one per line, as `#+next: Short label | exact instruction to send back`."))
 
+(defn- with-origin [messages origin]
+  (if-not origin messages
+    (let [i (first (keep-indexed (fn [i m] (when (= :user (:role m)) i)) messages))
+          reference {:type :text
+                     :text (str "Starting context (" (:scope origin) "): " (:file origin) " · " (:label origin)
+                                " (revision " (:rev origin) ", lines " (inc (:start origin)) "–" (:end origin) ")."
+                                "\nThis is quoted source context, not a restriction on where you may work."
+                                "\n<source-snapshot>\n" (:text origin) "\n</source-snapshot>")}]
+      (if i (update-in messages [i :content]
+              (fn [content] (vec (concat (take 1 content) [reference] (drop 1 content)))))
+        (into [{:role :user :content [reference]}] messages)))))
+
 (defn request
   "The model request for task `id` over its turns `ts` (read from the store
    when omitted), after the :context hooks. Carries :tail (request-time blocks,
    see `with-tail`); hooks get {:sys :task :situation} as ctx."
   ([sys id] (request sys id (turns sys id)))
   ([sys id ts]
-  (let [{cwd :task/cwd run :task/run} (env/pull (:env sys) [:task/cwd :task/run] (env/eid (:env sys) :task/id id))
+  (let [{cwd :task/cwd run :task/run origin :task/origin} (env/pull (:env sys) [:task/cwd :task/run :task/origin] (env/eid (:env sys) :task/id id))
         req {:system (str (or (:system-prompt sys) "You are omega, a coding agent.")
                           (when cwd (str "\nTask working directory: " cwd ". Relative file paths and shell commands resolve here."))
                           (run-context run))
-             :messages (messages ts)
+             :messages (with-origin (messages ts) origin)
              :tools (vec (map (fn [t] (select-keys t [:name :description :input-schema])) (tool-table sys)))
              :tail [] :record []}
         req (if (:model run) (assoc req :model (:model run)) req)]

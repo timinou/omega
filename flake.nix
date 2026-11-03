@@ -73,6 +73,6 @@
       '';
     in
     {
-      packages.${system} = { inherit frontend; default = frontend; };
+      packages.${system} = { inherit frontend; frontend-compiler = blSandbox; default = frontend; };
     };
 }

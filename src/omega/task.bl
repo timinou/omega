@@ -59,7 +59,7 @@
 
 (def ^:private PULL
   [:task/id :task/goal :task/title :task/status :task/scope :task/refined
-   :task/place :task/cwd :task/home-path :task/home-block
+   :task/place :task/cwd :task/origin :task/home-path :task/home-block
    :task/result :task/cost :task/at :task/run
    {:task/owner [:task/id]} {:task/opened-by [:actor/id]} {:task/waits-on [:task/id]}])
 
@@ -74,6 +74,7 @@
          :status (:task/status m) :scope (vec (or (:task/scope m) []))
          :place (when (:task/place m) (:place/id (env/pull e [:place/id] (:task/place m))))
          :cwd (or (:task/cwd m) (:root sys) (File/cwd!))
+         :origin (:task/origin m)
          :home (when (:task/home-path m) {:path (:task/home-path m) :block (:task/home-block m)})
          :refined (vec (or (:task/refined m) []))
          :result (:task/result m) :cost (:task/cost m) :at (:task/at m) :run (:task/run m)
@@ -246,6 +247,7 @@
                       :task/opened-by (env/eid e :actor/id by)}
                place-eid (assoc :task/place place-eid)
                (some? owner) (assoc :task/owner owner)
+               (:origin m) (assoc :task/origin (:origin m))
                (get-in m [:home :path]) (assoc :task/home-path (get-in m [:home :path]))
                (get-in m [:home :block]) (assoc :task/home-block (get-in m [:home :block]))
                (seq (:scope m)) (assoc :task/scope (vec (:scope m)))

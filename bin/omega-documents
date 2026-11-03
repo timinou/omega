@@ -3,13 +3,16 @@
 set -euo pipefail
 ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
 port=${1:-8792}
+# Work's current gateway includes its configured model-provider fallback.
+export OMEGA_DOCUMENTS_BASE_URL=${OMEGA_DOCUMENTS_BASE_URL:-${OMEGA_BASE_URL:-http://127.0.0.1:18080/anthropic}}
 prototype_root=$(mktemp -d /tmp/omega-documents.XXXXXX)
 frontend_link=${OMEGA_DOCUMENTS_FRONTEND:-/tmp/omega-dossier-frontend}
 cp "$ROOT/spikes/workspace/dossier/demo.bl.org" "$prototype_root/review.bl.org"
+cp "$ROOT/spikes/workspace/document_tasks/demo.bl.org" "$prototype_root/work-from-anywhere.bl.org"
 dossier_source=/home/othman/code/undefine/beam-lisp--execution-protocol/research/build-unification/UNIFICATION.bl.org
 if [ -f "$dossier_source" ]; then cp "$dossier_source" "$prototype_root/UNIFICATION.bl.org"; fi
-if [ ! -f "$frontend_link/pkg/dossier.mjs" ]; then
-  nix build "$ROOT#frontend" --out-link "$frontend_link" -L
+if [ ! -f "$frontend_link/pkg/dossier.mjs" ] || [ ! -f "$frontend_link/pkg/document-tasks.mjs" ]; then
+  "$ROOT/bin/omega-build" "$ROOT#frontend" --out-link "$frontend_link" -L
 fi
 web=$(readlink -f "$frontend_link")
 printf '%s\n' "Private copies: $prototype_root" "Open: file://$prototype_root/review.bl.org" "Ctrl-C stops the prototype."

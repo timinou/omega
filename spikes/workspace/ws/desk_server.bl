@@ -1,7 +1,7 @@
 ; Domain documents remain plain text plus typed provider objects.
 (ns ws.desk-server
   (:require [omega.task :as task] [omega.loop :as loop] [omega.env :as env] [omega.ui.model :as model] [place.model :as place] [links.model :as link]
-            [ws.server :as ws] [ws.next :as next] [ws.repos :as repos] [bl-ed.serve :as serve] [clojure.string :as str]))
+            [ws.server :as ws] [omega.documents :as documents] [ws.next :as next] [ws.repos :as repos] [bl-ed.serve :as serve] [clojure.string :as str]))
 (defn- emit [d text object]
   (cond-> (update d :lines conj text) object (update :objects conj (assoc object :row (count (:lines d))))))
 (defn- finish [d data]
@@ -32,7 +32,7 @@
                     (if (empty? rs) d
                       (reduce (fn [d r] (emit d (str (:id r) " · " (name (:status r)) " · " (:title r) " · " (or (some-> (:asks r) first :text) (:result r) (:goal r)))
                         {:type "omega/task" :key (:id r) :title (:title r) :goal (:goal r) :status (name (:status r))
-                         :place-name (get-in places [(:place r) :name]) :place (:place r) :home (:home r) :cwd (:cwd r) :folder (folder-address sys r) :artifacts (:artifacts (task-context-base sys (:id r)))
+                         :place-name (get-in places [(:place r) :name]) :place (:place r) :home (:home r) :origin (:origin r) :cwd (:cwd r) :folder (folder-address sys r) :artifacts (:artifacts (task-context-base sys (:id r)))
                          :ask (some-> (:asks r) first :text) :ask-id (some-> (:asks r) first :id)
                          :age-ms (:age-ms r) :model (get-in r [:run :model]) :branch (get-in r [:run :branch]) :notify (get-in r [:run :notify])
                          :step (when (contains? #{:running :open} (:status r)) (latest-step sys (:id r)))
@@ -61,18 +61,23 @@
   (let [t (task/view sys id) e (:env sys)
         refs (filter (fn [m] (:path (:to m))) (link/all e {:task id}))
         artifacts (map (fn [m] {:path (link/target e (:to m)) :block (:block (:to m))
-                                :label (Path/basename (:path (:to m))) :kind (name (:kind m))})
+                                :label (or (:document-title (:to m)) (Path/basename (:path (:to m)))) :kind (name (:kind m)) :origin (when (:scope (:to m)) (:to m))})
                        (sort-by (fn [m] [(if (= :output (:kind m)) 0 1) (:id m)]) refs))
         home (:home t)
+        artifacts (map (fn [a]
+                         (if (:documents sys)
+                           (try (assoc a :path (documents/normalize (:documents sys) (:path a))) (catch _ a)) a))
+                       (concat artifacts (changed-files sys t) (when home [(assoc home :label "Plan / home" :kind "home")])))
         artifacts (reduce (fn [out a] (if (some (fn [old] (and (= (:path old) (:path a)) (= (:block old) (:block a)))) out)
                                       out (conj out a))) []
-                          (concat artifacts (changed-files sys t) (when home [(assoc home :label "Plan / home" :kind "home")])))
+                          artifacts)
         roots (place/roots (place/all e))
         changed (filter (fn [address]
-                          (and (str/starts-with? address "work:")
-                               (try (seq (env/q e '[:find ?op :in $ ?path :where [?buf :buf/path ?path] [?op :op/buf ?buf]]
-                                                (ws/resolve-file roots (subs address 5))))
-                                    (catch _ false))))
+                          (try
+                            (let [path (if (:documents sys) (documents/file-path (:documents sys) address)
+                                         (when (str/starts-with? address "work:") (ws/resolve-file roots (subs address 5))))]
+                              (and path (seq (env/q e '[:find ?op :in $ ?path :where [?buf :buf/path ?path] [?op :op/buf ?buf]] path))))
+                            (catch _ false)))
                         (distinct (keep :path artifacts)))]
     {:desk "task" :task-id id :task-at (:at t) :task-title (:title t) :task-status (name (:status t)) :task-result (some-> (:result t) str next/strip)
      :proposals (when (= :idle (:status t)) (next/proposals (str (:result t))))
@@ -82,7 +87,7 @@
      :age-ms (some-> (model/task-rows e [id]) first :age-ms)
      :tokens (when-let [c (:cost t)] (+ (or (:input c) 0) (or (:output c) 0) (or (:cache-read c) 0)))
      :ask (some-> (model/task-rows e [id]) first :asks first :text)
-     :place-name (get-in (place/all e) [(:place t) :name]) :place (:place t) :cwd (:cwd t) :folder (folder-address sys t) :home home
+     :place-name (get-in (place/all e) [(:place t) :name]) :place (:place t) :cwd (:cwd t) :folder (folder-address sys t) :home home :origin (:origin t)
      :artifacts artifacts :changed-files (vec changed)}))
 (defn task-context [sys id]
   (assoc (task-context-base sys id) :turns (loop/turns sys id)

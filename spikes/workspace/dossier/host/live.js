@@ -288,6 +288,7 @@
     const head = $('header.doc'); if (head) head.hidden = !(all || target === list[0]);
     document.body.classList.toggle('all-mode', all);
     current = all ? 'all' : target.id;
+    if(parent!==window)parent.postMessage({type:'omega-document-location',scope:all||target?.id==='s-intro'?'document':'section',row:+(target?.dataset.sourceFrom||0),rev},location.origin);
     document.querySelectorAll('.side-item').forEach(i => i.classList.toggle('on', i.dataset.sec === current));
     document.querySelectorAll('.side-all').forEach(a => a.classList.toggle('on', all));
     document.querySelectorAll('nav.chips a').forEach(a => {
@@ -317,6 +318,22 @@
   if(saved.y)scrollTo(0,saved.y);
   paintGraphs();
 
+  window.addEventListener('message',e=>{
+    if(e.origin!==location.origin||e.source!==parent)return;
+    if(e.data?.type==='omega-document-reveal'){
+      const row=e.data.row,units=[...document.querySelectorAll('[data-source-from]')];
+      const target=units.filter(u=>+u.dataset.sourceFrom<=row&&row<+(u.dataset.sourceTo||(+u.dataset.sourceFrom+1)))
+        .sort((a,b)=>(+(a.dataset.sourceTo||a.dataset.sourceFrom)-a.dataset.sourceFrom)-(+(b.dataset.sourceTo||b.dataset.sourceFrom)-b.dataset.sourceFrom))[0]
+        ||units.find(u=>+u.dataset.sourceFrom>=row);
+      show('all');document.querySelectorAll('.source-origin').forEach(u=>u.classList.remove('source-origin'));
+      if(target){target.classList.add('source-origin');target.scrollIntoView({block:'center'});parent.postMessage({type:'omega-document-location',scope:'part',row,rev},location.origin);parent.postMessage({type:'omega-document-revealed',token:e.data.token},location.origin);}
+    }
+    if(e.data?.type==='omega-document-current'){
+      const visible=secs().find(s=>!s.hidden&&s.style.display!=='none'&&s.classList.contains('active'))||secs().find(s=>s.id===current);
+      parent.postMessage({type:'omega-document-location',row:+(visible?.dataset.sourceFrom||0),rev},location.origin);
+    }
+  });
+
   // Compose with the retained editor's existing controls through its public
   // event API. The iframe owns presentation; the editor still owns selection,
   // source editing and task context. No second editor or document state lives here.
@@ -337,15 +354,18 @@
       if(button.dataset.act==='copy-passage'&&getSelection()?.toString()){e.preventDefault();e.stopPropagation();parent.navigator.clipboard.writeText(getSelection().toString()).catch(()=>{});}
     };
     const input=e=>{if(active()&&e.target.matches('[data-field="search"]'))find();};
-    const passage=()=>{if(!active())return;const selected=getSelection()?.toString().trim();if(!selected)return;
-      const {R,K,F}=editor,ed=F.d_editor(editor.frame(),K(owner.dataset.pane||'file')),lines=ed.get(K('text')).get(K('lines')).toArray();
-      const pieces=selected.split('\n').filter(Boolean),start=lines.findIndex(l=>l.includes(pieces[0]));if(start<0)return;
-      let end=start+1;const last=pieces.at(-1);for(let i=start;i<lines.length;i++)if(lines[i].includes(last)){end=i+1;break;}
-      const selection=R.hashMap(K('path'),ed.get(K('path')),K('rev'),ed.get(K('doc')).get(K('rev')),K('start'),start,K('end'),end,K('text'),lines.slice(start,end).join('\n'));
-      sendEditor('mobile/selection','rail',[K('selection'),selection]);
+    const mapped=node=>(node?.nodeType===1?node:node?.parentElement)?.closest('[data-source-from]');
+    const passage=()=>{if(!active())return;const selected=getSelection();if(!selected||selected.isCollapsed)return;
+      const a=mapped(selected.anchorNode),b=mapped(selected.focusNode);if(!a||!b)return;
+      const start=Math.min(+a.dataset.sourceFrom,+b.dataset.sourceFrom),end=Math.max(+(a.dataset.sourceTo||a.dataset.sourceFrom)+(!a.dataset.sourceTo?1:0),+(b.dataset.sourceTo||b.dataset.sourceFrom)+(!b.dataset.sourceTo?1:0));
+      parent.postMessage({type:'omega-document-context',scope:'passage',start,end,row:start,rev},location.origin);
     };
+    const locate=e=>{const unit=mapped(e.target);if(!unit)return;
+      parent.postMessage({type:'omega-document-location',scope:'part',row:+unit.dataset.sourceFrom,start:+unit.dataset.sourceFrom,end:+(unit.dataset.sourceTo||(+unit.dataset.sourceFrom+1)),rev},location.origin);
+    };
+    document.addEventListener('pointerdown',locate);
     parent.document.addEventListener('click',click,true);parent.document.addEventListener('input',input);document.addEventListener('pointerup',passage);
-    window.addEventListener('pagehide',()=>{parent.document.removeEventListener('click',click,true);parent.document.removeEventListener('input',input);document.removeEventListener('pointerup',passage);},{once:true});
+    window.addEventListener('pagehide',()=>{parent.document.removeEventListener('click',click,true);parent.document.removeEventListener('input',input);document.removeEventListener('pointerup',passage);document.removeEventListener('pointerdown',locate);},{once:true});
   }
   initialize(); refresh(false); setInterval(() => refresh(false), 4000);
 })();

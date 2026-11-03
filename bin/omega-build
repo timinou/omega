@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Build artifacts on the daemon's configured Build host; never fall back to Work.
+set -euo pipefail
+exec nix build "$@" --max-jobs 0

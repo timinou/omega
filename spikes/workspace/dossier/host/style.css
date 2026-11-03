@@ -729,3 +729,5 @@ body.sg-immersed{overflow:hidden}.screen-graph.sg-expanded{position:fixed;inset:
 :where(html[data-design]) :where(button,input,textarea,select){font-family:var(--font-ui)}
 :where(html[data-design]:not([data-design="none"])) .desk{--k-voice:var(--font-ui);--k-doc:var(--font-body);--k-display:var(--font-display);--k-data:var(--font-data)}
 }
+/* Source ranges are presentation-neutral; task origins reveal without adding toolbars. */
+.source-unit{min-width:0}.source-origin{outline:1px solid var(--accent,#b86b4e);outline-offset:5px;background:rgba(184,107,78,.06)}

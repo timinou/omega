@@ -1,0 +1,298 @@
+TAP version 13
+# Subtest: mobile is a removable layer and a real frame layout, with no user table mutation
+ok 1 - mobile is a removable layer and a real frame layout, with no user table mutation
+  ---
+  duration_ms: 199.853447
+  type: 'test'
+  ...
+# Subtest: drafts stay keyed to tasks and navigation leaves the conversation editor untouched
+ok 2 - drafts stay keyed to tasks and navigation leaves the conversation editor untouched
+  ---
+  duration_ms: 13.568098
+  type: 'test'
+  ...
+# Subtest: send uses the existing task intent, blocks duplicates and preserves drafts on failure
+ok 3 - send uses the existing task intent, blocks duplicates and preserves drafts on failure
+  ---
+  duration_ms: 13.527721
+  type: 'test'
+  ...
+# Subtest: quick answers keep a composed reply; successful text sends clear only the submitted draft
+ok 4 - quick answers keep a composed reply; successful text sends clear only the submitted draft
+  ---
+  duration_ms: 18.702068
+  type: 'test'
+  ...
+# Subtest: completed task follow-up carries its actual place and frozen directory
+ok 5 - completed task follow-up carries its actual place and frozen directory
+  ---
+  duration_ms: 6.617359
+  type: 'test'
+  ...
+# Subtest: mobile file input participates in the shared-buffer draft protocol and read-only guards
+ok 6 - mobile file input participates in the shared-buffer draft protocol and read-only guards
+  ---
+  duration_ms: 29.462408
+  type: 'test'
+  ...
+# Subtest: dirty file navigation keeps its current tab and exposes a publication message
+ok 7 - dirty file navigation keeps its current tab and exposes a publication message
+  ---
+  duration_ms: 4.287635
+  type: 'test'
+  ...
+# Subtest: task creation from a place document validates against the retained place choices
+ok 8 - task creation from a place document validates against the retained place choices
+  ---
+  duration_ms: 5.064961
+  type: 'test'
+  ...
+# Subtest: document navigation and explicit passage retain their address, revision and anchor
+ok 9 - document navigation and explicit passage retain their address, revision and anchor
+  ---
+  duration_ms: 7.817201
+  type: 'test'
+  ...
+# Subtest: command discovery includes core and package commands without shared table mutation
+ok 10 - command discovery includes core and package commands without shared table mutation
+  ---
+  duration_ms: 16.280348
+  type: 'test'
+  ...
+# Subtest: first editor eval can resume when the language arrives
+ok 11 - first editor eval can resume when the language arrives
+  ---
+  duration_ms: 5.850312
+  type: 'test'
+  ...
+# Subtest: native prompts expose data and submit through the existing editor
+ok 12 - native prompts expose data and submit through the existing editor
+  ---
+  duration_ms: 20.63046
+  type: 'test'
+  ...
+# Subtest: reading a task home does not manufacture unpublished edits when a task completes
+ok 13 - reading a task home does not manufacture unpublished edits when a task completes
+  ---
+  duration_ms: 24.802144
+  type: 'test'
+  ...
+# Subtest: long goals retain their complete instruction under a compact editable title
+ok 14 - long goals retain their complete instruction under a compact editable title
+  ---
+  duration_ms: 10.70906
+  type: 'test'
+  ...
+# Subtest: running task instructions steer the current turn
+ok 15 - running task instructions steer the current turn
+  ---
+  duration_ms: 7.448269
+  type: 'test'
+  ...
+# Subtest: place form invokes the existing place intent as ordinary data
+ok 16 - place form invokes the existing place intent as ordinary data
+  ---
+  duration_ms: 7.131717
+  type: 'test'
+  ...
+# Subtest: Files index clears an earlier file target without discarding that editor
+ok 17 - Files index clears an earlier file target without discarding that editor
+  ---
+  duration_ms: 5.394523
+  type: 'test'
+  ...
+# Subtest: clearing a local cwd setting restores inheritance
+ok 18 - clearing a local cwd setting restores inheritance
+  ---
+  duration_ms: 6.312958
+  type: 'test'
+  ...
+# Subtest: a newly visited document opens in reading mode without changing the retained editor text
+ok 19 - a newly visited document opens in reading mode without changing the retained editor text
+  ---
+  duration_ms: 28.674087
+  type: 'test'
+  ...
+# Subtest: closed work cannot advertise a stale question or waiting summary
+ok 20 - closed work cannot advertise a stale question or waiting summary
+  ---
+  duration_ms: 1.114995
+  type: 'test'
+  ...
+# Subtest: generic document task commands capture source, use task/open, and unuse exactly
+ok 21 - generic document task commands capture source, use task/open, and unuse exactly
+  ---
+  duration_ms: 51.87373
+  type: 'test'
+  ...
+# Subtest: file-local package declaration accepts installed names, orders dependencies and excludes executable/remote references
+ok 22 - file-local package declaration accepts installed names, orders dependencies and excludes executable/remote references
+  ---
+  duration_ms: 2.235746
+  type: 'test'
+  ...
+# Subtest: explicit unload is respected across refreshes until explicitly used again
+ok 23 - explicit unload is respected across refreshes until explicitly used again
+  ---
+  duration_ms: 0.336824
+  type: 'test'
+  ...
+# Subtest: provider suggestions use the same bare-name and explicit-unload rules
+ok 24 - provider suggestions use the same bare-name and explicit-unload rules
+  ---
+  duration_ms: 0.266599
+  type: 'test'
+  ...
+# Subtest: normal-mode motions: hjkl, w selects a word, counts
+ok 25 - normal-mode motions: hjkl, w selects a word, counts
+  ---
+  duration_ms: 305.421733
+  type: 'test'
+  ...
+# Subtest: insert mode types, Escape returns, undo/redo round-trip
+ok 26 - insert mode types, Escape returns, undo/redo round-trip
+  ---
+  duration_ms: 117.253525
+  type: 'test'
+  ...
+# Subtest: multiple cursors: C adds a cursor below, typing goes to both
+ok 27 - multiple cursors: C adds a cursor below, typing goes to both
+  ---
+  duration_ms: 54.499716
+  type: 'test'
+  ...
+# Subtest: x selects lines; d deletes and yanks; p pastes
+ok 28 - x selects lines; d deletes and yanks; p pastes
+  ---
+  duration_ms: 98.118714
+  type: 'test'
+  ...
+# Subtest: org navigation: ]h [h g u ]b
+ok 29 - org navigation: ]h [h g u ]b
+  ---
+  duration_ms: 197.878856
+  type: 'test'
+  ...
+# Subtest: structural form motion inside a cell
+ok 30 - structural form motion inside a cell
+  ---
+  duration_ms: 179.43493
+  type: 'test'
+  ...
+# Subtest: paredit-style: wrap and raise
+ok 31 - paredit-style: wrap and raise
+  ---
+  duration_ms: 116.092679
+  type: 'test'
+  ...
+# Subtest: the command line evaluates Beam Lisp against the live editor
+ok 32 - the command line evaluates Beam Lisp against the live editor
+  ---
+  duration_ms: 206.049752
+  type: 'test'
+  ...
+# Subtest: the command line is the real language: macros, defn, destructuring, threading
+ok 33 - the command line is the real language: macros, defn, destructuring, threading
+  ---
+  duration_ms: 391.06344
+  type: 'test'
+  ...
+# Subtest: split cells: a local cell runs in the page; a beam cell becomes an effect
+ok 34 - split cells: a local cell runs in the page; a beam cell becomes an effect
+  ---
+  duration_ms: 332.702711
+  type: 'test'
+  ...
+# Subtest: the palette finds and runs commands by fuzzy name
+ok 35 - the palette finds and runs commands by fuzzy name
+  ---
+  duration_ms: 383.20468
+  type: 'test'
+  ...
+# Subtest: describe-key explains a binding
+ok 36 - describe-key explains a binding
+  ---
+  duration_ms: 51.96244
+  type: 'test'
+  ...
+# Subtest: search: / n N * with smart-case and wrap
+ok 37 - search: / n N * with smart-case and wrap
+  ---
+  duration_ms: 131.614643
+  type: 'test'
+  ...
+# Subtest: dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans
+ok 38 - dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans
+  ---
+  duration_ms: 74.887747
+  type: 'test'
+  ...
+# Subtest: save is an effect, not a side effect
+ok 39 - save is an effect, not a side effect
+  ---
+  duration_ms: 35.355627
+  type: 'test'
+  ...
+# Subtest: an eval reload keeps the cursor and is one undo step
+ok 40 - an eval reload keeps the cursor and is one undo step
+  ---
+  duration_ms: 51.482885
+  type: 'test'
+  ...
+# Subtest: render model: segments, problems, status
+ok 41 - render model: segments, problems, status
+  ---
+  duration_ms: 25.145753
+  type: 'test'
+  ...
+# Subtest: incremental structure == full derive, over random typing in real documents
+ok 42 - incremental structure == full derive, over random typing in real documents
+  ---
+  duration_ms: 135151.411927
+  type: 'test'
+  ...
+# Subtest: round trip: every repo .bl.org is reproduced byte-for-byte
+ok 43 - round trip: every repo .bl.org is reproduced byte-for-byte
+  ---
+  duration_ms: 4524.863812
+  type: 'test'
+  ...
+# Subtest: deferred language: Enter keeps the draft, one effect, replays once on ready
+ok 44 - deferred language: Enter keeps the draft, one effect, replays once on ready
+  ---
+  duration_ms: 54.273211
+  type: 'test'
+  ...
+# Subtest: deferred language: Escape or an edit cancels the parked run
+ok 45 - deferred language: Escape or an edit cancels the parked run
+  ---
+  duration_ms: 62.752103
+  type: 'test'
+  ...
+# Subtest: deferred language: a failed load keeps the draft and says so; Enter retries
+ok 46 - deferred language: a failed load keeps the draft and says so; Enter retries
+  ---
+  duration_ms: 48.529261
+  type: 'test'
+  ...
+# Subtest: deferred language: a local cell keeps its text and resumes once; edits cancel stale results
+ok 47 - deferred language: a local cell keeps its text and resumes once; edits cancel stale results
+  ---
+  duration_ms: 120.962682
+  type: 'test'
+  ...
+# Subtest: named command events use normal command lookup and retain the read-only guard
+ok 48 - named command events use normal command lookup and retain the read-only guard
+  ---
+  duration_ms: 19.937068
+  type: 'test'
+  ...
+1..48
+# tests 48
+# suites 0
+# pass 48
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 143148.86981

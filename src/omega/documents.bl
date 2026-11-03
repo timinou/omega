@@ -1,7 +1,8 @@
 ; One account host, the existing place table and one shared buffer per real file.
 ; Dossier parsing/presentation is reused; no per-document listener or code execution.
 (ns omega.documents
-  (:require [place.model :as place] [buffer.model :as buffer]
+  (:require [place.model :as place] [buffer.model :as buffer] [omega.env :as env]
+            [omega.document-source :as source]
             [dossier.org :as org] [dossier.page :as page] [dossier.answer :as answer]
             [dossier.film :as film] [live.hiccup :as h] [web :as web]
             [bl.doc :as doc] [bl.json :as json] [clojure.string :as str]))
@@ -11,11 +12,43 @@
     (when-not (= 0 status) (throw (ex-info "Document is unavailable." {})))
     (str/trim result)))
 (defn- inside? [root path] (or (= root path) (str/starts-with? path (str root "/"))))
+(def schema
+  [{:db/ident :document/id :db/valueType :db.type/string :db/unique :db.unique/identity}
+   {:db/ident :document/entry}])
+(defn- remembered [sys]
+  (into {} (map (fn [[id entry]] [id entry])
+    (env/q (:env sys) '[:find ?id ?entry :where [?d :document/id ?id] [?d :document/entry ?entry]]))))
 (defn registry [sys server opts]
-  {:sys sys :server server :admitted (atom {}) :cache (atom {}) :assets (atom {})
+  {:sys sys :server server :admitted (atom (remembered sys)) :cache (atom {}) :assets (atom {})
    :owner (:document-owner opts) :handle (or (:document-handle opts) (System/get_env "USER") "owner")
    :home (Path/expand "../.." (Path/dirname (BeamLisp.Loader/source_path "omega.documents")))})
 (defn- digest [value] (str/lower-case (Base/encode16 (crypto/hash :sha256 (str value)))))
+(defn- remember! [r entry]
+  (when-not (= entry (get @(:admitted r) (:id entry)))
+    (env/tx! (get-in r [:sys :env]) [{:db/id -1 :document/id (:id entry) :document/entry entry}])
+    (swap! (:admitted r) assoc (:id entry) entry)) entry)
+(defn- org-files [roots]
+  ;; Discovery is bounded and skips symlinked directories; never recurse into
+  ;; generated/dependency trees. An ambiguous ID is not a rename recovery.
+  (loop [todo (vec (distinct roots)) out [] visited #{} n 0]
+    (if (or (empty? todo) (>= n 2000)) out
+      (let [path (first todo) todo (vec (rest todo))]
+        (cond
+          (contains? visited path) (recur todo out visited (inc n))
+          (and (File/dir? path) (= path (real-path path)))
+          (recur (into todo (map #(str path "/" %) (remove #(or (str/starts-with? % ".") (contains? #{"node_modules" "target" "_build" "build" "out"} %)) (sort (File/ls! path))))) out (conj visited path) (inc n))
+          (and (File/regular? path) (str/ends-with? path ".bl.org")) (recur todo (conj out path) visited (inc n))
+          :else (recur todo out visited (inc n)))))))
+(defn- recover-entry [r entry]
+  (if (File/regular? (:path entry)) entry
+    (let [ps (place/all (get-in r [:sys :env]))
+          roots (if (:project entry) [(place/root ps (:project entry))] [(Path/dirname (:path entry))])
+          matches (filter (fn [path]
+                            (let [text (File/read! path)]
+                              (if (:org-id entry) (= (:org-id entry) (:org-id (source/index text)))
+                                (= (:fingerprint entry) (digest text))))) (org-files (keep identity roots)))]
+      (when-not (= 1 (count matches)) (throw (ex-info "Document moved; no unique Org ID or unchanged source was found. Reopen the file to recover." {})))
+      (remember! r (assoc entry :path (real-path (first matches)))))))
 (defn- project-path [r address]
   (let [parts (str/split address "/") id (first parts)
         root (place/root (place/all (get-in r [:sys :env])) id)]
@@ -30,6 +63,7 @@
     (if (str/starts-with? address "document:")
       (let [id (subs address 9) entry (get @(:admitted r) id)]
         (when-not entry (throw (ex-info "Document is not admitted to this account." {})))
+        (let [entry (recover-entry r entry)]
         (when-not (= (:path entry) (real-path (:path entry)))
           (throw (ex-info "Document target changed; open it again." {})))
         (when (:project entry)
@@ -37,7 +71,7 @@
             (when-not (and root (inside? (real-path root) (:path entry)))
               (throw (ex-info "Project access was removed." {})))))
         (when-not (File/regular? (:path entry)) (throw (ex-info "Not a file." {})))
-        entry)
+        entry))
       (let [entry (cond
                     (str/starts-with? address "project:") (project-path r (subs address 8))
                     (str/starts-with? address "work:") (project-path r (subs address 5))
@@ -50,13 +84,17 @@
             path (:path entry)
             _ (when-not (File/regular? path)
                 (throw (ex-info "Open a regular file." {})))
-            id (digest (str (get-in r [:sys :root]) "\n" path))
+            text (File/read! path) idx (source/index text)
+            previous (first (filter #(or (= path (:path %)) (and (:org-id idx) (= (:org-id idx) (:org-id %)))) (vals @(:admitted r))))
+            _ (when (and previous (:org-id idx) (not= path (:path previous)) (File/regular? (:path previous)))
+                (throw (ex-info "Duplicate Org file ID. Resolve the duplicate before opening this copy." {})))
+            id (or (:id previous) (digest (str (get-in r [:sys :root]) "\n" (or (:org-id idx) path))))
             existing (get @(:admitted r) id)
-            entry (assoc (or existing entry) :id id :address (str "document:" id))]
+            entry (merge existing entry {:id id :address (str "document:" id) :org-id (:org-id idx)
+                                        :title (:title idx) :fingerprint (digest text)})]
         (when (and (nil? existing) (>= (count @(:admitted r)) 256))
-          (throw (ex-info "Prototype document limit reached; restart the private host." {})))
-        (swap! (:admitted r) assoc id entry)
-        entry))))
+          (throw (ex-info "Prototype document limit reached." {})))
+        (remember! r entry)))))
 (defn normalize [r address]
   (let [s (str address)]
     (if (or (str/starts-with? s "document:") (str/starts-with? s "project:")
@@ -68,14 +106,33 @@
 (defn file-path [r address] (:path (resolve-document r address)))
 (defn snapshot [r entry]
   (let [result (buffer/request! (:server r) [:read (:path entry) {}])]
-    (when (:error result) (throw (ex-info (:error result) {}))) result))
+    (when (:error result) (throw (ex-info (:error result) {})))
+    (let [idx (source/index (:text result))]
+      (remember! r (assoc entry :title (:title idx) :org-id (:org-id idx) :fingerprint (digest (:text result))))) result))
+(defn context! [r args]
+  (let [entry (resolve-document r (:path args)) d (snapshot r entry)
+        _ (when (and (:rev args) (not= (:rev args) (:rev d))) (throw (ex-info "The document changed; choose the starting context again. Your goal is retained." {})))
+        context (source/capture (:text d) args)]
+    (merge context {:path (:address entry) :document (:id entry) :file (:path entry) :rev (:rev d)
+                    :project (:project entry)})))
+(defn reveal! [r origin]
+  (let [entry (resolve-document r (:path origin)) d (snapshot r entry)]
+    (merge {:path (:address entry) :file (:path entry) :origin origin} (source/reveal (:text d) origin))))
+(defn index! [r project]
+  (let [root (place/root (place/all (get-in r [:sys :env])) project)]
+    (when-not root (throw (ex-info "Unknown project." {})))
+    (let [root (real-path root)]
+      (mapv (fn [path] (let [idx (source/index (File/read! path))]
+                        {:title (:title idx) :path path :org-id (:org-id idx)
+                         :address (str "project:" project "/" (subs path (inc (count root))))}))
+            (org-files [root])))))
 (defn provider [r]
   {:read (fn [id _]
            (let [entry (resolve-document r (str "document:" id)) d (snapshot r entry)]
              {:text (:text d) :rev (:rev d) :title (Path/basename (:path entry)) :objects [] :read-only? false
-              :data (cond-> {:buffer true :document (:address entry)}
+              :data (cond-> {:buffer true :document (:address entry) :document-title (:title (get @(:admitted r) id))}
                       (str/ends-with? (:path entry) ".bl.org")
-                      (assoc :packages ["dossier"] :dossier {:id id :url (str "/documents/" id "/view")}))}))
+                      (assoc :packages ["dossier" "document-tasks"] :dossier {:id id :url (str "/documents/" id "/view")}))}))
    :rev (fn [id _] (:rev (snapshot r (resolve-document r (str "document:" id)))))
    :eval (fn [id _ cell text]
            (let [entry (resolve-document r (str "document:" id)) sliced (doc/slice-text text (doc/format-of (:path entry)))]

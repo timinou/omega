@@ -4,7 +4,7 @@
 (def source "#+TITLE: A shared dossier\n* Decision\n#+begin_ask :id direction :title Pick :options Yes|No\nContinue?\n#+end_ask\n\n* Evidence\n#+begin_src beam-lisp :id recorded\n(throw :never-run)\n#+end_src\n#+RESULTS: recorded\n: recorded result\n")
 (defn fixture []
  (let [root (str "/tmp/omega-documents-" (System/pid) "-" (erlang/unique_integer (list :positive)))
-       e (env/open {:schema (vec (concat place/schema buffer/schema))}) server (buffer/start! e)
+       e (env/open {:schema (vec (concat place/schema buffer/schema d/schema))}) server (buffer/start! e)
        sys {:env e :root root} r (d/registry sys server {})]
   (File/mkdir_p! root) (File/write! (str root "/review.bl.org") source)
   (place/put! e {:id "a" :root root})

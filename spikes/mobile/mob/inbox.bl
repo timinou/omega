@@ -38,6 +38,10 @@
         [:span (or (:activity task) (session/step-label (:step task)))]]
        (not (s/blank? (str (:summary task))))
        (when-not (= (s/trim (str (:summary task))) (s/trim (str (:title task)))) [:p (:summary task)]))
+     (when-let [origin (:origin task)]
+       [:button.origin-link {:data-act "task-origin" :data-task (:key task) :data-key "origin"
+                             :aria-label (str "Open source: " (:label origin))}
+        (ui/icon :file "sm") [:span (:document-title origin) " · " (:label origin)]])
      (when needs? (chips task))]))
 
 (defn- group [vm id label tasks]

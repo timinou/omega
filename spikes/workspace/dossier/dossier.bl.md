@@ -30,7 +30,8 @@ copy to describe saving; it does not claim an agent has received the answer.
 
 `bin/omega-documents` uses the verified cached frontend, or builds it through Nix on Build, then copies the demo
 and the real build-unification dossier into a new temporary directory, and
-starts an offline memory world on port 8792. It prints the ordinary Omega URL.
+starts a private durable world on port 8792, using the configured Omega model service.
+Set `OMEGA_DOCUMENTS_OFFLINE=1` for scripted acceptance. It prints the ordinary Omega URL.
 Use an unused port; another port can be passed as its first argument. Ctrl-C
 stops this foreground prototype. The live world and original dossier are untouched.
 
@@ -63,12 +64,17 @@ Implemented: project/full-file opening, original dossier reading, guarded
 feedback, ordinary source editing, live source/evidence refresh, private explicit
 assets, and retaining local answer input and reader position.
 
-Still planned: title-based project-wide discovery, Needs you projection,
-explicit block/task links with recoverable answer delivery, durable document
-admission/rename recovery, and production gateway acceptance. Answers currently
-save to the source document; they do not resume an Omega task. No existing
-standalone service has been retired. Video range streaming and asset-only cache
-invalidation beyond recorded film metadata need further work before broad cutover.
+The [general document-task slice](../document_tasks/document-tasks.bl.md) adds
+separate starts from a passage, arbitrary part, section or whole file, with
+persistent source origins and direct return navigation. Org titles appear in
+project file navigation. Admission persists in the world database and unique
+Org IDs support rename recovery. Answer saving remains a file save and never
+starts or continues a task.
+
+Authentication and standalone-service migration are deferred at the user's
+request. Broader/global document discovery and ambiguous external moves still
+need work. No standalone service has been retired. Video range streaming and
+asset-only cache invalidation beyond recorded film metadata remain limitations.
 
 ## Checks
 
@@ -150,8 +156,8 @@ inspection of the installed Work endpoint helper and Serve configuration found:
 - `proof/http.json` tests configured app middleware using synthetic headers on
   an isolated fixture. It is not evidence of a real second-account denial.
 
-Before using original private documents, put the host behind a verified owner
-gate, establish a trusted identity handoff (the opened-port gate strips those
+Authentication is deferred for this trusted-user prototype. Before a later
+production rollout, establish a verified owner gate and a trusted identity handoff (the opened-port gate strips those
 headers), close local-user bypasses, and run actual owner/other-account checks
 for reads, writes, observation, assets and task actions. Setting the header check
 alone does not authenticate arbitrary local callers. Production acceptance and
@@ -179,20 +185,20 @@ refines it; a finished task can produce a new reference linked to the previous
 one. Explicit `:cwd` avoids relying on working-directory inference for full-file
 or canonical `document:` addresses.
 
-Selecting prose in Read and using the existing Ask action reaches the ordinary
-source-anchored task composer. The host validates the captured revision and
-passage before task creation. The rendered dossier has no new inline Start card. Home/Pocket's Edit textarea
-does not implement that desktop task-block shortcut; use its Read → select
-passage → Ask flow today. The trial's model is scripted/offline: it exercises the task machinery but does
-not run a real model against the requested implementation.
+The current general task workflow supersedes the original answer-delivery
+proposal. Use the task icon in Read, choose the starting scope, and enter a goal
+in the ordinary composer. The Work task card and Files references return to
+that origin. Saving answers is independent; source changes can be read by the
+agent through its existing file tools. Reply/steer/cancel remain ordinary task
+actions. See the document-task notes for the updated contract and evidence.
 
-What remains is the document/task decision loop: an explicit question links to
-a specific task, Needs you exposes it in Pocket, and accepting an answer both
-saves the source and records recoverable delivery to that same task. Delivery
-must survive a restart without resuming work twice. `Save answer` currently
-performs only the source-saving part. The existing task-message answer action
-already works separately; bridging it to dossier decisions is the next slice.
+The historical task-block contract (12 tests) and task/workspace backend checks
+are retained in [editor results](proof/task-editor.log) and
+[backend results](proof/task-backend.log). Those checks use scripted worlds.
 
-The existing task-block editor contract (12 tests) and task/workspace backend
-checks were rerun for this review; see [editor results](proof/task-editor.log)
-and [backend results](proof/task-backend.log). They use private scripted worlds.
+
+The generic task slice and its current checks are documented in
+[document tasks](../document_tasks/document-tasks.bl.md). Saving answers remains
+independent of starting or continuing a task. The trial now uses the current
+Work model gateway and a durable temporary world. Authentication and migration
+are explicitly deferred. The user's saved review was preserved during upgrades.

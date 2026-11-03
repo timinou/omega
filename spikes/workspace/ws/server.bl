@@ -1,7 +1,7 @@
 ; BEAM providers for attached directories. The editor package does no IO.
 (ns ws.server
   (:require [omega.task :as task] [bl-ed.serve :as serve] [bl.doc :as doc]
-            [clojure.string :as str]))
+            [clojure.string :as str] [omega.document-source :as source]))
 
 (defn resolve-file
   "Resolve a mounted address suffix (place/relative-path)."
@@ -39,7 +39,10 @@
                       directory? (File/dir? abs)]
                   (emit a (str "  " (if directory? "▸ " "  ") name (if directory? "/" ""))
                         {:type (if directory? "workspace/folder" "workspace/file")
-                         :key (str (if directory? "folder:" "work:") p)}))))
+                         :key (str (if directory? "folder:" "work:") p)
+                          :title (when (and (not directory?) (str/ends-with? name ".bl.org"))
+                                   (try (let [title (:title (source/index (File/read! abs)))]
+                                          (when-not (= "Untitled" title) title)) (catch _ nil)))}))))
             acc (sort (File/ls! dir)))))
 
 (defn places-doc [places]

@@ -6,9 +6,9 @@
 ;
 ;   node = {:t :heading :level :title :todo :tags :line}
 ;        | {:t :para :text}            | {:t :list :ordered? :items}
-;        | {:t :table :head :rows}     | {:t :props :pairs}
+;        | {:t :table :from (+ offset i) :to (+ offset end) :head :rows}     | {:t :props :pairs}
 ;        | {:t :block :lang :attrs :pairs :body :line}
-;        | {:t :cell :id :code :result :error?} | {:t :code :lang :body}
+;        | {:t :cell :from (:from s) :to (:to s) :id :code :result :error?} | {:t :code :from (:from s) :to (:to s) :lang :body}
 
 (ns dossier.org
   (:require [bl.doc.spans :as sp] [dossier.attrs :as at]))
@@ -28,9 +28,9 @@
 
 (defn- prose-nodes
   "Nodes for one run of prose lines; keywords land in meta."
-  [lines]
+  [lines offset]
   (loop [i 0 out [] meta {} para []]
-    (let [flush (fn [out] (if (empty? para) out (conj out {:t :para :text (join " " para)})))]
+    (let [flush (fn [out] (if (empty? para) out (conj out {:t :para :text (join " " para) :from (+ offset (- i (count para))) :to (+ offset i)})))]
       (if (>= i (count lines))
         {:nodes (flush out) :meta meta}
         (let [l (nth lines i) kw (keyword-line l)]
@@ -45,7 +45,7 @@
                                    :let [m (Regex/run (Regex/compile! "^\\s*:([\\w-]+):\\s*(.*)$") p)]
                                    :when m]
                                [(lower-case (nth m 1)) (nth m 2)]))]
-              (recur (inc end) (conj (flush out) {:t :props :pairs pairs}) meta []))
+              (recur (inc end) (conj (flush out) {:t :props :pairs pairs :from (+ offset i) :to (+ offset (min (inc end) (count lines)))}) meta []))
 
             (table-line? l)
             (let [end (or (some (fn [j] (when (not (table-line? (nth lines j))) j)) (range i (count lines)))
@@ -53,7 +53,7 @@
                   rows (slice lines i end)
                   rule (some (fn [j] (when (rule-line? (nth rows j)) j)) (range (count rows)))
                   body (vec (map cells-of (filter (fn [r] (not (rule-line? r))) rows)))]
-              (recur end (conj (flush out) {:t :table :head (if rule (subvec body 0 rule) [])
+              (recur end (conj (flush out) {:t :table :from (+ offset i) :to (+ offset end) :head (if rule (subvec body 0 rule) [])
                                             :rows (if rule (subvec body rule) body)})
                      meta []))
 
@@ -70,7 +70,7 @@
                                                      (recur (inc k) (conj more (trim (nth lines k))))
                                                      [more k]))]
                                     (recur k (conj items (join " " (cons (nth m 3) more))))))))]
-              (recur j (conj (flush out) {:t :list :ordered? ordered? :items items}) meta []))
+              (recur j (conj (flush out) {:t :list :ordered? ordered? :items items :from (+ offset i) :to (+ offset j)}) meta []))
 
             (blank? l) (recur (inc i) (flush out) meta [])
 
@@ -99,11 +99,11 @@
                              (contains? todo-words (first words)) (first words))
                   title (if (and todo (= todo (first words))) (join " " (rest words)) (:title s))]
               (recur (rest ss) (conj out {:t :heading :level (:level s) :title title :todo todo
-                                          :tags (:tags s) :line (:from s)})
+                                          :tags (:tags s) :line (:from s) :from (:from s) :to (:to s)})
                      meta))
 
             (= k :prose)
-            (let [r (prose-nodes (slice lines (:from s) (:to s)))]
+            (let [r (prose-nodes (slice lines (:from s) (:to s)) (:from s))]
               (recur (rest ss) (into out (:nodes r)) (merge meta (:meta r))))
 
             (= k :block)
@@ -111,11 +111,11 @@
               (recur (rest ss) (conj out {:t :block :lang (:lang s) :pairs pairs :attrs (at/attr-map pairs)
                                           :body (slice lines (or (:code-from s) (inc (:from s)))
                                                        (or (:code-to s) (dec (:to s))))
-                                          :line (:from s)})
+                                          :line (:from s) :from (:from s) :to (:to s)})
                      meta))
 
             (= k :cell)
-            (recur (rest ss) (conj out {:t :cell :id (or (:explicit-id s) (str "cell-" (:from s)))
+            (recur (rest ss) (conj out {:t :cell :from (:from s) :to (:to s) :id (or (:explicit-id s) (str "cell-" (:from s)))
                                         :frozen? (:frozen? s)
                                         :code (join "\n" (slice lines (:code-from s) (:code-to s)))})
                    meta)
@@ -125,18 +125,18 @@
                   prev (last out)]
               (recur (rest ss)
                      (if (= :cell (:t prev))
-                       (conj (pop out) (assoc prev :result txt :error? (includes? txt ";; error")))
+                       (conj (pop out) (assoc prev :to (:to s) :result txt :error? (includes? txt ";; error")))
                        out)
                      meta))
 
             (= k :prose-code)
-            (recur (rest ss) (conj out {:t :code :lang (:lang s)
+            (recur (rest ss) (conj out {:t :code :from (:from s) :to (:to s) :lang (:lang s)
                                         :body (join "\n" (slice lines (or (:code-from s) (inc (:from s)))
                                                                 (or (:code-to s) (dec (:to s)))))})
                    meta)
 
             :else
-            (recur (rest ss) (conj out {:t :code :lang "org" :body (join "\n" (slice lines (:from s) (:to s)))})
+            (recur (rest ss) (conj out {:t :code :from (:from s) :to (:to s) :lang "org" :body (join "\n" (slice lines (:from s) (:to s)))})
                    meta)))))))
 
 (defn rows-of

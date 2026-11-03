@@ -5,8 +5,8 @@
             [buffer.model :as buffer] [buffer.server :as buffers]
             [ws.desk-server :as desk] [ws.repos :as repos] [omega.ed.providers :as pv]
             [bl-ed.serve :as serve] [clojure.string :as str]
-            [omega.documents :as documents] [omega.env :as env] [harness]))
-(def schema (vec (concat place/schema link/schema buffer/schema)))
+            [omega.documents :as documents] [omega.document-source :as source] [omega.task :as task] [omega.env :as env] [harness]))
+(def schema (vec (concat place/schema link/schema buffer/schema documents/schema)))
 (defn start! [e root]
   ;; Only bootstrap an empty mount table. Existing place names and homes belong
   ;; to the world, including after a durable restart.
@@ -48,25 +48,37 @@
       :prepare-task
       (fn [args]
         (when (str/blank? (str (:goal args))) (throw (ex-info "Write a goal." {})))
-        (let [args (run-settings sys args)]
-        (if-let [value (:selection args)]
-          (let [s (selection value) d (serve/read-doc cfg (:path s))
-                lines (str/split (or (:text d) "") "\n")
-                start (:start s) end (:end s)]
-            (when-not (and (nil? (:error d)) (= (:rev s) (:rev d))
-                          (integer? start) (integer? end) (<= 0 start) (< start end) (<= end (count lines))
-                          (= (:text s) (str/join "\n" (subvec (vec lines) start end))))
-              (throw (ex-info "The passage changed; select it again. Your goal is retained." {})))
-            (assoc args :selection s :path (:path s)
-              :title (or (:title args) (first (str/split (str (:goal args)) "\n")))
-              :goal (str (:goal args) "\n\nSelected passage from " (:path s) " (revision " (:rev s)
-                         ", lines " (inc start) "–" end "):\n" (:text s))))
-          args)))
+        (let [value (:selection args)
+              value (when value (selection value))
+              ;; Task blocks and the reader/composer share this same capture path.
+              value (or value
+                        (when (and (:documents sys) (:block args) (:path args))
+                          (let [entry (documents/resolve-document (:documents sys) (:path args))
+                                d (documents/snapshot (:documents sys) entry)
+                                row (source/block-row (:text d) (:block args))]
+                            (when row (documents/context! (:documents sys) {:path (:path args) :scope "part" :row row})))))
+              args (if value
+                     (let [d (serve/read-doc cfg (:path value))
+                           ls (source/lines (or (:text d) "")) start (:start value) end (:end value)]
+                       (when-not (and (nil? (:error d)) (= (:rev value) (:rev d))
+                                     (integer? start) (integer? end) (<= 0 start) (< start end) (<= end (count ls))
+                                     (= (:text value) (source/text-at ls start end)))
+                         (throw (ex-info "The starting context changed; select it again. Your goal is retained." {})))
+                       (let [captured (source/capture (:text d) {:scope (or (:scope value) "passage") :row start :start start :end end})
+                             entry (when (:documents sys) (documents/resolve-document (:documents sys) (:path value)))
+                             origin (merge captured (select-keys value [:rev])
+                                           {:path (or (:address entry) (:path value)) :file (or (:path entry) (:file value) (:path value))
+                                            :document (:id entry) :project (:project entry)})]
+                         (cond-> (assoc args :selection origin :origin origin :path (:path origin)
+                                   :title (or (:title args) (first (str/split (str (:goal args)) "\n")))
+)
+                           (and (nil? (:cwd args)) entry) (assoc :cwd (Path/dirname (:path entry)))))) args)]
+          (run-settings sys args)))
       :task-opened
       (fn [id args]
         (when-let [s (:selection args)]
           (link/put! (:env sys) {:id (str id "-input") :from {:task id} :kind :input
-                                 :to (select-keys s [:path :rev :start :end :text])}))))))
+                                 :to s}))))))
 (defn providers [sys server opts]
   (let [base (pv/providers sys opts)]
     (merge base (places/providers sys) (links/providers sys)
@@ -86,4 +98,10 @@
           (finally (BeamLisp.Env/undefine_var ns "world")))))))
 (defn intents [sys server]
   (assoc (merge (places/intents sys) (links/intents sys) (buffers/intents sys server) (repos/intents sys))
+    "document/context" (fn [args] {:selection (documents/context! (:documents sys) args)})
+    "document/index" (fn [{:keys [project]}] {:documents (documents/index! (:documents sys) project)})
+    "document/reveal" (fn [{:keys [task origin]}]
+                        (let [origin (or (:origin (task/view sys task)) (when origin (selection origin)))]
+                          (when-not origin (throw (ex-info "This task has no captured document origin." {})))
+                          (documents/reveal! (:documents sys) origin)))
     "world/eval" (fn [{:keys [code]}] (evaluate! sys code))))

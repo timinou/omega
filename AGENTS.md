@@ -40,6 +40,10 @@ compiled frontend is the flake output `.#frontend`: the same
 `pelagic.build/frontend-into!` the development cache uses, compiled by the drop of
 env.bl's `:bl` pin. Change `flake.nix`'s beam-lisp rev together with that pin.
 
+- Remote builds are mandatory: pass `--max-jobs 0` to Nix build/realise commands.
+  Use `bin/omega-build` for frontend and prototype builds. Do not rely solely on
+  a user configuration or permit fallback to a local Work build.
+
 - Live account host: `bin/omega-frontend` (builds `.#frontend`, keeps the GC root
   in `~/.local/state/omega/frontend`, writes `~/.config/omega/frontend.path`),
   then `work restart omega`. Never compile the live frontend on Work.
