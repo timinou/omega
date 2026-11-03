@@ -1,0 +1,56 @@
+(ns omega.frontend-build-test
+  (:require [omega.frontend-build :as build] [bl.json :as json]))
+(defn fixture []
+  (let [root (str "/tmp/omega-remote-frontend-" (System/pid) "-" (System/unique_integer (list :positive)))
+        web (str root "/store/frontend")]
+    (File/mkdir_p! (str web "/out"))
+    (File/write! (str web "/.omega-managed") "managed")
+    (File/write! (str web "/.inputs") "built-on-build")
+    (File/write! (str web "/pelagic-build.json") (json/encode {:compiler "pin" :inputs "built-on-build"}))
+    (File/write! (str web "/index.html") "frontend")
+    (File/write! (str web "/out/ed.main.mjs") "compiled")
+    {:root root :web web}))
+(deftest launch-cache-misses-call-only-the-remote-wrapper-and-retain-generations
+  (let [{:keys [root web]} (fixture) calls (atom [])
+        run (fn [cmd args]
+              (swap! calls conj [cmd (vec args)])
+              (File/ln_s! web (last (vec args))) ["" 0])]
+    (try
+      (is (= web (build/acquire! root "first" "pin" run)))
+      (is (= [[(str root "/bin/omega-build") [(str root "#frontend") "--out-link" (str root "/spikes/pelagic/dist/nix-frontend/first")]]] @calls))
+      (is (= web (build/acquire! root "first" "pin" run)))
+      (is (= 1 (count @calls)))
+      (is (= web (build/acquire! root "next" "pin" run)))
+      (is (= 2 (count @calls)))
+      (is (File/dir? (str root "/spikes/pelagic/dist/nix-frontend/first")))
+      (finally (File/rm_rf! root)))))
+(deftest failed-or-wrong-compiler-builds-never-use-a-local-compiler-or-publish-a-result
+  (let [{:keys [root web]} (fixture) calls (atom 0)]
+    (try
+      (is (try (build/acquire! root "failed" "pin" (fn [_ _] (swap! calls inc) ["remote unavailable" 1])) false (catch _ true)))
+      (is (= 1 @calls))
+      (is (not (File/exists? (str root "/spikes/pelagic/dist/nix-frontend/failed"))))
+      (is (try (build/acquire! root "wrong" "another-pin" (fn [_ args] (File/ln_s! web (last (vec args))) ["" 0])) false (catch _ true)))
+      (is (try (build/acquire! root "missing" "pin" (fn [_ _] ["" 0])) false (catch _ true)))
+      (finally (File/rm_rf! root)))))
+(deftest tracking-new-source-invalidates-the-nix-input-key
+  (let [{:keys [root]} (fixture)]
+    (try
+      (System/cmd "git" (list "-C" root "init" "--quiet"))
+      (let [before (build/input-key root "same-bytes")]
+        (File/write! (str root "/new.bl") "(ns new)\n")
+        (is (= before (build/input-key root "same-bytes")))
+        (System/cmd "git" (list "-C" root "add" "-N" "new.bl"))
+        (is (not= before (build/input-key root "same-bytes")))
+        (is (not= (build/input-key root "same-bytes") (build/input-key root "changed-bytes"))))
+      (finally (File/rm_rf! root)))))
+(deftest derivation-and-pin-edits-invalidate-the-runtime-cache
+  (let [{:keys [root]} (fixture)]
+    (try
+      (System/cmd "git" (list "-C" root "init" "--quiet"))
+      (doseq [name ["flake.nix" "flake.lock" "env.bl" "bin/omega-build"]]
+        (let [path (str root "/" name) before (build/input-key root "same-sources")]
+          (File/mkdir_p! (Path/dirname path))
+          (File/write! path "changed build authority")
+          (is (not= before (build/input-key root "same-sources")))))
+      (finally (File/rm_rf! root)))))

@@ -90,7 +90,8 @@ Future build instructions in the repository require this too. The full graph
 and the final package module were compiled on Build through Nix with the same
 pinned compiler; the package-only refresh leaves existing navigation bindings
 intact. [Build identity](../dossier/proof/document-task-build.json).
-The resulting output is a private prototype, without a managed-release marker.
+That initial package overlay was a private prototype without a managed-release
+marker. The trial now serves the complete managed Nix frontend described below.
 
 The hands-on trial is `omega-dossier-trial`, separate from the live
 `work-omega.service` in `/home/othman/projects/omega`. The latter still uses the
@@ -98,3 +99,37 @@ old uncapped HTTP pool. A read-only [memory audit](../dossier/proof/live-memory-
 records the user's reported PID and the distinction. This session did not start,
 stop or restart that live service. Owned disposable browser hosts were stopped;
 the hands-on trial remains available.
+
+## New-checkout candidate and handoff
+
+The trial's backend runs from `/home/othman/code/undefine/omega`. Its frontend
+now uses the [complete candidate](../dossier/proof/new-checkout-candidate.json)
+built on Build from client commit `ea3a0d9`, with compiler `65c25b33`.
+All 21 package/mobile drive checks pass against that exact output. The
+[browser check](../dossier/proof/new-checkout-candidate-browser.json) verifies
+the existing phone composer and three source scopes without submitting a task
+or editing a file. [Phone screenshot](../dossier/proof/new-checkout-candidate.png).
+The trial's durable database and existing review edits are retained.
+
+Development launches, `omega.build`, and the frontend watcher now acquire a
+managed frontend through `bin/omega-build`, including on cache misses. Their
+runtime cache accounts for tracked paths, source content, derivation changes
+and compiler configuration. A failed remote build has no local compiler
+fallback. `frontend-into!` rejects calls outside a Nix build. New source files
+must be added to Git before a flake build can include them.
+
+[Routing and watcher checks](../dossier/proof/remote-frontend-routing.log)
+cover remote invocation, cache reuse, pin validation, failure handling,
+input changes, and watcher lifecycle. They run in an isolated scope capped at
+768 MiB; `inotifywait` was supplied for these checks without changing the
+machine's global environment. The complete candidate predates these launcher
+changes; its client graph is unchanged by them.
+
+`bin/omega-frontend --prepare` builds a candidate and records the checkout
+without changing the live frontend configuration. For eventual account cutover,
+select this backend checkout and compiler pin together with its frontend.
+The installed account launcher still selects `/home/othman/projects/omega`;
+publishing a frontend alone does not move that backend or apply its HTTP fix.
+Keep the account's existing world root and database when moving its launcher;
+the temporary trial database is only for the prototype. No live account
+configuration or service restart was performed for this candidate.

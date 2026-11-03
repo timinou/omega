@@ -12,7 +12,7 @@
           (watch/start!
            {:paths (vec (distinct (concat (:paths (build/assembly))
                       [(str (build/root) "/packages") (str (build/root) "/src") (str (build/root) "/vendor/bl-ed/src") (str (build/root) "/vendor/bl-ed/web")])))
-            :build build/frontend! :fingerprint build/fingerprint :authority build/host-fingerprint
+            :build build/frontend! :fingerprint build/remote-fingerprint :authority build/host-fingerprint
             :accept (fn [output]
               (let [id (File/read! (str output "/.inputs"))]
                (when-not (build/artifact-valid? output id) (throw (ex-info "Candidate failed artifact admission" {})))

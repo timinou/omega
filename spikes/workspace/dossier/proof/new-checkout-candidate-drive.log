@@ -1,0 +1,136 @@
+TAP version 13
+# Subtest: mobile is a removable layer and a real frame layout, with no user table mutation
+ok 1 - mobile is a removable layer and a real frame layout, with no user table mutation
+  ---
+  duration_ms: 195.454294
+  type: 'test'
+  ...
+# Subtest: drafts stay keyed to tasks and navigation leaves the conversation editor untouched
+ok 2 - drafts stay keyed to tasks and navigation leaves the conversation editor untouched
+  ---
+  duration_ms: 18.487192
+  type: 'test'
+  ...
+# Subtest: send uses the existing task intent, blocks duplicates and preserves drafts on failure
+ok 3 - send uses the existing task intent, blocks duplicates and preserves drafts on failure
+  ---
+  duration_ms: 16.06334
+  type: 'test'
+  ...
+# Subtest: quick answers keep a composed reply; successful text sends clear only the submitted draft
+ok 4 - quick answers keep a composed reply; successful text sends clear only the submitted draft
+  ---
+  duration_ms: 15.505214
+  type: 'test'
+  ...
+# Subtest: completed task follow-up carries its actual place and frozen directory
+ok 5 - completed task follow-up carries its actual place and frozen directory
+  ---
+  duration_ms: 8.493485
+  type: 'test'
+  ...
+# Subtest: mobile file input participates in the shared-buffer draft protocol and read-only guards
+ok 6 - mobile file input participates in the shared-buffer draft protocol and read-only guards
+  ---
+  duration_ms: 50.540816
+  type: 'test'
+  ...
+# Subtest: dirty file navigation keeps its current tab and exposes a publication message
+ok 7 - dirty file navigation keeps its current tab and exposes a publication message
+  ---
+  duration_ms: 8.257271
+  type: 'test'
+  ...
+# Subtest: task creation from a place document validates against the retained place choices
+ok 8 - task creation from a place document validates against the retained place choices
+  ---
+  duration_ms: 8.69952
+  type: 'test'
+  ...
+# Subtest: document navigation and explicit passage retain their address, revision and anchor
+ok 9 - document navigation and explicit passage retain their address, revision and anchor
+  ---
+  duration_ms: 8.561624
+  type: 'test'
+  ...
+# Subtest: command discovery includes core and package commands without shared table mutation
+ok 10 - command discovery includes core and package commands without shared table mutation
+  ---
+  duration_ms: 26.464845
+  type: 'test'
+  ...
+# Subtest: first editor eval can resume when the language arrives
+ok 11 - first editor eval can resume when the language arrives
+  ---
+  duration_ms: 9.906621
+  type: 'test'
+  ...
+# Subtest: native prompts expose data and submit through the existing editor
+ok 12 - native prompts expose data and submit through the existing editor
+  ---
+  duration_ms: 30.834552
+  type: 'test'
+  ...
+# Subtest: reading a task home does not manufacture unpublished edits when a task completes
+ok 13 - reading a task home does not manufacture unpublished edits when a task completes
+  ---
+  duration_ms: 28.195362
+  type: 'test'
+  ...
+# Subtest: long goals retain their complete instruction under a compact editable title
+ok 14 - long goals retain their complete instruction under a compact editable title
+  ---
+  duration_ms: 11.74876
+  type: 'test'
+  ...
+# Subtest: running task instructions steer the current turn
+ok 15 - running task instructions steer the current turn
+  ---
+  duration_ms: 6.701943
+  type: 'test'
+  ...
+# Subtest: place form invokes the existing place intent as ordinary data
+ok 16 - place form invokes the existing place intent as ordinary data
+  ---
+  duration_ms: 4.172563
+  type: 'test'
+  ...
+# Subtest: Files index clears an earlier file target without discarding that editor
+ok 17 - Files index clears an earlier file target without discarding that editor
+  ---
+  duration_ms: 4.140571
+  type: 'test'
+  ...
+# Subtest: clearing a local cwd setting restores inheritance
+ok 18 - clearing a local cwd setting restores inheritance
+  ---
+  duration_ms: 3.713329
+  type: 'test'
+  ...
+# Subtest: a newly visited document opens in reading mode without changing the retained editor text
+ok 19 - a newly visited document opens in reading mode without changing the retained editor text
+  ---
+  duration_ms: 23.444815
+  type: 'test'
+  ...
+# Subtest: closed work cannot advertise a stale question or waiting summary
+ok 20 - closed work cannot advertise a stale question or waiting summary
+  ---
+  duration_ms: 0.883524
+  type: 'test'
+  ...
+# Subtest: generic document task commands capture source, use task/open, and unuse exactly
+ok 21 - generic document task commands capture source, use task/open, and unuse exactly
+  ---
+  duration_ms: 84.320062
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1127.503967

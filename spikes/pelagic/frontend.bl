@@ -1,3 +1,3 @@
-; Compile/reuse the shared frontend without offline packaging or installation.
+; Build on Build/reuse the shared frontend without offline packaging or installation.
 (ns pelagic.frontend-task (:require [pelagic.build :as build]))
 (println (build/frontend!))

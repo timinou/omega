@@ -1,15 +1,33 @@
 #!/usr/bin/env bash
 # Release the compiled frontend as an immutable Nix output for the account host.
 # Nix builds `.#frontend` on Build; the out-link is its GC root; the host reads
-# ~/.config/omega/frontend.path at start. Then: work restart omega.
+# ~/.config/omega/frontend.path at start. --prepare builds a candidate without
+# publishing that path. A live cutover must also select this backend checkout.
 set -euo pipefail
 ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
+prepare=false
+case "${1:-}" in
+  --prepare) prepare=true; shift ;;
+  '') ;;
+  *) echo 'Usage: bin/omega-frontend [--prepare]' >&2; exit 2 ;;
+esac
+if [ "$#" -ne 0 ]; then echo 'Usage: bin/omega-frontend [--prepare]' >&2; exit 2; fi
 state=${XDG_STATE_HOME:-$HOME/.local/state}/omega
-mkdir -p "$state" "$HOME/.config/omega"
-"$ROOT/bin/omega-build" "$ROOT#frontend" --out-link "$state/frontend" -L
-web=$(readlink -f "$state/frontend")
+mkdir -p "$state"
+link="$state/frontend"
+if "$prepare"; then link="$state/candidate"; fi
+"$ROOT/bin/omega-build" "$ROOT#frontend" --out-link "$link" -L
+web=$(readlink -f "$link")
 test -f "$web/.omega-managed" && test -f "$web/.inputs"
+if "$prepare"; then
+  printf '%s\n' "$ROOT" > "$state/candidate.checkout"
+  echo "$web"
+  echo "Candidate built from $ROOT. Live frontend configuration is unchanged."
+  exit 0
+fi
+mkdir -p "$HOME/.config/omega"
 printf '%s\n' "$web" > "$HOME/.config/omega/frontend.path.next"
 mv "$HOME/.config/omega/frontend.path.next" "$HOME/.config/omega/frontend.path"
 echo "$web"
-echo "Frontend released. Apply with: work restart omega"
+echo "Frontend released from $ROOT."
+echo "Before restarting omega, verify its backend launcher uses this checkout and compiler pin."

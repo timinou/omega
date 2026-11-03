@@ -44,9 +44,16 @@ env.bl's `:bl` pin. Change `flake.nix`'s beam-lisp rev together with that pin.
   Use `bin/omega-build` for frontend and prototype builds. Do not rely solely on
   a user configuration or permit fallback to a local Work build.
 
-- Live account host: `bin/omega-frontend` (builds `.#frontend`, keeps the GC root
-  in `~/.local/state/omega/frontend`, writes `~/.config/omega/frontend.path`),
-  then `work restart omega`. Never compile the live frontend on Work.
+- Prepare without changing the live frontend: `bin/omega-frontend --prepare`.
+  It keeps the candidate GC root and records its backend checkout under
+  `~/.local/state/omega/`.
+- Live account host: pair the backend launcher checkout and compiler pin with
+  the frontend before cutover. `bin/omega-frontend` builds `.#frontend`, keeps
+  its GC root in `~/.local/state/omega/frontend`, and writes
+  `~/.config/omega/frontend.path`; it does not change the backend launcher.
+  Restart only after that pairing is correct. The installed `omega-host` may
+  still point at `/home/othman/projects/omega`; a frontend build alone does not
+  move it to this checkout. Never compile the live frontend on Work.
 - Secrets never enter a derivation (the store is world-readable). Pocket's APK is
   signed on Work after the build by `spikes/mobile/android/app_update.py`, with the
   key in `~/.local/share/omega-pocket/signing` (0700).

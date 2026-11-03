@@ -46,7 +46,7 @@ From the repository root:
 bin/bl run omega.bl.md                 # scripted task playground
 bin/bl run docs/domain-model.bl.md     # executable model and invariants
 bin/bl --cold test                     # offline unit suite; no frontend build required
-bin/bl omega.build                     # compile the shared package frontend
+bin/bl omega.build                     # build the shared frontend on Build
 bin/bl-ed --offline --memory --port 8792 --root /tmp/omega-demo
 ```
 
@@ -120,12 +120,17 @@ and [spike index](spikes/README.md). The
 describe the optional signed Pocket APK. Its builder is selected separately with
 `BEAM_LISP_MOBILE_BIN`; use the recorded builder revision when reproducing it.
 
-[Documents and task starting points](!tasks/plans/PLAN-025-consolidated-document-serving.bl.org),
+[Documents and task starting points](!tasks/plans/PLAN-025-consolidated-document-serving.bl.org)
 covers project/full-file access, interactive dossiers, and ordinary tasks from any
 Org part, section or whole file. Saving answers remains independent.
 Try the [document prototype](spikes/workspace/document_tasks/document-tasks.bl.md)
 with `bin/omega-documents`; builds use `bin/omega-build` and run on Build with
 local fallback disabled.
+Development launches and `omega.build` use that same remote-only path, including
+cache misses. `bin/omega-frontend --prepare` builds a candidate without publishing
+a live frontend path. A live cutover must select this backend checkout and its
+compiler pin as well as the frontend; rebuilding the frontend does not move the
+separate installed account launcher from the older checkout.
 
 ## Layout
 
