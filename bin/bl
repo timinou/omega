@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # bin/bl — run beam-lisp for omega: the build env.bl pins (`:bl "commit:…"`),
 # resolved by the `bl` launcher, with omega's sources on the search path.
 # OMEGA_BL=<path to a bl> runs that one instead (e.g. the live main checkout).
@@ -6,7 +6,7 @@ ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
 if [ -n "${OMEGA_BL:-}" ]; then
   BL=$OMEGA_BL
 else
-  BL=$(command -v "$HOME/.local/bin/bl" || true)
+  BL=$(command -v "$HOME/.local/bin/bl" || command -v bl || true)
   [ -z "$BL" ] && { echo "omega: needs the bl launcher at ~/.local/bin/bl (or set OMEGA_BL)" >&2; exit 2; }
   # the launcher reads env.bl from the working directory upwards: pin it from
   # wherever omega is run

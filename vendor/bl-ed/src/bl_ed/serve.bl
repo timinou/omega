@@ -30,7 +30,7 @@
 (ns bl-ed.serve
   ; clojure.re: `re-matches` is interned into core only when it loads; the #"…" literal autoloads it
   ; AFTER the unqualified fn symbol is resolved, so a cold request handler failed on first use.
-  (:require [clojure.re] [web :as w] [bl.doc :as doc] [bl.json :as json] [system.place :as pl]))
+  (:require [clojure.re] [web :as w] [bl-ed.http :as http] [bl.doc :as doc] [bl.json :as json] [system.place :as pl]))
 
 ; ─── paths ──────────────────────────────────────────────────────────────────
 
@@ -73,10 +73,13 @@
 
 (defn- provider [cfg pp] (get (:providers cfg) (:scheme pp)))
 
+(defn resolved-path [cfg path]
+  (parse-path (if-let [resolve (:resolve-path cfg)] (resolve path) path)))
+
 (defn read-doc
   "{:text :rev :read-only? :title :objects} of any path, or {:error s :status n}."
   [cfg path]
-  (let [pp (parse-path path)]
+  (let [pp (resolved-path cfg path)]
     (if (contains? pp :file)
       (let [t (file-text (:root cfg) (:file pp))]
         (if (nil? t)
@@ -93,7 +96,7 @@
 (defn rev-of
   "The current rev of `path` (cheap when the provider gives :rev)."
   [cfg path]
-  (let [pp (parse-path path)
+  (let [pp (resolved-path cfg path)
         pv (when-not (contains? pp :file) (provider cfg pp))]
     (if (and (some? pv) (some? (:rev pv)))
       (str ((:rev pv) (:name pp) (:params pp)))
@@ -158,7 +161,7 @@
 
 (defn- api-save [cfg conn]
   (let [[b conn] (body-json conn) p (get b "path") t (get b "text") base (get b "base")
-        pp (parse-path p)]
+        pp (resolved-path cfg p)]
     (cond
       (not (string? t)) (w/json conn 400 {:ok false :message "no text"})
       (contains? pp :file)
@@ -185,7 +188,7 @@
 
 (defn- api-eval [cfg conn]
   (let [[b conn] (body-json conn) p (get b "path") id (get b "id") t (get b "text")
-        pp (parse-path p)]
+        pp (resolved-path cfg p)]
     (if (contains? pp :file)
       (if (not (doc-path? (:root cfg) p))
         (w/json conn 403 {:ok false :message (str "refusing to evaluate " p)})
@@ -270,7 +273,8 @@
   "Resolve an explicitly configured host's root preset. Explicit queries win."
   [cfg host query]
   (when (and (string? host) (empty? (or query "")))
-    (get (:landing-pages cfg) (lower-case (first (split host ":"))))))
+    (or (get (:landing-pages cfg) (lower-case (first (split host ":"))))
+        (:default-landing-page cfg))))
 
 (defn- generation [cfg conn path]
   (let [parts (split (subs path (count "/generations/")) "/") id (first parts)
@@ -315,9 +319,12 @@
              :providers (or (:providers opts) {})
              :intents (or (:intents opts) {})
              :landing-pages (or (:landing-pages opts) {})
+             :default-landing-page (:default-landing-page opts)
+             :resolve-path (:resolve-path opts)
              :generations (:generations opts) :closing (atom false)}
         port (or (:port opts) 8790)
-        started (w/serve {:port port :plug (router cfg) :ip (erlang/list_to_tuple (list 127 0 0 1))})]
+        handler (if-let [middleware (:middleware opts)] (middleware (router cfg)) (router cfg))
+        started (http/serve! {:port port :plug handler :acceptors (or (:http-acceptors opts) 4) :ip (erlang/list_to_tuple (list 127 0 0 1))})]
     (when-not (= :ok (elem started 0))
       (throw (ex-info "Cannot start editor listener" {:reason (elem started 1) :port port})))
     {:url (str "http://127.0.0.1:" port "/") :port port :root (:root cfg)

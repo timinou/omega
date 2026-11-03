@@ -1,0 +1,23 @@
+; Private acceptance host. No frontend compilation and no live-world writes.
+(ns dossier.prototype-host (:require [omega.ed.main :as main] [bl.json :as json]))
+(defn memory-sample []
+ (let [top (take 8 (reverse (sort-by :memory
+              (keep (fn [pid]
+                (let [info (erlang/process_info pid (list :memory :current_function :registered_name))]
+                  (when (list? info)
+                    (let [m (into {} info)]
+                      {:pid (str pid) :memory (:memory m) :function (pr-str (:current_function m))
+                       :name (pr-str (:registered_name m))})))) (erlang/processes)))))]
+   {:vm (into {} (erlang/memory)) :processes (vec top)}))
+(let [[root web port] (BeamLisp/argv)
+      host (main/start! {:root root :web web :port (erlang/binary_to_integer (or port "8792"))
+                        :offline? true :memory? true
+                        :default-landing-page "/?use=home&layout=home&file=workspace:all"
+                        :providers {"launch" {:read (fn [_ _] {:text (json/encode {:root root :db nil :live false}) :read-only? true})}}
+                        :document-owner (System/get_env "OMEGA_DOCUMENT_OWNER")
+                        :intent-factory (fn [_] {"prototype/memory" (fn [_] (memory-sample))})})]
+ (println (str "Startup memory: " (pr-str (memory-sample))))
+ (erlang/garbage_collect)
+ (println (str "After startup GC: " (pr-str (memory-sample))))
+ (println (str "Dossier prototype: " (:url host) "?use=home&layout=home&file=workspace:all"))
+ (try (receive :stop nil) (finally (main/stop! host))))

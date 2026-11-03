@@ -5,7 +5,7 @@
             [buffer.model :as buffer] [buffer.server :as buffers]
             [ws.desk-server :as desk] [ws.repos :as repos] [omega.ed.providers :as pv]
             [bl-ed.serve :as serve] [clojure.string :as str]
-            [omega.env :as env] [harness]))
+            [omega.documents :as documents] [omega.env :as env] [harness]))
 (def schema (vec (concat place/schema link/schema buffer/schema)))
 (defn start! [e root]
   ;; Only bootstrap an empty mount table. Existing place names and homes belong
@@ -43,7 +43,7 @@
       tree (assoc :cwd (:cwd tree)))))
 (defn options [sys server opts]
   (let [base (assoc (select-keys opts [:state]) :task-context (fn [path cwd] (places/context sys path cwd)))
-        cfg {:root (:root sys) :providers (providers sys server base)}]
+        cfg {:root (:root sys) :resolve-path (when (:documents sys) #(documents/normalize (:documents sys) %)) :providers (providers sys server base)}]
     (assoc base
       :prepare-task
       (fn [args]
@@ -70,7 +70,8 @@
 (defn providers [sys server opts]
   (let [base (pv/providers sys opts)]
     (merge base (places/providers sys) (links/providers sys)
-           (buffers/providers sys server) (desk/providers sys (get base "task")))))
+           (buffers/providers sys server)
+           (when (:documents sys) {"document" (documents/provider (:documents sys))}) (desk/providers sys (get base "task")))))
 (defn evaluate! [sys code]
   (when (or (not (string? code)) (str/blank? code)) (throw (ex-info "Write a Lisp expression." {})))
   (let [ns (str "omega.w." (env/world (:env sys)) ".human")]

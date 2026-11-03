@@ -53,7 +53,7 @@
           (lib.fileset.unions (map (p: lib.fileset.maybeMissing p) [
             ./spikes/mobile/design-review
             ./spikes/mobile/proof ./spikes/home/proof ./spikes/pelagic/proof
-            ./spikes/workspace/proof ./spikes/dwim/proof ./spikes/atlas/proof
+            ./spikes/workspace/proof ./spikes/workspace/dossier/proof ./spikes/dwim/proof ./spikes/atlas/proof
             ./research ./docs (./. + "/!tasks") (./. + "/!sessions")
           ]));
       };

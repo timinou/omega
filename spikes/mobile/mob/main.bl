@@ -189,7 +189,7 @@
                (sort-by first (merge cmds/table (pkg/commands ed) (:user-commands ed))))})
 (def bl-package
   {:name "mobile" :doc "Touch-first remote workbench: attention, places, retained conversations and actual working text."
-   :requires ["present" "workspace" "places" "references" "buffers" "workbench"]
+   :requires ["present" "workspace" "places" "references" "buffers" "workbench" "dossier"]
    :commands {:mobile/publish {:doc "Publish to the host; a disconnected save retains the draft."
                       :run (fn [ed] (c/effect ed {:kind :save :path (:path ed) :text (t/to-string (:text ed)) :rev (:rev ed) :base (get-in ed [:doc :rev]) :require-server? true}))}
               :mobile/work {:doc "Return to the attention list." :run (fn [ed] (put ed :screen "work"))}

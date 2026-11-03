@@ -1,7 +1,8 @@
 (ns place.server (:require [place.model :as p] [ws.server :as ws] [omega.task :as task]
                           [bl-ed.serve :as serve] [clojure.string :as str] [clojure.edn :as edn]))
 (defn context [sys path cwd]
-  (let [places (p/all (:env sys)) roots (p/roots places)
+  (let [path (if (and path (str/starts-with? path "project:")) (str "work:" (subs path 8)) path)
+        places (p/all (:env sys)) roots (p/roots places)
         address (cond (and path (str/starts-with? path "work:")) (first (str/split (subs path 5) "/"))
                       (and path (str/starts-with? path "place:")) (subs path 6))
         configured (when address (get-in (p/settings places address) [:cwd :value]))

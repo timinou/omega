@@ -1,0 +1,134 @@
+; dossier/design.bl — the design languages a mockup can be drawn in.
+;
+; A screen or desk with `:design forest` (or a document with `#+design:
+; forest`) gets the class `design-forest`. Each language is a literate
+; module (`design/NAME.bl.org`) that owns its tokens and turns them into the
+; CSS that re-skins the kit's mockups. The module is the single source: its
+; showcase page, its CSS and its token checks are one file.
+;
+; Four blocks show a language instead of describing it; each reads the
+; module, so a token changed there changes the page:
+;
+;   #+begin_palette :design forest      swatches, light and dark
+;   #+begin_type :design forest         the type scale, set in the face
+;   #+begin_shape :design forest        radii and elevations on real cards
+;   #+begin_motion :design forest       every motion token, playing
+
+(ns dossier.design
+  (:require [dossier.design.forest :as forest]))
+
+(def languages
+  "name → the module's `language` map:
+   {:name :title :fonts [href] :css :font :light :dark :palette :type :radii :shadows :motion}"
+  {"forest" forest/language})
+
+(defn- product-css
+  "Languages that live with their product (a private repository, say): CSS
+   files styling `.design-NAME`, named by DOSSIER_DESIGN_CSS (comma-separated),
+   read per page so a regenerated file shows at once."
+  []
+  (let [paths (filter (fn [p] (and (not= "" p) (File/regular? p)))
+                      (map trim (split (or (System/get_env "DOSSIER_DESIGN_CSS") "") ",")))]
+   (map (fn [p] (File/read! p)) paths)))
+
+(defn- report-vars [language colors]
+  (str "--font-body:" (:font language) ";--font-display:" (:font language)
+       ";--font-ui:" (:font language) ";"
+       (join ";" (for [[kit token] [["bg" :paper] ["paper" :inset] ["card" :card]
+                                    ["line" :line] ["latte" :edge] ["ink" :ink]
+                                    ["muted" :muted] ["mocha" :secondary] ["clay" :forest]
+                                    ["sage" :success] ["ochre" :pending] ["slate" :neutral] ["plum" :lilac]]]
+                   (str "--" kit ":" (get colors token))))))
+
+(defn- report-css [language]
+  (let [selector (str "html[data-design=\"" (:name language) "\"]")]
+    (str selector "{" (report-vars language (:light language)) "}"
+         "@media(prefers-color-scheme:dark){" selector ":not([data-theme=\"light\"]){"
+         (report-vars language (:dark language)) "}}"
+         selector "[data-theme=\"dark\"]{" (report-vars language (:dark language)) "}")))
+
+(defn css []
+  (join "\n" (concat (map :css (vals languages)) (map report-css (vals languages)) (product-css))))
+
+(defn font-links
+  "Load only faces used by this document. An external language supplies its own
+   font assets; unrelated registered languages do not leak into its report."
+  [doc]
+  (let [theme (get-in doc [:meta :design])
+        chosen (set (concat (when theme [theme])
+                            (keep (fn [node] (get-in node [:attrs :design])) (:nodes doc))))
+        legacy-desk? (some (fn [node] (and (= "desk" (:lang node))
+                                          (or (= "none" (get-in node [:attrs :design]))
+                                              (and (nil? theme) (nil? (get-in node [:attrs :design])))))) (:nodes doc))]
+    (vec (distinct
+           (concat
+             (when (or (nil? theme) (= theme "none"))
+               ["https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap"])
+             (when legacy-desk?
+               ["https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Fraunces:opsz,wght,SOFT@9..144,400..600,100&family=Literata:opsz,wght@7..72,400..600&display=swap"])
+             (mapcat (fn [name] (:fonts (get languages name))) chosen))))))
+
+(defn- lang-of [nd] (get languages (or (:design (:attrs nd)) "forest")))
+
+(defn- frame
+  "A showcase block: drawn inside `design-NAME` so it wears the language."
+  [nd kind body]
+  (let [l (lang-of nd) a (:attrs nd)]
+    [:figure {:class (str "lang-show " kind " design-" (:name l))}
+     (when (:title a) [:figcaption (:title a)])
+     body]))
+
+(defn- palette-h [nd]
+  (let [l (lang-of nd)]
+    (frame nd "palette"
+      (for [[group ks] (:palette l)]
+        [:div.f-group
+         [:h5 group]
+         [:div.f-swatches
+          (for [k ks]
+            [:div.f-sw
+             [:div.f-chip [:i {:style (str "background:" (get (:light l) k))}] [:i {:style (str "background:" (get (:dark l) k))}]]
+             [:b (name k)]
+             [:code (str (get (:light l) k) " · " (get (:dark l) k))]])]]))))
+
+(defn- type-h [nd]
+  (let [l (lang-of nd)]
+    (frame nd "type"
+      (for [t (:type l)]
+        [:div.f-type
+         [:span.f-type-meta (str (:role t) " · " (:size t) "/" (:lh t) " · " (:weight t))]
+         [:div {:style (str "font:" (:weight t) " " (:size t) "px/" (:lh t) " " (:font l)
+                            ";letter-spacing:" (or (:ls t) 0) "px;color:var(--f-" (name (or (:ink t) :ink)) ")")}
+          (:sample t)]]))))
+
+(defn- shape-h [nd]
+  (let [l (lang-of nd)]
+    (frame nd "shape"
+      (list
+        [:div.f-shapes
+         (for [[k r] (:radii l)]
+           [:div.f-shape {:style (str "border-radius:" r "px")} [:b (name k)] [:code (str r "px")]])]
+        [:div.f-shapes
+         (for [[k s] (:shadows l)]
+           [:div.f-shape.lift {:style (str "box-shadow:" s)} [:b (name k)] [:code s]])]))))
+
+(defn- motion-h [nd]
+  (let [l (lang-of nd)]
+    (frame nd "motion"
+      [:div.f-motions
+       (for [m (:motion l)]
+         [:div.f-motion
+          [:div.f-stage [:div {:class (str "f-demo fm-" (:name m))} [:span]]]
+          [:b (:name m)]
+          [:code (str (:ms m) "ms · " (:ease m))]
+          [:p (:use m)]])])))
+
+(defn block-h
+  "Hiccup for a showcase block, or nil when `nd` is not one."
+  [nd]
+  (case (:lang nd)
+    "palette" (palette-h nd)
+    "type" (type-h nd)
+    "shape" (shape-h nd)
+    "motion" (motion-h nd)
+    nil))

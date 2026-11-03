@@ -1,0 +1,278 @@
+#+TITLE: Consolidated document serving and dossier tasks
+#+DATE: 2026-11-02
+#+STATUS: PLANNED
+#+BASIS: User requested recording the dossier milestone and project or full file access with private access and existing dossier feature parity
+
+* Outcome
+Find the Beam Lisp build unification dossier in Omega, read its rendered form,
+edit its source, answer a decision from Pocket, and have the linked task receive
+that answer. Desktop and phone stay on the same document and task identities.
+
+Any place opened through =project:=, or a document opened by its full file link,
+uses the consolidated document service. A =.bl.org= document remains editable
+and interactive, with at least the features of the existing ad hoc single file
+dossier server. A full file link is private to the authenticated user whose
+account resolves and opens the file; possessing the link grants nobody access.
+
+This records the requested milestone and serving design. The document prototype
+is implemented as described below; complete milestone acceptance remains
+unchecked. No live service migration is implied.
+
+* Prototype, 2026-11-03
+The first document slice is implemented in [[file:../../spikes/workspace/dossier/dossier.bl.md][the dossier package]].
+It retains the existing Home/Pocket chrome, Open, Read/Edit and Publish flow.
+Project, work and full-file addresses share a buffer. The original dossier kit
+renders in that pane; answers are revision guarded, with browser drafts retained
+across another client's answer and source publication. The private trial uses
+temporary copies, including the real build-unification dossier.
+
+This is not the complete milestone below. Project-wide title discovery, Needs
+you projection, linked-task continuation/recovery and production gateway
+acceptance remain planned. No existing dossier service was migrated or stopped.
+Proof, renderer hashes, the Nix frontend identity and executable checks are
+recorded in the package notes.
+
+* Review and next slice, 2026-11-03
+The requested UI constraint remains: use the existing Home, Places, Read/Edit,
+Publish, Ask and Needs you surfaces. No new dashboard or separate task UI is
+needed. Source task blocks already open/refine tasks and retain a task reference;
+this predates the dossier prototype. Selection in the reader reaches the
+existing anchored Ask composer. The private trial uses a scripted model.
+
+The complete intended loop is: dossier → start an explicitly anchored task →
+task asks a linked question → Pocket Needs you → answer saved and durably
+queued for that task → task continues once → review changes in the same file.
+The prototype implements document reading/editing and answer saving. It does
+not yet connect dossier answers to task continuation.
+
+The deployment audit found a real owner-authentication gap: the named trial
+service forwards directly from Tailscale Serve to loopback, bypassing Work's
+separate opened-port owner gate, and its optional =document-owner= check is not
+configured. Tailnet reachability is enforced; owner-only document access is not
+yet demonstrated or enforced by the app on that route. The synthetic HTTP
+middleware fixture is not cross-account production proof. Full observations and
+task-start instructions are in the package notes above.
+
+Next, establish a verified owner gate and trusted identity handoff before using
+original private documents. Then implement explicit question/task linkage,
+Needs you projection and recoverable answer delivery; run the restart and real
+second-account milestone. Add title-based document discovery and durable
+admission/rename recovery before gradual migration. Keep all acceptance work in
+temporary copies, and retain the current UI.
+
+* Why this belongs in Omega
+The literate file holds explanation, executable cells, stored results, evidence
+and human decisions. Omega supplies places, navigation, editable buffers, task
+references and an attention inbox. A dossier is a presentation of that same
+file, rather than a separate copy of the work.
+
+The useful loop is: open a project, understand the proposal, inspect evidence,
+answer a specific question, continue the linked task, and review its changes.
+The file remains usable in ordinary editors and version control. Task execution
+and history retain their existing owners; they are not all forced into the file.
+
+On 2026-11-02, the Work audit found 18 generic dossier VMs using approximately
+520 MiB RSS and 1518 MiB swap in total. Related document surfaces also use custom
+servers and static sites. Work already provides named services and a searchable
+ports page. Reuse that infrastructure for routing and migration; Omega needs
+document discovery and interactions, not another ports dashboard.
+
+* Addresses and access
+** Project addresses
+=project:<place-id>/<relative-path>= opens a file in an attached place. For
+example, =project:beam-lisp/research/build-unification/UNIFICATION.bl.org=.
+The place supplies directory context and existing project configuration.
+Opening its root shows the ordinary place and file navigation, with dossiers
+discoverable by title, status, recent changes and unanswered questions.
+
+The current workspace already has =place:=, =folder:= and =work:= providers.
+=project:= is the requested public entry vocabulary, implemented in the prototype
+as an adapter over the same place resolver and file identity. Do not create a second
+mount table or copies of files to support it. Existing addresses keep working.
+
+Project IDs are scoped to the authenticated account/world. Opening or attaching
+a place never publishes it to other accounts. Resolve paths against the actual
+attached root, including symlinks; reject escapes outside that root.
+
+** Full file links
+Accept a full host path or =file:///absolute/path/document.bl.org= in Omega's
+Open action, and generate an authenticated HTTPS link for desktop and Pocket.
+The server resolves the host path; a phone's local filesystem is not involved.
+For example, opening the full path of =UNIFICATION.bl.org= must work without
+first attaching the Beam Lisp checkout as a place.
+
+A full file open admits exactly that document into the user's account context.
+It does not attach its parent directory, grant a general filesystem browser, or
+make neighboring files downloadable. A relative link opens another document
+through an independently checked resolution; project attachment remains an
+explicit, separate action. Discovering a file already in an attached place
+reuses its existing identity and buffer.
+
+Use the existing authenticated host/account identity and OS access boundaries.
+The account association is server-owned, not supplied by a path, URL parameter
+or client header. A guessed, forwarded or copied link does not transfer access,
+even when the underlying file happens to be world-readable. An unauthenticated
+viewer signs in; a different account is refused. Do not disclose document
+titles, snippets, source, answers or evidence through unauthorized requests.
+
+Apply the same authorization to rendered reads, raw source, revisions,
+subscriptions, edits, answers, assets and linked task actions. Keep the existing
+trusted identity proxy boundary; do not expose a bypass listener that accepts
+client-supplied identity headers. Detaching/revoking access invalidates further
+reads, writes and observation. Access must be rechecked if the resolved file
+or its permissions change.
+
+** Document identity and links
+Both entry forms resolve to one account-scoped document identity, current
+source revision and existing buffer owner. Read/Edit switches retain drafts,
+selection and return position. Different users never share private caches,
+drafts, indexes or task context merely because their paths look alike.
+
+Copy link produces a stable authenticated document URL, optionally anchored
+to a block ID. Port numbers and the current rendering mode are routing/view
+details. A rename handled by Omega preserves document identity; an external
+move that cannot be resolved offers recovery instead of silently selecting
+another file. Historical task references retain their captured revision.
+
+* Consolidated serving
+One account host serves many admitted documents. It owns authentication,
+document resolution, subscriptions and bounded render caches. A document gets
+a lightweight owner/buffer and on-demand projections, not a new HTTP server
+and cold BEAM for every file. Different account trust boundaries remain intact.
+
+The request flow is: authenticate, resolve =project:= or full file address,
+authorize the actual document, obtain its current buffer revision, then render
+or perform a named action through the owner. Source, dossier reading, feedback
+and task links all use that resolution. Opening a document never executes its
+code. Explicit evaluation uses the existing project/world execution facilities
+and names its target context; serving many documents does not merge their
+namespaces or running applications.
+
+Extract/reuse the dossier parser and presentation functions as an Omega bl-ed
+package. Keep shared Org cell/result partitioning in =bl.doc.spans=. Domain
+rendering and commands belong to the package; file IO, authentication and
+accepted mutations belong to host owners. Preserve real package use/unuse and
+the existing desktop/Pocket frame. Do not introduce another editor loop.
+
+Cache projections by account/world, document identity, source revision,
+renderer generation and referenced evidence revisions. A film's =run.json=,
+=film.json=, failure or manifest can change without the Org source changing;
+that must refresh its presentation. Bound cache entries and active observers,
+coalesce rendering of the same revision, and release inactive subscriptions.
+
+Referenced images, movies and evidence files use explicit authorized asset
+resolution. Admit only required resources, never a generic directory listing.
+An exact-file open does not grant access to unrelated siblings. Preserve
+explicit external media links; broad publishing/sharing is separate work.
+
+* Required feature parity
+The existing dossier kit is the minimum, including features added during the
+implementation window. Inventory both the current kit and the older kit used
+by running pages before cutover. Use representative real documents as fixtures.
+
+| Capability | Consolidated behavior |
+|------------+-----------------------|
+| Org reading | Metadata, prose, headings, TODO state/tags, lists, tables, properties and links remain readable. |
+| Navigation | Section navigation, anchors, whole-document reading, outline, return position and theme remain available on desktop and phone. |
+| Dossier blocks | Preserve the existing design blocks, diagrams, screen and screen_graph views, desks, jobs, schemas, procedures, runs and horizons. Preserve declared design inheritance and procedure links. |
+| Recorded code | Source disclosure, stored results and errors remain attached to the correct cell. Reading does not rerun them. |
+| Films and evidence | Preserve playback, chapters, steps, claims, verdicts, missing evidence and unproven gaps from the recorded run. |
+| Feedback | Every currently answerable block supports its choices, free note, submit, clear/change, attribution, time and answered/unanswered tally. |
+| Source access | Raw source/download and Edit open the same actual file. Edits support existing bl-ed document operations, undo and guarded publication. |
+| Live updates | External saves, accepted answers, agent edits and evidence changes refresh readers while preserving unsent input, draft text, focus and location. Show disconnected/error state honestly. |
+| Task context | Work on this captures document/block identity and source revision; return from the task reveals that source. |
+
+The existing server's =/=, =/src=, =/rev=, =/doc=, =/answers= and =/answer=
+behavior must have equivalents under the shared document route. Existing links
+can redirect or use a thin compatibility adapter during migration. A plain Org
+text preview is not parity with the dossier presentation.
+
+* Accepted edits and answers
+Reuse Omega's buffer owner and revision-checked publication for both source
+editing and structured feedback. Preserve existing =:answer=, =:note=, =:at=
+and =:by= source attributes, unrelated bytes and ordinary editor compatibility.
+The current kit's read/patch/rename writer does not supply a concurrency guard;
+atomic replacement alone cannot coordinate it with an editor or another answer.
+
+An answer carries document ID, block ID, base/question revision and a retry ID.
+The owner validates the current question and serializes the accepted mutation.
+Refuse a changed/deleted question with the person's answer retained for review.
+Concurrent answer submissions resolve once; duplicate delivery does not create
+another answer or task continuation. Use existing buffer conflict behavior for
+source edits rather than silently replacing another writer's changes.
+
+Project unanswered =ask=/=decision= blocks into the existing Needs you inbox,
+with source block, place and linked task. Other feedback remains available in
+the document and can contribute counts without pretending every review item
+is an agent waiting for an answer. Do not manufacture a task for every block.
+
+An accepted answer records a recoverable delivery to the linked task through
+its existing message/continuation authority. Track saved and delivered states
+separately, retry idempotently after restart, and reconcile interrupted delivery.
+Do not claim a filesystem write and a fact transaction are automatically atomic.
+Unlinked decisions remain valid document answers. Reading a file or refreshing
+an inbox never repeats a tool effect or resumes work on its own.
+
+* First complete milestone
+Use the current build unification dossier as the initial real-world target:
+=/home/othman/code/undefine/beam-lisp--execution-protocol/research/build-unification/UNIFICATION.bl.org=.
+Its present standalone service is =bl-unification.othman=, exposed at tailnet
+port 18052 during the 2026-11-02 audit. Port assignment is not its future identity.
+
+- [ ] Find it by title in an attached project's Documents view.
+- [ ] Open it through both =project:= and the full file link; both reach the
+      same source revision and buffer, without starting a per-file server.
+- [ ] Read its dossier presentation, inspect its source/evidence, edit text,
+      save, and return to the same block without losing view or draft state.
+- [ ] Create or use an explicitly linked decision and Omega task. If the real
+      dossier has no suitable question, add one deliberately in the private
+      acceptance fixture; do not represent fixture activity as production work.
+- [ ] Answer from Pocket; desktop, file and inbox converge on the accepted
+      answer, and the linked task receives it once and can continue.
+- [ ] Restart the private host with delivery pending and show recovery without
+      duplicate task effects or lost accepted feedback.
+- [ ] Show that another authenticated account cannot read, observe, download,
+      answer or edit the full file link or its evidence.
+- [ ] Exercise concurrent source edit/answer, stale question and evidence-only
+      refresh while preserving input and accurately reporting conflicts.
+- [ ] Demonstrate all existing dossier feature families in a compact fixture
+      corpus, on desktop and phone, plus package use/unuse and existing editor
+      regressions. Record the renderer and compiler revisions used.
+
+Acceptance runs in isolated worlds and temporary document copies. Do not answer
+questions, launch agents, change authentication or stop services in the user's
+live world to produce proof. Cap BL process trees and clean up owned hosts.
+
+* Implementation order
+1. Inventory actual dossier blocks, service-to-file mappings and owner identity
+   boundaries. Define the single resolver and authenticated document route.
+2. Implement project/full-file opening and a reusable dossier package with
+   feature parity, source editing and guarded answer publication. Seed discovery
+   from existing services; continue discovering files in attached places even
+   when no standalone process is running.
+3. Add inbox projection, explicit block/task links and recoverable answer
+   delivery. Complete the private two-client milestone before broad migration.
+4. Cut over existing dossier links gradually, compare old/new behavior, and
+   retire each old process only after its replacement is verified. Preserve
+   named entry links and source files; do not keep two independent writers.
+5. Measure host RSS plus swap, warm open/render cost, evidence refresh and
+   observer counts against the baseline. Consolidation must remove per-file
+   startup while keeping memory/cache growth bounded.
+
+* Existing implementation references
+- [[file:../../spikes/workspace/workspace.bl.md][Places, files, task homes and buffers]]
+- [[file:../../spikes/mobile/mobile.bl.md][Pocket inbox, document reading and current screens]]
+- [[file:../../spikes/home/home.bl.md][Shared Home and retained work surfaces]]
+- [[file:../../research/domain/interface/providers/README.bl.md][Document provider vision and protocol]]
+- [[file:../../src/omega/workspace.bl][World providers, task selection context and intents]]
+- [[file:../../spikes/workspace/ws/server.bl][Mounted files and revision-checked writes]]
+- [[file:../../spikes/workspace/place/server.bl][Dynamic place providers]]
+- [[file:../../vendor/bl-ed/src/bl_ed/serve.bl][Generic document routes and intent dispatch]]
+- Dossier baseline: =/home/othman/projects/enchanted-skills/bl-org-dossier/kit/=,
+  especially =serve.bl=, =dossier/org.bl=, =dossier/page.bl=,
+  =dossier/answer.bl=, =dossier/film.bl= and =live.js=. Capture exact source
+  identity when implementation begins; this path is an inspection reference.
+
+Omega baseline for the audit: upstream main =d50f22f=, 2026-10-31. The
+=project:= adapter and consolidated dossier service above are planned behavior,
+not capabilities already provided by that revision.

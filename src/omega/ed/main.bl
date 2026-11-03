@@ -21,6 +21,7 @@
             [omega.runtime :as runtime]
             [omega.music-gen :as music-gen]
             [omega.workspace :as workspace]
+            [omega.documents :as documents]
             [buffer.model :as buffer]
             [bl-ed.serve :as serve]
             [bl-ed.image :as image]))
@@ -66,6 +67,7 @@
         ;; extensions go in BEFORE recovery and serving: executors copy the
         ;; system they start with (omega.task/start-system)
         sys (if (seq (:extensions opts)) (ext/install sys (:extensions opts)) sys)
+        sys (assoc sys :documents (documents/registry sys server opts))
         context-opts (workspace/options sys server opts)
         registry (packages/registry home root (merge opts context-opts))
         interrupted (task/recover! sys (fn [id] (packages/recover-system registry sys id)))
@@ -77,7 +79,9 @@
         _ (reset! inspector inspection)
         img (image/provider)
         r (serve/start! {:port (or (:port opts) 8790) :root root :web web
-                         :landing-pages (:landing-pages opts) :generations generations
+                         :landing-pages (:landing-pages opts) :default-landing-page (:default-landing-page opts) :generations generations
+                         :resolve-path #(documents/normalize (:documents sys) %)
+                         :middleware #(documents/middleware (:documents sys) %)
                          :providers (merge (:providers opts)
                                            (assoc (workspace/providers sys server context-opts) "bl" (:provider img) "runtime" (runtime/provider inspection) "package" (packages/provider registry)))
                          :intents (merge (pv/intents sys context-opts) (workspace/intents sys server) (:intents img) (runtime/intents inspection) (music-gen/intents home)

@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import {writeFileSync,readFileSync,mkdirSync,readdirSync,existsSync} from 'node:fs';
+import {homedir} from 'node:os';
+import path from 'node:path';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright-core');
+const base=process.env.DOSSIER_URL||'http://127.0.0.1:8792',root=process.env.DOSSIER_ROOT||'/tmp/omega-dossier-prototype';
+assert.ok(root.startsWith('/tmp/'));assert.ok(!base.includes(':8790'));
+const proof=path.resolve('spikes/workspace/dossier/proof');mkdirSync(proof,{recursive:true});
+const cache=path.join(homedir(),'.cache/ms-playwright');
+const executablePath=process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE||(existsSync(cache)?readdirSync(cache):[]).filter(x=>/^chromium-\d+$/.test(x)).map(x=>path.join(cache,x,'chrome-linux64/chrome')).find(existsSync);
+const browser=await chromium.launch({headless:true,executablePath,args:['--no-sandbox']});
+const desktop=await browser.newContext({viewport:{width:1440,height:1000}}),phone=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+const a=await desktop.newPage(),b=await phone.newPage(),errors=[];for(const p of[a,b]){p.setDefaultTimeout(60000);p.on('pageerror',e=>errors.push(e.message));}
+const doc=async address=>{const r=await a.request.get(base+'/api/doc?path='+encodeURIComponent(address));const d=await r.json();assert.equal(d.ok,true,JSON.stringify(d));return d;};
+const address='project:project/review.bl.org';
+const open=async(p,address)=>{await p.goto(base+'/?file=workspace:all&use=mobile&layout=mobile');await p.waitForFunction(()=>!!window.blEd?.frame());await p.evaluate(address=>{const {R,K}=blEd;blEd.dispatch(R.hashMap(K('type'),K('mobile/document'),K('pane'),K('rail'),K('path'),address));},address);await p.locator('.dossier-frame').waitFor();return p.frameLocator('.dossier-frame');};
+const checks=[];
+try{
+ const initial=await doc(address),full=await doc('file://'+root+'/review.bl.org');assert.equal(initial.data.document,full.data.document);assert.equal(initial.rev,full.rev);checks.push('project and full file share identity/revision');
+ const af=await open(a,address),bf=await open(b,'file://'+root+'/review.bl.org');
+ await af.locator('a.side-sec[href="#s-your-decision"]:visible,nav.chips a[href="#your-decision"]:visible').first().click();await bf.locator('nav.chips a[href="#your-decision"]').click();
+ await af.locator('form.fb .opt').filter({hasText:'Needs a change'}).click();
+ await af.locator('form.fb textarea').fill('Desktop draft survives a phone answer');
+ await bf.locator('form.fb .opt').filter({hasText:'Keep it'}).click();await bf.locator('form.fb textarea').fill('Answered from phone');await bf.locator('form.fb button.send').click();
+ await bf.locator('.fb-state').filter({hasText:'answered'}).waitFor();
+ await a.waitForTimeout(4500);assert.equal(await af.locator('form.fb textarea').inputValue(),'Desktop draft survives a phone answer');
+ assert.match(readFileSync(root+'/review.bl.org','utf8'),/Answered from phone/);checks.push('phone answer reaches shared file; desktop draft retained');
+ await a.screenshot({path:path.join(proof,'01-used-desktop.png')});await b.screenshot({path:path.join(proof,'02-used-phone.png')});
+ const frame=await a.locator('.dossier-frame').elementHandle();
+ await a.locator('[data-act="edit-mode"]').filter({visible:true}).click();
+ const source=a.locator('textarea[aria-label="Document source"]');await source.fill((await source.inputValue())+'\nA source edit from desktop.\n');
+ await a.locator('[data-act="publish"]').filter({visible:true}).click();await a.waitForFunction(()=>blEd.F.d_editor(blEd.frame(),blEd.K('file')).get(blEd.K('saved-text')).get(blEd.K('lines')).toArray().join('\n')===blEd.F.d_editor(blEd.frame(),blEd.K('file')).get(blEd.K('text')).get(blEd.K('lines')).toArray().join('\n'));
+ await a.locator('[data-act="edit-mode"]').filter({visible:true}).click();assert.equal(await frame.evaluate(n=>n.isConnected),true);
+ assert.equal(await af.locator('form.fb textarea').inputValue(),'Desktop draft survives a phone answer');checks.push('source edit publishes and Read retains iframe, answer draft and location');
+ await af.getByRole('link',{name:'Try it',exact:true}).click();await af.getByRole('link',{name:'the build unification dossier',exact:true}).click();
+ await a.waitForFunction(()=>String(blEd.F.d_editor(blEd.frame(),blEd.K('file')).get(blEd.K('path'))).includes('UNIFICATION.bl.org'));checks.push('relative link opens a real dossier in the same pane');
+ await a.frameLocator('.dossier-frame').locator('#doc h1').waitFor({state:'visible'});await a.screenshot({path:path.join(proof,'03-real-dossier.png')});
+ const raw=await desktop.newPage();raw.on('pageerror',e=>errors.push(e.message));await raw.goto(base+'/?file='+encodeURIComponent(address)+'&use=dossier');await raw.locator('[data-package-inline] iframe').waitFor();
+ await raw.evaluate(()=>blEd.dispatch(blEd.R.hashMap(blEd.K('type'),blEd.K('command'),blEd.K('command'),blEd.K('dossier/unload'))));await raw.waitForFunction(()=>!document.querySelector('[data-package-inline] iframe'));await raw.screenshot({path:path.join(proof,'04-unused-editor.png')});checks.push('package unuse restores ordinary source editor');
+ assert.deepEqual(errors,[]);writeFileSync(path.join(proof,'browser.json'),JSON.stringify({checks,errors},null,2));console.log(JSON.stringify({checks,errors},null,2));
+}finally{await browser.close();}

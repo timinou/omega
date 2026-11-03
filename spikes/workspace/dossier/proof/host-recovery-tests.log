@@ -1,0 +1,21 @@
+Running as unit: omega-dossier-recovery-checks.service
+
+Testing dossier-documents-test
+
+Testing omega.dev-host-test
+
+10:28:52.305 [info] Running #Function<7.116738642/2 in :"Elixir.BeamLisp.Ns.Body.Bl-ed.Http".serve!/1> with Bandit 1.12.4 at 127.0.0.1:38259 (http)
+
+10:28:52.604 [error] Running #Function<7.116738642/2 in :"Elixir.BeamLisp.Ns.Body.Bl-ed.Http".serve!/1> with Bandit 1.12.4 at http failed, port 50823 already in use
+── ward: warm isolated test run ──
+
+  ✓ dossier-documents-test  16 passed
+  ✓ omega.dev-host-test  26 passed
+
+  2 file(s) passed, 0 failed, 0 incoherent
+  ✓ all green
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 42.592s
+             CPU time consumed: 45.244s
+                   Memory peak: 408.3M (swap: 0B)

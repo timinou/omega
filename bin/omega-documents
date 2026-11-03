@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Private, disposable dossier acceptance host. Build through Nix on Build.
+set -euo pipefail
+ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
+port=${1:-8792}
+prototype_root=$(mktemp -d /tmp/omega-documents.XXXXXX)
+frontend_link=${OMEGA_DOCUMENTS_FRONTEND:-/tmp/omega-dossier-frontend}
+cp "$ROOT/spikes/workspace/dossier/demo.bl.org" "$prototype_root/review.bl.org"
+dossier_source=/home/othman/code/undefine/beam-lisp--execution-protocol/research/build-unification/UNIFICATION.bl.org
+if [ -f "$dossier_source" ]; then cp "$dossier_source" "$prototype_root/UNIFICATION.bl.org"; fi
+if [ ! -f "$frontend_link/pkg/dossier.mjs" ]; then
+  nix build "$ROOT#frontend" --out-link "$frontend_link" -L
+fi
+web=$(readlink -f "$frontend_link")
+printf '%s\n' "Private copies: $prototype_root" "Open: file://$prototype_root/review.bl.org" "Ctrl-C stops the prototype."
+runner=()
+if command -v systemd-run >/dev/null 2>&1; then
+  runner=(systemd-run --user --scope --collect --property=MemoryMax=4G --property=MemorySwapMax=1G)
+fi
+exec "${runner[@]}" "$ROOT/bin/bl" --cold run "$ROOT/spikes/workspace/dossier/test/host.bl" -- "$prototype_root" "$web" "$port"

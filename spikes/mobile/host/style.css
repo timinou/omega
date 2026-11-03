@@ -129,3 +129,6 @@
 .mobile-app .change-heading strong {overflow-wrap:anywhere;min-width:0}
 .mobile-app .diff code {display:block}
 .mobile-app .sheet-error {border-left:2px solid var(--rose,#c98f8c);background:var(--rose-bg,#f5e6e4);padding:10px 12px;margin-top:32px;font-size:13px}
+
+/* Existing reader pane; retain the original dossier presentation within it. */
+.dossier-frame{display:block;width:100%;height:calc(100dvh - 190px);min-height:360px;border:0;background:transparent}.dossier-frame[hidden]{display:none}

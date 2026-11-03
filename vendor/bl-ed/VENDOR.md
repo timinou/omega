@@ -527,3 +527,21 @@ The host also retains an inline package mount when only its current-row or
 selection styling changes. Package/object identity, not the row's CSS class,
 owns the mounted view. Reusing a viewport slot for a different object still
 disposes/replaces that view through the existing package lifetime mechanism.
+
+2026-11-03 — consolidated documents prototype: the server accepts optional
+`:resolve-path` and `:middleware` host hooks. Resolution is shared by reads,
+revisions, saves and explicit evaluation; the editor remains domain independent.
+Provider `data.packages` suggestions pass through the same bare-name validation
+and explicit-unload suppression as `#+USE:` declarations. Omega's resolver,
+account policy and dossier implementation live above the vendored editor.
+
+2026-11-03 — HTTP listener recovery: `bl-ed.http` sets an explicit four-acceptor
+Thousand Island pool. The pinned `web/serve` has no pool option and its default
+created over 200 idle processes holding copies of the large application callback
+context (about 2.8 GB of process memory before opening a document). The adapter
+retains the scoped request callbacks, code leases and supervisor adoption/monitor
+lifecycle from `priv/lib/web.bl` at the pinned `65c25b33` compiler, with a bounded
+pool and access logging. It uses public native APIs; no application knowledge or
+document state lives there. The adapter can disappear when upstream exposes pool
+options. `:http-acceptors` allows an explicit 1–64 override. `:default-landing-page`
+provides a host-selected preset for a bare root URL; explicit query routes win.

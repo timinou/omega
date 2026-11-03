@@ -1,8 +1,9 @@
 (ns buffer.server (:require [buffer.model :as b] [place.model :as place] [ws.server :as ws]
-                           [bl-ed.serve :as serve] [clojure.string :as str]))
+                           [omega.documents :as documents] [bl-ed.serve :as serve] [clojure.string :as str]))
 (defn path [sys address]
-  (when-not (str/starts-with? address "work:") (throw (ex-info "Shared buffers use work: place addresses." {})))
-  (ws/resolve-file (place/roots (place/all (:env sys))) (subs address 5)))
+  (if (:documents sys) (documents/file-path (:documents sys) address)
+  (do (when-not (str/starts-with? address "work:") (throw (ex-info "Shared buffers use work: place addresses." {})))
+  (ws/resolve-file (place/roots (place/all (:env sys))) (subs address 5)))))
 (defn provider [sys server]
   {:read (fn [nm _] (let [r (b/request! server [:read (path sys (str "work:" nm)) {}])]
                       (if (:error r) (throw (ex-info (:error r) {}))

@@ -1,0 +1,93 @@
+; dossier/horizon.bl — horizons as a telescope: each band is the magnified now of the one above.
+;
+;   #+begin_horizons :id H :now 2026-11-02 :title "Where we are in time"
+;   horizon year    | 2026-01-01 | 2026-12-31
+;   horizon quarter | 2026-10-01 | 2026-12-31
+;   horizon cycle   | 2026-10-26 | 2026-11-14
+;   horizon week    | 2026-11-02 | 2026-11-08
+;   goal year    | Daily workspace for 3 pilot teams | 2026-12-31
+;   goal cycle   | Agree on what the team machine is | 2026-11-14 | 2/4
+;   goal week    | Architecture sketch | 2026-11-06 | 1/2
+;   goal cycle   | Publish the method
+;   #+end_horizons
+;
+; A team declares its horizons (names and current spans), so the same
+; drawing serves "week, cycle, quarter, year" or "sprint, season, saga".
+; Bands stack from widest to finest; a funnel joins the slice of each band
+; that the next band magnifies. Goals sit on their horizon's band at their
+; date; progress shows as a filled arc; an undated goal waits on the dashed
+; someday edge, the quiet nudge toward a date.
+
+(ns dossier.horizon
+  (:require [dossier.ui :as ui]))
+
+(defn- day [s]
+  (let [[y m d] (map (fn [x] (erlang/binary_to_integer x)) (String/split (trim s) "-"))]
+    (calendar/date_to_gregorian_days y m d)))
+
+(defn- cells [l] (vec (map trim (String/split l "|"))))
+
+(defn parse [body]
+  {:bands (vec (for [l body :when (starts-with? (trim l) "horizon ")
+                     :let [[nm s e] (cells (subs (trim l) 8))]]
+                 {:name nm :start (day s) :end (day e) :from s :to e}))
+   :goals (vec (for [l body :when (starts-with? (trim l) "goal ")
+                     :let [[h title date prog] (cells (subs (trim l) 5))]]
+                 {:horizon h :title title :day (when (and date (not (blank? date))) (day date)) :date date
+                  :progress (when prog (let [[a b] (String/split prog "/")] [(erlang/binary_to_integer a) (erlang/binary_to_integer b)]))}))})
+
+(def W 640) (def L 92) (def R 40) (def BH 34) (def GAP 74)
+
+(defn- n [x] (str (/ (erlang/round (* 10 x)) 10.0)))
+
+(defn- x-of [band d]
+  (let [span (max 1 (- (:end band) (:start band)))
+        t (/ (- d (:start band)) span)]
+    (+ L (* (- W L R) (min 1.0 (max 0.0 t))))))
+
+(defn- arc
+  "A progress ring of radius r at (cx, cy): a fraction drawn as a stroke."
+  [cx cy r [a b]]
+  (let [f (if (> b 0) (/ a b) 0) c (* 2 3.14159 r)]
+    (list [:circle {:cx (n cx) :cy (n cy) :r r :class "hz-ring"}]
+          [:circle {:cx (n cx) :cy (n cy) :r r :class "hz-arc" :stroke-dasharray (str (n (* f c)) " " (n c))
+                    :transform (str "rotate(-90 " (n cx) " " (n cy) ")")}])))
+
+(defn horizons-h [b]
+  (let [a (:attrs b) {:keys [bands goals]} (parse (:body b))
+        now (when (:now a) (day (:now a)))
+        H (+ 30 (* (count bands) (+ BH GAP)))
+        y-of (fn [i] (+ 20 (* i (+ BH GAP))))]
+    [:figure {:class (str "horizons" (if (:design a) (str " design-" (:design a)) "")) :id (str "horizons-" (:id a))}
+     (when (:title a) [:figcaption [:b (ui/md (:title a))]])
+     [:svg {:viewBox (str "0 0 " W " " H) :class "hz" :role "img" :aria-label "horizons, nested"}
+      ;; bands first, so the slices and funnels sit on top of them
+      (for [i (range (count bands))]
+        [:rect {:x L :y (y-of i) :width (- W L R) :height BH :rx 10 :class "hz-band"}])
+      ;; funnels: the slice of band i that band i+1 magnifies
+      (for [i (range (dec (count bands)))
+            :let [b0 (nth bands i) b1 (nth bands (inc i))
+                  x1 (x-of b0 (:start b1)) x2 (x-of b0 (:end b1)) y0 (+ (y-of i) BH) y1 (y-of (inc i))]]
+        (list [:rect {:x (n x1) :y (y-of i) :width (n (max 3 (- x2 x1))) :height BH :rx 6 :class "hz-slice"}]
+              [:path {:d (str "M" (n x1) " " y0 " L" (n x2) " " y0 " L" (- W R) " " y1 " L" L " " y1 " Z") :class "hz-funnel"}]))
+      ;; names, spans, the someday edge, now
+      (for [i (range (count bands)) :let [bd (nth bands i) y (y-of i)]]
+        (list [:text {:x 4 :y (+ y 15) :class "hz-name"} (:name bd)]
+              [:text {:x 4 :y (+ y 29) :class "hz-span"} (str (subs (:from bd) 5) " → " (subs (:to bd) 5))]
+              [:line {:x1 (- W R 0) :y1 (- y 4) :x2 (- W R 0) :y2 (+ y BH 4) :class "hz-someday"}]
+              (when now [:line {:x1 (n (x-of bd now)) :y1 (- y 3) :x2 (n (x-of bd now)) :y2 (+ y BH 3) :class "hz-now"}])))
+      ;; goals on their horizon's band; an undated goal's label sits above, by the someday edge
+      (for [g goals
+            :let [i (first (keep (fn [[j bd]] (when (= (:name bd) (:horizon g)) j)) (map-indexed (fn [j bd] [j bd]) bands)))]
+            :when i
+            :let [bd (nth bands i) y (+ (y-of i) (/ BH 2))
+                  x (if (:day g) (x-of bd (:day g)) (+ (- W R) 18))]]
+        (list (if (:progress g) (arc x y 8 (:progress g))
+                  [:circle {:cx (n x) :cy (n y) :r 6 :class (if (:day g) "hz-goal" "hz-goal someday")}])
+              [:text {:x (n (min (- W R 4) (max (+ L 4) x))) :y (if (:day g) (+ y 24) (- y (/ BH 2) 7))
+                      :class (str "hz-label" (if (:day g) "" " someday"))
+                      :text-anchor (cond (nil? (:day g)) "end" (> x (- W 160)) "end" (< x (+ L 80)) "start" :else "middle")}
+               (str (:title g) (if (:day g) "" " · by when?"))]))
+      (when now [:text {:x (n (x-of (first bands) now)) :y 12 :class "hz-now-label" :text-anchor "middle"} "now"])]
+     (when (:caption a) [:p.hz-cap (ui/md (:caption a))])
+     (when (:id a) (ui/feedback-h a [["love" "Love it"] ["fine" "Fine"] ["rework" "Rework"]] "Does this feel like moving through time?"))]))

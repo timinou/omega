@@ -1,0 +1,9 @@
+{
+  "checks": [
+    "anonymous and another account rejected before document resolution",
+    "render/source/revisions/answers and writes use the same account policy",
+    "guarded answer saves and stale concurrent answer is refused",
+    "project and full-file reads converge on accepted answer revision"
+  ],
+  "scope": "Isolated configured-owner middleware fixture with synthetic identity headers; not deployed Tailscale authentication"
+}

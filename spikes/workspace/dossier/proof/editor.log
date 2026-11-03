@@ -1,0 +1,298 @@
+TAP version 13
+# Subtest: file-local package declaration accepts installed names, orders dependencies and excludes executable/remote references
+ok 1 - file-local package declaration accepts installed names, orders dependencies and excludes executable/remote references
+  ---
+  duration_ms: 1.847274
+  type: 'test'
+  ...
+# Subtest: explicit unload is respected across refreshes until explicitly used again
+ok 2 - explicit unload is respected across refreshes until explicitly used again
+  ---
+  duration_ms: 0.213592
+  type: 'test'
+  ...
+# Subtest: provider suggestions use the same bare-name and explicit-unload rules
+ok 3 - provider suggestions use the same bare-name and explicit-unload rules
+  ---
+  duration_ms: 0.18686
+  type: 'test'
+  ...
+# Subtest: normal-mode motions: hjkl, w selects a word, counts
+ok 4 - normal-mode motions: hjkl, w selects a word, counts
+  ---
+  duration_ms: 208.608082
+  type: 'test'
+  ...
+# Subtest: insert mode types, Escape returns, undo/redo round-trip
+ok 5 - insert mode types, Escape returns, undo/redo round-trip
+  ---
+  duration_ms: 80.103028
+  type: 'test'
+  ...
+# Subtest: multiple cursors: C adds a cursor below, typing goes to both
+ok 6 - multiple cursors: C adds a cursor below, typing goes to both
+  ---
+  duration_ms: 71.298368
+  type: 'test'
+  ...
+# Subtest: x selects lines; d deletes and yanks; p pastes
+ok 7 - x selects lines; d deletes and yanks; p pastes
+  ---
+  duration_ms: 79.466406
+  type: 'test'
+  ...
+# Subtest: org navigation: ]h [h g u ]b
+ok 8 - org navigation: ]h [h g u ]b
+  ---
+  duration_ms: 177.221377
+  type: 'test'
+  ...
+# Subtest: structural form motion inside a cell
+ok 9 - structural form motion inside a cell
+  ---
+  duration_ms: 194.415449
+  type: 'test'
+  ...
+# Subtest: paredit-style: wrap and raise
+ok 10 - paredit-style: wrap and raise
+  ---
+  duration_ms: 134.485357
+  type: 'test'
+  ...
+# Subtest: the command line evaluates Beam Lisp against the live editor
+ok 11 - the command line evaluates Beam Lisp against the live editor
+  ---
+  duration_ms: 157.568235
+  type: 'test'
+  ...
+# Subtest: the command line is the real language: macros, defn, destructuring, threading
+ok 12 - the command line is the real language: macros, defn, destructuring, threading
+  ---
+  duration_ms: 345.484269
+  type: 'test'
+  ...
+# Subtest: split cells: a local cell runs in the page; a beam cell becomes an effect
+ok 13 - split cells: a local cell runs in the page; a beam cell becomes an effect
+  ---
+  duration_ms: 325.656883
+  type: 'test'
+  ...
+# Subtest: the palette finds and runs commands by fuzzy name
+ok 14 - the palette finds and runs commands by fuzzy name
+  ---
+  duration_ms: 446.557309
+  type: 'test'
+  ...
+# Subtest: describe-key explains a binding
+ok 15 - describe-key explains a binding
+  ---
+  duration_ms: 60.999484
+  type: 'test'
+  ...
+# Subtest: search: / n N * with smart-case and wrap
+ok 16 - search: / n N * with smart-case and wrap
+  ---
+  duration_ms: 123.889882
+  type: 'test'
+  ...
+# Subtest: dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans
+ok 17 - dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans
+  ---
+  duration_ms: 99.446288
+  type: 'test'
+  ...
+# Subtest: save is an effect, not a side effect
+ok 18 - save is an effect, not a side effect
+  ---
+  duration_ms: 47.356839
+  type: 'test'
+  ...
+# Subtest: an eval reload keeps the cursor and is one undo step
+ok 19 - an eval reload keeps the cursor and is one undo step
+  ---
+  duration_ms: 62.167613
+  type: 'test'
+  ...
+# Subtest: render model: segments, problems, status
+ok 20 - render model: segments, problems, status
+  ---
+  duration_ms: 27.348584
+  type: 'test'
+  ...
+# Subtest: incremental structure == full derive, over random typing in real documents
+ok 21 - incremental structure == full derive, over random typing in real documents
+  ---
+  duration_ms: 129556.730162
+  type: 'test'
+  ...
+# Subtest: round trip: every repo .bl.org is reproduced byte-for-byte
+ok 22 - round trip: every repo .bl.org is reproduced byte-for-byte
+  ---
+  duration_ms: 5449.889485
+  type: 'test'
+  ...
+# Subtest: deferred language: Enter keeps the draft, one effect, replays once on ready
+ok 23 - deferred language: Enter keeps the draft, one effect, replays once on ready
+  ---
+  duration_ms: 46.865518
+  type: 'test'
+  ...
+# Subtest: deferred language: Escape or an edit cancels the parked run
+ok 24 - deferred language: Escape or an edit cancels the parked run
+  ---
+  duration_ms: 52.928177
+  type: 'test'
+  ...
+# Subtest: deferred language: a failed load keeps the draft and says so; Enter retries
+ok 25 - deferred language: a failed load keeps the draft and says so; Enter retries
+  ---
+  duration_ms: 37.701369
+  type: 'test'
+  ...
+# Subtest: deferred language: a local cell keeps its text and resumes once; edits cancel stale results
+ok 26 - deferred language: a local cell keeps its text and resumes once; edits cancel stale results
+  ---
+  duration_ms: 104.843929
+  type: 'test'
+  ...
+# Subtest: named command events use normal command lookup and retain the read-only guard
+ok 27 - named command events use normal command lookup and retain the read-only guard
+  ---
+  duration_ms: 14.720665
+  type: 'test'
+  ...
+# Subtest: latest visit wins: an older slow answer never overwrites a newer one
+ok 28 - latest visit wins: an older slow answer never overwrites a newer one
+  ---
+  duration_ms: 2.465239
+  type: 'test'
+  ...
+# Subtest: a stale ERROR is dropped; the newest request's error is shown
+ok 29 - a stale ERROR is dropped; the newest request's error is shown
+  ---
+  duration_ms: 1.149397
+  type: 'test'
+  ...
+# Subtest: superseded requests are aborted
+ok 30 - superseded requests are aborted
+  ---
+  duration_ms: 0.251387
+  type: 'test'
+  ...
+# Subtest: a background refresh never supersedes a foreground visit, nor lands on another path
+ok 31 - a background refresh never supersedes a foreground visit, nor lands on another path
+  ---
+  duration_ms: 0.334297
+  type: 'test'
+  ...
+# Subtest: a visit supersedes an in-flight refresh of the same pane
+ok 32 - a visit supersedes an in-flight refresh of the same pane
+  ---
+  duration_ms: 0.468987
+  type: 'test'
+  ...
+# Subtest: a disposed pane's answer is dropped
+ok 33 - a disposed pane's answer is dropped
+  ---
+  duration_ms: 0.251527
+  type: 'test'
+  ...
+# Subtest: memoFrame renders once per frame value
+ok 34 - memoFrame renders once per frame value
+  ---
+  duration_ms: 0.230656
+  type: 'test'
+  ...
+# Subtest: language: sync hooks never return a Promise; honest status, retry after failure
+ok 35 - language: sync hooks never return a Promise; honest status, retry after failure
+  ---
+  duration_ms: 8.430708
+  type: 'test'
+  ...
+# Subtest: awaitLanguage: answers ready once; failure carries the message; a vanished pane gets nothing
+ok 36 - awaitLanguage: answers ready once; failure carries the message; a vanished pane gets nothing
+  ---
+  duration_ms: 0.73204
+  type: 'test'
+  ...
+# Subtest: easing is elapsed-time based: 60/120/144 Hz settle alike and cover the distance
+ok 37 - easing is elapsed-time based: 60/120/144 Hz settle alike and cover the distance
+  ---
+  duration_ms: 0.883081
+  type: 'test'
+  ...
+# Subtest: one 60 Hz frame covers the former 32 %
+ok 38 - one 60 Hz frame covers the former 32 %
+  ---
+  duration_ms: 0.113688
+  type: 'test'
+  ...
+# Subtest: reduced motion and trackpad deltas apply directly, with no easing
+ok 39 - reduced motion and trackpad deltas apply directly, with no easing
+  ---
+  duration_ms: 0.165274
+  type: 'test'
+  ...
+# Subtest: wheel vs trackpad classification
+ok 40 - wheel vs trackpad classification
+  ---
+  duration_ms: 0.125532
+  type: 'test'
+  ...
+# Subtest: pane disposal: apply→false drops the glide; drop() cancels the frame
+ok 41 - pane disposal: apply→false drops the glide; drop() cancels the frame
+  ---
+  duration_ms: 0.192289
+  type: 'test'
+  ...
+# Subtest: packageUrl: bare names resolve under ./pkg
+ok 42 - packageUrl: bare names resolve under ./pkg
+  ---
+  duration_ms: 0.144049
+  type: 'test'
+  ...
+# Subtest: task navigation preserves package and theme bootstrap parameters on reload
+ok 43 - task navigation preserves package and theme bootstrap parameters on reload
+  ---
+  duration_ms: 0.354184
+  type: 'test'
+  ...
+# Subtest: presentation actions accept command names, including qualified keywords, without executable text
+ok 44 - presentation actions accept command names, including qualified keywords, without executable text
+  ---
+  duration_ms: 0.377636
+  type: 'test'
+  ...
+# Subtest: a used package adds keys and commands; unuse removes exactly them
+ok 45 - a used package adds keys and commands; unuse removes exactly them
+  ---
+  duration_ms: 186.73466
+  type: 'test'
+  ...
+# Subtest: a package intercepts before the core, reacts after it, adopts visited documents
+ok 46 - a package intercepts before the core, reacts after it, adopts visited documents
+  ---
+  duration_ms: 47.216214
+  type: 'test'
+  ...
+# Subtest: ed/use asks the host for the module (an effect); a failed load is a message
+ok 47 - ed/use asks the host for the module (an effect); a failed load is a message
+  ---
+  duration_ms: 34.391177
+  type: 'test'
+  ...
+# Subtest: package observers see completed module installation and failed loads
+ok 48 - package observers see completed module installation and failed loads
+  ---
+  duration_ms: 3.740663
+  type: 'test'
+  ...
+1..48
+# tests 48
+# suites 0
+# pass 48
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 138244.806922

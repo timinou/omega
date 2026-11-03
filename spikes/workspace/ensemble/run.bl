@@ -1,0 +1,156 @@
+; ensemble/run.bl — a procedure being played, as facts.
+;
+; A run never stores a status. It stores what happened, in order, and
+; everything else is worked out:
+;
+;   {:fact :routed      :step id :to person}           a route picked someone
+;   {:fact :drafted     :output name :by who :ref r}    the harness wrote a draft
+;   {:fact :shared      :output name :by who :ref r}    a person shared a draft
+;   {:fact :handed-over :output name :by who :ref r}    final (trust: no sign-off)
+;   {:fact :asked-change :output name :by who :note s}  reopens it for its maker
+;   {:fact :checked     :output name :by who :verdict ok|flag :says s}
+;   {:fact :called      :step id :by capability :ref r}  code made its outputs
+;
+; Facts carry :at and are datom-shaped: one entity (the output or step),
+; one attribute (the fact), one value. They sit in a datom log as they are.
+
+(ns ensemble.run
+  (:require [ensemble.format :as f]))
+
+(defn start
+  "A new run of procedure `p` for `team` {:members [..] :roles {role [holders]} :load {person n}}."
+  [p team id]
+  {:id id :procedure (:id p) :revision (:revision p) :steps (:steps p) :team team :facts []})
+
+(defn add [run fact] (update run :facts conj fact))
+
+;; ─── who ─────────────────────────────────────────────────────────────────
+
+(defn- pick
+  "A route's rule over the role's holders."
+  [rule holders load]
+  (case (or rule "first")
+    "everyone" (vec holders)
+    "least-loaded" [(first (sort-by (fn [h] (get load h 0)) holders))]
+    [(first holders)]))
+
+(defn bindings
+  "Names a run has bound: every route's output names who it picked
+   (a :routed fact wins over the rule)."
+  [run]
+  (reduce
+    (fn [acc s]
+      (if (= "route" (:verb s))
+        (let [routed (last (filter (fn [x] (and (= :routed (:fact x)) (= (:id s) (:step x)))) (:facts run)))
+              holders (get-in run [:team :roles (:who s)] [])
+              picked (if routed [(:to routed)] (pick (:rule s) holders (get-in run [:team :load] {})))]
+          (into acc (for [o (:outputs s)] [(:name o) picked])))
+        acc))
+    {} (:steps run)))
+
+(defn holders
+  "The people (or agents) a step's `who` names in this run."
+  [run who]
+  (let [b (bindings run)]
+    (cond (= who "everyone") (get-in run [:team :members])
+          (contains? b who) (get b who)
+          (contains? (get-in run [:team :roles]) who) (get-in run [:team :roles who])
+          :else [who])))
+
+;; ─── outputs ─────────────────────────────────────────────────────────────
+
+(defn output-state
+  "expected › draft › final, or changes: the last word among the facts."
+  [run name]
+  (reduce (fn [st x]
+            (if (= name (:output x))
+              (case (:fact x)
+                :drafted (if (= st :final) st :draft)
+                :shared (if (= st :final) st :draft)
+                :handed-over :final
+                :asked-change :changes
+                st)
+              (if (and (= :called (:fact x)) (some (fn [s] (and (= (:id s) (:step x)) (some (fn [o] (= name (:name o))) (:outputs s)))) (:steps run)))
+                :final st)))
+          :expected (:facts run)))
+
+(defn- makes [s] (contains? #{"step" "call"} (:verb s)))
+
+(defn instance
+  "The output a holder owes: `reaction/ahmed` when a step fans out to several people."
+  [run s o holder]
+  (if (> (count (holders run (:who s))) 1) (str (:name o) "/" holder) (:name o)))
+
+(defn instances
+  "Every instance of output `name`: one per holder of the step that makes it."
+  [run name]
+  (if-let [s (first (filter (fn [s] (and (makes s) (some (fn [o] (= name (:name o))) (:outputs s)))) (:steps run)))]
+    (vec (distinct (for [h (holders run (:who s))] (instance run s {:name name} h))))
+    [name]))
+
+(defn- final? [run name] (every? (fn [i] (= :final (output-state run i))) (instances run name)))
+
+(defn status
+  "Each step: :waiting (behind a gate), :open, or :done."
+  [run]
+  (loop [ss (:steps run) blocked? false out []]
+    (if (empty? ss)
+      out
+      (let [s (first ss)
+            all-final? (every? (fn [o] (final? run (:name o))) (:outputs s))
+            st (cond (and (= "gate" (:verb s)) all-final?) :done
+                     blocked? :waiting
+                     (and (makes s) all-final?) :done
+                     (and (= "check" (:verb s))
+                          (every? (fn [o] (some (fn [x] (and (= :checked (:fact x)) (= (:name o) (:output x)))) (:facts run))) (:outputs s))) :done
+                     (= "route" (:verb s)) :done
+                     :else :open)]
+        (recur (rest ss) (or blocked? (and (= "gate" (:verb s)) (not all-final?)))
+               (conj out (assoc s :status st)))))))
+
+;; ─── what it asks of whom ────────────────────────────────────────────────
+
+(defn asks
+  "person → what blocks on them: Deliver or Change (trust: nothing else blocks)."
+  [run]
+  (reduce
+    (fn [acc s]
+      (if (and (= "step" (:verb s)) (= :open (:status s)))
+        (reduce (fn [acc p]
+                  (reduce (fn [acc o]
+                            (let [i (instance run s o p) st (output-state run i)]
+                              (if (= st :final) acc
+                                  (assoc acc p (conj (get acc p []) {:verb (if (= st :changes) "Change" "Deliver")
+                                                                     :step (:id s) :output i :state st})))))
+                          acc (:outputs s)))
+                acc (holders run (:who s)))
+        acc))
+    {} (status run)))
+
+(defn headless
+  "What can happen with nobody at the keyboard right now: open calls, drafts
+   the harness owes, low-stakes outputs an agent may finish, and checks."
+  [run]
+  (vec (for [s (status run) :when (= :open (:status s))
+             o (or (seq (:outputs s)) [nil])
+             i (if (and o (= "step" (:verb s))) (for [h (holders run (:who s))] (instance run s o h)) [(when o (:name o))])
+             :let [st (when i (output-state run i))]
+             :when (or (= "call" (:verb s))
+                       (and o (= "step" (:verb s)) (= st :expected) (:draft? o))
+                       (and o (= "step" (:verb s)) (:auto? o) (not= st :final))
+                       (and o (= "check" (:verb s)) (not= :expected st) (not-any? (fn [x] (and (= :checked (:fact x)) (= (:name o) (:output x)))) (:facts run))))]
+         {:step (:id s) :verb (:verb s) :output i :who (:who s)
+          :does (cond (= "call" (:verb s)) :call (= "check" (:verb s)) :check (and (:draft? o) (= st :expected)) :draft (:auto? o) :finish :else :draft)})))
+
+(defn view
+  "Everything a screen needs about a run, in one map."
+  [run]
+  {:id (:id run) :procedure (:procedure run) :revision (:revision run)
+   :steps (vec (for [s (status run)]
+                 {:id (:id s) :verb (:verb s) :title (:title s) :icon (:icon s) :status (:status s)
+                  :who (holders run (:who s))
+                  :outputs (vec (for [o (:outputs s) i (if (= "step" (:verb s)) (instances run (:name o)) [(:name o)])]
+                                  (assoc o :instance i :state (output-state run i))))}))
+   :asks (asks run)
+   :headless (headless run)
+   :checks (vec (filter (fn [x] (= :checked (:fact x))) (:facts run)))})

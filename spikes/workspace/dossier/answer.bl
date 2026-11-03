@@ -1,0 +1,55 @@
+; dossier/answer.bl — a reader's answer, written into the document itself.
+;
+; The .bl.org file is the only store: an answer becomes attributes on the
+; block's own header line (`:answer`, `:note`, `:at`, `:by`). Everything
+; else in the file is left byte for byte, so Emacs, git diff and
+; `bl doc run` all keep working on it. `answer-lines` is pure;
+; `answer!` is the one effect (read, patch, atomic rename). `:by` holds a
+; handle, never a login: `handle` is the only way a name reaches the file.
+
+(ns dossier.answer
+  (:require [dossier.attrs :as at] [dossier.page :as pg]))
+
+(defn answer-lines
+  "`lines` with block `id`'s header carrying `answer`/`note`, or
+   {:error …} when no answerable block has that id. An empty answer clears."
+  [lines id answer note stamp by]
+  (let [hit (first (for [i (range (count lines))
+                         :let [l (nth lines i) lang (at/header-lang l)]
+                         :when (and lang (contains? pg/answerable lang)
+                                    (= id (:id (at/attr-map (at/read-attrs l)))))]
+                     [i lang l]))]
+    (if (nil? hit)
+      {:error (str "no answerable block with :id " id)}
+      (let [[i _ l] hit
+            clear? (blank? answer)
+            changes {"answer" (if clear? nil answer)
+                     "note" (if (or clear? (blank? note)) nil (trim note))
+                     "at" (if clear? nil stamp)
+                     "by" (if (or clear? (blank? by)) nil by)}]
+        {:lines (assoc lines i (at/patch-line l changes))
+         :line i}))))
+
+(defn handle
+  "Who answered, as written to `:by`: `configured` (DOSSIER_HANDLE) when set,
+   else the part of `login` before the @. An email never lands in the file."
+  [login configured]
+  (cond (not (blank? configured)) (trim configured)
+        (blank? login) nil
+        :else (first (String/split (trim login) "@"))))
+
+(defn now-stamp []
+  (let [s (str (DateTime/utc_now))]
+    (subs (String/replace s (Regex/compile! "^~U\\[") "") 0 16)))
+
+(defn answer!
+  "Write an answer into the file at `path`. {:ok line} | {:error msg}."
+  [path id answer note by]
+  (let [text (File/read! path)
+        r (answer-lines (vec (String/split text "\n")) id answer note (now-stamp) by)]
+    (if (:error r)
+      r
+      (let [tmp (str path ".answer-tmp")]
+        (File/write! tmp (join "\n" (:lines r)))
+        (File/rename! tmp path)
+        {:ok (:line r)}))))

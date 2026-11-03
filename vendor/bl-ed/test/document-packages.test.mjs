@@ -8,3 +8,7 @@ test('file-local package declaration accepts installed names, orders dependencie
 test('explicit unload is respected across refreshes until explicitly used again',()=>{
  assert.deepEqual(documentPackages('#+USE: present,browser,procurement',{loaded:new Set(['present']),suppressed:new Set(['procurement'])}),['browser']);
 });
+test('provider suggestions use the same bare-name and explicit-unload rules',()=>{
+ assert.deepEqual(documentPackages('#+USE: dossier,present',{suggested:['dossier','https://bad/pkg.mjs','../escape'],suppressed:new Set(['present'])}),['dossier']);
+ assert.deepEqual(documentPackages('',{suggested:['dossier'],suppressed:new Set(['dossier'])}),[]);
+});

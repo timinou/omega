@@ -1,0 +1,202 @@
+; test/kit_test.bl — the dossier kit's promises, witnessed.
+;
+;   bl test -p ~/.claude/skills/bl-org-dossier/kit test/kit_test.bl
+;
+; An answer touches one header line and nothing else; attributes survive a
+; round trip; every component of a real dossier renders.
+
+(ns dossier.kit.test
+  (:require [live.hiccup :as h] [dossier.attrs :as at] [dossier.org :as o]
+            [dossier.page :as pg] [dossier.answer :as ans] [dossier.design.forest :as forest] [dossier.film :as film]
+            [dossier.ui :as ui]))
+
+(deftest a-screen-graph-can-branch-and-take-feedback
+  (let [lines ["#+design: forest" "* Walk"
+               "#+begin_screen_graph :id walk :title Try :start request"
+               "view request | A request | Not a promise"
+               "msg you | Please read <script>"
+               "go accepted | I will" "go deferred | Later"
+               "view accepted | Committed" "bar Working"
+               "go request | Ask a change"
+               "view deferred | Waiting" "bar Later"
+               "#+end_screen_graph"]
+        doc (o/read-doc (join "\n" lines))
+        html (h/hiccup->html (pg/page-h doc "" ""))
+        answered (ans/answer-lines lines "walk" "rework" "Missing context" "t" "reader")]
+    (doseq [needle ["screen-graph design-forest" "data-sg-to=\"accepted\"" "data-sg-to=\"deferred\""
+                    "data-view=\"accepted\"" "data-sg-back" "data-sg-reset" "&lt;script&gt;" "data-id=\"walk\""]]
+      (is (includes? html needle) (str "missing " needle)))
+    (is (= ["walk"] (map :id (pg/feedback-items doc))))
+    (is (includes? (first (Regex/run (Regex/compile! "<section[^>]*data-view=\"accepted\"[^>]*>") html)) "hidden"))
+    (is (not (:error answered)))
+    (is (= 1 (count (filter (fn [i] (not= (nth lines i) (nth (:lines answered) i))) (range (count lines))))))))
+
+(deftest broken-screen-graphs-explain-their-authoring-errors
+  (is (= ["No views declared"] (:errors (ui/screen-graph []))))
+  (let [g (ui/screen-graph ["view a | A" "go absent | Lost" "view a | Again"])]
+    (is (some (fn [s] (= s "Duplicate view: a")) (:errors g)))
+    (is (some (fn [s] (= s "a points to missing view: absent")) (:errors g))))
+  (let [doc (o/read-doc "* G\n#+begin_screen_graph :id g :start absent\nview a | A\n#+end_screen_graph")
+        html (h/hiccup->html (pg/page-h doc "" ""))]
+    (is (includes? html "Missing start view: absent"))
+    (is (not (includes? html "data-sg-to")))))
+
+(deftest a-prototype-connects-the-apps-own-controls
+  (let [body ["view inbox | Inbox" "brand Example | Studio" "identity Ada"
+              "nav [[view:inbox][@home Inbox]]* | [[view:task][@chat Work]]"
+              "head Inbox | turn · A suggestion | [[view:task][@check Save]]!"
+              "col main" "card turn | [[view:task][Review <draft>]] | Ada | Read the source"
+              "compose Say something | [[view:task][@send]]"
+              "view task | Work" "head Work" "col main" "row Source | [[view:inbox][@back Inbox]]"]
+        g (ui/screen-graph body)
+        text (join "\n" (concat ["* P" "#+begin_screen_graph :id p :start inbox"] body ["#+end_screen_graph"]))
+        html (h/hiccup->html (pg/page-h (o/read-doc text) "" ""))]
+    (is (empty? (:errors g)))
+    (is (= 5 (count (:edges (first (:views g))))))
+    (doseq [needle ["class=\"sg-app\"" "App navigation" "class=\"btn sg-link primary\""
+                    "Review &lt;draft&gt;" "<input" "data-sg-highlight" "data-sg-mode" "data-sg-expand" "data-sg-zoom"]]
+      (is (includes? html needle) (str "missing " needle)))
+    (is (not (includes? html "href=\"view:")))
+    (is (not (includes? html "sg-legacy-actions")))
+    (is (not (includes? html "class=\"sg-map\""))))
+  (let [g (ui/screen-graph ["view a | A" "actions [[view:missing][Open]]!"])]
+    (is (= ["a points to missing view: missing"] (:errors g)))))
+
+(deftest a-run-draws-a-persons-screen-from-the-procedure
+  (let [doc (o/read-doc (join "\n" ["* R"
+                                    "#+begin_procedure :id demo :title \"Demo hand-off\""
+                                    "route @people Who reviews | reviewers · everyone | reviewer"
+                                    "step @spark Write the demo | lead | demo · dossier · draft"
+                                    "gate @check The demo is out | lead | demo"
+                                    "step @eye React | reviewer | reaction · dossier · draft"
+                                    "gate @check Every reaction is in | reviewer | reaction"
+                                    "#+end_procedure"
+                                    "#+begin_run :id r1 :procedure demo :as ahmed :title \"Ahmed\""
+                                    "team lead othman | reviewers ahmed amine"
+                                    "fact handed-over | demo | othman"
+                                    "fact drafted | reaction/ahmed | harness"
+                                    "#+end_run"
+                                    "#+begin_screen :id s9 :title S" "bar Hi" "#+end_screen"]))
+        html (h/hiccup->html (pg/page-h doc "" ""))]
+    (doseq [needle ["phone rv" "rv-rail" "rv-s gate" "rv-card draft" "rv-verb deliver" ">reaction<" "drafted"
+                    "rv-gate" "rv-chip" "class=\"screens\"" "id=\"screen-s9\""]]
+      (is (includes? html needle) (str "missing " needle)))
+    ;; the run and the screen after it share one strip
+    (is (= 1 (count (Regex/scan (Regex/compile! "class=\"screens\"") html))))
+    (is (some (fn [i] (= "r1" i)) (map :id (pg/feedback-items doc))))))
+
+(deftest horizons-draw-as-a-telescope
+  (let [doc (o/read-doc (join "\n" ["* H" "#+begin_horizons :id h1 :now 2026-11-02"
+                                    "horizon year | 2026-01-01 | 2026-12-31"
+                                    "horizon cycle | 2026-10-26 | 2026-11-14"
+                                    "goal year | Pilots | 2026-12-31"
+                                    "goal cycle | Agree | 2026-11-14 | 2/4"
+                                    "goal cycle | Publish the method"
+                                    "#+end_horizons"]))
+        html (h/hiccup->html (pg/page-h doc "" ""))]
+    (doseq [needle ["svg" "hz-funnel" "hz-slice" "hz-arc" "hz-now" "by when?" ">cycle<"]]
+      (is (includes? html needle) (str "missing " needle)))))
+
+(deftest a-design-language-dresses-mockups-and-shows-itself
+  (let [doc (o/read-doc (join "\n" ["#+design: forest" "* D"
+                                    "#+begin_screen :id s1 :title S" "bar Hi" "#+end_screen"
+                                    "#+begin_desk :id k1 :title K :design none" "head H" "#+end_desk"
+                                    "#+begin_palette" "#+end_palette" "#+begin_motion" "#+end_motion"]))
+        html (h/hiccup->html (pg/page-h doc "" ""))]
+    (doseq [needle ["phone design-forest" "desk design-none" "--f-forest:#204e3d" "class=\"f-sw\""
+                    "fm-hand-over" "Manrope" "@keyframes fm-draft"]]
+      (is (includes? html needle) (str "missing " needle)))))
+
+(deftest forest-matches-the-shipped-app
+  (is (empty? forest/drift) (str "drift: " (pr-str forest/drift))))
+
+(def sample
+  ["* Q" "#+begin_ask :id q1 :title \"Who drives?\" :options \"A|B\"" "Context." "#+end_ask"
+   "#+begin_decision :id d1 :title T" "- [x] yes" "#+end_decision" "#+begin_note" "n" "#+end_note"])
+
+(deftest attrs-round-trip
+  (let [line "#+begin_ask :id q1 :title \"Say \\\"hi\\\": now\" :flag :options A|B"
+        pairs (at/read-attrs line)]
+    (is (= {:id "q1" :title "Say \"hi\": now" :flag "true" :options "A|B"} (at/attr-map pairs)))
+    (is (= pairs (at/read-attrs (at/header-line line "ask" pairs))))))
+
+(deftest answer-touches-one-line
+  (let [r (ans/answer-lines sample "q1" "B" "because" "2026-10-31 17:00" "")
+        changed (filter (fn [i] (not= (nth sample i) (nth (:lines r) i))) (range (count sample)))]
+    (is (= [1] changed))
+    (is (= "B" (:answer (at/attr-map (at/read-attrs (nth (:lines r) 1))))))
+    (is (= "because" (:note (at/attr-map (at/read-attrs (nth (:lines r) 1))))))))
+
+(deftest clearing-restores-the-line
+  (let [once (:lines (ans/answer-lines sample "q1" "B" "x" "t" "me"))
+        cleared (:lines (ans/answer-lines once "q1" "" "" "t" "me"))]
+    (is (= sample cleared))))
+
+(deftest by-is-a-handle-never-an-email
+  (is (= "timinou" (ans/handle "someone@example.com" "timinou")))
+  (is (= "someone" (ans/handle "someone@example.com" nil)))
+  (is (= "someone" (ans/handle "someone@example.com" "  ")))
+  (is (nil? (ans/handle nil nil))))
+
+(deftest only-answerable-blocks
+  (is (:error (ans/answer-lines sample "nope" "A" "" "t" "")))
+  (is (= ["q1" "d1"] (map :id (pg/feedback-items (o/read-doc (join "\n" sample)))))))
+
+(deftest the-baton-dossier-renders
+  (let [path (Path/expand "~/projects/tiny-tools/mobile-app/dossier/pocket-harness.bl.org")
+        html (h/hiccup->html (pg/page-h (o/read-doc (File/read! path)) "" ""))]
+    (is (> (count html) 50000))
+    (doseq [needle ["class=\"phone" "class=\"sequence\"" "class=\"graph\"" "class=\"rosetta\""
+                    "class=\"matrix\"" "class=\"decision\"" "class=\"seq-steps\"" "✓ ran"]]
+      (is (includes? html needle) (str "missing " needle)))
+    (is (not (includes? html "✗ failed")))))
+
+(deftest a-desk-draws-regions-icons-and-a-review
+  (let [doc (o/read-doc (join "\n" ["* D" "#+begin_desk :id d1 :title \"Revue\""
+                                    "nav @home Accueil | @matter Affaires*" "head Affaire | turn · À revoir | Approuver!"
+                                    "col doc" "page Mise en demeure" "para la somme {-de 12 000 MAD-}{+majorée+} ‹P-02› ^1"
+                                    "col rail" "point turn | @check Contrôle | Délai | huit jours | Correct* | Réserve"
+                                    "comment 1 | Amina | Ajouter les intérêts." "#+end_desk"]))
+        html (h/hiccup->html (pg/page-h doc "" ""))]
+    (doseq [needle ["class=\"desk\"" "class=\"ic\"" "<ins>" "<del>" "class=\"piece\"" "d-cols doc-rail" "d-point turn" "d-comment" "class=\"btn primary\""]]
+      (is (includes? html needle) (str "missing " needle)))
+    (is (= ["d1"] (map :id (pg/feedback-items doc))))))
+
+(deftest a-roadmap-sorts-now-next-later
+  (let [doc (o/read-doc (join "\n" ["* R" "#+begin_roadmap :id r1 :title \"What comes next\""
+                                    "now | Remote servers | OAuth, policies | X1" "next | Shared folders | Office, Google | J2"
+                                    "later | Local commands | sandboxed |" "#+end_roadmap"]))
+        html (h/hiccup->html (pg/page-h doc "" ""))]
+    (doseq [needle ["class=\"roadmap\"" "id=\"roadmap-r1\"" "rm-col rm-now" "rm-col rm-next" "rm-col rm-later" "Shared folders" ">J2<"]]
+      (is (includes? html needle) (str "missing " needle)))))
+
+(deftest a-schema-and-a-procedure-draw-and-answer
+  (let [doc (o/read-doc (join "\n" ["* S" "#+begin_schema :id s1 :title \"Nouns\""
+                                    "goal @flag | What we want true" "  done-when text | how we know"
+                                    "  state open > met / missed" "project | A body of work" "  serves ->> goal"
+                                    "#+end_schema"
+                                    "#+begin_procedure :id p1 :title Align :makes project"
+                                    "step @edit Frame | owner | problem · doc, risks · list"
+                                    "call @link Publish | dossier.publish/serve! | link · link"
+                                    "check @eye Read it | verifier | problem"
+                                    "gate @check Agree | everyone | problem" "Why it exists." "#+end_procedure"]))
+        html (h/hiccup->html (pg/page-h doc "" ""))]
+    (doseq [needle ["class=\"schema\"" "id=\"entity-goal\"" "class=\"s-ref\"" "class=\"sx-flow\""
+                    "2 entities · 3 attributes · 3 states" "class=\"procedure\"" "p-gate" "p-item needs" "Why it exists."
+                    "p-call" "dossier.publish/serve!" "p-check" "p-item reads"]]
+      (is (includes? html needle) (str "missing " needle)))
+    (is (= ["s1" "p1"] (map :id (pg/feedback-items doc))))))
+
+(deftest a-film-draws-its-run-and-its-gaps
+  ;; a scene with a gesture after its last claim, a refuted claim, a declared missing beat
+  (let [doc (o/read-doc (join "\n" ["* F" "#+begin_film :id f1 :title Relire :src x.mp4" "On relit." "missing Déposer | pas encore" "#+end_film"]))
+        run {"verdict" "refuted"
+             "steps" [{"i" 1 "actor" "a" "verdict" "witnessed" "trace" {"kind" "act" "action" ["act" "a" ["navigate" "/x"]]}}
+                      {"i" 2 "actor" "a" "verdict" "refuted" "trace" {"kind" "expect" "action" ["expect" "a" {} "Le rail s'ouvre"]}}
+                      {"i" 3 "actor" "a" "verdict" "witnessed" "trace" {"kind" "act" "action" ["act" "a" ["click" ".x"]]}}
+                      {"i" 4 "actor" "a" "verdict" "witnessed" "trace" {"kind" "act" "action" ["act" "a" ["missing" "Signer" "à filmer"]]}}]}
+        nd (first (filter (fn [n] (= "film" (:lang n))) (:nodes doc)))
+        doc2 (assoc doc :nodes (mapv (fn [n] (if (= n nd) (assoc n :data {:run run :film {"scenes" [{"id" "s" "title" "Scène" "step-marks" [{"step" 1} {"step" 2} {"step" 3} {"step" 4}]}]}}) n)) (:nodes doc)))
+        html (h/hiccup->html (pg/page-h doc2 "" ""))]
+    (doseq [needle ["film-f1" "<video" "fs missing" "Pas encore filmé : Signer" "Geste non prouvé : click" "Non vérifié (refuted)" "Pas encore filmé" "Pas encore rendu" "data-id=\"f1\""]]
+      (is (includes? html needle) (str "missing " needle)))))

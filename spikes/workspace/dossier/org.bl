@@ -1,0 +1,148 @@
+; dossier/org.bl — a .bl.org file as a list of nodes a page can draw.
+;
+; bl.doc.spans owns the partition (cells, results, blocks, headings); this
+; namespace only reads INSIDE prose spans: keywords, drawers, tables, lists
+; and paragraphs. Pure; the caller hands in the text.
+;
+;   node = {:t :heading :level :title :todo :tags :line}
+;        | {:t :para :text}            | {:t :list :ordered? :items}
+;        | {:t :table :head :rows}     | {:t :props :pairs}
+;        | {:t :block :lang :attrs :pairs :body :line}
+;        | {:t :cell :id :code :result :error?} | {:t :code :lang :body}
+
+(ns dossier.org
+  (:require [bl.doc.spans :as sp] [dossier.attrs :as at]))
+
+(def todo-words #{"TODO" "NEXT" "DOING" "DONE" "BLOCKED" "DROP" "WAIT" "REVIEW"})
+
+(defn- slice [lines from to] (subvec lines from (min to (count lines))))
+
+(defn- keyword-line [l] (Regex/run (Regex/compile! "^#\\+([A-Za-z_]+):\\s*(.*)$") l))
+(defn- table-line? [l] (starts-with? (trim l) "|"))
+(defn- rule-line? [l] (some? (Regex/run (Regex/compile! "^\\s*\\|[-+|]+\\|?\\s*$") l)))
+(defn- item-line [l] (Regex/run (Regex/compile! "^(\\s*)([-+]|\\d+[.)])\\s+(.*)$") l))
+(defn- cells-of [l]
+  (vec (map trim (String/split (String/replace (String/replace (trim l) (Regex/compile! "^\\|") "")
+                                               (Regex/compile! "\\|$") "")
+                               "|"))))
+
+(defn- prose-nodes
+  "Nodes for one run of prose lines; keywords land in meta."
+  [lines]
+  (loop [i 0 out [] meta {} para []]
+    (let [flush (fn [out] (if (empty? para) out (conj out {:t :para :text (join " " para)})))]
+      (if (>= i (count lines))
+        {:nodes (flush out) :meta meta}
+        (let [l (nth lines i) kw (keyword-line l)]
+          (cond
+            kw (recur (inc i) (flush out) (assoc meta (keyword (lower-case (nth kw 1))) (nth kw 2)) [])
+
+            (= ":PROPERTIES:" (trim l))
+            (let [end (or (some (fn [j] (when (= ":END:" (trim (nth lines j))) j))
+                                (range (inc i) (count lines)))
+                          (count lines))
+                  pairs (vec (for [p (slice lines (inc i) end)
+                                   :let [m (Regex/run (Regex/compile! "^\\s*:([\\w-]+):\\s*(.*)$") p)]
+                                   :when m]
+                               [(lower-case (nth m 1)) (nth m 2)]))]
+              (recur (inc end) (conj (flush out) {:t :props :pairs pairs}) meta []))
+
+            (table-line? l)
+            (let [end (or (some (fn [j] (when (not (table-line? (nth lines j))) j)) (range i (count lines)))
+                          (count lines))
+                  rows (slice lines i end)
+                  rule (some (fn [j] (when (rule-line? (nth rows j)) j)) (range (count rows)))
+                  body (vec (map cells-of (filter (fn [r] (not (rule-line? r))) rows)))]
+              (recur end (conj (flush out) {:t :table :head (if rule (subvec body 0 rule) [])
+                                            :rows (if rule (subvec body rule) body)})
+                     meta []))
+
+            (item-line l)
+            (let [ordered? (some? (Regex/run (Regex/compile! "^\\d") (nth (item-line l) 2)))
+                  [items j] (loop [j i items []]
+                              (let [m (when (< j (count lines)) (item-line (nth lines j)))]
+                                (if (nil? m)
+                                  [items j]
+                                  (let [[more k] (loop [k (inc j) more []]
+                                                   (if (and (< k (count lines))
+                                                            (some? (Regex/run (Regex/compile! "^\\s{2,}\\S") (nth lines k)))
+                                                            (nil? (item-line (nth lines k))))
+                                                     (recur (inc k) (conj more (trim (nth lines k))))
+                                                     [more k]))]
+                                    (recur k (conj items (join " " (cons (nth m 3) more))))))))]
+              (recur j (conj (flush out) {:t :list :ordered? ordered? :items items}) meta []))
+
+            (blank? l) (recur (inc i) (flush out) meta [])
+
+            :else (recur (inc i) out meta (conj para (trim l)))))))))
+
+(defn- result-text [lines]
+  (join "\n" (for [l lines]
+               (cond (starts-with? l ": ") (subs l 2)
+                     (= ":" (trim l)) ""
+                     :else l))))
+
+(defn read-doc
+  "{:meta {…} :nodes [node …]} for the text of a .bl.org file."
+  [text]
+  (let [lines (vec (String/split text "\n"))]
+    (loop [ss (sp/spans lines :org {:headings? true}) out [] meta {}]
+      (if (empty? ss)
+        {:meta meta :nodes out :lines lines}
+        (let [s (first ss) k (:kind s)]
+          (cond
+            (= k :heading)
+            (let [words (String/split (:title s) " ")
+                  t0 (:todo s)
+                  todo (cond (keyword? t0) (upper-case (name t0))
+                             (string? t0) t0
+                             (contains? todo-words (first words)) (first words))
+                  title (if (and todo (= todo (first words))) (join " " (rest words)) (:title s))]
+              (recur (rest ss) (conj out {:t :heading :level (:level s) :title title :todo todo
+                                          :tags (:tags s) :line (:from s)})
+                     meta))
+
+            (= k :prose)
+            (let [r (prose-nodes (slice lines (:from s) (:to s)))]
+              (recur (rest ss) (into out (:nodes r)) (merge meta (:meta r))))
+
+            (= k :block)
+            (let [pairs (at/read-attrs (nth lines (:from s)))]
+              (recur (rest ss) (conj out {:t :block :lang (:lang s) :pairs pairs :attrs (at/attr-map pairs)
+                                          :body (slice lines (or (:code-from s) (inc (:from s)))
+                                                       (or (:code-to s) (dec (:to s))))
+                                          :line (:from s)})
+                     meta))
+
+            (= k :cell)
+            (recur (rest ss) (conj out {:t :cell :id (or (:explicit-id s) (str "cell-" (:from s)))
+                                        :frozen? (:frozen? s)
+                                        :code (join "\n" (slice lines (:code-from s) (:code-to s)))})
+                   meta)
+
+            (= k :result)
+            (let [txt (trim (result-text (slice lines (inc (:from s)) (:to s))))
+                  prev (last out)]
+              (recur (rest ss)
+                     (if (= :cell (:t prev))
+                       (conj (pop out) (assoc prev :result txt :error? (includes? txt ";; error")))
+                       out)
+                     meta))
+
+            (= k :prose-code)
+            (recur (rest ss) (conj out {:t :code :lang (:lang s)
+                                        :body (join "\n" (slice lines (or (:code-from s) (inc (:from s)))
+                                                                (or (:code-to s) (dec (:to s)))))})
+                   meta)
+
+            :else
+            (recur (rest ss) (conj out {:t :code :lang "org" :body (join "\n" (slice lines (:from s) (:to s)))})
+                   meta)))))))
+
+(defn rows-of
+  "The `a | b | c` rows of a block body, blank and `#` lines skipped."
+  [body]
+  (vec (for [l body :when (and (not (blank? l)) (not (starts-with? (trim l) "#")))]
+         (vec (map trim (String/split (String/replace (String/replace (trim l) (Regex/compile! "^\\|") "")
+                                                      (Regex/compile! "\\|$") "")
+                                      "|"))))))

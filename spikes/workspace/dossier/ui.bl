@@ -1,0 +1,889 @@
+; dossier/ui.bl — semantic blocks drawn as hiccup.
+;
+; One function per block kind; `block->h` dispatches on the `#+begin_X`
+; name. Every body is a small line language a human writes comfortably in
+; Emacs: `a | b | c` rows, `A -> B : label` arrows, `card tone | title`.
+; Pure: text in, hiccup out. Inline org markup is parsed into hiccup nodes,
+; never spliced as HTML, so everything a document says is escaped.
+
+(ns dossier.ui
+  (:require [dossier.org :as o]))
+
+; ─── inline markup ──────────────────────────────────────────────────────────
+
+(def ^:private inline-re
+  (Regex/compile!
+    (str "(\\[\\[[^\\]]+\\](?:\\[[^\\]]+\\])?\\]"
+         "|(?<![\\w=])=[^\\s=](?:[^=\\n]*?[^\\s=])?=(?!\\w)"
+         "|(?<![\\w~])~[^\\s~](?:[^~\\n]*?[^\\s~])?~(?!\\w)"
+         "|(?<![\\w*])\\*[^\\s*](?:[^*\\n]*?[^\\s*])?\\*(?![\\w*])"
+         "|(?<![\\w/:.~<])/[^\\s/](?:[^/\\n]*?[^\\s/])?/(?![\\w/]))")))
+
+(defn- link-h [piece]
+  (let [m (Regex/run (Regex/compile! "^\\[\\[([^\\]]+)\\](?:\\[([^\\]]+)\\])?\\]$") piece)
+        target (String/replace (nth m 1) (Regex/compile! "^file:") "")
+        label (if (> (count m) 2) (nth m 2) target)
+        outside? (starts-with? target "http")]
+    (if (starts-with? target "view:")
+      [:button {:type "button" :class "sg-link" :data-sg-to (subs target 5)} (mdi label)]
+      [:a (if outside? {:href target :target "_blank" :rel "noopener"} {:href target}) (mdi label)])))
+
+(defn md
+  "Hiccup children for one line of org inline markup."
+  [s]
+  (if (or (nil? s) (= "" s))
+    (list)
+    (for [piece (Regex/split inline-re s (list (tuple :include_captures true)))
+          :when (not= "" piece)]
+      (let [inner (when (> (count piece) 2) (subs piece 1 (dec (count piece))))]
+        (cond
+          (starts-with? piece "[[") (link-h piece)
+          (and inner (or (starts-with? piece "=") (starts-with? piece "~"))) [:code inner]
+          (and inner (starts-with? piece "*")) [:strong (md inner)]
+          (and inner (starts-with? piece "/")) [:em (md inner)]
+          :else piece)))))
+
+; ─── icons: `@name` in any mockup line draws a line icon ────────────────────
+
+(def icon-paths
+  "24×24 strokes. Names are what a mockup writes after @."
+  {"home" ["M3 11l9-7 9 7" "M5 10v10h14V10"]
+   "matter" ["M3 7h18v13H3z" "M8 7V4h8v3" "M3 12h18"]
+   "library" ["M4 4h4v16H4z" "M10 4h4v16h-4z" "M15.5 5l3.5-1 3 15-3.5 1z"]
+   "playbook" ["M10 6h10" "M10 12h10" "M10 18h10" "M4 6l1 1 2-2" "M4 12l1 1 2-2" "M4 18l1 1 2-2"]
+   "people" ["M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" "M3 20c0-3 3-5 6-5s6 2 6 5" "M16 5a3 3 0 0 1 0 6" "M21 20c0-2.5-1.5-4.3-4-4.9"]
+   "audit" ["M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" "M9 12l2 2 4-4"]
+   "settings" ["M4 6h9" "M17 6h3" "M15 4v4" "M4 12h3" "M11 12h9" "M9 10v4" "M4 18h11" "M19 18h1" "M17 16v4"]
+   "search" ["M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14z" "M20 20l-4-4"]
+   "plus" ["M12 5v14" "M5 12h14"]
+   "send" ["M12 19V5" "M6 11l6-6 6 6"]
+   "file" ["M6 3h8l4 4v14H6z" "M14 3v4h4"]
+   "word" ["M6 3h8l4 4v14H6z" "M14 3v4h4" "M9 11l1.5 6 1.5-4 1.5 4 1.5-6"]
+   "check" ["M5 12l5 5 9-10"]
+   "x" ["M6 6l12 12" "M18 6L6 18"]
+   "alert" ["M12 3l9 17H3z" "M12 10v4" "M12 17h.01"]
+   "clock" ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" "M12 7v5l3 2"]
+   "user" ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" "M4 21c0-4 4-6 8-6s8 2 8 6"]
+   "bot" ["M5 9h14v10H5z" "M12 5v4" "M9.5 14h.01" "M14.5 14h.01" "M2 13v3" "M22 13v3"]
+   "chat" ["M4 5h16v11H9l-5 4z"]
+   "comment" ["M4 4h16v12H8l-4 4z" "M8 9h8" "M8 12h5"]
+   "link" ["M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1" "M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"]
+   "seal" ["M12 3a4 4 0 0 1 2 7.5V13h4v4H6v-4h4v-2.5A4 4 0 0 1 12 3z" "M5 21h14"]
+   "eye" ["M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"]
+   "edit" ["M4 20h4L19 9l-4-4L4 16z" "M14 6l4 4"]
+   "version" ["M6 3v12" "M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" "M18 9c0 5-6 4-12 6"]
+   "diff" ["M5 3h14v18H5z" "M12 6v6" "M9 9h6" "M9 16h6"]
+   "filter" ["M3 5h18l-7 8v6l-4 2v-8z"]
+   "more" ["M5 12h.01" "M12 12h.01" "M19 12h.01"]
+   "back" ["M15 6l-6 6 6 6"]
+   "next" ["M9 6l6 6-6 6"]
+   "down" ["M12 4v12" "M7 11l5 5 5-5" "M5 20h14"]
+   "up" ["M12 20V8" "M7 13l5-5 5 5" "M5 4h14"]
+   "bell" ["M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" "M10 21h4"]
+   "wait" ["M7 3h10" "M7 21h10" "M8 3c0 5 8 5 8 9s-8 4-8 9" "M16 3c0 5-8 5-8 9s8 4 8 9"]
+   "calendar" ["M4 6h16v15H4z" "M4 10h16" "M8 3v4" "M16 3v4"]
+   "scale" ["M12 4v16" "M7 20h10" "M5 8h14" "M5 8l-3 6a3 3 0 0 0 6 0z" "M19 8l-3 6a3 3 0 0 0 6 0z"]
+   "flag" ["M5 21V4" "M5 4h12l-2 4 2 4H5"]
+   "play" ["M7 4l12 8-12 8z"]
+   "undo" ["M9 14L4 9l5-5" "M4 9h11a5 5 0 0 1 0 10h-3"]
+   "lock" ["M6 11h12v10H6z" "M8 11V7a4 4 0 0 1 8 0v4"]
+   "attach" ["M20 11l-8 8a5 5 0 0 1-7-7l9-9a3 3 0 0 1 4 4l-9 9a1 1 0 0 1-2-2l8-8"]
+   "grid" ["M4 4h7v7H4z" "M13 4h7v7h-7z" "M4 13h7v7H4z" "M13 13h7v7h-7z"]
+   "list" ["M8 6h12" "M8 12h12" "M8 18h12" "M4 6h.01" "M4 12h.01" "M4 18h.01"]
+   "board" ["M4 4h4v16H4z" "M10 4h4v10h-4z" "M16 4h4v13h-4z"]
+   "split" ["M4 4h16v16H4z" "M12 4v16"]
+   "spark" ["M12 3v4" "M12 17v4" "M3 12h4" "M17 12h4" "M6 6l2.5 2.5" "M15.5 15.5L18 18" "M18 6l-2.5 2.5" "M8.5 15.5L6 18"]
+   "mic" ["M9 5a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0z" "M5 11a7 7 0 0 0 14 0" "M12 18v3"]
+   "stop" ["M6 6h12v12H6z"]
+   "terminal" ["M3 5h18v14H3z" "M7 10l3 2-3 2" "M12 15h5"]
+   "server" ["M4 4h16v7H4z" "M4 13h16v7H4z" "M8 7.5h.01" "M8 16.5h.01"]
+   "laptop" ["M5 5h14v10H5z" "M2 19h20"]
+   "phone" ["M8 2h8v20H8z" "M11 18h2"]
+   "branch" ["M6 3v12" "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" "M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" "M18 9c0 6-12 3-12 6"]
+   "folder" ["M3 6h6l2 2h10v11H3z"]
+   "wave" ["M3 12h2" "M7 8v8" "M11 5v14" "M15 9v6" "M19 11v2"]
+   "queue" ["M4 6h12" "M4 12h12" "M4 18h8" "M18 15v6" "M15 18h6"]
+   "graph" ["M3 4h6v5H3z" "M15 4h6v5h-6z" "M9 16h6v5H9z" "M9 6.5h6" "M6 9v4h6v3" "M18 9v4h-6"]
+   "expand" ["M8 3H3v5" "M16 3h5v5" "M3 16v5h5" "M21 16v5h-5"]
+   "cursor" ["M5 3l14 9-7 1-3 7z" "M13 14l4 6"]})
+
+(defn ico
+  "The icon named `nm`, or the literal text when there is no such icon."
+  [nm]
+  (if-let [ps (get icon-paths nm)]
+    [:svg {:class "ic" :viewBox "0 0 24 24" :aria-hidden "true"} (for [d ps] [:path {:d d}])]
+    (str "@" nm)))
+
+(def ^:private icon-re (Regex/compile! "(\\[\\[[^\\]]+\\](?:\\[[^\\]]+\\])?\\]|@[a-z][a-z-]*)"))
+
+(defn mdi
+  "md, plus `@name` icons — the inline language of mockups."
+  [s]
+  (if (or (nil? s) (= "" s))
+    (list)
+    (for [piece (Regex/split icon-re s (list (tuple :include_captures true)))
+          :when (not= "" piece)]
+      (if (and (starts-with? piece "@") (contains? icon-paths (subs piece 1)))
+        (ico (subs piece 1))
+        (md piece)))))
+
+(defn slug [s]
+  (-> (lower-case (str s))
+      (String/replace (Regex/compile! "[^a-z0-9]+") "-")
+      (String/replace (Regex/compile! "^-|-$") "")))
+
+(defn- paras
+  "Body lines → paragraphs (blank lines split them)."
+  [lines]
+  (for [chunk (partition-by blank? lines) :when (not (blank? (first chunk)))]
+    [:p (md (join " " (map trim chunk)))]))
+
+(defn- n [x] (str (erlang/round x)))
+
+(defn- wrap-words
+  "Greedy word wrap of `s` to lines of at most `width` characters."
+  [s width]
+  (reduce (fn [acc w]
+            (let [cur (last acc)]
+              (if (and (some? cur) (<= (+ (count cur) 1 (count w)) width))
+                (conj (pop acc) (str cur " " w))
+                (conj acc w))))
+          [] (String/split (trim s) " ")))
+
+; ─── feedback: the reader answers, the file remembers ──────────────────────
+
+(defn feedback-h
+  "Answer controls for block `a` (its attrs map). `opts` is [[value label] …].
+   Posting writes :answer/:note/:at back into the block header."
+  [a opts prompt]
+  (let [ans (:answer a)]
+    [:form {:class (str "fb" (if ans " answered picked" "")) :data-id (:id a)}
+     [:div.fb-prompt prompt]
+     [:div.fb-opts
+      (for [[v label] opts]
+        [:button {:type "button" :class (if (= v ans) "opt on" "opt") :data-v v} label])]
+     [:textarea {:name "note" :rows "2" :placeholder "Optional note"} (or (:note a) "")]
+     [:div.fb-row
+      [:button.send {:type "submit"} (if ans "Update" "Save answer")]
+      [:span.fb-state (if ans (str "✓ answered " (or (:at a) "")) "awaiting you")]]]))
+
+; ─── prose components ──────────────────────────────────────────────────────
+
+(defn lede-h [b] [:div.lede (paras (:body b))])
+
+(defn stats-h [b]
+  [:div.stats
+   (for [[v label note] (o/rows-of (:body b))]
+     [:div.stat [:b v] [:span (md label)] (when note [:small (md note)])])])
+
+(defn terms-h [b]
+  [:dl.terms
+   (for [[t d] (o/rows-of (:body b))]
+     (list [:dt (md t)] [:dd (md d)]))])
+
+(defn principles-h [b]
+  [:ol.principles
+   (for [[t d] (o/rows-of (:body b))]
+     [:li [:b (md t)] [:span (md d)]])])
+
+(defn callout-h [b]
+  [:aside {:class (str "callout " (:lang b))}
+   (when (:title (:attrs b)) [:b (md (:title (:attrs b)))])
+   (paras (:body b))])
+
+; ─── rosetta and matrix: one idea across many systems ──────────────────────
+
+(defn rosetta-h [b]
+  (let [rows (o/rows-of (:body b)) head (first rows)]
+    [:div.rosetta {:style (str "--cols:" (count head))}
+     [:div.r-row.r-head (for [h head] [:div h])]
+     (for [r (rest rows)]
+       [:div.r-row
+        (map-indexed (fn [i c] [:div {:data-h (nth head i "")} (md c)]) r)])]))
+
+(defn- mark [c]
+  (let [[tok & more] (String/split c " ")
+        rest-text (join " " more)
+        dot (fn [k] (list [:i {:class (str "dot " k)}] (when (not (blank? rest-text)) [:span (md rest-text)])))]
+    (cond
+      (contains? #{"y" "✓" "yes"} tok) (dot "full")
+      (contains? #{"~" "partial"} tok) (dot "half")
+      (contains? #{"n" "–" "-" "no"} tok) (dot "none")
+      :else (md c))))
+
+(defn matrix-h [b]
+  (let [rows (o/rows-of (:body b)) head (first rows)]
+    [:div.scrollx
+     [:table.matrix
+      [:thead [:tr (for [h head] [:th (md h)])]]
+      [:tbody
+       (for [r (rest rows)]
+         [:tr [:th (md (first r))] (for [c (rest r)] [:td (mark c)])])]]
+     [:div.legend [:i.dot.full] "does it" [:i.dot.half] "partly" [:i.dot.none] "no"]]))
+
+;; A roadmap: what is built, what comes next, what waits — one card each, with
+;; what it answers. Body rows: `now | title | detail | ref` (now, next or later).
+(defn roadmap-h [b]
+  (let [a (:attrs b) rows (o/rows-of (:body b))
+        col (fn [k label]
+              (let [its (filter (fn [r] (= k (trim (str (first r))))) rows)]
+                [:div {:class (str "rm-col rm-" k)}
+                 [:h5 label [:span.n (count its)]]
+                 (for [r its]
+                   [:div.rm-item [:b (md (nth r 1 ""))]
+                    (when-not (= "" (trim (str (nth r 2 "")))) [:p (md (nth r 2 ""))])
+                    (when-not (= "" (trim (str (nth r 3 "")))) [:span.chip (nth r 3 "")])])]))]
+    [:section.roadmap {:id (when (:id a) (str "roadmap-" (:id a)))}
+     (when (:title a) [:h4 (md (:title a))])
+     [:div.rm-cols (col "now" "Now") (col "next" "Next") (col "later" "Later")]]))
+
+; ─── jobs, decisions, asks ─────────────────────────────────────────────────
+
+(defn job-h [b]
+  (let [a (:attrs b)]
+    [:article.job {:id (str "job-" (:id a))}
+     [:header [:span.chip (:id a)] [:h4 (md (:title a))]]
+     [:blockquote.jtbd (paras (:body b))]
+     [:dl.job-facts
+      ;; reference products are named by the dossier (:codex-label …); Baton's labels stay the default
+      (when (:codex a) (list [:dt (or (:codex-label a) "Codex does")] [:dd (md (:codex a))]))
+      (when (:claude a) (list [:dt (or (:claude-label a) "Claude Code path")] [:dd (md (:claude a))]))
+      (when (:decision a) (list [:dt.decide (or (:decision-label a) "Baton decides")] [:dd.decide (md (:decision a))]))]
+     (when (:screen a) [:a.to-screen {:href (str "#screen-" (:screen a))} (str "See the screen → " (:screen a))])
+     (feedback-h a [["spot-on" "Spot on"] ["close" "Close"] ["wrong" "Wrong job"]] "Is this the job?")]))
+
+(defn decision-h [b]
+  (let [a (:attrs b)]
+    [:article.decision {:id (str "decision-" (:id a))}
+     [:header [:span.chip (:id a)] [:span {:class (str "status " (or (:status a) "proposed"))} (or (:status a) "proposed")]]
+     [:h4 (md (:title a))]
+     (for [run (partition-by (fn [l] (starts-with? (trim l) "- [")) (filter (fn [l] (not (blank? l))) (:body b)))]
+       (if (starts-with? (trim (first run)) "- [")
+         (for [l run :let [t (trim l)]]
+           (if (starts-with? t "- [x]")
+             [:div.opt-row.chosen [:i "✓"] [:span (md (trim (subs t 5)))]]
+             [:div.opt-row.alt [:i "·"] [:span (md (trim (subs t 5)))]]))
+         [:p (md (join " " (map trim run)))]))
+     (feedback-h a [["accept" "Agree"] ["rework" "Rework"] ["reject" "Disagree"]] "Your call")]))
+
+(defn ask-h [b]
+  (let [a (:attrs b)
+        opts (for [o (String/split (or (:options a) "Yes|No") "|")] [(trim o) (trim o)])]
+    [:article.ask {:id (str "ask-" (:id a))}
+     [:header [:span.chip.q (:id a)] [:h4 (md (:title a))]]
+     (paras (:body b))
+     (feedback-h a opts "Pick one, or say more")]))
+
+; ─── screens: a phone drawn from a line language ───────────────────────────
+
+(defn- cols [rest-text] (vec (map trim (String/split rest-text "|"))))
+
+(defn- btn-h
+  "`Label!` primary, `Label?` quiet, `Label^` danger, else plain."
+  [x]
+  (let [mark (last x)
+        kind (case mark "!" " primary" "?" " quiet" "^" " danger" "")
+        text (if (contains? #{"!" "?" "^"} mark) (subs x 0 (dec (count x))) x)
+        link (Regex/run (Regex/compile! "^\\[\\[view:([^\\]]+)\\]\\[([^\\]]+)\\]\\]$") text)]
+    (if link
+      [:button {:type "button" :class (str "btn sg-link" kind) :data-sg-to (nth link 1)} (mdi (nth link 2))]
+      [:span {:class (str "btn" kind)} (mdi text)])))
+
+(defn- screen-line
+  "One `verb rest` line of a screen body as hiccup."
+  [line]
+  (let [t (trim line)
+        sp (index-of t " ")
+        verb (if sp (subs t 0 sp) t)
+        rest-text (if sp (trim (subs t (inc sp))) "")
+        c (cols rest-text)]
+    (case verb
+      "bar" [:div.s-bar
+             (if (starts-with? (first c) "< ") (list [:span.s-back "‹"] [:b (mdi (subs (first c) 2))]) [:b (mdi (first c))])
+             (when (> (count c) 1) [:span.s-right (mdi (nth c 1))])]
+      "sub" [:div.s-sub (mdi rest-text)]
+      "chips" [:div.s-chips (for [x c] (if (ends-with? x "*") [:span.chip.on (mdi (subs x 0 (dec (count x))))] [:span.chip (mdi x)]))]
+      "section" [:div.s-sec [:span (mdi (first c))] (when (> (count c) 1) [:em (nth c 1)])]
+      "card" (let [[tone title meta body acts] c]
+               [:div {:class (str "s-card " tone (if acts " has-acts" ""))}
+                [:i.s-dot]
+                [:div.s-card-main
+                 [:div.s-card-top [:b (mdi title)] (when meta [:span (mdi meta)])]
+                 (when body [:div.s-card-body (mdi body)])]
+                (when acts
+                  [:div.s-acts
+                   (for [x (filter (fn [w] (not (blank? w))) (String/split acts " "))]
+                     (let [mark (last x)
+                           kind (case mark "!" "primary" "?" "quiet" "^" "danger" "")
+                           x (if (contains? #{"!" "?" "^"} mark) (subs x 0 (dec (count x))) x)]
+                       [:span {:class (str "ib " kind) :title (subs x 1)} (mdi x)]))])])
+      "machine" (let [[tone who role detail right] c]
+                  [:div {:class (str "s-machine " tone)}
+                   [:span.glyph (mdi (first (String/split who " ")))]
+                   ;; side facts flow in the text, never a column of their own
+                   [:div [:b (mdi (join " " (rest (String/split who " "))))
+                          (when right [:em (mdi right)])]
+                    [:span (mdi role)]
+                    (when detail [:small (mdi detail)])]])
+      "search" [:div.s-search (ico "search") [:span (mdi rest-text)] (ico "mic")]
+      "pick" (let [[what detail right] c
+                   on? (ends-with? what "*")
+                   what (if on? (subs what 0 (dec (count what))) what)]
+               [:div {:class (str "s-pick" (if on? " on" ""))}
+                [:span.glyph (mdi (first (String/split what " ")))]
+                [:div [:b (mdi (join " " (rest (String/split what " "))))]
+                 (when (or detail right) [:span (mdi (join " · " (filter (fn [x] (not (blank? x))) [detail right])))])]])
+      "listen" [:div.s-listen [:div.s-orb (ico "mic")] [:div.s-bars (for [h [6 14 22 12 26 18 9 20 13 7 17 24 11]] [:i {:style (str "height:" h "px")}])]
+                [:span (mdi rest-text)]]
+      "heard" [:div.s-heard [:em "heard"] [:span (mdi rest-text)]]
+      "intent" (let [[verb target text] c]
+                 [:div.s-intent [:div.s-intent-top [:b (mdi verb)] [:span (mdi target)]] [:div (mdi text)]])
+      "ask" [:div.s-ask (mdi rest-text)]
+      "choices" [:div.s-choices
+                 (map-indexed (fn [i x] (let [on? (ends-with? x "*") x (if on? (subs x 0 (dec (count x))) x)]
+                                          [:span {:class (if on? "on" "")} [:i (str (inc i))] (mdi x)]))
+                              c)]
+      "reply" [:div.s-reply [:span (mdi (first c))] (ico "mic") [:span.s-send (ico "send")]]
+      "actions" [:div.s-actions
+                 (for [x c]
+                   (btn-h x))]
+      "msg" [:div {:class (str "s-msg " (first c))} (mdi (join " | " (rest c)))]
+      "tool" [:div.s-tool [:span.s-tri "▸"] [:span (mdi (first c))] (when (> (count c) 1) [:em (mdi (nth c 1))])]
+      "diff" [:div.s-diff [:span.plusminus (first c)] [:code (nth c 1 "")]]
+      "code" [:pre.s-code rest-text]
+      "input" [:div.s-input [:span (mdi (first c))]
+               (let [send (if (> (count c) 1) (nth c 1) "↑")] (when-not (blank? send) [:span.s-send (mdi send)]))]
+      "tabs" [:div.s-tabs (for [x c] (if (ends-with? x "*") [:span.on (mdi (subs x 0 (dec (count x))))] [:span (mdi x)]))]
+      "banner" [:div {:class (str "s-banner " (first c))} (mdi (nth c 1 ""))]
+      "note" [:div.s-note (mdi rest-text)]
+      "row" [:div.s-row [:span (mdi (first c))] [:b (mdi (nth c 1 ""))]]
+      "strip" [:div {:class (str "s-strip " (first c))} [:i.s-dot] [:span (mdi (nth c 1 ""))]
+               (when (and (> (count c) 2) (not (blank? (nth c 2)))) [:span.btn.small (mdi (nth c 2))])]
+      "notif" (let [[app title body actions] c]
+                [:div.s-notif
+                 [:div.s-notif-app [:i "ω"] app [:em "now"]]
+                 [:b (mdi title)] [:div (mdi body)]
+                 (when actions [:div.s-notif-acts (for [x (String/split actions ",")] [:span (trim x)])])])
+      "lock" [:div.s-lock [:b (first c)] [:span (nth c 1 "")]]
+      "dest" (let [[icon title body] c]
+               [:div.s-dest [:i (mdi icon)] [:div [:b (mdi title)] [:span (mdi body)]]])
+      "spacer" [:div.s-spacer]
+      [:div.s-note (mdi t)])))
+
+(defn- screen-body
+  "Lines → hiccup; a `sheet Title` line opens a bottom sheet over the rest."
+  [lines]
+  (let [lines (filter (fn [l] (not (blank? l))) lines)
+        before (take-while (fn [l] (not (starts-with? (trim l) "sheet"))) lines)
+        sheet (drop-while (fn [l] (not (starts-with? (trim l) "sheet"))) lines)]
+    (list
+      [:div.s-flow (map screen-line before)]
+      (when (seq sheet)
+        (list [:div.s-scrim]
+              [:div.s-sheet [:div.s-grip] [:div.s-sheet-title (md (trim (subs (trim (first sheet)) 5)))]
+               (map screen-line (rest sheet))])))))
+
+(defn- design-class
+  "` design-NAME` when a mockup is drawn in a design language (dossier.design)."
+  [a]
+  (if (:design a) (str " design-" (:design a)) ""))
+
+(defn screen-h [b]
+  (let [a (:attrs b) dark? (= "dark" (:theme a))]
+    [:figure {:class (str "phone" (if dark? " lockscreen" "") (design-class a)) :id (str "screen-" (:id a))}
+     [:div.device
+      [:div.statusbar [:span "9:41"] [:span.notch] [:span "◔ ▮▮"]]
+      [:div.screen (screen-body (:body b))]]
+     [:figcaption
+      [:div.cap-top [:span.chip (:id a)] [:b (md (:title a))]
+       (when (:job a) [:a {:href (str "#job-" (:job a))} (str "job " (:job a))])]
+      (when (:caption a) [:p (md (:caption a))])
+      (feedback-h a [["love" "Love it"] ["fine" "Fine"] ["rework" "Rework"]] "How does it feel?")]]))
+
+(defn screens-h
+  "A `#+begin_screens` strip: consecutive screen blocks scroll sideways."
+  [blocks]
+  [:div.screens (map screen-h blocks)])
+
+; A walkable screen graph. Views reuse the screen language; `go` declares
+; every transition explicitly. No product code or state is executed.
+(defn screen-graph
+  "Compile view/go lines, retaining bad references as authoring errors."
+  [body]
+  (let [views (reduce
+                (fn [vs line]
+                  (let [t (trim line) c (vec (map trim (String/split t "|")))]
+                    (cond
+                      (starts-with? t "view ")
+                      (conj vs {:id (trim (subs (first c) 5)) :title (nth c 1 "")
+                                :cue (nth c 2 "") :body [] :edges []})
+                      (empty? vs) vs
+                      (starts-with? t "go ")
+                      (conj (pop vs) (update (last vs) :edges conj
+                        {:to (trim (subs (first c) 3)) :label (nth c 1 "Open") :legacy? true}))
+                      :else (conj (pop vs)
+                              (-> (last vs)
+                                  (update :body conj line)
+                                  (update :edges into
+                                    (for [[_ to label] (Regex/scan (Regex/compile! "\\[\\[view:([^\\]]+)\\]\\[([^\\]]+)\\]\\]") line)]
+                                      {:to to :label label})))))))
+                [] body)
+        ids (map :id views)
+        errors (vec (concat
+                 (when (empty? views) ["No views declared"])
+                 (for [[id n] (frequencies ids) :when (> n 1)] (str "Duplicate view: " id))
+                 (for [v views e (:edges v) :when (not (contains? (set ids) (:to e)))]
+                   (str (:id v) " points to missing view: " (:to e)))))]
+    {:views views :errors errors}))
+
+(defn- screen-graph-h [b]
+  (let [a (:attrs b) g (screen-graph (:body b)) vs (:views g)
+        start (or (:start a) (:id (first vs)))
+        errors (concat (:errors g) (when (and (seq vs) (not (some (fn [v] (= start (:id v))) vs)))
+                                    [(str "Missing start view: " start)]))]
+    [:figure {:class (str "screen-graph" (design-class a)) :id (str "screen-graph-" (:id a))
+              :data-graph (:id a) :data-start start}
+     [:figcaption [:b (md (:title a))]
+      [:p (md (or (:caption a) "Walk the screens. Changes stay inside this prototype."))]]
+     (if (seq errors)
+       [:div.warning {:role "alert"} (for [e errors] [:p e])]
+       [:div.sg-workbench {:tabindex "0" :aria-label "Interactive prototype"}
+        [:div.sg-stage
+         (for [v vs]
+           [:section {:class "sg-view" :data-view (:id v) :data-title (:title v)
+                      :data-cue (:cue v) :hidden (not= start (:id v))}
+            (prototype-body (:body v))
+            (when (some :legacy? (:edges v))
+              [:div.sg-legacy-actions
+               (for [e (:edges v) :when (:legacy? e)]
+                 [:button {:type "button" :class "btn sg-link" :data-sg-to (:to e)} (mdi (:label e))])])])]
+        [:div.sg-overview {:hidden true}
+         [:header.sg-overview-head [:div [:span "SCREEN GRAPH"] [:h4 "Every screen. Every way through."]]
+          [:div.sg-overview-actions [:p "Choose a screen to return. Connections follow the app's own controls."]
+           [:div.sg-zoom {:aria-label "Graph zoom"}
+            [:button {:type "button" :data-sg-zoom "out" :aria-label "Zoom out"} "−"]
+            [:button {:type "button" :data-sg-zoom "fit"} "Fit"]
+            [:button {:type "button" :data-sg-zoom "in" :aria-label "Zoom in"} "+"]]]]
+         [:div.sg-graph-scroll [:div.sg-graph-sizer [:div.sg-canvas [:svg.sg-wires {:aria-hidden "true"}] [:div.sg-nodes]]]]
+         [:div.sg-graph-inspector {:aria-label "Connections from this screen"}]]
+        [:div.sg-toolbar {:role "toolbar" :aria-label "Prototype controls"}
+         [:button {:type "button" :data-sg-back "true" :disabled true :aria-label "Back" :data-tip "Back"} (ico "back")]
+         [:button {:type "button" :data-sg-highlight "true" :aria-pressed "false" :aria-label "Highlight links" :data-tip "Highlight links · H"} (ico "cursor")]
+         [:button {:type "button" :data-sg-mode "true" :aria-pressed "false" :aria-label "Show screen graph" :data-tip "Screen graph · G"} (ico "graph")]
+         [:button {:type "button" :data-sg-expand "true" :aria-pressed "false" :aria-label "Expand prototype" :data-tip "Full screen · Esc to exit"} (ico "expand")]
+         [:button {:type "button" :data-sg-reset "true" :aria-label "Start again" :data-tip "Start again"} (ico "undo")]]
+        [:span.sg-announcement {:aria-live "polite"}]])
+     [:p.sg-footnote "Click the screen's own controls. " [:span "Hover for tools · H highlights links · G shows the graph."]]
+     (when (:id a)
+       (feedback-h a [["love" "Love it"] ["fine" "Fine"] ["rework" "Rework"]] "Does this flow fit how you work?"))]))
+
+; ─── sequence: who says what to whom, in order ─────────────────────────────
+
+(defn- sequence-steps
+  "The same sequence as a numbered list, for a phone-width column."
+  [rows]
+  [:ol.seq-steps
+   (for [l rows :let [t (trim l)] :when (not (starts-with? t "lanes "))]
+     (cond
+       (starts-with? t "==") [:li.div (trim (subs t 2))]
+       (starts-with? t "note ")
+       (let [m (Regex/run (Regex/compile! "^note\\s+([^:]+):\\s*(.*)$") t)]
+         [:li.note [:span.who (trim (nth m 1))] (md (nth m 2))])
+       :else
+       (let [m (Regex/run (Regex/compile! "^(.+?)\\s*(=>|-->|->)\\s*(.+?)\\s*:\\s*(.*)$") t)]
+         (when m
+           (let [[_ from arrow to label] m]
+             [:li {:class (case arrow "=>" "baton" "-->" "reply" "call")}
+              [:span.who (trim from) (if (= (trim from) (trim to)) "" (str " → " (trim to)))]
+              [:span.what (md label)]])))))])
+
+(defn- sequence-svg [b lanes M S W H out]
+    [:svg {:class "sequence" :viewBox (str "0 0 " W " " H) :style (str "min-width:" (n (* W 0.9)) "px")
+            :role "img" :aria-label (or (:title (:attrs b)) "sequence")}
+      [:defs [:marker {:id "sq-head" :viewBox "0 0 10 10" :refX "9" :refY "5" :markerUnits "userSpaceOnUse" :markerWidth "10" :markerHeight "10" :orient "auto-start-reverse"}
+              [:path {:d "M0,0 L10,5 L0,10 z"}]]]
+      (map-indexed
+        (fn [i l]
+          (let [[title sub] (String/split l " · ") cx (+ M (* S i))]
+            [:g.sq-lane
+             [:line.life {:x1 (n cx) :x2 (n cx) :y1 "50" :y2 (n (- H 6))}]
+             [:rect {:x (n (- cx 74)) :y "8" :width "148" :height "42" :rx "9"}]
+             [:text.t {:x (n cx) :y (if sub "26" "33") :text-anchor "middle"} title]
+             (when sub [:text.s {:x (n cx) :y "42" :text-anchor "middle"} sub])]))
+        lanes)
+      (map identity out)])
+
+(defn sequence-h [b]
+  (let [rows (filter (fn [l] (not (blank? l))) (:body b))
+        lane-line (first (filter (fn [l] (starts-with? (trim l) "lanes ")) rows))
+        lanes (cols (subs (trim lane-line) 6))
+        idx (into {} (map-indexed (fn [i l] [(first (String/split l " · ")) i]) lanes))
+        S 168 M 92 W (+ (* 2 M) (* S (dec (count lanes))))
+        x (fn [name] (+ M (* S (get idx (trim name) 0))))
+        steps (reduce
+                (fn [acc l]
+                  (let [t (trim l) y (:y acc)]
+                    (cond
+                      (starts-with? t "lanes ") acc
+                      (starts-with? t "==")
+                      (let [label (trim (subs t 2))]
+                        (-> acc (update :out conj
+                                        [:g.sq-div
+                                         [:line {:x1 "8" :x2 (n (- W 8)) :y1 (n y) :y2 (n y)}]
+                                         [:text {:x (n (/ W 2)) :y (n (- y 6)) :text-anchor "middle"} label]])
+                            (assoc :y (+ y 36))))
+                      (starts-with? t "note ")
+                      (let [m (Regex/run (Regex/compile! "^note\\s+([^:]+):\\s*(.*)$") t)
+                            who (vec (map trim (String/split (nth m 1) ",")))
+                            x1 (- (apply min (map x who)) 70) x2 (+ (apply max (map x who)) 70)
+                            ls (wrap-words (nth m 2) (max 20 (erlang/round (/ (- x2 x1) 6.6))))
+                            h (+ 12 (* 15 (count ls)))]
+                        (-> acc (update :out conj
+                                        [:g.sq-note
+                                         [:rect {:x (n x1) :y (n (- y 14)) :width (n (- x2 x1)) :height (n h) :rx "6"}]
+                                         (map-indexed (fn [i s] [:text {:x (n (/ (+ x1 x2) 2)) :y (n (+ y 2 (* 15 i))) :text-anchor "middle"} s]) ls)])
+                            (assoc :y (+ y h 14))))
+                      :else
+                      (let [m (Regex/run (Regex/compile! "^(.+?)\\s*(=>|-->|->)\\s*(.+?)\\s*:\\s*(.*)$") t)]
+                        (if (nil? m)
+                          acc
+                          (let [[_ from arrow to label] m
+                                x1 (x from) x2 (x to)
+                                self? (= x1 x2)
+                                span (if self? 150 (max 120 (- (max x1 x2) (min x1 x2))))
+                                ls (wrap-words label (max 18 (erlang/round (/ span 6.8))))
+                                lift (* 14 (dec (count ls)))
+                                y (+ y lift)
+                                kind (case arrow "=>" "baton" "-->" "reply" "call")]
+                            (-> acc (update :out conj
+                                            [:g {:class (str "sq-msg " kind)}
+                                             (if self?
+                                               [:path {:d (str "M" (n x1) " " (n (- y 4)) " h34 v16 h-30") :marker-end "url(#sq-head)"}]
+                                               [:line {:x1 (n x1) :x2 (n (if (> x2 x1) (- x2 6) (+ x2 6))) :y1 (n y) :y2 (n y) :marker-end "url(#sq-head)"}])
+                                             (map-indexed (fn [i s]
+                                                            [:text {:x (n (if self? (+ x1 42) (/ (+ x1 x2) 2)))
+                                                                    :y (n (+ (- y 7 lift) (* 14 i) (if self? 8 0)))
+                                                                    :text-anchor (if self? "start" "middle")} s])
+                                                          ls)])
+                                (assoc :y (+ y (if self? 40 34))))))))))
+                {:y 84 :out []} rows)
+        H (+ (:y steps) 10)
+        svg (fn [] (sequence-svg b lanes M S W H (:out steps)))]
+    [:div.seq
+     [:div.scrollx.seq-wide (svg)]
+     (sequence-steps rows)
+     [:details.seq-narrow [:summary "As a diagram"] [:div.scrollx (svg)]]]))
+
+; ─── graph: boxes on a grid, typed edges between them ──────────────────────
+
+(defn graph-h [b]
+  (let [rows (o/rows-of (:body b))
+        nodes (for [r rows :when (starts-with? (first r) "node ")]
+                (let [[c rr] (map (fn [s] (erlang/binary_to_integer (trim s))) (String/split (nth r 3 "0,0") ","))]
+                  {:id (trim (subs (first r) 5)) :label (nth r 1 "") :sub (nth r 2 "") :col c :row rr :tone (nth r 4 "")}))
+        edges (for [r rows :when (starts-with? (first r) "edge ")]
+                (let [m (Regex/run (Regex/compile! "^edge\\s+(\\S+)\\s*(->|<->|--)\\s*(\\S+)$") (first r))]
+                  {:from (nth m 1) :to (nth m 3) :arrow (nth m 2) :label (nth r 1 "") :style (nth r 2 "solid")}))
+        CW 280 RH 132 BW 176 BH 64 M 104
+        at (into {} (for [nd nodes] [(:id nd) [(+ M (* CW (:col nd))) (+ 56 (* RH (:row nd)))]]))
+        W (+ (* 2 M) (* CW (apply max 0 (map :col nodes))))
+        H (+ 112 (* RH (apply max 0 (map :row nodes))))
+        clip (fn [[x1 y1] [x2 y2]]
+               (let [dx (- x2 x1) dy (- y2 y1)
+                     ax (if (< dx 0) (- dx) dx) ay (if (< dy 0) (- dy) dy)
+                     tx (if (> ax 0) (/ (+ 6 (/ BW 2)) ax) 1.0e9)
+                     ty (if (> ay 0) (/ (+ 6 (/ BH 2)) ay) 1.0e9)
+                     t (min tx ty)]
+                 [(+ x1 (* t dx)) (+ y1 (* t dy))]))]
+    [:div.scrollx.graph-wrap {:data-hint "swipe ↔"}
+     [:svg {:class "graph" :viewBox (str "0 0 " W " " H) :style (str "min-width:" (n (* W 0.82)) "px")
+            :role "img" :aria-label (or (:title (:attrs b)) "graph")}
+      [:defs [:marker {:id "gr-head" :viewBox "0 0 10 10" :refX "9" :refY "5" :markerUnits "userSpaceOnUse" :markerWidth "10" :markerHeight "10" :orient "auto-start-reverse"}
+              [:path {:d "M0,0 L10,5 L0,10 z"}]]]
+      (for [e edges :when (and (get at (:from e)) (get at (:to e)))]
+        (let [p1 (get at (:from e)) p2 (get at (:to e))
+              [x1 y1] (clip p1 p2) [x2 y2] (clip p2 p1)]
+          [:g {:class (str "gr-edge " (:style e))}
+           [:line (merge {:x1 (n x1) :y1 (n y1) :x2 (n x2) :y2 (n y2)}
+                         (when (not= "--" (:arrow e)) {:marker-end "url(#gr-head)"})
+                         (when (= "<->" (:arrow e)) {:marker-start "url(#gr-head)"}))]
+           (when (not (blank? (:label e)))
+             [:text {:x (n (/ (+ x1 x2) 2)) :y (n (- (/ (+ y1 y2) 2) 5)) :text-anchor "middle"} (:label e)])]))
+      (for [nd nodes]
+        (let [[cx cy] (get at (:id nd))]
+          [:g {:class (str "gr-node " (:tone nd))}
+           [:rect {:x (n (- cx (/ BW 2))) :y (n (- cy (/ BH 2))) :width (n BW) :height (n BH) :rx "12"}]
+           [:text.t {:x (n cx) :y (n (- cy 4)) :text-anchor "middle"} (:label nd)]
+           [:text.s {:x (n cx) :y (n (+ cy 15)) :text-anchor "middle"} (:sub nd)]]))]]))
+
+; ─── dispatch ──────────────────────────────────────────────────────────────
+
+; ─── desk: the same product on a desktop ────────────────────────────────────
+;
+; A desk reuses every screen verb and adds the regions of a desktop app:
+;   nav @home Accueil* | @matter Affaires     the sidebar (`*` = here)
+;   crumb Affaires › Dupont SA                 where you are
+;   head Title | tone · Status | Act! | Act?   object, status, the action slot
+;   meta @user Amina · @bot Atlas Copilot      facts about the object
+;   col doc | col rail | col main              columns (doc draws paper)
+; and document verbs, for the paper and its review:
+;   page Mise en demeure                       the document's title
+;   para text {+inserted+} {-deleted-} {~proposed~} {!to verify!} ‹P-01› ^1
+;   point tone | kind | title | body | Opt* | Opt
+;   comment 1 | who | text                     a comment, numbered like its ^1
+
+(def ^:private doc-re (Regex/compile! "(\\{\\+.*?\\+\\}|\\{-.*?-\\}|\\{~.*?~\\}|\\{!.*?!\\}|‹[^›]+›|\\^\\d+)"))
+
+(defn- doc-inline [s]
+  (for [piece (Regex/split doc-re s (list (tuple :include_captures true))) :when (not= "" piece)]
+    (let [inner (fn [] (subs piece 2 (- (count piece) 2)))]
+      (cond (starts-with? piece "{+") [:ins (mdi (inner))]
+            (starts-with? piece "{-") [:del (mdi (inner))]
+            (starts-with? piece "{~") [:span.prop (mdi (inner))]
+            (starts-with? piece "{!") [:mark (mdi (inner))]
+            (starts-with? piece "‹") [:span.piece (subs piece 1 (dec (count piece)))]
+            (starts-with? piece "^") [:sup.cm (subs piece 1)]
+            :else (mdi piece)))))
+
+(defn- opts-h [xs]
+  [:div.d-opts (for [x xs] (if (ends-with? x "*") [:span.on (mdi (subs x 0 (dec (count x))))] [:span (mdi x)]))])
+
+(defn- desk-line [line]
+  (let [t (trim line)
+        sp (index-of t " ")
+        verb (if sp (subs t 0 sp) t)
+        rest-text (if sp (trim (subs t (inc sp))) "")
+        c (cols rest-text)]
+    (case verb
+      "page" [:div.d-page-h (mdi rest-text)]
+      "para" [:p.d-para (doc-inline rest-text)]
+      "point" (let [[tone kind title body & xs] c]
+                [:div {:class (str "d-point " tone)}
+                 [:div.d-kind (mdi kind)] [:b (mdi title)] (when body [:div.d-pbody (doc-inline body)])
+                 (when (seq xs) (opts-h xs))])
+      "comment" (let [[n who text] c]
+                  [:div.d-comment [:sup.cm n] [:div [:b (mdi who)] [:div (doc-inline (or text ""))]]])
+      "opts" (opts-h c)
+      (screen-line line))))
+
+(defn- desk-parts
+  "Lines → {:nav [...] :top [...] :cols [[name lines] ...]}."
+  [lines]
+  (reduce (fn [acc l]
+            (let [t (trim l)]
+              (cond (blank? t) acc
+                    (starts-with? t "nav ") (assoc acc :nav (cols (subs t 4)))
+                    (or (starts-with? t "crumb ") (starts-with? t "head ") (starts-with? t "meta ") (and (starts-with? t "tabs ") (empty? (:cols acc))))
+                    (update acc :top conj t)
+                    (starts-with? t "col ") (update acc :cols conj [(trim (subs t 4)) []])
+                    (empty? (:cols acc)) (update acc :pre conj t)
+                    :else (update-in acc [:cols (dec (count (:cols acc))) 1] conj t))))
+          {:nav nil :top [] :pre [] :cols []} lines))
+
+(defn- desk-top [t]
+  (let [sp (index-of t " ") verb (subs t 0 sp) c (cols (trim (subs t (inc sp))))]
+    (case verb
+      "crumb" [:div.d-crumb (mdi (first c))]
+      "meta" [:div.d-meta (for [x c] [:span (mdi x)])]
+      "tabs" [:div.d-tabs (for [x c] (if (ends-with? x "*") [:span.on (mdi (subs x 0 (dec (count x))))] [:span (mdi x)]))]
+      "head" (let [[title status & acts] c
+                   [tone label] (when (and status (not= "" status)) (let [p (String/split status " · ")] (if (> (count p) 1) [(first p) (join " · " (rest p))] ["idle" (first p)])))]
+               [:div.d-head [:div.d-title (mdi title)]
+                (when label [:span {:class (str "d-st " tone)} [:i] (mdi label)])
+                [:span.d-acts (map btn-h acts)]])
+      nil)))
+
+(defn desk-h [b]
+  (let [a (:attrs b) {:keys [nav top pre cols]} (desk-parts (:body b))
+        names (map first cols)]
+    [:figure {:class (str "desk" (design-class a)) :id (str "desk-" (:id a))}
+     [:div.d-frame
+      [:div.d-chrome [:i] [:i] [:i] [:span (or (:url a) "knowledger · cabinet-atlas")]]
+      [:div {:class (if nav "d-app" "d-app bare")}
+       (when nav
+         [:nav.d-nav [:div.d-firm (or (:firm a) "Cabinet Atlas")]
+          (for [x nav] (if (ends-with? x "*") [:span.on (mdi (subs x 0 (dec (count x))))] [:span (mdi x)]))])
+       [:div.d-main
+        (keep desk-top top)
+        (map desk-line pre)
+        [:div {:class (str "d-cols " (join "-" names))}
+         (for [[nm ls] cols]
+           [:div {:class (str "d-col " nm)}
+            (if (= nm "doc") [:div.d-paper (map desk-line ls)] (map desk-line ls))])]]]]
+     [:figcaption
+      [:div.cap-top [:span.chip (:id a)] [:b (md (:title a))]
+       (when (:job a) [:a {:href (str "#job-" (:job a))} (str "job " (:job a))])]
+      (when (:caption a) [:p (md (:caption a))])
+      (feedback-h a [["love" "Love it"] ["fine" "Fine"] ["rework" "Rework"]] "How does it feel?")]]))
+
+(defn- prototype-line [line]
+  (if (starts-with? (trim line) "compose ")
+    (let [c (cols (subs (trim line) 8))]
+      [:div.sg-compose
+       [:input {:type "text" :placeholder (first c) :aria-label (first c)}]
+       (mdi (nth c 1 ""))])
+    (desk-line line)))
+
+(defn- prototype-body
+  "A real app layout inside a prototype, using the existing desk language."
+  [lines]
+  (let [brand (first (filter (fn [l] (starts-with? (trim l) "brand ")) lines))
+        brand (if brand (cols (subs (trim brand) 6)) ["Workspace" ""])
+        who (first (filter (fn [l] (starts-with? (trim l) "identity ")) lines))
+        who (if who (trim (subs (trim who) 9)) "You")
+        parts (desk-parts (remove (fn [l] (or (starts-with? (trim l) "brand ")
+                                              (starts-with? (trim l) "identity "))) lines))]
+    [:div {:class (str "sg-app" (when (empty? (:nav parts)) " sg-bare"))}
+     (when (seq (:nav parts))
+       [:aside.sg-app-nav
+        [:div.sg-brand [:span.sg-mark (ico "spark")] [:div [:b (first brand)] [:small (nth brand 1 "")]]]
+        [:nav.sg-app-menu {:aria-label "App navigation"}
+         (for [x (:nav parts)]
+           [:div {:class (str "sg-menu-item" (when (ends-with? x "*") " on"))}
+            (mdi (if (ends-with? x "*") (subs x 0 (dec (count x))) x))])]
+        [:div.sg-person (ico "user") (mdi who)]])
+     [:div.sg-workspace
+      [:header.sg-app-top (keep desk-top (:top parts))]
+      [:div.sg-app-content
+       (map prototype-line (:pre parts))
+       [:div {:class (str "sg-columns " (join "-" (map first (:cols parts))))}
+        (for [[name ls] (:cols parts)]
+          [:div {:class (str "sg-column " name)} (map prototype-line ls)])]]]]))
+
+; ─── schema: entities and their datoms in a few lines ──────────────────────
+;
+;   goal @flag | What the team wants true by a date
+;     done-when  text            | how we will know
+;     state      open > met / missed / dropped
+;     kind       doc, decision, link   | one of, not a flow
+;     serves     ->> goal        | many refs; `-> goal` is one
+;
+; An unindented line names an entity; indented lines are its attributes.
+
+(defn- head-tail [s]
+  (let [[l & r] (String/split s "|")] [(trim l) (when (seq r) (trim (join "|" r)))]))
+
+(defn schema-of
+  "Entities of a schema body: [{:name :icon :gloss :attrs [{:name :type :note}]} …]."
+  [body]
+  (reduce
+    (fn [es l]
+      (cond
+        (or (blank? l) (starts-with? (trim l) "#")) es
+        (Regex/run (Regex/compile! "^\\s") l)
+        (if (empty? es) es
+            (let [[h r] (head-tail l) [nm & ty] (String/split h (Regex/compile! "\\s+"))]
+              (conj (pop es) (update (peek es) :attrs conj {:name nm :type (join " " ty) :note r}))))
+        :else
+        (let [[h r] (head-tail l) ws (String/split h (Regex/compile! "\\s+"))
+              ic (first (filter (fn [w] (starts-with? w "@")) ws))]
+          (conj es {:name (first ws) :icon (when ic (subs ic 1)) :gloss r :attrs []}))))
+    [] body))
+
+(defn flow-states
+  "The states of a flow type `a > b / c`, or [] for any other type."
+  [t]
+  (if (and (includes? t ">") (not (starts-with? t "->")))
+    (vec (filter (fn [w] (not (contains? #{">" "/" ""} w))) (String/split t (Regex/compile! "\\s+"))))
+    []))
+
+(defn- schema-type-h [t]
+  (cond
+    (starts-with? t "->>") (let [k (trim (subs t 3))] [:a.s-ref {:href (str "#entity-" k)} "→ " k [:i "many"]])
+    (starts-with? t "->") (let [k (trim (subs t 2))] [:a.s-ref {:href (str "#entity-" k)} "→ " k])
+    (includes? t ">") [:span.sx-flow (for [w (String/split t (Regex/compile! "\\s+")) :when (not= "" w)]
+                                      (case w ">" [:i "›"] "/" [:i.alt "or"] [:b w]))]
+    (includes? t ",") [:span.sx-flow.enum (for [w (String/split t ",") :when (not (blank? w))] [:b (trim w)])]
+    :else [:span.s-type t]))
+
+(defn schema-h [b]
+  (let [a (:attrs b) es (schema-of (:body b))
+        n-attr (reduce + 0 (map (fn [e] (count (:attrs e))) es))
+        n-state (reduce + 0 (for [e es at (:attrs e)] (count (flow-states (:type at)))))]
+    [:article.schema {:id (str "schema-" (:id a))}
+     [:header (when (:id a) [:span.chip (:id a)]) [:h4 (md (or (:title a) "Schema"))]]
+     [:div.s-grid
+      (for [e es]
+        [:section.s-ent {:id (str "entity-" (:name e))}
+         [:div.s-name (when (:icon e) (ico (:icon e))) [:b (:name e)]]
+         (when (:gloss e) [:p (md (:gloss e))])
+         [:dl (for [at (:attrs e)]
+                (list [:dt (:name at)]
+                      [:dd (schema-type-h (:type at)) (when (:note at) [:small (md (:note at))])]))]])]
+     [:footer.s-count (str (count es) " entities · " n-attr " attributes · " n-state " states")]
+     (when (:id a) (feedback-h a [["accept" "Agree"] ["rework" "Rework"] ["reject" "Disagree"]] "Does this shape hold?"))]))
+
+; ─── procedure: a reusable shape of work, steps and sign-offs ──────────────
+;
+;   step @edit Frame the problem | lead | problem statement · doc · draft
+;   check @eye Check against the principles | verifier | problem statement
+;   call @link Publish it | dossier.publish/serve! | demo link · link
+;   gate @check Frame is in | everyone | problem statement
+;
+; A step produces deliverables (`name · kind`, comma separated; a third
+; `· draft` means a harness drafts it the moment the task starts). A check
+; reads deliverables and leaves advice; a call runs code instead of a person
+; (a Beam Lisp fn or an API, named in the middle column) and produces like a
+; step; a gate names the deliverables that must be handed over before work
+; goes on. Other lines are prose.
+
+(def ^:private step-re (Regex/compile! "^\\s*(step|gate|check|call)\\s"))
+
+(defn procedure-of
+  "Steps of a procedure body: [{:kind :icon :title :who :items [{:name :kind :draft?}]} …]."
+  [body]
+  (vec (for [l body :when (Regex/run step-re l)]
+         (let [[head who items] (map trim (String/split (trim l) "|"))
+               [kind & ws] (String/split head (Regex/compile! "\\s+"))
+               ic (first (filter (fn [w] (starts-with? w "@")) ws))]
+           {:kind kind :icon (when ic (subs ic 1))
+            :title (join " " (filter (fn [w] (not (starts-with? w "@"))) ws))
+            :who (or who "")
+            :items (vec (for [it (String/split (or items "") ",") :when (not (blank? it))]
+                          (let [[nm k flag] (map trim (String/split it "·"))]
+                            {:name nm :kind k :draft? (= "draft" flag)})))}))))
+
+(defn procedure-h [b]
+  (let [a (:attrs b) steps (procedure-of (:body b))
+        prose (filter (fn [l] (not (Regex/run step-re l))) (:body b))]
+    [:article.procedure {:id (str "procedure-" (:id a))}
+     [:header (when (:id a) [:span.chip (:id a)]) [:h4 (md (or (:title a) "Procedure"))]
+      (when (:makes a) [:span.p-makes (str "makes a " (:makes a))])]
+     [:ol.p-steps
+      (for [s steps :let [k (:kind s)]]
+        [:li {:class (str "p-" k)}
+         [:div.p-mark (when (:icon s) (ico (:icon s)))]
+         [:div.p-body
+          [:b (md (:title s))] [:span.p-who (md (:who s))]
+          [:div.p-items
+           (for [it (:items s)]
+             [:span {:class (str "p-item" (case k "gate" " needs" "check" " reads" ""))}
+              (case k "gate" "✓ " "check" "◎ " "→ ") (:name it) (when (:kind it) [:i (:kind it)])
+              (when (:draft? it) [:em.p-draft "drafted"])])]]])]
+     (paras prose)
+     (when (:id a) (feedback-h a [["accept" "Agree"] ["rework" "Rework"] ["reject" "Disagree"]] "Is this the right shape of work?"))]))
+
+(defn block->h [b]
+  (case (:lang b)
+    "schema" (schema-h b)
+    "procedure" (procedure-h b)
+    "lede" (lede-h b)
+    "stats" (stats-h b)
+    "terms" (terms-h b)
+    "principles" (principles-h b)
+    "note" (callout-h b)
+    "warning" (callout-h b)
+    "honest" (callout-h b)
+    "rosetta" (rosetta-h b)
+    "matrix" (matrix-h b)
+    "roadmap" (roadmap-h b)
+    "job" (job-h b)
+    "decision" (decision-h b)
+    "ask" (ask-h b)
+    "screen" (screens-h [b])
+    "screen_graph" (screen-graph-h b)
+    "desk" (desk-h b)
+    "sequence" (sequence-h b)
+    "graph" (graph-h b)
+    "quote" [:blockquote (paras (:body b))]
+    [:pre {:class (str "block " (:lang b))} (join "\n" (:body b))]))
