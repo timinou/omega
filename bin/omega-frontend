@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
 state=${XDG_STATE_HOME:-$HOME/.local/state}/omega
 mkdir -p "$state" "$HOME/.config/omega"
-nix build "$ROOT#frontend" --out-link "$state/frontend" -L
+nix build "$ROOT#frontend" --max-jobs 0 --out-link "$state/frontend" -L
 web=$(readlink -f "$state/frontend")
 test -f "$web/.omega-managed" && test -f "$web/.inputs"
 printf '%s\n' "$web" > "$HOME/.config/omega/frontend.path.next"
