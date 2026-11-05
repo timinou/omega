@@ -1,0 +1,69 @@
+; A pure, removable drawer over the same operations used by Omega's harness.
+(ns liveview.main
+ (:require [ed.core :as c] [ed.docs :as docs] [ed.pkg :as pkg] [ed.inspector :as inspector]
+           [liveview.presentation :as presentation]))
+(def layout {:name "live" :doc "Source beside the live image."
+ :panes [{:id :main :doc :linked :width [:fr 2]}
+         {:id :live-panel :view [:live/drawer :main] :width [:fr 3]}] :focus :main})
+(defn state [ed] (get-in ed [:pkg-state "live"] {}))
+(defn put [ed key value] (assoc-in ed [:pkg-state "live" key] value))
+(defn refresh [ed]
+ (if (or (:pending (state ed)) (:paused (state ed))) ed
+  (-> ed (put :pending true)
+      (c/effect {:kind :intent :intent "live/snapshot" :args {} :then :live/snapshot}))))
+(defn open [ed]
+ (-> ed (c/effect {:kind :frame-panel :layout "live"}) refresh))
+(defn close [ed] (c/effect ed {:kind :frame-panel :layout nil}))
+(defn visit [ed kind path]
+ (if-let [navigate (some #(get-in % [:provides :live/navigation]) (reverse (pkg/packages ed)))]
+  (close (navigate ed {:kind kind :path path}))
+  (cond-> (docs/visit ed path) (:compact (state ed)) close)))
+(defn send [ed operation args]
+ (if (:busy (state ed)) (c/message ed "A live operation is still pending.")
+  (-> ed (put :busy true)
+      (c/effect {:kind :intent :intent (str "live/" operation) :args args :then :live/result}))))
+(defn return-selected [ed]
+ (let [o (docs/object-at ed)]
+  (if (and (= "buffer/op" (:type o)) (= (:path o) (get-in ed [:pkg-state "live" :backend :source])))
+   (send ed "rehearse" {:change (:key o)})
+   (c/message ed "Select a worker change in Changes; r rehearses its behavior against current state."))))
+(defn intercept [ed ev]
+ (case (:type ev)
+  :live/open (open ed)
+  :live/viewport (put ed :compact (:compact ev))
+  :live/close (close ed)
+  :live/refresh (refresh ed)
+  :live/start (send ed "start-demo" {})
+  :live/provider (put ed :provider (:provider ev))
+  :live/policy (put ed :policy (:policy ev))
+  :live/run (send ed "run-harness" {:provider (get (state ed) :provider "claude") :policy (get (state ed) :policy "review") :delta 5})
+  :live/decide (send ed "decide" (select-keys ev [:proposal :decision]))
+  :live/stop (send ed "stop-harness" {})
+  :live/rehearse (send ed "rehearse" (select-keys ev [:change]))
+  :live/apply (send ed "apply" {:candidate (get-in (state ed) [:backend :candidate :id])})
+  :live/discard (send ed "discard" {:candidate (get-in (state ed) [:backend :candidate :id])})
+  :live/source (visit ed :source (get-in (state ed) [:backend :source]))
+  :live/changes (visit ed :changes (get-in (state ed) [:backend :changes]))
+  :live/task (when-let [id (get-in (state ed) [:backend :task :id])] (visit ed :task (str "task:" id)))
+  :intent-result
+   (cond
+    (= :live/snapshot (:then ev)) (-> ed (put :pending false)
+       (put :backend (when (:ok? ev) (:data ev))) (put :error (when-not (:ok? ev) (:message ev))))
+    (= :live/result (:then ev)) (-> ed (put :busy false)
+       (put :notice (if (:ok? ev) (str (get-in ev [:data :status] (get-in ev [:data :task] "Acknowledged"))) (:message ev)))
+       (put :outcome (when (:ok? ev) (:data ev))) refresh)
+    :else nil)
+  (inspector/intercept ed "live" ev)))
+(defn model [ed]
+ (inspector/model ed "live" [] presentation/project))
+(def bl-package
+ {:name "live" :doc "Inspect, rehearse, apply and return to live behavior through shared Changes."
+  :commands {:live/open {:doc "Open Live beside any editor layout." :run open}
+             :live/close {:doc "Close Live, retaining every editor." :run close}
+             :live/rehearse {:doc "Rehearse the published worker source." :run #(send % "rehearse" {})}
+             :live/return {:doc "Rehearse the selected Changes version against current state." :run return-selected}}
+  :keys (fn [ed] {:normal (merge {"space r l" :live/open}
+                          (when (= "buffer/op" (:type (docs/object-at ed))) {"r" :live/return}))})
+  :adopt (fn [ed] (if (= "live:overview" (:path ed)) (open ed) ed))
+  :intercept intercept
+  :provides {:layouts {"live" layout} :views {:live/drawer model}}})

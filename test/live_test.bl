@@ -1,0 +1,219 @@
+(ns omega.live-test
+ (:require [omega.live :as live] [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
+           [omega.workspace :as workspace] [buffer.model :as buffer] [buffer.server :as changes]
+           [omega.codemode :as cm] [omega.change :as change] [omega.actor :as actor] [clojure.edn :as edn] [clojure.string :as str]))
+(defn- fixture [f]
+ (let [root (str "/tmp/omega-live-" (erlang/unique_integer (list :positive)))
+       _ (File/mkdir_p! root) e (env/open {:schema workspace/schema}) b (workspace/start! e root)
+       sys (task/start-system e {:root root :files (buffer/port b) :step (loop/scripted [(loop/say "ok")])})
+       l (live/start! sys b {:root root :offline? true :traffic? false})]
+  (try (f l sys b)
+   (finally (task/stop-system! sys) (live/stop! l) (workspace/stop! b) (env/close! e) (File/rm_rf! root)))))
+(defn- write! [l b source]
+ (let [r (buffer/request! b [:write (:path l) {:text source :meta {:actor "human:tester" :kind :publish}}])]
+  (is (nil? (:error r))) r))
+(deftest live-transitions-use-shared-history-and-preserve-current-work
+ (fixture
+  (fn [l sys b]
+   (is (= :running (:status (live/demo! l))))
+   (let [initial (live/snapshot l) pid (get-in initial [:current :pid])
+         checkpoint (:id (first (:history initial)))
+         before-history (count (live/history l))]
+    (is (= 1 (:value (live/call-worker! l))))
+    (let [a (live/snapshot l) b (live/snapshot l)]
+     (is (= (get-in a [:current :revision]) (get-in b [:current :revision])) "Inspection never sends a business request"))
+    (write! l b (str/replace live/initial-source "delta 1" "delta 5"))
+    (is (= 1 (get-in (live/snapshot l) [:current :version])) "Source publication is separate")
+    (let [r (live/rehearse! l {} {:actor "human:tester"})]
+     (is (= :valid (:status r)) (pr-str r))
+     (is (= 1 (get-in (live/snapshot l) [:current :value])))
+     (is (= :applied (:status (live/apply! l {:candidate (:candidate r)} {:actor "human:tester"})))))
+    (is (= 6 (:value (live/call-worker! l))))
+    (let [r (live/rehearse! l {:change checkpoint} {:actor "human:tester"})]
+     (is (= :valid (:status r)) (pr-str r))
+     (is (= :applied (:status (live/apply! l {:candidate (:candidate r)} {:actor "human:tester"})))))
+    (is (= 7 (:value (live/call-worker! l))))
+    (is (= pid (get-in (live/snapshot l) [:current :pid])))
+    (is (= 3 (get-in (live/snapshot l) [:current :version])))
+    (is (= false (:source-matches (live/snapshot l))) "History return never overwrites later source edits")
+    (let [ops (live/history l) last-op (last ops)
+          doc (changes/changes-doc sys (:address l))]
+     (is (> (count ops) before-history))
+     (is (= :live/return (:op/kind last-op)))
+     (is (= checkpoint (get-in last-op [:op/runtime :return-of])))
+     (is (= (map :op/id (reverse ops)) (map :key (:objects doc))))
+     (is (:error (buffer/request! b [:undo (:path l) {:id (:op/id last-op) :actor "human:tester"}])))
+     (is (includes? (:text doc) "return")))))))
+
+(deftest refused-stale-and-discarded-proposals-never-become-live
+ (fixture
+  (fn [l sys b]
+   (live/demo! l)
+   (write! l b (str/replace live/initial-source "(defn migrate [value] value)" "(defn migrate [value] -1)"))
+   (let [r (live/rehearse! l {} {:actor "human:tester"})]
+    (is (= :refused (:status r)) (pr-str r))
+    (is (= :proposal-not-applicable (:kind (live/apply! l {:candidate (:candidate r)} {}))))
+    (is (= 1 (get-in (live/snapshot l) [:current :version])))
+    (is (= 1 (:value (live/call-worker! l)))))
+   (write! l b (str/replace live/initial-source "delta 1" "delta 5"))
+   (let [r (live/rehearse! l {} {})]
+    (write! l b (str/replace live/initial-source "delta 1" "delta 2"))
+    (is (= :source-changed (:kind (live/apply! l {:candidate (:candidate r)} {}))))
+    (is (= :discarded (:status (live/discard! l {:candidate (:candidate r)} {}))))
+    (is (:reconciled (live/apply! l {:candidate (:candidate r)} {}))))
+   (is (= 2 (:value (live/call-worker! l))))
+   (is (= 1 (get-in (live/snapshot l) [:current :version]))))))
+
+(deftest live-tools-attribute-the-same-operations-to-task-and-cell
+ (fixture
+  (fn [l sys _]
+   (live/demo! l)
+   (let [source (str/replace live/initial-source "delta 1" "delta 3")
+         s (assoc sys :tools (vec (concat cm/tools (live/tools l)))
+                 :step (loop/scripted
+                        [(loop/call-tool "eval" {:code (str "(write \"live-worker.bl\" " (pr-str source) ")")})
+                         (loop/call-tool "live" {:operation "rehearse"})
+                         (fn [req]
+                          (let [r (edn/read-string (get-in (last (:messages req)) [:content 0 :content]))]
+                           (loop/call-tool "live" {:operation "apply" :candidate (:candidate r)})))
+                         (loop/say "Done")]))
+         id (task/open! s {:goal "Rehearse the current worker" :run {:live {:policy "scoped" :target "worker" :epoch (:epoch l) :delta 3}}}) _ (task/await s id 120000)
+         op (last (live/history l))]
+    (is (= id (:op/actor op)))
+    (is (= (env/eid (:env sys) :task/id id) (:op/task op)))
+    (is (starts-with? (:op/cell op) (str id "/")))
+    (is (= :applied (get-in op [:op/runtime :status])))
+    (is (= 3 (:value (live/call-worker! l))))
+    (is (some #(and (= :write (:op/kind %)) (= id (:op/actor %)) (:op/cell %)) (live/history l)))))))
+
+(deftest live-demonstration-is-refused-on-a-live-world
+ (fixture (fn [l _ _]
+            (is (try (live/demo! (assoc l :allowed? false)) false (catch _ true)))
+            (is (not (File/exists? (:path l)))))))
+
+(deftest review-parks-the-ordinary-task-and-an-exact-decision-resumes-it
+ (fixture
+  (fn [l sys b]
+   (live/demo! l)
+   (let [candidate (atom nil) steps (atom 0)
+         scripted (loop/scripted
+          [(loop/call-tool "eval" {:code (str "(write \"live-worker.bl\" " (pr-str (str/replace live/initial-source "delta 1" "delta 3")) ")")})
+           (loop/call-tool "live" {:operation "rehearse"})
+           (fn [req] (let [r (edn/read-string (get-in (last (:messages req)) [:content 0 :content]))]
+                       (reset! candidate (:candidate r))
+                       (loop/call-tool "live" {:operation "submit" :candidate @candidate :summary "Count by three, retain all accepted work."})))
+           (fn [_] (loop/call-tool "live" {:operation "apply" :candidate @candidate}))
+           (fn [_] (loop/call-tool "live" {:operation "verify" :candidate @candidate}))
+           (loop/call-tool "eval" {:code "(done \"Count-by-three verified.\")"})])
+         s (assoc sys :tools cm/tools :world-tools (live/tools l) :step (fn [r] (swap! steps inc) (scripted r)))
+         id (task/open! s {:goal "Prepare a worker change for review" :run {:live {:policy "review" :target "worker" :epoch (:epoch l) :delta 3}}})
+         settled (task/await s id 120000)
+         p (change/view (:env sys) @candidate)]
+    (is (= :idle (:status settled)))
+    (is (= 3 @steps) "Submitting parks without another model request")
+    (is (= :needs-decision (:status p)))
+    (is (not= (env/eid (:env sys) :change/id @candidate)
+              (env/eid (:env sys) :msg/id (:question p))) "Proposal and question are separate entities in their atomic transaction")
+    (is (some? (live/completion-error l id)))
+    (is (= (:question p) (:id (first (actor/inbox (:env sys) "human:me")))))
+    (is (= :decision-required (:kind (live/apply! l {:candidate @candidate} {:task id :actor id}))))
+    (is (= 1 (get-in (live/snapshot l) [:current :version])))
+    (is (= 1 (:value (live/call-worker! l))))
+    (is (= :decided (:status (live/decide! l {:proposal @candidate :decision "apply"}))))
+    (is (= "apply" (get-in (live/decide! l {:proposal @candidate :decision "discard"}) [:decision :action])) "First exact decision wins")
+    (let [deadline (+ (erlang/monotonic_time :millisecond) 120000)]
+     (loop [] (when (and (not (task/terminal? (task/status s id))) (< (erlang/monotonic_time :millisecond) deadline))
+                (Process/sleep 50) (recur))))
+    (is (= :done (task/status s id)))
+    (is (nil? (live/completion-error l id)))
+    (let [p (change/view (:env sys) @candidate)]
+     (is (= :applied (:status p)))
+     (is (= :passed (get-in p [:verification :status])))
+     (is (= id (:task p)))
+     (is (:reconciled (live/apply! l {:candidate @candidate} {:task id}))))
+    (is (= 2 (get-in (live/snapshot l) [:current :version])))
+    (is (some #(= :live/decision (:op/kind %)) (live/history l)))
+    (is (some #(and (= :live/verify (:op/kind %)) (:op/task %) (:op/cell %)) (live/history l)))))))
+
+(deftest scope-cancellation-and-free-text-cannot-authorize-publication
+ (fixture
+  (fn [l sys b]
+   (live/demo! l)
+   (let [id (task/open! sys {:goal "Wait" :run {:live {:policy "scoped" :target "worker" :epoch (:epoch l) :delta 5}}})
+         _ (task/await sys id)
+         source (str (str/replace live/initial-source "delta 1" "delta 5") "\n(def extra 1)\n")
+         _ (write! l b source)
+         r (live/rehearse! l {} {:task id :actor id})]
+    (is (= :valid (:status r)))
+    (is (= :outside-authorized-scope (:kind (live/apply! l {:candidate (:candidate r)} {:task id}))))
+    (task/cancel! sys id)
+    (is (= :task-ended (:kind (live/apply! l {:candidate (:candidate r)} {:task id}))))
+    (is (= 1 (get-in (live/snapshot l) [:current :version]))))
+   (let [id (task/open! sys {:goal "Wait for a review"}) _ (task/await sys id)
+         _ (write! l b (str/replace live/initial-source "delta 1" "delta 2"))
+         r (live/rehearse! l {} {:task id :actor id})
+         submitted (live/submit! l {:candidate (:candidate r)} {:task id})]
+    (is (= :needs-decision (:status submitted)))
+    (is (= "revise" (get-in (live/answer! l (:question submitted) "yes") [:decision :action])))
+    (is (= :discarded (:status (change/view (:env sys) (:candidate r)))))
+    (is (= 1 (get-in (live/snapshot l) [:current :version])))))))
+
+(deftest a-stale-approved-proposal-refuses-and-reconciles-its-receipt
+ (fixture
+  (fn [l sys b]
+   (live/demo! l)
+   (let [id (task/open! sys {:goal "Wait for a decision"}) _ (task/await sys id)
+         _ (write! l b (str/replace live/initial-source "delta 1" "delta 4"))
+         r (live/rehearse! l {} {:task id :actor id})
+         _ (live/submit! l {:candidate (:candidate r)} {:task id})
+         _ (write! l b (str/replace live/initial-source "delta 1" "delta 5"))
+         _ (live/decide! l {:proposal (:candidate r) :decision "apply"})
+         result (live/apply! l {:candidate (:candidate r)} {:task id})]
+    (is (= :source-changed (:kind result)))
+    (is (= :refused (:status (change/view (:env sys) (:candidate r)))))
+    (is (:reconciled (live/apply! l {:candidate (:candidate r)} {:task id})))
+    (is (= 1 (get-in (live/snapshot l) [:current :version])))))))
+
+(deftest world-tools-survive-a-package-tool-table-and-cannot-be-shadowed
+ (let [world {:name "live" :description "World capability"}
+       tools (loop/tool-table {:tools [{:name "package"} {:name "live" :description "shadow"}] :world-tools [world]})]
+  (is (= ["package" "live"] (map :name tools)))
+  (is (= world (last tools)))))
+
+(deftest a-missing-verification-id-is-an-actionable-input-error
+ (fixture
+  (fn [l _ _]
+   (let [r ((:run (first (live/tools l))) {:task "t-no-proposal"} {:operation "verify"})]
+    (is (str/includes? (:error r) "requires a candidate argument"))))))
+
+(deftest the-real-harness-profile-refuses-done-without-a-verified-publication
+ (fixture
+  (fn [l sys _]
+   (live/demo! l)
+   (let [step (loop/scripted [(loop/call-tool "eval" {:code "(done \"Premature success\")"})
+                              (loop/say "I need to prepare and verify the change first.")])
+         s (live/harness-system (assoc-in l [:opts :harness-step] step) sys {:provider "test"})
+         id (task/open! s {:goal "Complete only after verification"})
+         v (task/await s id 10000)
+         result (first (:content (first (filter #(= :tool (:role %)) (loop/turns s id)))))]
+    (is (= :idle (:status v)))
+    (is (= true (:error? result)))
+    (is (str/includes? (:content result) "not complete"))))))
+
+(deftest proposal-intent-and-receipts-survive-a-runtime-epoch-without-replay
+ (let [root (str "/tmp/omega-live-recovery-" (erlang/unique_integer (list :positive)))
+       _ (File/mkdir_p! root) db (str root "/db") e (env/open {:path db :schema workspace/schema})
+       applied (change/create! e {:target "worker" :status :applied :epoch "old" :receipt {:status :applied :after {:version 2}}})
+       applying (change/create! e {:target "worker" :status :applying :epoch "old" :intent {:before {:version 1}}})
+       pending (change/create! e {:target "worker" :status :needs-decision :epoch "old"})]
+  (env/close! e)
+  (let [e (env/open {:path db :schema workspace/schema}) b (workspace/start! e root)
+        sys (task/start-system e {}) l (live/start! sys b {:root root :offline? true :traffic? false})]
+   (try
+    (is (= :applied (:status (change/view e (:id applied)))))
+    (is (= :uncertain (:status (change/view e (:id applying)))))
+    (is (= :stale (:status (change/view e (:id pending)))))
+    (is (nil? (:current (live/snapshot l))))
+    (is (:reconciled (live/apply! l {:candidate (:id applied)} {})))
+    (is (not= (:id pending) (:id (change/create! e {:target "worker" :status :rehearsed}))))
+    (finally (task/stop-system! sys) (live/stop! l) (workspace/stop! b) (env/close! e) (File/rm_rf! root))))))

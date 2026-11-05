@@ -82,7 +82,8 @@
     (str (s/upper-case (subs text 0 1)) (subs text 1))))
 
 (defn- tool-code [block]
-  (let [i (:input block)] (str (or (:code i) (:command i) (when (string? i) i) ""))))
+  (let [i (:input block)] (str (or (:code i) (:command i) (when (string? i) i)
+                                  (str (or (:name block) "tool") " " (pr-str (or i {})))))))
 
 (defn group-turns
   "Turns → [{:kind :text …} {:kind :steps :steps […]}], merging adjacent tool turns."
@@ -94,7 +95,10 @@
                           (and (= "text" (:type b)) (not (s/blank? (str (:text b)))))
                           (conj out {:kind :text :role (:role t) :html (:html b) :text (:text b) :n (:n t)})
                           (= "tool-use" (:type b))
-                          (let [step {:id (:id b) :name (:name b) :code (tool-code b) :result (get results (:id b))}
+                          (let [input (:input b) code (tool-code b)
+                                label (if (or (:code input) (:command input) (string? input))
+                                        (step-label code) (str "Called " (or (:name b) "tool")))
+                                step {:id (:id b) :name (:name b) :code code :label label :result (get results (:id b))}
                                 last-group (peek out)]
                             (if (= :steps (:kind last-group))
                               (conj (pop out) (update last-group :steps conj step))
@@ -106,7 +110,7 @@
 (defn- step-row [step]
   (let [r (:result step) failed (:error? r)]
     [:div {:class ["tool" (when failed "failed")] :data-key (str "step:" (:id step))}
-     [:span.grow (step-label (:code step)) [:code (st/one-line (:code step) 120)]]
+     [:span.grow (or (:label step) (step-label (:code step))) [:code (st/one-line (:code step) 120)]]
      [:span {:class ["step-mark" (cond failed "bad" r "ok" :else "wait")]} (cond failed "!" r "✓" :else "…")]]))
 
 (defn- steps [g running?]

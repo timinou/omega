@@ -1,0 +1,33 @@
+
+Testing task-test
+
+Testing actor-test
+
+Testing codemode-test
+
+Testing packages-test
+warning: /home/othman/code/undefine/omega/spikes/atlas/atlas/desk.bl:28: json/decode is OTP's :json, which cannot encode beam-lisp vectors, sets or keywords. Use bl.json: (:require [bl.json :as json]), or call (erlang/apply :json :decode ...) to keep OTP's on purpose.
+warning: /home/othman/code/undefine/omega/spikes/atlas/atlas/desk.bl:47: json/decode is OTP's :json, which cannot encode beam-lisp vectors, sets or keywords. Use bl.json: (:require [bl.json :as json]), or call (erlang/apply :json :decode ...) to keep OTP's on purpose.
+
+Testing loop-projection-test
+turns 600 ms 56.991
+stage ms: turns 72.376 task-rows 1.835 task-detail 75.471 snapshot 2.914
+
+Testing core-changes-test
+
+Testing workspace-desk-test
+
+Testing workspace-buffer-test
+── ward: warm isolated test run ──
+
+  ✓ task-test  44 passed
+  ✓ actor-test  15 passed
+  ✓ codemode-test  15 passed
+  ✓ packages-test  40 passed
+  ✓ loop-projection-test  30 passed
+  ✓ core-changes-test  29 passed
+  ✓ workspace-desk-test  20 passed
+  ✓ workspace-buffer-test  48 passed
+
+  8 file(s) passed, 0 failed, 0 incoherent
+  ✓ all green

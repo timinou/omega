@@ -1,0 +1,82 @@
+{
+  "url": "http://127.0.0.1:8792/",
+  "task": {
+    "cost": {
+      "cache-read": 0,
+      "cache-write": 0,
+      "cache-write-1h": 0,
+      "cache-write-5m": 0,
+      "input": 14115,
+      "output": 435
+    },
+    "id": "t-1",
+    "result": "{:status :needs-decision, :question \"msg-10\", :summary \"Change worker increment delta from 1 to 5; state, PID and protocol unchanged.\", :proposal \"change-8\"}",
+    "run": {
+      "live": {
+        "delta": 5,
+        "epoch": "live-w938-1554",
+        "policy": "review",
+        "provider": "claude",
+        "target": "worker"
+      },
+      "may": "edit",
+      "model": "claude-sonnet-5-5"
+    },
+    "status": "idle",
+    "title": "Live edit \u00b7 claude"
+  },
+  "proposal": {
+    "at": 1793880183224,
+    "before": {
+      "digest": "8a2751c24e77096ecba689ea47be97acbdad8a71bbe8328696de129ca40e188a",
+      "pid": "#PID<0.1140.0>",
+      "revision": 31,
+      "value": 31,
+      "version": 1
+    },
+    "cell": "t-1/8/toolu_01SAuEdCebgh8fyw8TamVFAq",
+    "choices": [
+      {
+        "label": "Apply",
+        "text": "apply change-8"
+      },
+      {
+        "label": "Revise",
+        "text": "revise change-8"
+      },
+      {
+        "label": "Discard",
+        "text": "discard change-8"
+      }
+    ],
+    "epoch": "live-w938-1554",
+    "id": "change-8",
+    "policy": {
+      "delta": 5,
+      "epoch": "live-w938-1554",
+      "policy": "review",
+      "provider": "claude",
+      "target": "worker"
+    },
+    "published-source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+    "question": "msg-10",
+    "rehearsal": {
+      "candidate-digest": "d406ad2d49743b2725ae01d8a52c93757b444cf1c805f1e6511197394176ead9",
+      "candidate-version": 2,
+      "digest": "d406ad2d49743b2725ae01d8a52c93757b444cf1c805f1e6511197394176ead9",
+      "messages": 0,
+      "revision": 57,
+      "scope": "proved-future-owner-inputs",
+      "status": "valid",
+      "version": 1
+    },
+    "return-of": null,
+    "source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+    "source-rev": "3",
+    "status": "needs-decision",
+    "summary": "Change worker increment delta from 1 to 5; state, PID and protocol unchanged.",
+    "target": "worker",
+    "task": "t-1"
+  },
+  "world": "fresh offline memory preview; awaiting a product decision"
+}

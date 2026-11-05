@@ -545,3 +545,13 @@ pool and access logging. It uses public native APIs; no application knowledge or
 document state lives there. The adapter can disappear when upstream exposes pool
 options. `:http-acceptors` allows an explicit 1–64 override. `:default-landing-page`
 provides a host-selected preset for a bare root URL; explicit query routes win.
+
+2026-11-05 — optional inspector panels: `:frame-panel` appends the view panes
+of a package-provided layout to the current frame, bound to the emitting editor.
+It retains every existing editor, layout link, draft and user table. Closing or
+unusing its provider restores the prior layout and column widths. Reopening
+replaces the one panel. This is generic layout composition; Omega's Live model,
+history and transition authority remain above the editor.
+
+2026-11-05 — inspector text wraps long resource identities and history addresses
+on phone widths. Domain-specific panel placement remains package CSS.

@@ -104,3 +104,38 @@
                       {"type" "message_delta" "delta" {"stop_reason" "max_tokens"} "usage" {"output_tokens" 8000}}]))]
     (is (= :max-tokens (:stop sse)))
     (is (= {} (:input (first (:content sse)))))))
+
+(deftest responses-preserves-reasoning-items-and-exact-tool-call-ids
+ (let [reason {"type" "reasoning" "id" "r1" "summary" [] "encrypted_content" "opaque"}
+       r (llm/responses-response {"model" "configured-codex" "status" "completed"
+           "output" [reason {"type" "function_call" "call_id" "call-7" "name" "live" "arguments" "{\"operation\":\"snapshot\"}"}]
+           "usage" {"input_tokens" 20 "output_tokens" 3}})
+       body (llm/responses-body {:model "configured-codex" :max-tokens 100}
+             {:system "Omega" :tools [{:name "live" :description "Inspect" :input-schema {:type "object"}}]
+              :messages [{:role :assistant :content (:content r)}
+                         {:role :user :content [{:type :tool-result :id "call-7" :content "observed"}]}]})]
+  (is (= reason (first (:input body))))
+  (is (= "call-7" (:call_id (second (:input body)))))
+  (is (= {:type "function_call_output" :call_id "call-7" :output "observed"} (nth (:input body) 2)))
+  (is (= "snapshot" (get-in r [:content 1 :input :operation])))
+  (is (= false (:store body)))
+  (is (= ["reasoning.encrypted_content"] (:include body)))
+  (is (= false (get-in body [:tools 0 :strict])))
+  (is (= :tool-use (:stop r)))))
+
+(deftest chat-tools-replay-results-before-new-human-context
+ (let [req {:system "Omega" :tools [{:name "live" :description "Inspect" :input-schema {:type "object"}}]
+            :messages [{:role :assistant :content [{:type :text :text "Checking"}
+                                                   {:type :tool-use :id "a" :name "live" :input {:operation "snapshot"}}]}
+                       {:role :user :content [{:type :tool-result :id "a" :content "ok"}
+                                              {:type :text :text "Continue"}]}]}
+       body (llm/chat-body {:provider :deepseek :model "configured-deepseek" :max-tokens 100} req)
+       r (llm/chat-response {"model" "configured-deepseek" "choices"
+            [{"finish_reason" "tool_calls" "message" {"content" nil "tool_calls"
+               [{"id" "b" "function" {"name" "live" "arguments" "{\"operation\":\"rehearse\"}"}}]}}]})]
+  (is (= ["system" "assistant" "tool" "user"] (map :role (:messages body))))
+  (is (= "a" (get-in body [:messages 1 :tool_calls 0 :id])))
+  (is (= "a" (get-in body [:messages 2 :tool_call_id])))
+  (is (= "disabled" (get-in body [:thinking :type])))
+  (is (= :tool-use (:stop r)))
+  (is (= "rehearse" (get-in r [:content 0 :input :operation])))))

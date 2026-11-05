@@ -218,7 +218,9 @@
 
 ;; ── one step ────────────────────────────────────────────────────────────
 
-(defn- tool-table [sys] (or (:tools sys) []))
+(defn tool-table [sys]
+ (let [world (:world-tools sys) names (set (map :name world))]
+  (vec (concat (remove #(contains? names (:name %)) (:tools sys)) world))))
 
 (defn- find-tool [sys nm] (first (filter (fn [t] (= nm (:name t))) (tool-table sys))))
 
@@ -456,16 +458,21 @@
                                 ;; the output was cut off: the call's input may be incomplete.
                                 ;; Answer every call WITHOUT running any, so the history stays paired
                                 (vec (map (fn [u] {:id (:id u) :error TRUNCATED-NOTE}) uses))
-                                (vec (map (fn [u] (assoc (run-tool sys id u turn-n) :id (:id u))) uses)))
+                                (reduce (fn [out u]
+                                  (conj out (assoc
+                                    (if (some #(or (:pause %) (:done %)) out)
+                                      {:error "NOT RUN: an earlier tool parked or finished this turn. Resume with a new turn."}
+                                      (run-tool sys id u turn-n)) :id (:id u)))) [] uses))
                       done (first (filter :done results))
+                      pause (first (filter :pause results))
                       ts (append! sys id ts :tool
                                   (vec (map (fn [r] {:type :tool-result :id (:id r)
                                                      :content (or (:ok r) (:error r))
                                                      :error? (some? (:error r))})
                                             results)))]
                   (emit sys :step/end {:task id :step turn-n :tools (vec (map :name uses))})
-                  (if (some? done)
-                    (let [r {:status :done :result (:ok done)}]
+                  (if (or done pause)
+                    (let [r {:status (if done :done :idle) :result (:ok (or done pause))}]
                       (emit sys :turn/end (assoc r :task id))
                       r)
                     (recur (inc n) (drain! sys id ts) cost)))))))))))

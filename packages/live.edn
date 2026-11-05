@@ -1,0 +1,7 @@
+{:name "live" :editor "live" :editor-only true :layout "live"
+ :doc "Inspect, rehearse and choose live worker behavior, with shared Changes history."
+ :entry "live:overview"
+ :frontend {:version 1 :entry "liveview.main" :roots ["vendor/bl-ed" "spikes/live"]
+  :includes ["js.observation"] :host ["eval-ed" "eval-cells"]
+  :loader {:host "live/host.mjs"}
+  :assets [{:from "spikes/live/host" :to "pkg/live" :suffixes [".mjs" ".css"]}]}}

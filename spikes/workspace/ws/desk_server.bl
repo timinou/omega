@@ -36,7 +36,8 @@
                          :ask (some-> (:asks r) first :text) :ask-id (some-> (:asks r) first :id)
                          :age-ms (:age-ms r) :model (get-in r [:run :model]) :branch (get-in r [:run :branch]) :notify (get-in r [:run :notify])
                          :step (when (contains? #{:running :open} (:status r)) (latest-step sys (:id r)))
-                         :proposals (when (= :idle (:status r)) (next/proposals (str (:result r))))
+                         :proposals (or (some-> (:asks r) first :data :choices)
+                                        (when (= :idle (:status r)) (next/proposals (str (:result r)))))
                          :summary (or (some-> (:asks r) first :text) (some-> (:result r) str next/strip) (:goal r))}))
                         (emit d (str "* " label " (" (count rs) ")") nil) rs))) d groups)
         d (if (empty? rows) (emit d "No tasks here yet. Press n to start one." {:type "desk/empty" :key "empty"}) d)]
@@ -80,7 +81,9 @@
                             (catch _ false)))
                         (distinct (keep :path artifacts)))]
     {:desk "task" :task-id id :task-at (:at t) :task-title (:title t) :task-status (name (:status t)) :task-result (some-> (:result t) str next/strip)
-     :proposals (when (= :idle (:status t)) (next/proposals (str (:result t))))
+     :proposals (or (some-> (model/task-rows e [id]) first :asks first :data :choices)
+                    (when (= :idle (:status t)) (next/proposals (str (:result t)))))
+     :live-policy (get-in t [:run :live])
      :model (get-in t [:run :model]) :branch (get-in t [:run :branch]) :may (get-in t [:run :may]) :worktree (get-in t [:run :worktree])
      :started-ms (when (:at t) (- (System/os_time :millisecond) (:at t)))
      :step (when (contains? #{:running :open} (:status t)) (latest-step sys id))

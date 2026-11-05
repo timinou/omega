@@ -1,0 +1,18 @@
+Mobile-compatible frontend, remotely built with bin/omega-build (--max-jobs 0).
+Build and compiler identities: artifact.json. No live account cutover.
+
+Native Pocket: 42 view + 13 run-settings = 55 assertions passed (native.log).
+Pocket + Live drive: 26 tests passed (drive.log).
+Complete vendored editor: 89 tests passed (editor.log).
+Mobile/desktop browser: 8 checks, zero page errors (browser.json/browser.log).
+Desktop browser: 7 checks, zero page errors (../browser.json/desktop.log).
+Phone viewport sizes: 320x740, 390x844, 844x390, 1024x768.
+
+Unchanged spikes/present/test/check.mjs: four documents, no bad variants
+(equivalence.log). A temporary PP_OUT facade aliases rt.printStr as core.pr_str
+for printing only; comparisons execute the real remotely compiled pp.check.
+
+All browser hosts used fresh /tmp roots and offline in-memory worlds.
+Native task-driven edit/rehearse/apply coverage from the initial demonstration
+remains in ../native.log (41 Live assertions); engine code is unchanged here.
+Pocket is the web frontend. No Android APK was built, signed or deployed.

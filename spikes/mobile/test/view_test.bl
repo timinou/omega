@@ -3,6 +3,16 @@
             [mob.launch :as launch] [mob.buffers :as buffers] [ws.next :as next] [omega.loop :as loop]
             [clojure.string :as str]))
 
+(deftest structured-tool-calls-have-readable-labels-and-empty-text-is-safe
+ (let [groups (session/group-turns
+               [{:n 1 :role "assistant" :content [{:type "tool-use" :id "live-1" :name "live" :input {:operation "rehearse"}}]}])
+       step (first (:steps (first groups)))]
+  (is (= "Called live" (:label step)))
+  (is (str/includes? (:code step) "rehearse"))
+  (is (= "" (st/one-line nil 60)))
+  (is (= "" (st/one-line "" 60)))
+  (is (string? (session/step-label "")))))
+
 (def places [{:id "om" :name "omega" :root "/h/projects/omega" :branch "main"}
              {:id "bl" :name "beam-lisp" :root "/h/projects/beam-lisp" :branch "main"}])
 (def tasks [{:key "t-1" :title "Notify" :status "idle" :ask "Rebuild?" :place "om" :age-ms 120000

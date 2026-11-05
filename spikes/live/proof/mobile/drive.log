@@ -1,0 +1,166 @@
+TAP version 13
+# Subtest: Live appends a view and exact unload retains the editor and user tables
+ok 1 - Live appends a view and exact unload retains the editor and user tables
+  ---
+  duration_ms: 331.29929
+  type: 'test'
+  ...
+# Subtest: opening, reopening, closing and unusing Live preserves every workspace pane and widths
+ok 2 - opening, reopening, closing and unusing Live preserves every workspace pane and widths
+  ---
+  duration_ms: 282.893713
+  type: 'test'
+  ...
+# Subtest: one snapshot in flight and proposal ids flow through the same backend operations
+ok 3 - one snapshot in flight and proposal ids flow through the same backend operations
+  ---
+  duration_ms: 5.703778
+  type: 'test'
+  ...
+# Subtest: Pocket opens Live without replacing retained editors, and routes source into its file editor
+ok 4 - Pocket opens Live without replacing retained editors, and routes source into its file editor
+  ---
+  duration_ms: 271.257062
+  type: 'test'
+  ...
+# Subtest: Pocket can load Live on demand and open it after the package arrives
+ok 5 - Pocket can load Live on demand and open it after the package arrives
+  ---
+  duration_ms: 201.264631
+  type: 'test'
+  ...
+# Subtest: structured VM tools render in the conversation without a CodeMode code field
+ok 6 - structured VM tools render in the conversation without a CodeMode code field
+  ---
+  duration_ms: 148.220874
+  type: 'test'
+  ...
+# Subtest: mobile is a removable layer and a real frame layout, with no user table mutation
+ok 7 - mobile is a removable layer and a real frame layout, with no user table mutation
+  ---
+  duration_ms: 256.963291
+  type: 'test'
+  ...
+# Subtest: drafts stay keyed to tasks and navigation leaves the conversation editor untouched
+ok 8 - drafts stay keyed to tasks and navigation leaves the conversation editor untouched
+  ---
+  duration_ms: 16.540074
+  type: 'test'
+  ...
+# Subtest: send uses the existing task intent, blocks duplicates and preserves drafts on failure
+ok 9 - send uses the existing task intent, blocks duplicates and preserves drafts on failure
+  ---
+  duration_ms: 14.616175
+  type: 'test'
+  ...
+# Subtest: quick answers keep a composed reply; successful text sends clear only the submitted draft
+ok 10 - quick answers keep a composed reply; successful text sends clear only the submitted draft
+  ---
+  duration_ms: 11.137295
+  type: 'test'
+  ...
+# Subtest: completed task follow-up carries its actual place and frozen directory
+ok 11 - completed task follow-up carries its actual place and frozen directory
+  ---
+  duration_ms: 6.573641
+  type: 'test'
+  ...
+# Subtest: mobile file input participates in the shared-buffer draft protocol and read-only guards
+ok 12 - mobile file input participates in the shared-buffer draft protocol and read-only guards
+  ---
+  duration_ms: 33.810632
+  type: 'test'
+  ...
+# Subtest: dirty file navigation keeps its current tab and exposes a publication message
+ok 13 - dirty file navigation keeps its current tab and exposes a publication message
+  ---
+  duration_ms: 6.834109
+  type: 'test'
+  ...
+# Subtest: task creation from a place document validates against the retained place choices
+ok 14 - task creation from a place document validates against the retained place choices
+  ---
+  duration_ms: 4.390617
+  type: 'test'
+  ...
+# Subtest: document navigation and explicit passage retain their address, revision and anchor
+ok 15 - document navigation and explicit passage retain their address, revision and anchor
+  ---
+  duration_ms: 5.454556
+  type: 'test'
+  ...
+# Subtest: command discovery includes core and package commands without shared table mutation
+ok 16 - command discovery includes core and package commands without shared table mutation
+  ---
+  duration_ms: 18.472995
+  type: 'test'
+  ...
+# Subtest: first editor eval can resume when the language arrives
+ok 17 - first editor eval can resume when the language arrives
+  ---
+  duration_ms: 7.650291
+  type: 'test'
+  ...
+# Subtest: native prompts expose data and submit through the existing editor
+ok 18 - native prompts expose data and submit through the existing editor
+  ---
+  duration_ms: 20.127079
+  type: 'test'
+  ...
+# Subtest: reading a task home does not manufacture unpublished edits when a task completes
+ok 19 - reading a task home does not manufacture unpublished edits when a task completes
+  ---
+  duration_ms: 22.649767
+  type: 'test'
+  ...
+# Subtest: long goals retain their complete instruction under a compact editable title
+ok 20 - long goals retain their complete instruction under a compact editable title
+  ---
+  duration_ms: 7.311528
+  type: 'test'
+  ...
+# Subtest: running task instructions steer the current turn
+ok 21 - running task instructions steer the current turn
+  ---
+  duration_ms: 6.34654
+  type: 'test'
+  ...
+# Subtest: place form invokes the existing place intent as ordinary data
+ok 22 - place form invokes the existing place intent as ordinary data
+  ---
+  duration_ms: 4.316615
+  type: 'test'
+  ...
+# Subtest: Files index clears an earlier file target without discarding that editor
+ok 23 - Files index clears an earlier file target without discarding that editor
+  ---
+  duration_ms: 4.9976
+  type: 'test'
+  ...
+# Subtest: clearing a local cwd setting restores inheritance
+ok 24 - clearing a local cwd setting restores inheritance
+  ---
+  duration_ms: 3.539623
+  type: 'test'
+  ...
+# Subtest: a newly visited document opens in reading mode without changing the retained editor text
+ok 25 - a newly visited document opens in reading mode without changing the retained editor text
+  ---
+  duration_ms: 28.459567
+  type: 'test'
+  ...
+# Subtest: closed work cannot advertise a stale question or waiting summary
+ok 26 - closed work cannot advertise a stale question or waiting summary
+  ---
+  duration_ms: 0.733314
+  type: 'test'
+  ...
+1..26
+# tests 26
+# suites 0
+# pass 26
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1534.024465

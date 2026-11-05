@@ -290,3 +290,37 @@ Status: desk tests only (`attention_test.bl`, `home_test.bl`). The APK has not
 been rebuilt with this change and nothing is verified on a device.
 
 Validation and screenshots are recorded in `proof/android-standalone/`.
+
+### Harness APK (2026-11-05)
+
+The signed ARM64 update is `android/release/omega-pocket-harness-0.1.3-arm64-v8a.apk`
+(versionCode 2026110501). It uses the existing Pocket application/signing identity.
+It defaults to `https://work.tailcb5318.ts.net:18079`, preloads the real Live package,
+and stores its server selection in `pocket-harness-origin`, leaving the ordinary
+Pocket account address in `pocket-origin` intact. The APK contains no model credentials;
+the real task runs on the dedicated offline host.
+
+Private tailnet download:
+`https://work.tailcb5318.ts.net:18080/omega-pocket-harness-0.1.3-arm64-v8a.apk`.
+Enable Tailscale on the phone before opening it. Work services
+`omega-live-harness-20261105` and `omega-live-harness-apk-20261105` own the host and
+download endpoint. The account world is unchanged.
+
+`nix/pocket-harness.nix` builds the app modules remotely through `bin/omega-build`
+using the tested base APK's own portable compiler/mobile SDK. Its host-only NIF
+must match that SDK; it never enters the new runtime. `app_update.py --variant harness`
+overlays the modules, adds the notification permission/private receiver already
+implemented in the base DEX, patches the version and signs on Work with the
+existing key. Signing secrets remain outside Nix. The base's native libraries,
+DEX/resources and all 7,623 non-app runtime entries remain byte-identical.
+
+Verification: signature and update certificate match, 12 shipped modules equal
+the remotely compiled/tested modules, packaged defaults/Live loading/TLS origin
+validation/exact proposal notification actions pass, and the HTTPS APK has the
+correct MIME type and checksum. Evidence: [release receipt](../live/proof/apk/release.json)
+and [packaged contract](../live/proof/apk/packaged-contract.log).
+
+The isolated Android 15 emulator installs the APK but cannot complete OTP boot
+(`erl_child_setup` failure under ARM translation). The unchanged 0.1.2 base
+reproduces the same failure before Pocket initialization. Physical-device launch
+and notification delivery are not verified in this session.

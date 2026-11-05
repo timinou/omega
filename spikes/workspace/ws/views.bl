@@ -153,14 +153,14 @@
 (defn changes-doc [o ctx]
   (let [ed (:ed ctx) path (get-in ed [:doc :data :buffer-path])]
     (p/stack (concat [(p/line-mark 0 [{:text "Changes" :kind :question}] "changes/title" {:size 2 :role :question})
-                     (mark 1 "changes/context" [{:text (str path "    u undo selected change · C-o back") :kind :aside}] :meta)]
+                     (mark 1 "changes/context" [{:text (str path "    u undo text · Live: r rehearse behavior · C-o back") :kind :aside}] :meta)]
                     (map (fn [k] (p/present k ctx)) (filter (fn [k] (= :buffer/op (:type k))) (:kids o)))))))
 (defn change-card [o ctx]
   (let [r (:from o) head (subs (text ctx r) 2) parts (split head " · ") actor (nth parts 2 "")
-        human? (starts-with? actor "human:") old (text ctx (+ r 2)) new (text ctx (+ r 3))]
+        human? (starts-with? actor "human:") runtime (:runtime (info o ctx)) old (text ctx (+ r 2)) new (text ctx (+ r 3))]
     (p/head-card (:key o) "focus"
       [(mark r (str (:key o) "/who") [{:text (str (if human? "You" actor) " · " (nth parts 1 "change")) :kind :strong}
-                                      {:text (str "    revision " (first parts) "    u undo") :kind :meta}] :rail-title)
+                                      {:text (str "    revision " (first parts) (if runtime "    r rehearse return" "    u undo")) :kind :meta}] :rail-title)
        (mark r (str (:key o) "/old") [{:text old :kind :aside}] :aside)
        (mark r (str (:key o) "/new") [{:text new :kind :answer}] :answer)
        (mark r (str (:key o) "/gap") [{:text " " :kind :prose}] :aside)])))

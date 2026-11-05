@@ -3,7 +3,8 @@
 
 (def tools [{:id "machine" :glyph "λ" :title "Machine" :kind "World REPL"}
             {:id "music" :glyph "∿" :title "Pelagic" :kind "Instrument"}
-            {:id "runtime" :glyph "◎" :title "Runtime" :kind "Inspector"}])
+            {:id "runtime" :glyph "◎" :title "Runtime" :kind "Inspector"}
+            {:id "live" :glyph "↻" :title "Live" :kind "Changes to the running world"}])
 
 (defn- kind-of [path]
   (cond (s/starts-with? (str path) "task:") "session" (s/starts-with? (str path) "place:") "place"
@@ -35,7 +36,7 @@
      [:div.tool-grid {:data-key "tools"}
       (for [t tools]
         [:button.tool-tile {:data-act "tool" :data-value (:id t) :data-key (str "tool-" (:id t))
-                       :data-parent-buffer (when (and (:embedded vm) (not= "machine" (:id t))) (:id t))}
+                       :data-parent-buffer (when (and (:embedded vm) (contains? #{"music" "runtime"} (:id t))) (:id t))}
          [:span.glyph (:glyph t)] [:span [:b (:title t)] [:span (:kind t)]]])]
      [:div.sec [:span "Recent"]]
      (if (seq ordered) (map (fn [b] (buffer-row vm b)) ordered)

@@ -1,0 +1,123 @@
+#+TITLE: A real Omega task changes the live world
+#+DATE: 2026-11-05
+#+STATUS: Implemented first vertical; remaining scope explicit
+
+* Ownership and the existing harness
+
+This updates [[file:processes-and-harness.bl.md][the substrate exploration]] against current Omega.
+There is one task engine and one world fact store:
+
+- [[file:../../../src/omega/task.bl][omega.task]] owns durable task identity, disposable supervised executors,
+  follow-ups, steering, cancellation and recovery. Ordinary answers leave a task
+  idle; done is terminal. Admission and cancellation now share a world boundary,
+  preventing a child executor from starting after its task was cancelled.
+- [[file:../../../src/omega/loop.bl][omega.loop]] persists assistant/tool turns, usage and traces. Tools can
+  park a turn: their result is recorded, later calls in the batch are not run,
+  and no further model request occurs until a message resumes the same task.
+- [[file:../../../src/omega/codemode.bl][omega.codemode]] uses upstream harness/eval-cell for bounded evaluation
+  with a per-world/task namespace and task/cell attribution. The upstream
+  standalone harness session keeper is not Omega's task datastore.
+- Shared buffers own source edits and Changes, including :op/runtime events.
+- [[file:../../../src/omega/change.bl][omega.change]] stores exact proposal basis, source, policy, question,
+  decision, publication intent, receipt and verification in the same fact store.
+- [[file:../../../src/omega/live.bl][omega.live]] owns the worker, retained generations, admission gate and
+  publication authority. World-owned traffic continues after an editing task
+  finishes or is cancelled. A PID observed in an inspector grants no authority.
+- [[file:../../../spikes/mobile/mob/main.bl][Pocket]] is another view over those tasks, documents and Changes.
+  Existing questions/choices and [[file:../../../spikes/mobile/android/src/pocket/attention.bl][Android attention]] provide the decision route;
+  there is no phone-local model engine. No Android APK was rebuilt here.
+
+Document-started tasks retain their captured source revision, structural anchor
+and original snapshot. That context is independent of publication authority.
+
+* Actual lifecycle
+
+1. In Live, start the isolated worker, choose a configured provider and choose
+   review or scoped publication. Run harness opens a real Omega task with the
+   source as its home, target identity, runtime epoch and recorded policy.
+2. The model inspects the actual target, reads live-worker.bl and edits through
+   CodeMode's shared buffer port. Source publication alone leaves the VM alone.
+3. Rehearsal builds an immutable candidate and checks native migration while
+   the old owner continues serving. It records a proposal with the source,
+   installed code basis, task/cell, epoch and policy.
+4. Submit in review mode commits the ready proposal and human question in one
+   transaction and parks the turn. Pocket's existing Needs you/task card shows
+   Apply, Revise and Discard, each carrying the exact proposal id.
+5. An exact decision is recorded before its reply resumes the same task.
+   First decision wins. A free-text reply requests revision; it cannot grant
+   publication authority. A revision requires a new candidate and decision.
+6. Apply checks task liveness/ownership, unchanged policy, exact decision,
+   candidate, runtime epoch, installed generation, source and drafts. Durable
+   intent and source CAS are admitted against task cancellation. Cancellation
+   after that boundary cannot revoke an accepted effect.
+7. The worker gate finishes accepted calls and queues new admissions only for
+   fresh native preparation and commit. State progresses between rehearsal and
+   apply: rehearsed state is never restored. Confirmed stale preparation may be
+   retried; uncertain publication is never automatically replayed.
+8. A durable receipt precedes its projection into shared Changes. Repeating
+   apply for that id returns the receipt, without another native commit.
+9. The model calls verify: two original-protocol client requests measure the
+   actual increment. The harness profile refuses done until the exact applied
+   proposal has passing verification against the current generation. A human
+   discard can also finish without publishing. This is enforced, not just prose.
+10. Finishing the task leaves world-owned services running. Return from Changes
+    is another checked forward transition to earlier behavior against current
+    state. It preserves accepted work and later source/history.
+
+Scoped policy is intentionally narrow in this first slice: the exact count-by-five
+source edit, for the named worker and runtime epoch. A passing in-scope change
+proceeds without another question. Different formatting or any wider code change
+requires a new scope or review. The controller enforces publication policy;
+CodeMode retains Omega's existing full host rights. The launch read/edit setting
+is still an instruction, not an OS sandbox.
+
+World tools are composed separately from package tools, so a package profile
+cannot replace Live by substituting its own :tools table. Extension hooks may
+fail open and asynchronous event observers are not publication gates.
+
+* Real providers and evidence
+
+[[file:../../../src/omega/llm.bl][omega.llm]] offers explicit Claude Messages, Codex Responses and DeepSeek
+Chat Completions adapters. Credentials remain host-side; provider/model metadata
+alone goes to the browser. No credential is placed in a derivation. Responses
+reasoning items are retained with the durable neutral transcript for tool-result
+continuation, following the [[https://developers.openai.com/api/docs/guides/function-calling][official function-calling contract]].
+
+Opt-in proofs are [[file:../../../spikes/live/test/providers.bl][provider tool-call/continuation]],
+[[file:../../../spikes/live/test/harness.bl][real task acceptance]] and
+[[file:../../../spikes/live/test/harness-browser.py][real Pocket/desktop acceptance]].
+The chosen provider never silently changes when its endpoint fails. The recorded
+Codex smoke received HTTP 503 from the configured gateway; that is not evidence
+of successful Codex execution. See the timestamped proof logs for provider outcomes.
+
+* Failure and recovery boundaries
+
+A refusal leaves the previous generation serving. Source/code changes stale the
+candidate; approval never transfers to a replacement. Cancelling an editing task
+does not rewind an already accepted publication. A lost caller reply reconciles
+through its exact receipt; it never repeats the native conversion.
+
+Proposal records, decisions and receipts survive a durable store reopening.
+Native candidate handles and the demo worker are VM-local. On a new runtime
+epoch, pending proposals become stale and interrupted applying intents become
+uncertain. Recovery closes obsolete questions and never reconstructs a prepared
+ticket or replays a publication. Existing task recovery repairs unanswered tools
+as interrupted/effect unknown and restores the original harness profile.
+
+The prototype does not restore the worker's process state after VM loss. Source,
+process state, database state and external effects have separate restoration
+contracts; an old source tree is not a heap or mailbox snapshot. Retention is
+bounded to 16 graphs. General owner-driven drain/retirement remains future work.
+
+* Next generalization
+
+Register a second real application target with explicit ownership, source
+closure, observations, migration, verification and retirement contracts. Reuse
+this exact proposal/task/decision/history path; do not manufacture authority from
+an arbitrary PID. Native actors, browser actors and editor packages should expose
+the capabilities they actually support.
+
+Then support a declared harness component changing at a turn boundary, keeping
+a working old generation and the publication/recovery controller outside the
+edited scope. Compiler/native SDK/OS changes still require immutable builds and a
+paired frontend/backend cutover. The live account has not been cut over.

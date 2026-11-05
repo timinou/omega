@@ -14,6 +14,7 @@ The signing key never enters the Nix store or the repository: it is read from
 ~/.local/share/omega-pocket/signing (0700) by apksigner on this machine.
 ANDROID_BUILD_TOOLS names a build-tools directory (zipalign, apksigner).
 """
+import argparse
 import hashlib
 import io
 import json
@@ -23,6 +24,7 @@ import struct
 import subprocess
 import sys
 import zipfile
+from manifest_notifications import enable as enable_notifications
 
 HERE = Path(__file__).resolve().parent
 APP = 'otp/omega_pocket/'
@@ -58,8 +60,18 @@ def manifest(xml, old_code, code, old_name, name):
 
 
 def main():
-    base_apk, beams, name, code = sys.argv[1], Path(sys.argv[2]), sys.argv[3], int(sys.argv[4])
-    old_name, old_code = '0.1.1', 2026101601
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('base_apk')
+    parser.add_argument('beams', type=Path)
+    parser.add_argument('name')
+    parser.add_argument('code', type=int)
+    parser.add_argument('--base-version', default='0.1.1')
+    parser.add_argument('--base-code', type=int, default=2026101601)
+    parser.add_argument('--variant', choices=['harness'])
+    args = parser.parse_args()
+    base_apk, beams, name, code = args.base_apk, args.beams, args.name, args.code
+    old_name, old_code = args.base_version, args.base_code
+    assert code > old_code, 'An update must increase versionCode'
     tools = Path(os.environ['ANDROID_BUILD_TOOLS'])
     modules = {p.name: p.read_bytes() for p in beams.glob('Elixir.BeamLisp.Ns.*.beam')}
     release = HERE / 'release'
@@ -68,14 +80,18 @@ def main():
     with zipfile.ZipFile(base_apk) as base, zipfile.ZipFile(unsigned, 'w') as out:
         runtime, added = overlay(base.read('assets/bl-runtime.zip'), modules)
         digest = hashlib.sha256(runtime).hexdigest()
+        xml = manifest(base.read('AndroidManifest.xml'), old_code, code, old_name, name)
+        if args.variant == 'harness':
+            xml = enable_notifications(xml)
         replace = {'assets/bl-runtime.zip': runtime, 'assets/bl-runtime.sha256': digest.encode(),
-                   'AndroidManifest.xml': manifest(base.read('AndroidManifest.xml'), old_code, code, old_name, name)}
+                   'AndroidManifest.xml': xml}
         for entry in base.infolist():
             if entry.filename.startswith('META-INF/') and entry.filename.rsplit('.', 1)[-1] in {'SF', 'RSA', 'EC', 'DSA', 'MF'}:
                 continue  # any v1 signature belongs to the base
             out.writestr(entry, replace.get(entry.filename, base.read(entry.filename)))
     abi = 'arm64-v8a'
-    output = release / f'omega-pocket-{name}-{abi}.apk'
+    variant = f'-{args.variant}' if args.variant else ''
+    output = release / f'omega-pocket{variant}-{name}-{abi}.apk'
     subprocess.run([tools / 'zipalign', '-P', '16', '-f', '4', unsigned, aligned], check=True)
     signing = Path.home() / '.local/share/omega-pocket/signing'
     assert (signing.stat().st_mode & 0o077) == 0, f'{signing} must be private (0700)'

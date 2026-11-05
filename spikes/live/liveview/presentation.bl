@@ -1,0 +1,77 @@
+(ns liveview.presentation)
+(defn text [s] {:type "text" :text s})
+(defn action [label type args] {:label label :event (assoc args :type type)})
+(defn actions [xs] {:type "actions" :items (vec xs)})
+(defn section [id title blocks] {:id id :title title :blocks (vec (remove nil? blocks))})
+(defn short [s] (if (string? s) (subs s 0 (min 12 (count s))) "—"))
+(defn project [s _ _]
+ (let [b (:backend s) current (:current b) candidate (:candidate b) proposal (:proposal candidate)
+       provider (get s :provider "claude") policy (get s :policy "review")
+       awaiting? (contains? #{:needs-decision "needs-decision"} (:status proposal))
+       valid? (contains? #{:valid "valid"} (get-in candidate [:result :status]))
+       busy? (boolean (:busy s))]
+  {:title "Change the running world" :eyebrow "OMEGA / LIVE"
+   :scope (if (:running b) (str "Worker " (:pid current) " · generation " (:version current)) "An isolated live editing demonstration")
+   :notice (:notice s) :error (:error s)
+   :actions [(action "Refresh" :live/refresh {}) (action "Close Live" :live/close {})]
+   :sections
+   [(section "running" "Running now"
+     (if (:running b)
+      [{:type "metrics" :rows [["Process" (:pid current)] ["Version" (:version current)]
+                              ["Code" (short (:digest current))] ["Latest worker result" (:value current)]
+                              ["Published source" (if (:source-matches b) "Matches running behavior" "Differs from running behavior")]
+                              ["Model" (get-in b [:task :run :model] "Not started")]
+                              ["Policy" (get-in b [:task :run :live :policy] policy)]
+                              ["Harness" (get-in b [:task :status] "Not started")]]}
+       (text "Ask a real model to change this worker to count by five, preserve accepted work, rehearse, and verify the result. World-owned traffic continues while the task waits.")
+       (actions (map (fn [p] (assoc (action (case (:id p) "claude" "Claude" "codex" "Codex" "DeepSeek")
+                                               :live/provider {:provider (:id p)})
+                                   :disabled (not (:configured p))
+                                   :variant (when (= provider (:id p)) "primary"))) (:providers b)))
+       (text (str "Selected provider: " provider " · " (if (= policy "review") "Review before publication" "Authorized only for the count-by-five source edit")))
+       (actions [(action "Review before apply" :live/policy {:policy "review"})
+                 (action "Allow count-by-five automatically" :live/policy {:policy "scoped"})])
+       (actions [(action "Open worker source" :live/source {}) (action "Changes" :live/changes {})
+                 (assoc (action "Run harness" :live/run {}) :disabled busy?)
+                 (assoc (action "Stop harness" :live/stop {}) :disabled (or busy? (nil? (:task b)) (contains? #{:done :failed :cancelled "done" "failed" "cancelled"} (get-in b [:task :status]))))
+                 (assoc (action "Open harness task" :live/task {}) :disabled (nil? (:task b)))])
+       (when-let [result (get-in b [:task :result])] (text result))]
+      [(text (if (:available b) "Start one worker in this offline world. Its source and VM transitions share Changes history." "Open an offline --memory world to start the demonstration."))
+       (actions [(assoc (action "Start demonstration" :live/start {}) :disabled (or busy? (not (:available b))))])]))
+    (section "candidate" "Proposed change"
+     (concat
+      [(text "Edit and publish the worker source, then rehearse before applying. Publishing alone leaves the running behavior in place.")
+       (actions [(assoc (action "Rehearse published source" :live/rehearse {}) :disabled (or busy? (not (:running b))))])]
+      (when candidate
+       [(text (str (:id candidate) " · " (get-in candidate [:result :status])
+                   (when-let [reason (get-in candidate [:result :kind])] (str " · " reason))))
+        (when-let [message (get-in candidate [:result :message])] (text message))
+        (when (:task proposal) (text (str "Task " (:task proposal) " · " (:status proposal) " · policy " (get-in proposal [:policy :policy]))))
+        (when (:summary proposal) (text (:summary proposal)))
+        (when (:return-of candidate) (text (str "Return proposed from " (:return-of candidate) ". Current state will be preserved.")))
+        {:type "details" :label "Compare running and proposed source" :blocks
+         [(text "Running source") {:type "json" :value (:installed-source candidate)}
+          (text "Proposed source") {:type "json" :value (:source candidate)}]}
+        (if (:task proposal)
+          (actions (map (fn [choice] (assoc (action (case choice "apply" "Approve proposal" "revise" "Request revision" "Discard proposal")
+                                         :live/decide {:proposal (:id proposal) :decision choice}) :disabled (or busy? (not awaiting?))))
+                        ["apply" "revise" "discard"]))
+          (actions [(assoc (action "Apply rehearsed change" :live/apply {}) :disabled (or busy? (not valid?)))
+                    (assoc (action "Discard proposal" :live/discard {}) :disabled busy?)]))])
+      (when (:outcome s) [{:type "details" :label "Last operation result" :blocks [{:type "json" :value (:outcome s)}]}])))
+    (section "receipts" "Task proposals & receipts"
+     (map (fn [p] {:type "card" :id (str "proposal-" (:id p)) :blocks
+                   [(text (str (:id p) " · " (:status p) " · " (or (:task p) "manual change")))
+                    (text (or (:summary p) (:recovery p) "Source and runtime basis retained in the world journal."))
+                    {:type "details" :label "Decision, publication and verification" :blocks
+                     [{:type "json" :value (select-keys p [:epoch :before :policy :decision :receipt :verification :recovery])}]}]}) (:proposals b)))
+    (section "history" "Changes & checkpoints"
+     (concat [(text "These are the same attributed operations shown in Changes. Returning prepares a new transition; it preserves current work.")]
+      (map (fn [op]
+             {:type "card" :id (:id op) :blocks
+              (vec (remove nil?
+               [(text (str "#" (:rev op) " · " (:kind op) " · " (:actor op)
+                           (when (:cell op) (str " · " (:cell op)))))
+                (when (:runtime op) (text (str (get-in op [:runtime :status]) " · " (get-in op [:runtime :note]))))
+                (when (:returnable op) (actions [(assoc (action "Rehearse this behavior" :live/rehearse {:change (:id op)}) :disabled busy?)]))]))}) (:history b))))]
+   :footer "Rehearsal leaves the serving worker untouched. Apply checks the current owner revision. State is observed, never rewound; external effects are outside this demonstration."}))

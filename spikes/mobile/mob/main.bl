@@ -121,6 +121,9 @@
                       (-> ed (assoc-in [:pkg-state "runtime" :return] "mobile")
                           (c/effect {:kind :frame-layout :layout "runtime-pocket" :keep {:rail :rail :task :task :file :file}}))
                       (-> ed (put :open-runtime true) (c/effect {:kind :load-package :name "runtime"})))
+    :mobile/live (if (some #(= % "live") (pkg/names ed))
+                   (m/handle ed {:type :live/open})
+                   (-> ed (put :open-live true) (c/effect {:kind :load-package :name "live"})))
     :mobile/machine-eval (-> ed (put :eval-result nil) (put :evaluating true)
                             (c/effect {:kind :intent :intent "world/eval" :args {:code (:text ev)} :then :mobile-evaluated}))
     :mobile/new-field (assoc-in ed [:pkg-state "mobile" :new (:field ev)] (:value ev))
@@ -139,6 +142,8 @@
 (defn after [old ed ev]
   (let [ed (if (and (= :doc (:type ev)) (:visit? ev) (not= (:path old) (:path ed))) (put ed :editing false) ed)]
   (cond
+    (and (:open-live (state ed)) (some #(= % "live") (pkg/names ed)))
+      (m/handle (put ed :open-live false) {:type :live/open})
     (and (:open-runtime (state ed)) (some (fn [name] (= name "runtime")) (pkg/names ed)))
       (-> ed (put :open-runtime false) (assoc-in [:pkg-state "runtime" :return] "mobile")
           (c/effect {:kind :frame-layout :layout "runtime-pocket" :keep {:rail :rail :task :task :file :file}}))
@@ -198,6 +203,10 @@
               :mobile/send {:doc "Send the retained task draft." :run (fn [ed] (send-reply ed nil))}}
    :intercept (fn [ed ev] (when-let [next (event ed ev)] (pkg/after ed next ev))) :on-event after
    :provides {:layouts {"mobile" phone}
+              :live/navigation (fn [ed target]
+                                 (if (= :task (:kind target))
+                                  (navigate ed {:screen "task" :path (:path target)})
+                                  (event ed {:type :mobile/document :path (:path target)})))
               :views {:mobile-rail (fn [ed] (model ed "rail"))
                       :mobile-task (fn [ed] (model ed "task"))
                       :mobile-file (fn [ed] (model ed "file"))}}})

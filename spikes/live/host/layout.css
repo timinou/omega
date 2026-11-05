@@ -1,0 +1,25 @@
+/* One retained frame: the same inspector becomes a full-width phone surface. */
+.omega-mobile #panes:has(>[data-pane="live-panel"])>.pane:not([data-pane="live-panel"]),
+.omega-mobile #panes:has(>[data-pane="live-panel"])>[role="separator"] {
+ visibility:hidden!important;pointer-events:none!important;
+}
+.omega-mobile #panes>[data-pane="live-panel"] {
+ position:fixed!important;inset:0!important;width:100%!important;height:100dvh!important;
+ z-index:30;border:0!important;padding:0!important;background:var(--snow,#f7f3ee);
+}
+.omega-mobile #panes>[data-pane="live-panel"]>.view-body {
+ position:absolute!important;inset:0!important;width:100%!important;height:100%!important;
+}
+@media (max-width:720px) {
+ #panes:has(>[data-pane="live-panel"])>.pane:not([data-pane="live-panel"]),
+ #panes:has(>[data-pane="live-panel"])>[role="separator"] {
+  visibility:hidden!important;pointer-events:none!important;
+ }
+ #panes>[data-pane="live-panel"] {
+  position:fixed!important;inset:0!important;width:100%!important;height:100dvh!important;
+  z-index:30;border:0!important;padding:0!important;background:var(--snow,#f7f3ee);
+ }
+ #panes>[data-pane="live-panel"]>.view-body {
+  position:absolute!important;inset:0!important;width:100%!important;height:100%!important;
+ }
+}

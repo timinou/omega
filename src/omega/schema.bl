@@ -110,6 +110,14 @@
    {:db/ident :turn/usage :db/doc "Token usage of an assistant turn."}
    {:db/ident :turn/at :db/valueType :db.type/long}])
 
+(def change
+ [{:db/ident :change/id :db/valueType :db.type/string :db/unique :db.unique/identity}
+  {:db/ident :change/task :db/valueType :db.type/ref :db/index true}
+  {:db/ident :change/target :db/valueType :db.type/string :db/index true}
+  {:db/ident :change/status :db/valueType :db.type/keyword :db/index true}
+  {:db/ident :change/data :db/doc "Exact candidate basis, source, policy, decision and publication receipt. No VM handles or credentials."}
+  {:db/ident :change/at :db/valueType :db.type/long}])
+
 (def all
   "Every attribute omega declares, in install order."
-  (vec (concat actor task msg trace turn)))
+  (vec (concat actor task msg trace turn change)))

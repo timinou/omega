@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# A foreground service for Work's endpoint publisher; never the account world.
+set -euo pipefail
+ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
+export OMEGA_HOME="$ROOT"
+export OMEGA_BL=${OMEGA_BL:-"$ROOT/spikes/runtime/dist/live-compiler/bin/bl"}
+export LIVE_FRONTEND=${OMEGA_HARNESS_FRONTEND:-"$ROOT/spikes/live/dist/harness-frontend"}
+export LIVE_PORT=${PORT:-8792}
+export LIVE_WORLD
+LIVE_WORLD=$(mktemp -d /tmp/omega-pocket-harness-XXXXXX)
+export ELIXIR_ERL_OPTIONS="${ELIXIR_ERL_OPTIONS:-+S 2:2 +SDcpu 1:1 +SDio 1}"
+test -x "$OMEGA_BL" && test -f "$LIVE_FRONTEND/.omega-managed"
+cd "$ROOT"
+exec "$ROOT/bin/bl" --cold run "$ROOT/spikes/live/test/server.bl"

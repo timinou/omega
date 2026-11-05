@@ -32,9 +32,8 @@
 
 (defn human-id [name] (str "human:" name))
 
-(defn send!
-  "Deliver a message. m: {:from id :to id :kind kw :text s :data any :re msg-id}.
-   Both actors must exist. Returns the new message id."
+(defn prepare-message
+  "Allocate a message fact for an owning service's atomic transaction."
   [e m]
   (when-not (contains? MSG-KINDS (:kind m))
     (throw (ex-info (str "unknown message kind " (pr-str (:kind m))) {:msg m})))
@@ -49,8 +48,14 @@
                (some? (:text m)) (assoc :msg/text (:text m))
                (some? (:data m)) (assoc :msg/data (:data m))
                (some? (:re m)) (assoc :msg/re (env/eid e :msg/id (:re m))))]
-    (env/tx! e [fact])
-    id))
+    {:id id :fact fact}))
+
+(defn send!
+  "Deliver a message. m: {:from id :to id :kind kw :text s :data any :re msg-id}.
+   Both actors must exist. Returns the new message id."
+  [e m]
+  (let [prepared (prepare-message e m)]
+    (env/tx! e [(:fact prepared)]) (:id prepared)))
 
 (defn- ffirst-or-nil [rows] (when (seq rows) (first (first rows))))
 

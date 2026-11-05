@@ -454,7 +454,7 @@ const restored=new Set(),restoring=new Set();
    case 'place-default':{const id=shell()['place-id'];fetch('/api/doc?path='+encodeURIComponent('place:'+id),{cache:'no-store'}).then(r=>r.json()).then(j=>{const d=j.data||{};send('rail',{type:'mobile/place-save',id,name:d.name,root:d['own-root']||'',parent:d.parent||'',home:d.home?.path||'',cwd:d.config?.cwd||'',config:{...(d.config||{}),[el.dataset.field]:el.dataset.value}});});break;}
    case 'details':modal('details');break;
    case 'app-server':location.href='https://pocket.invalid/server';break;
-   case 'tool':{const id=el.dataset.value;if(id==='machine')nav('machine');else if(id==='runtime')send('rail',{type:'mobile/runtime'});else if(id==='music')location.href='/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org';break;}
+   case 'tool':{const id=el.dataset.value;if(id==='machine')nav('machine');else if(id==='runtime')send('rail',{type:'mobile/runtime'});else if(id==='live')send('rail',{type:'mobile/live'});else if(id==='music')location.href='/?use=pelagic&layout=pelagic&file=spikes/pelagic/live-set.bl.org';break;}
    case 'open-address':modal(null);openDocument(el.dataset.path);break;
    case 'palette-pick':{
     const run=el.dataset.run;

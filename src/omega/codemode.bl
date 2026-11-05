@@ -124,7 +124,7 @@
 
 (def DESCRIPTION
   (str "Evaluate beam-lisp in your task's own namespace; definitions persist between calls. "
-       "This is your ONLY tool: compose many steps in one program and return just what matters. "
+       "Compose many steps in one program and return just what matters. Additional world tools may be available. "
        "Functions available (already referred):\n"
        "  (read path) → string · (write path s) · (edit path [{:old \"…\" :new \"…\"} …]) exact, all-or-nothing\n"
        "  (ls dir) · (glob \"src/**/*.bl\") · (sh \"cmd\") → {:out :exit}\n"

@@ -1,0 +1,19 @@
+{
+  "frontend": "/nix/store/z28zniawsq7fmjiv258b3dr3b74cwnls-omega-frontend-v2026.10",
+  "compiler": "/nix/store/2hh3lgc3lsq424xq1vdnlwjj70rnjrvg-omega-beam-lisp-v2026.10",
+  "frontendBuild": "bin/omega-build .#frontend --max-jobs 0 on Build",
+  "backend": "workspace native host sources; protocol tested with the compiled frontend",
+  "backendHashes": {
+    "src/omega/live.bl": "d2bdd119d04b1f85c807be352b060ea517cb9eece07a3741ed3a19905561ea7a",
+    "src/omega/change.bl": "2150a7f66c534028d0e6c84a58ca73ea62181db5dcdb228f1beb7ca217d84671",
+    "src/omega/task.bl": "13a9a1da5259310d00daa89bd71f9116a0576387189edc15c5ce508a67994e8b",
+    "src/omega/loop.bl": "a1608a4a9cf19925a87b390d0f72d8ba871af518e8d28d049ddd87fc2ea1ea9f",
+    "src/omega/actor.bl": "a0a7c8b478baaa126a4a214f5001ffdae33bd53a8943fb04b04cf8f0d26433a9",
+    "src/omega/llm.bl": "7846ec09459cfdefc73065be2cdf66f6ac0e6366058fc69c97a8a8784046fc6d",
+    "src/omega/schema.bl": "644c6443ac8117cafd032dedbc360cae7e5927a4242ee4611ed7ba0428c70d63",
+    "src/omega/env.bl": "c9db32b9bfed5b3039bd9e6d449967beb9a122a6132157ba6ef4626a9492d7ea",
+    "src/omega/ed/main.bl": "849469a8e0453b837bf24bebe30c48d07661b1be94515743e6faecfd5f0f0e88",
+    "spikes/workspace/ws/desk_server.bl": "3eedbb266d314b70b427d04d3af0b096fd8e90a5d7f893a8c2b3f51c6aeb7775"
+  },
+  "liveCutover": false
+}

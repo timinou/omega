@@ -202,7 +202,19 @@
 
 (defn- executor-pid [sys id] (get @(:executors sys) id))
 
+(defn- admitted
+ "Serialize executor admission and cancellation within a world. A child fact
+  becomes visible before its executor exists; cancellation must win that gap.
+  Reentrant calls from this process stay inside the same admission boundary."
+ [sys f]
+ (let [key (tuple :omega/task-admission (env/world (:env sys)))]
+  (if (Process/get key) (f)
+   (global/trans (tuple key (erlang/self))
+    (fn [] (Process/put key true) (try (f) (finally (Process/delete key))))))))
+
 (defn- start-executor! [sys id]
+ (admitted sys (fn []
+  (when-not (terminal? (status sys id))
   (let [spec (BeamLisp.Supervisor/server id executor [sys id] {:restart :temporary})
         r (DynamicSupervisor/start_child (:sup sys) spec)]
     (if (and (erlang/is_tuple r) (>= (erlang/tuple_size r) 2)
@@ -211,7 +223,16 @@
         (swap! (:executors sys) assoc id pid)
         pid)
       (do (finish! sys id {:status :failed :error (str "Executor could not start: " (pr-str r))})
-          nil))))
+          nil)))))))
+
+(defn admit-effect!
+ "Accept a durable effect intent atomically with respect to task cancellation.
+  Once f accepts it, cancelling the task cannot retroactively revoke the effect."
+ [sys id f]
+ (admitted sys (fn []
+  (if (and id (or (nil? (status sys id)) (terminal? (status sys id))))
+   {:status :refused :kind :task-ended}
+   (f)))))
 
 (defn- slug [goal]
   (let [s (lower-case (Regex/replace (Regex/compile! "[^A-Za-z0-9]+") goal "-"))
@@ -231,6 +252,9 @@
      :run        {:model :may :branch :worktree :notify}, optional; see omega.loop/run-context
    Returns the task id."
   [sys m]
+ (admitted sys (fn []
+  (when (and (:owner m) (terminal? (status sys (:owner m))))
+   (throw (ex-info "A finished or cancelled task cannot admit another child." {:owner (:owner m)})))
   (let [cwd (Path/expand (or (:cwd m) (when (:owner m) (:cwd (view sys (:owner m))))
                              (:root sys) (File/cwd!)) (or (:root sys) (File/cwd!)))
         _ (when-not (File/dir? cwd) (throw (ex-info (str "not a working directory: " cwd) {:cwd cwd})))
@@ -258,7 +282,7 @@
     (actor/send! e {:from by :to id :kind :prompt :text (:goal m)})
     ((get-in sys [:hooks :emit] (fn [_ _] nil)) :task/open {:task id :owner (:owner m)})
     (start-executor! sys id)
-    id))
+    id))))
 
 (defn- deliver! [sys id kind text by]
   (let [e (:env sys)
@@ -285,6 +309,7 @@
 (defn cancel!
   "Cancel task `id` and, first, every descendant (top-down). Idempotent."
   [sys id]
+ (admitted sys (fn []
   (doseq [c (children sys id)] (cancel! sys c))
   (when-not (terminal? (status sys id))
     (when-let [pid (executor-pid sys id)]
@@ -295,7 +320,7 @@
     (tr/release-claims! (:env sys) id)
     (reap/reap-task! (:nonce sys) id)
     (set-status! sys id :cancelled))
-  :ok)
+  :ok)))
 
 (defn await
   "Block until task `id` is terminal or idle (or `ms` pass). Senses the env —
@@ -376,7 +401,7 @@
                     :nonce (reap/nonce)
                     :open! (fn [s m] (open! s m)) :await (fn [s id ms] (await s id ms))
                     :status (fn [s id] (status s id))}
-                   (select-keys opts [:step :tools :hooks :system-prompt :max-steps :root :eval-timeout-ms :eval-preloads :token-budget :dev?
+                   (select-keys opts [:step :tools :world-tools :hooks :system-prompt :max-steps :root :eval-timeout-ms :eval-preloads :token-budget :dev?
                                      ;; :files = the file port (C6, omega.prelude/DISK by default);
                                      ;; :edit-rules merge over omega.edit/RULES
                                      :files :edit-rules]))]

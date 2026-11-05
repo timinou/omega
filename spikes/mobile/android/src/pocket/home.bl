@@ -4,7 +4,8 @@
                           [pocket.attention :as attention] [android.notify :as notify]
                           [android.events :as events] [pocket.http :as transport]))
 (defscreen)
-(def query "/?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile&app=pocket")
+(def query (str "/?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench,mobile"
+                config/extra-use "&layout=mobile&app=pocket"))
 ;; Pocket's ω mark navigates here inside the app; the blocked navigation opens the native panel.
 (def server-url "https://pocket.invalid/server")
 (defn origin-valid? [s]
@@ -22,13 +23,13 @@
       (assoc assigns :error "Enter a private Tailscale HTTPS address, e.g. https://work.tailnet.ts.net:18001"))))
 (defn saved-origin []
   (if (jvm/available?)
-    (try (let [s (trim (File/read! (Path/join (System/get_env "MOB_DATA_DIR") "pocket-origin")))]
+    (try (let [s (trim (File/read! (Path/join (System/get_env "MOB_DATA_DIR") config/origin-file)))]
            (if (origin-valid? s) s config/origin))
       (catch _ config/origin))
     config/origin))
 (defn remember-origin! [origin]
   (when (jvm/available?)
-    (File/write! (Path/join (System/get_env "MOB_DATA_DIR") "pocket-origin") origin)))
+    (File/write! (Path/join (System/get_env "MOB_DATA_DIR") config/origin-file) origin)))
 ;; Notifications: the host stays the only source of truth. While connected the
 ;; screen polls its own work document and announces tasks that wait on the person.
 ;; `attend` is pure (assigns + items -> assigns + effects); `perform!` is the IO.

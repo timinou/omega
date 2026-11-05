@@ -1,0 +1,6 @@
+(ns live.prototype-server (:require [omega.ed.main :as omega]))
+(let [host (omega/start! {:root (System/get_env "LIVE_WORLD") :web (System/get_env "LIVE_FRONTEND")
+                         :port (erlang/binary_to_integer (System/get_env "LIVE_PORT")) :offline? true :memory? true})]
+ (println (str "Live editor: " (:url host) "?use=live,buffers,present,workspace&file=live:overview"))
+ (println (str "Pocket preview: " (:url host) "?use=present,dwim,workspace,places,references,buffers,workbench,mobile&layout=mobile&file=workspace:all"))
+ (try (receive :stop nil) (finally (omega/stop! host))))
