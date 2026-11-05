@@ -80,7 +80,7 @@
     :tool-use {:type "tool_use" :id (:id b) :name (:name b) :input (or (:input b) {})}
     :tool-result {:type "tool_result" :tool_use_id (:id b) :content (str (:content b))
                   :is_error (boolean (:error? b))}
-    {:type "text" :text (pr-str b)}))
+    nil))
 
 (defn anthropic-body
   "omega request → Anthropic Messages body (a bl map, before jsonable)."
@@ -90,7 +90,7 @@
     (cond-> {:model (or (:model req) (:model p))
              :max_tokens (:max-tokens p)
              :messages (vec (map (fn [m] {:role (name (:role m))
-                                          :content (vec (map block->wire (:content m)))})
+                                          :content (vec (keep block->wire (:content m)))})
                                  (:messages req)))}
       (seq sys) (assoc :system sys)
       (seq (:tools req)) (assoc :tools (vec (map (fn [t] {:name (:name t) :description (:description t)
@@ -210,6 +210,90 @@
 
 (def RETRYABLE #{:rate-limited :server :transport})
 
+;; Provider-native state stays in the durable turn alongside the neutral blocks.
+;; In particular Responses reasoning items must accompany their function calls
+;; when replaying a transcript after a tool result or a task restart.
+(defn responses-body [p req]
+ (cond-> {:model (or (:model req) (:model p)) :store false
+          :include ["reasoning.encrypted_content"] :max_output_tokens (:max-tokens p)
+          :input (vec (mapcat (fn [m]
+            (mapcat (fn [b]
+             (case (:type b)
+              :provider-state (or (get-in b [:responses :items]) [])
+              :text [{:role (name (:role m)) :content (:text b)}]
+              :tool-use [{:type "function_call" :call_id (:id b) :name (:name b) :arguments (encode (:input b))}]
+              :tool-result [{:type "function_call_output" :call_id (:id b) :output (str (:content b))}]
+              [])) (:content m))) (:messages req)))}
+  (:system req) (assoc :instructions (:system req))
+  (seq (:tools req)) (assoc :tools (mapv (fn [t] {:type "function" :name (:name t) :description (:description t)
+                                                :parameters (:input-schema t) :strict false}) (:tools req)))))
+(defn responses-response [d]
+ (let [items (get d "output")
+       content (vec (mapcat (fn [i]
+         (case (get i "type")
+          "reasoning" [{:type :provider-state :responses {:items [i]}}]
+          "message" (keep (fn [b] (when (contains? #{"output_text" "refusal"} (get b "type"))
+                                    {:type :text :text (or (get b "text") (get b "refusal"))})) (get i "content"))
+          "function_call" [{:type :tool-use :id (get i "call_id") :name (get i "name")
+                            :input (try (keywordize (decoded->data (json/decode (get i "arguments")))) (catch _ {}))}]
+          [])) items))]
+  {:content content :model (get d "model") :usage (usage/unify (get d "usage"))
+   :stop (cond (= "incomplete" (get d "status")) :max-tokens
+               (some #(= :tool-use (:type %)) content) :tool-use :else :end)}))
+(defn chat-body [p req]
+ (let [messages (vec (mapcat (fn [m]
+   (let [calls (filter #(= :tool-use (:type %)) (:content m))
+         text (join "\n" (keep #(when (= :text (:type %)) (:text %)) (:content m)))
+         results (filter #(= :tool-result (:type %)) (:content m))
+         ordinary (when (or (seq text) (seq calls))
+          [(cond-> {:role (name (:role m)) :content text}
+            (seq calls) (assoc :tool_calls (mapv (fn [c] {:id (:id c) :type "function"
+                                          :function {:name (:name c) :arguments (encode (:input c))}}) calls)))])]
+    (concat (map (fn [r] {:role "tool" :tool_call_id (:id r) :content (str (:content r))}) results) ordinary))) (:messages req)))]
+  (cond-> {:model (or (:model req) (:model p)) :max_tokens (:max-tokens p)
+           :messages (cond-> messages (:system req) (->> (into [{:role "system" :content (:system req)}])))}
+    (= :deepseek (:provider p)) (assoc :thinking {:type "disabled"})
+    (seq (:tools req)) (assoc :tools (mapv (fn [t] {:type "function" :function
+                      {:name (:name t) :description (:description t) :parameters (:input-schema t)}}) (:tools req))))))
+(defn chat-response [d]
+ (let [choice (first (get d "choices")) m (get choice "message")
+       calls (get m "tool_calls")]
+  {:content (vec (concat (when (seq (get m "content")) [{:type :text :text (get m "content")}])
+                 (map (fn [c] {:type :tool-use :id (get c "id") :name (get-in c ["function" "name"])
+                   :input (try (keywordize (decoded->data (json/decode (get-in c ["function" "arguments"])))) (catch _ {}))}) calls)))
+   :model (get d "model") :usage (usage/unify (get d "usage"))
+   :stop (cond (= "length" (get choice "finish_reason")) :max-tokens (seq calls) :tool-use :else :end)}))
+(defn- compatible-call [p req]
+ (let [responses? (= :responses (:kind p))
+       r (post (str (:base-url p) (if responses? "/responses" "/chat/completions"))
+           (list (header "authorization" (str "Bearer " (:api-key p))))
+           (encode ((if responses? responses-body chat-body) p req)) (:timeout-ms p))]
+  (cond (:transport r) {:error {:kind :transport :reason (pr-str (:transport r))}}
+        (= 200 (:status r)) ((if responses? responses-response chat-response) (decoded->data (json/decode (:body r))))
+        :else {:error {:kind (error-kind (:status r)) :status (:status r)}})))
+
+(defn configured
+ "Explicit Live provider selection. Credentials remain host-side; no fallback
+  changes the provider behind the person's selection. Models can be overridden."
+ [root selection]
+ (let [local (cenv/read-file (str root "/.env"))
+       pick (fn [k] (or (cenv/lookup local k) (System/get_env k)))
+       common {:max-tokens 6000 :timeout-ms 180000 :retries 1 :stream false}
+       p (case selection
+        "claude" {:kind :anthropic :provider :claude :model (or (pick "OMEGA_CLAUDE_MODEL") "claude-sonnet-5-5")
+                  :base-url (or (pick "ANTHROPIC_BASE_URL") "https://api.anthropic.com") :api-key (pick "ANTHROPIC_API_KEY") :identity nil}
+        "codex" {:kind :responses :provider :codex :model (or (pick "OMEGA_CODEX_MODEL") "gpt-6.1-sol")
+                 :base-url (or (pick "OPENAI_BASE_URL") "https://api.openai.com/v1") :api-key (pick "OPENAI_API_KEY")}
+        "deepseek" {:kind :chat :provider :deepseek :model (or (pick "OMEGA_DEEPSEEK_MODEL") "deepseek-flash")
+                    :base-url (or (pick "DEEPSEEK_BASE_URL") "https://api.deepseek.com") :api-key (pick "DEEPSEEK_API_KEY")}
+        (throw (ex-info "Choose claude, codex or deepseek." {})))]
+  (when (blank? (:api-key p)) (throw (ex-info "The selected provider has no configured credential." {:provider selection})))
+  (merge common p)))
+(defn configured-public [root]
+ (mapv (fn [selection]
+         (try (assoc (select-keys (configured root selection) [:model]) :id selection :configured true)
+          (catch _ {:id selection :configured false}))) ["claude" "codex" "deepseek"]))
+
 (defn step
   "A `step` fn over provider `p`. Retries retryable errors with backoff
    (p :retries, default 3). When the request carries `:on-delta` (a fn), the
@@ -224,6 +308,8 @@
                 :anthropic (if (and on-delta (not= false (:stream p)))
                              (anthropic-stream p wire on-delta)
                              (anthropic-call p wire))
+                :responses (compatible-call p wire)
+                :chat (compatible-call p wire)
                 {:error {:kind :client :reason (str "unknown provider kind " (:kind p))}})]
         (if (and (contains? r :error)
                  (contains? RETRYABLE (get-in r [:error :kind]))

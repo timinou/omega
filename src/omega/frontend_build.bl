@@ -1,0 +1,41 @@
+; Runtime launchers acquire immutable Nix outputs. Compilation belongs to Build.
+(ns omega.frontend-build (:require [omega.artifacts :as artifacts] [bl.json :as json]))
+(defn input-key
+  "Nix flakes admit tracked paths. Staging a new input must invalidate a host
+   cache hit even when that file's bytes have not changed."
+  [root source-identity]
+  (let [[tracked status] (System/cmd "git" (list "-C" root "ls-files" "-z"))
+        authority (mapv (fn [name]
+                          (let [path (str root "/" name)]
+                            [name (when (File/regular? path) (File/read! path))]))
+                       ["flake.nix" "flake.lock" "env.bl" "bin/omega-build"])]
+    (when-not (= 0 status) (throw (ex-info "Frontend builds require the Omega Git checkout." {})))
+    (Base/encode16 (crypto/hash :sha256 (str source-identity "\n" tracked "\n" (json/encode authority)))
+                   (list (tuple :case :lower)))))
+(defn- target [link]
+  (try (Path/expand (File/read_link! link) (Path/dirname link)) (catch _ nil)))
+(defn- valid? [web compiler]
+  (try
+    (let [manifest (json/decode (File/read! (str web "/pelagic-build.json")) {:keys :keyword})]
+      (and web (File/regular? (str web "/.omega-managed"))
+           (File/regular? (str web "/index.html")) (File/regular? (str web "/out/ed.main.mjs"))
+           (= compiler (:compiler manifest)) (= (:inputs manifest) (File/read! (str web "/.inputs")))))
+    (catch _ false)))
+(defn acquire!
+  "One GC root per checked input generation keeps existing sessions usable.
+   `run` is the process boundary, injectable for isolated routing/failure tests."
+  ([root identity compiler] (acquire! root identity compiler (fn [cmd args] (System/cmd cmd args))))
+  ([root identity compiler run]
+   (let [cache (str root "/spikes/pelagic/dist/nix-frontend") link (str cache "/" identity)]
+     (artifacts/coordinated (str cache "/.build.lock")
+       (fn []
+         (let [cached (target link)]
+           (if (valid? cached compiler) cached
+             (let [[output status] (run (str root "/bin/omega-build")
+                                    (list (str root "#frontend") "--out-link" link))]
+               (when-not (= 0 status)
+                 (throw (ex-info (str "Frontend build on Build failed (" status "). " output) {:kind :frontend-build})))
+               (let [web (target link)]
+                 (when-not (valid? web compiler)
+                   (throw (ex-info "Build did not produce a managed frontend for the pinned compiler." {:kind :frontend-build})))
+                 web)))))))))

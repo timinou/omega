@@ -19,3 +19,7 @@
     (is (not= first (build/graph-fingerprint))))
    (finally (File/rm! path)))
   (is (= before (build/graph-fingerprint)))))
+(deftest runtime-cannot-invoke-the-derivation-only-compiler
+ (when-not (System/get_env "NIX_BUILD_TOP")
+  (is (try (build/frontend-into! "/tmp/omega-must-not-compile-frontend") false
+        (catch error (= :frontend-build-authority (:kind (ex-data error))))))))

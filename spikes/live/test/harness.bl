@@ -1,0 +1,47 @@
+; Opt-in acceptance: a real provider edits source and resumes after a human decision.
+(ns live.harness-proof
+ (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop] [omega.live :as live]
+           [omega.change :as change] [omega.workspace :as workspace] [omega.codemode :as cm] [buffer.model :as buffer] [bl.json :as json]))
+(defn wait-until [f ms]
+ (let [deadline (+ (erlang/monotonic_time :millisecond) ms)]
+  (loop [] (if-let [x (f)] x
+    (if (> (erlang/monotonic_time :millisecond) deadline) (throw (ex-info "Harness acceptance timed out." {}))
+     (do (Process/sleep 200) (recur)))))))
+(defn check [p label] (when-not p (throw (ex-info (str "Acceptance failed: " label) {}))) (println label))
+(let [provider (or (System/get_env "LIVE_PROVIDER") "claude")
+      root (str (System/tmp_dir!) "/omega-real-live-" (erlang/unique_integer (list :positive)))
+      _ (File/mkdir_p! root) e (env/open {:path (str root "/db") :schema workspace/schema}) b (workspace/start! e root)
+      sys (task/start-system e {:root root :files (buffer/port b) :tools cm/tools})
+      l (live/start! sys b {:root root :offline? true})]
+ (try
+  (live/demo! l)
+  (let [pid (get-in (live/snapshot l) [:current :pid])
+        checkpoint (:id (first (:history (live/snapshot l))))
+        id (:task (live/run-harness! l {:provider provider :delta 5 :policy "review"}))
+        p (wait-until #(first (filter (fn [p] (and (= id (:task p)) (= :needs-decision (:status p)))) (change/all e))) 240000)
+        _ (wait-until #(= :idle (:status (task/view sys id))) 10000)
+        count-before (count (loop/turns sys id))]
+   (check (= 1 (get-in (live/snapshot l) [:current :version])) "Real model edited and rehearsed without publishing VM code")
+   (check (some #(and (= id (:op/actor %)) (:op/cell %) (nil? (:op/runtime %))) (live/history l)) "Source edits carry the actual task and CodeMode cell")
+   (Process/sleep 1200)
+   (check (= count-before (count (loop/turns sys id))) "Needs-decision parks the model without polling or token use")
+   (live/answer! l (:question p) (str "apply " (:id p)))
+   (wait-until #(task/terminal? (:status (task/view sys id))) 240000)
+   (let [t (task/view sys id) applied (change/view e (:id p))
+         before (get-in (live/snapshot l) [:current :value])
+         replay (live/apply! l {:candidate (:id p)} {:actor "human:proof"})]
+    (check (= :done (:status t)) (str "Same real task finishes: " (:status t)))
+    (check (= :applied (:status applied)) "Exact approved proposal has a durable publication receipt")
+    (check (= :passed (get-in applied [:verification :status])) "Actual old-protocol client calls verify count-by-five behavior")
+    (check (= pid (get-in (live/snapshot l) [:current :pid])) "Worker identity and world-owned traffic survive task completion")
+    (check (:reconciled replay) "A repeated apply returns the receipt without another code generation")
+    (check (= 2 (get-in (live/snapshot l) [:current :version])) "Receipt reconciliation never republishes")
+    (let [return (live/rehearse! l {:change checkpoint} {:actor "human:proof"})
+          receipt (live/apply! l {:candidate (:candidate return)} {:actor "human:proof"})]
+     (check (= :applied (:status receipt)) "Earlier behavior returns through a new checked transition")
+     (check (>= (get-in (live/snapshot l) [:current :value]) before) "Return preserves accepted work"))
+    (File/mkdir_p! "spikes/live/proof/harness")
+    (File/write! (str "spikes/live/proof/harness/real-" provider ".json")
+     (json/encode {:provider provider :task t :proposal applied :turns (loop/turns sys id)
+                   :final (live/snapshot l) :world "disposable durable /tmp world"}))))
+  (finally (task/stop-system! sys) (live/stop! l) (workspace/stop! b) (env/close! e) (File/rm_rf! root))))

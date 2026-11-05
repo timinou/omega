@@ -1,0 +1,89 @@
+; Generic Org source locations. The shared span scanner owns all block boundaries.
+; No knowledge of dossier component names, task execution, or IO.
+(ns omega.document-source (:require [bl.doc.spans :as sp] [clojure.string :as str]))
+(defn lines [text] (vec (str/split text "\n")))
+(defn text-at [ls start end] (str/join "\n" (subvec ls start end)))
+(defn- match-value [pattern line] (second (re-find pattern (or line ""))))
+(defn properties [ls row]
+  (let [start (first (drop-while #(or (str/blank? (nth ls %)) (re-find #"(?i)^\s*(?:SCHEDULED|DEADLINE|CLOSED):" (nth ls %))) (range row (count ls))))]
+    (if (and start (= ":PROPERTIES:" (str/upper-case (str/trim (nth ls start)))))
+      (into {} (keep (fn [i] (when-let [m (re-find #"^\s*:([A-Za-z_]+):\s*(.*?)\s*$" (nth ls i))]
+                              [(str/upper-case (second m)) (nth m 2)]))
+                    (take-while #(not= ":END:" (str/upper-case (str/trim (nth ls %)))) (range (inc start) (count ls))))) {})))
+(defn index [text]
+  (let [ls (lines text) bs (sp/assign-ids ls (sp/spans ls :org {:headings? true}))]
+    {:lines ls :blocks bs :outline (sp/outline bs (count ls))
+     :org-id (let [limit (or (some #(when (not= :prose (:kind %)) (:from %)) bs) (count ls))
+                   drawer (first (filter #(= ":PROPERTIES:" (str/upper-case (str/trim (nth ls %)))) (range limit)))]
+               (when drawer (get (properties ls drawer) "ID")))
+     :title (or (some #(when (= :prose (:kind %))
+                        (some (fn [i] (match-value #"(?i)^#\+TITLE:\s*(.*)$" (nth ls i))) (range (:from %) (:to %)))) bs) "Untitled")}))
+(defn heading-at [idx row] (last (filter #(and (<= (:row %) row) (< row (:end %))) (:outline idx))))
+(defn- block-at [idx row] (first (filter #(and (<= (:from %) row) (< row (:to %))) (:blocks idx))))
+(defn- anchor-for [idx scope row block]
+  (let [ls (:lines idx) h (heading-at idx row) p (when h (properties ls (inc (:row h))))
+        name (when block (or (match-value #"(?i)^#\+NAME:\s*(\S+)" (nth ls (:from block)))
+                             (match-value #"(?i)^#\+NAME:\s*(\S+)" (nth ls (max 0 (dec (:from block)))))))
+        bid (when block (or (:explicit-id block) (match-value #"(?:^|\s):id\s+\"?([^\s\"]+)" (nth ls (:from block))))) ]
+    (cond
+      (and (not= scope "section") name) {:kind "name" :value name}
+      (and (not= scope "section") bid) {:kind "block" :value bid}
+      (get p "ID") {:kind "id" :value (get p "ID")}
+      (get p "CUSTOM_ID") {:kind "custom-id" :value (get p "CUSTOM_ID")}
+      h {:kind "heading" :value (:title h)}
+      :else nil)))
+(defn capture
+  "Source scope is context, never an execution restriction. Ranges are zero-based, end exclusive."
+  [text {:keys [scope row start end]}]
+  (let [idx (index text) ls (:lines idx) scope (or scope "part")
+        _ (when-not (contains? #{"part" "passage" "section" "document"} scope) (throw (ex-info "Unknown document scope." {})))
+        row (or row start 0)
+        _ (when-not (and (integer? row) (<= 0 row) (< row (count ls))) (throw (ex-info "Source location is outside the document." {})))
+        h (heading-at idx row) b (block-at idx row)
+        [a z] (case scope
+                "document" [0 (count ls)]
+                "section" (if h [(:row h) (:end h)] [0 (count ls)])
+                "passage" [start end]
+                (if (contains? #{:cell :prose-code :block :result} (:kind b)) [(:from b) (:to b)]
+                  (if (and (integer? start) (integer? end)) [start end]
+                    (let [a (loop [i row] (if (and (> i (:from b)) (not (str/blank? (nth ls (dec i))))) (recur (dec i)) i))
+                          z (loop [i (inc row)] (if (and (< i (:to b)) (not (str/blank? (nth ls i)))) (recur (inc i)) i))] [a z]))))
+        _ (when-not (and (integer? a) (integer? z) (<= 0 a) (< a z) (<= z (count ls))) (throw (ex-info "Invalid source range." {})))
+        anchor (when-not (= scope "document") (anchor-for idx scope row (assoc b :from a)))
+        label (case scope "document" (:title idx) "section" (or (:title h) (:title idx))
+                (or (match-value #"(?:^|\s):title\s+\"([^\"]+)\"" (nth ls a)) (:value anchor)
+                    (first (str/split (str/trim (text-at ls a z)) "\n"))))]
+    {:scope scope :start a :end z :text (text-at ls a z) :anchor anchor :heading (:title h)
+     :label (subs label 0 (min 100 (count label))) :document-title (:title idx)}))
+(defn- anchor-rows [idx anchor]
+  (let [ls (:lines idx) value (:value anchor)]
+    (case (:kind anchor)
+      "id" (mapv :row (filter #(= value (get (properties ls (inc (:row %))) "ID")) (:outline idx)))
+      "custom-id" (mapv :row (filter #(= value (get (properties ls (inc (:row %))) "CUSTOM_ID")) (:outline idx)))
+      "heading" (mapv :row (filter #(= value (:title %)) (:outline idx)))
+      "name" (vec (keep (fn [i] (when (= value (match-value #"(?i)^#\+NAME:\s*(\S+)" (nth ls i))) (inc i))) (range (count ls))))
+      "block" (vec (keep (fn [s] (when (= value (or (:explicit-id s) (match-value #"(?:^|\s):id\s+\"?([^\s\"]+)" (nth ls (:from s))))) (:from s)))
+                          (filter #(contains? #{:cell :prose-code :block} (:kind %)) (:blocks idx)))) [])))
+(defn block-row [text id]
+  (let [rows (anchor-rows (index text) {:kind "block" :value id})]
+    (when (= 1 (count rows)) (first rows))))
+(defn reveal
+  "Resolve against current source; preserve the original snapshot separately. Ambiguity is explicit."
+  [text origin]
+  (let [idx (index text) ls (:lines idx) needle (lines (:text origin))
+        exact (vec (filter #(= needle (subvec ls % (+ % (count needle)))) (range (inc (- (count ls) (count needle))))))
+        rows (when (:anchor origin) (anchor-rows idx (:anchor origin)))
+        row (when (= 1 (count rows)) (first rows))]
+    (cond
+      (= "document" (:scope origin)) {:row 0 :end (count ls) :state (if (= (:text origin) (text-at ls 0 (count ls))) "exact" "changed")}
+      (and row (or (= "section" (:scope origin))
+                   (and (= "part" (:scope origin)) (contains? #{"block" "name"} (get-in origin [:anchor :kind])))))
+      (let [r (capture text {:scope (:scope origin) :row row})]
+        {:row (:start r) :end (:end r) :state (if (= (:text r) (:text origin)) "exact" "changed")})
+      (and row (> (count exact) 1))
+      (let [h (heading-at idx row) hits (filter #(and (<= (:row h) %) (< % (:end h))) exact)]
+        (if (= 1 (count hits)) {:row (first hits) :end (+ (first hits) (count needle)) :state "exact"}
+          {:state "ambiguous" :message "Several matching passages remain. The original snapshot is retained."}))
+      (= 1 (count exact)) {:row (first exact) :end (+ (first exact) (count needle)) :state "exact"}
+      :else {:state (if (or (> (count exact) 1) (> (count rows) 1)) "ambiguous" "missing")
+             :message "The starting passage moved or changed. Its original snapshot is retained."})))

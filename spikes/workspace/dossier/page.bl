@@ -1,0 +1,215 @@
+; dossier/page.bl — a whole document as one page.
+;
+; Level-1 headings become sections and nav chips; runs of screen blocks
+; become one sideways strip; a `Roster` section gets its progress tiles;
+; every cell shows its last recorded result as proof. Pure.
+
+(ns dossier.page
+  (:require [dossier.org :as o] [dossier.ui :as ui] [dossier.design :as design] [dossier.film :as film]
+            [dossier.runview :as rv] [dossier.horizon :as hz]))
+
+(def answerable #{"ask" "decision" "screen" "screen_graph" "desk" "job" "schema" "procedure" "film" "run" "horizons"})
+
+(defn- with-design
+  "`#+design: NAME` draws every screen, run and desk without its own :design in that language."
+  [d nodes]
+  (if (blank? (str d))
+    nodes
+    (vec (for [nd nodes]
+           (if (and (= :block (:t nd)) (contains? #{"screen" "screen_graph" "desk" "run" "horizons"} (:lang nd)) (nil? (:design (:attrs nd))))
+             (assoc-in nd [:attrs :design] (trim d))
+             nd)))))
+
+(defn- with-procedures
+  "Each run block gets the procedure (from this document) its :procedure names."
+  [nodes]
+  (let [procs (into {} (for [nd nodes :when (and (= :block (:t nd)) (= "procedure" (:lang nd)) (:id (:attrs nd)))]
+                         [(:id (:attrs nd)) (rv/procedure-of-node nd)]))]
+    (vec (for [nd nodes]
+           (if (and (= :block (:t nd)) (= "run" (:lang nd)))
+             (assoc nd :proc (get procs (:procedure (:attrs nd))))
+             nd)))))
+
+(defn- phone-h [b]
+  (if (= "run" (:lang b))
+    (if (:proc b) (rv/run-h b (:proc b)) [:pre.block (str "run: no procedure " (:procedure (:attrs b)) " in this document")])
+    (ui/screen-h b)))
+
+(defn- group-screens
+  "Consecutive screen and run blocks (blank prose between them aside) as one strip."
+  [nodes]
+  (reduce (fn [out nd]
+            (let [prev (last out)]
+              (if (and (= :block (:t nd)) (contains? #{"screen" "run"} (:lang nd)))
+                (if (= :screens (:t prev))
+                  (conj (pop out) (update prev :blocks conj nd))
+                  (conj out {:t :screens :blocks [nd]}))
+                (conj out nd))))
+          [] nodes))
+
+(defn- todo-chip [k] (when k [:span {:class (str "kw " k)} k]))
+
+(defn- source-h [nd body]
+  ;; Annotate the existing element; preserve the renderer's layout/child shape.
+  (if (or (nil? body) (nil? (:from nd))) body
+    (if (and (vector? body) (keyword? (first body)))
+      (let [attrs? (map? (second body)) attrs (if attrs? (second body) {})
+            attrs (assoc attrs :data-source-from (:from nd) :data-source-to (:to nd))]
+        (into [(first body) attrs] (drop (if attrs? 2 1) body)))
+      [:div.source-unit {:data-source-from (:from nd) :data-source-to (:to nd)} body])))
+
+(defn- node-body [nd]
+  (case (:t nd)
+    :heading (let [tag (keyword (str "h" (min 6 (inc (:level nd)))))]
+               [tag {:id (ui/slug (:title nd))}
+                (todo-chip (:todo nd)) (ui/md (:title nd))
+                (for [t (:tags nd)] [:span.tag t])])
+    :para [:p (ui/md (:text nd))]
+    :list [(if (:ordered? nd) :ol :ul)
+           (for [it (:items nd)]
+             (cond (starts-with? it "[X] ") [:li.check.done (ui/md (subs it 4))]
+                   (starts-with? it "[ ] ") [:li.check (ui/md (subs it 4))]
+                   :else [:li (ui/md it)]))]
+    :table [:div.scrollx
+            [:table
+             (when (seq (:head nd)) [:thead (for [r (:head nd)] [:tr (for [c r] [:th (ui/md c)])])])
+             [:tbody (for [r (:rows nd)] [:tr (for [c r] [:td (ui/md c)])])]]]
+    :props (let [pairs (remove (fn [[k _]] (contains? #{"id" "custom_id"} k)) (:pairs nd))]
+             (when (seq pairs) [:div.props (for [[k v] pairs] [:span [:b k] (ui/md v)])]))
+    :block (case (:lang nd)
+             "film" (film/film-h nd)
+             "run" (phone-h nd)
+             "horizons" (hz/horizons-h nd)
+             (or (design/block-h nd) (ui/block->h nd)))
+    :screens [:div.screens (map (fn [b] (source-h b (phone-h b))) (:blocks nd))]
+    :cell [:section {:class (str "cell" (if (:error? nd) " failed" "")) :id (str "cell-" (:id nd))}
+           [:div.cell-head
+            [:span.badge (cond (:error? nd) "✗ failed" (:result nd) "✓ ran" :else "not run")]
+            [:code (:id nd)] [:span.lang "beam-lisp"]]
+           (when (:result nd) [:pre.result (:result nd)])
+           [:details [:summary (str "model source · " (count (String/split (:code nd) "\n")) " lines")]
+            [:pre.src (:code nd)]]]
+    :code [:pre {:class (str "code " (:lang nd))} (:body nd)]
+    nil))
+
+(defn- node->h [nd] (source-h nd (node-body nd)))
+
+(defn- sections
+  "Nodes split at level-1 headings: [{:head h :nodes […]} …]."
+  [nodes]
+  (reduce (fn [out nd]
+            (if (and (= :heading (:t nd)) (= 1 (:level nd)))
+              (conj out {:head nd :nodes []})
+              (if (empty? out)
+                [{:head nil :nodes [nd]}]
+                (conj (pop out) (update (last out) :nodes conj nd)))))
+          [] nodes))
+
+(defn- roster-h [nodes]
+  (let [kws (keep :todo (filter (fn [nd] (= :heading (:t nd))) nodes))
+        counts (frequencies kws)
+        total (max 1 (count kws))
+        order ["DONE" "DOING" "NEXT" "TODO" "BLOCKED" "DROP"]]
+    (when (seq kws)
+      (list
+        [:div.tiles (for [k order :when (get counts k)] [:div.tile [:b (get counts k)] [:span (lower-case k)]])]
+        [:div.bar (for [k order :when (get counts k)]
+                    [:i {:class (str "seg " k) :style (str "width:" (/ (* 100.0 (get counts k)) total) "%")}])]))))
+
+(defn feedback-items
+  "Every answerable block: [{:id :lang :title :answer :note :at} …]."
+  [doc]
+  (for [nd (:nodes doc) :when (and (= :block (:t nd)) (contains? answerable (:lang nd)) (:id (:attrs nd)))]
+    (let [a (:attrs nd)]
+      {:id (:id a) :lang (:lang nd) :title (or (:title a) "") :answer (:answer a) :note (:note a) :at (:at a)})))
+
+(defn- tally-h [doc]
+  (let [items (feedback-items doc)
+        open (filter (fn [i] (nil? (:answer i))) items)
+        asks (filter (fn [i] (contains? #{"ask" "decision"} (:lang i))) open)]
+    [:div.tally
+     [:span.tally-n (str (- (count items) (count open)) "/" (count items))]
+     [:span "answered"]
+     (when (seq asks)
+       [:a.next {:href (str "#" (:lang (first asks)) "-" (:id (first asks)))}
+        (str (count asks) " questions wait for you →")])]))
+
+(defn- sec-id [s] (if (:head s) (str "s-" (ui/slug (:title (:head s)))) "s-intro"))
+
+(defn- sec-asks
+  "Answerable blocks of a section: [answered total]."
+  [s]
+  (let [bs (filter (fn [nd] (and (= :block (:t nd)) (contains? answerable (:lang nd)) (:id (:attrs nd))))
+                   (mapcat (fn [nd] (if (= :screens (:t nd)) (:blocks nd) [nd])) (:nodes s)))]
+    [(count (filter (fn [b] (:answer (:attrs b))) bs)) (count bs)]))
+
+(defn- side-h
+  "The sections as an app's sidebar: where you are, what waits for an answer,
+   how far a roster got. Purely a view of the same file."
+  [meta secs]
+  [:aside.side
+   [:a.side-title {:href "#s-intro"} (ui/md (String/replace (or (:title meta) "Dossier") (Regex/compile! "\\s+—.*$") ""))]
+   [:nav.side-nav
+    (for [s secs]
+      (let [[ok n] (sec-asks s)
+            kws (keep :todo (filter (fn [nd] (= :heading (:t nd))) (:nodes s)))
+            done (count (filter (fn [k] (= "DONE" k)) kws))
+            subs (filter (fn [nd] (and (= :heading (:t nd)) (= 2 (:level nd)))) (:nodes s))]
+        [:div.side-item {:data-sec (sec-id s)}
+         [:a.side-sec {:href (str "#" (sec-id s))}
+          [:span.st (if (:head s) (ui/md (:title (:head s))) "Overview")]
+          (cond (> n ok) [:span.wait {:title "waiting for your answer"} (- n ok)]
+                (> n 0) [:span.ok {:title "answered"} "✓"]
+                (seq kws) [:span.prog {:title "done / total"} (str done "/" (count kws))]
+                :else nil)]
+         (when (seq subs)
+           [:div.side-subs (for [h subs] [:a {:href (str "#" (ui/slug (:title h)))} (ui/md (:title h))])])]))]
+   [:a.side-all {:href "#all"} "Whole document"]])
+
+(defn doc-h
+  "The document body (sidebar, header, nav and sections) as hiccup."
+  [doc]
+  (let [meta (:meta doc) secs (vec (sections (group-screens (with-procedures (with-design (:design meta) (:nodes doc))))))
+        n (count secs)]
+    (list
+      [:div {:class "app2" :data-design (:design meta)}
+       (side-h meta secs)
+       [:div.content
+        [:header.doc
+         (when (:kicker meta) [:div.kicker (ui/md (:kicker meta))])
+         [:h1 (ui/md (or (:title meta) "Untitled"))]
+         (when (:subtitle meta) [:div.sub (ui/md (:subtitle meta))])
+         [:div.meta
+          (when (:date meta) [:span (:date meta)])
+          (when (:status meta) [:span (ui/md (:status meta))])
+          (when (:author meta) [:span (:author meta)])]
+         (tally-h doc)]
+        [:nav.chips (for [s secs :when (:head s)]
+                      [:a {:href (str "#" (ui/slug (:title (:head s))))} (:title (:head s))])
+         [:a.all {:href "#all"} "All"]]
+        (map-indexed
+          (fn [i s]
+            [:section.part {:id (sec-id s) :data-sec (sec-id s) :data-source-from (or (:from (:head s)) 0)}
+             (when (:head s) (node->h (:head s)))
+             (when (and (:head s) (= "roster" (lower-case (:title (:head s))))) (roster-h (:nodes s)))
+             (keep node->h (:nodes s))
+             [:nav.pager
+              (when (> i 0) (let [p (get secs (dec i))] [:a.prev {:href (str "#" (sec-id p))} "← " (if (:head p) (:title (:head p)) "Overview")]))
+              (when (< (inc i) n) (let [x (get secs (inc i))] [:a.next {:href (str "#" (sec-id x))} (if (:head x) (:title (:head x)) "Overview") " →"]))]])
+          secs)]])))
+
+(defn page-h
+  "The full HTML document."
+  [doc css js]
+  [:html {:lang "en" :data-design (get-in doc [:meta :design])}
+   [:head
+    [:meta {:charset "utf-8"}]
+    [:meta {:name "viewport" :content "width=device-width,initial-scale=1,viewport-fit=cover"}]
+    (for [href (design/font-links doc)] [:link {:rel "stylesheet" :href href}])
+    [:title (String/replace (or (:title (:meta doc)) "Dossier") (Regex/compile! "\\s+—.*$") "")]
+    [:style css (design/css)]]
+   [:body
+    [:div.live [:i] [:span#stamp "live"] [:a {:href "src"} "source .bl.org"] [:button#theme {:type "button"} "theme"]]
+    [:main#doc (doc-h doc)]
+    [:div#toast]
+    [:script js]]])

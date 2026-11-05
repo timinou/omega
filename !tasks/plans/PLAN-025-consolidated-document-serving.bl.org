@@ -1,0 +1,113 @@
+#+TITLE: Documents as task starting points
+#+DATE: 2026-11-03
+#+STATUS: PROTOTYPE
+#+BASIS: User correction: save answers independently; start ordinary Omega tasks from any Org part, section or document; retain direct source references; minimal mobile UI; authentication deferred
+
+* Outcome
+Open any =.bl.org= file in Omega, read or edit it, and start an ordinary task from
+a selected passage, a component, a section or the whole file. The task appears
+in the existing Work list with a direct link to its starting location. The
+starting context is provenance, not a restriction on what the agent may do.
+
+=Save answer= only saves the source file. Saving feedback never starts, resumes,
+steers or delivers a message to a task. A person can save several answers and
+then start one task, or start a task unrelated to any answer. Existing Omega
+conversations, replies, steers, questions and execution remain their respective
+owners. No parallel dossier task engine or automatic answer-delivery loop.
+
+* User experience
+Keep Home, Places, Work, Read/Edit, Publish and the normal task composer. One
+compact task icon in the reader opens the existing composer. It offers =This
+part=, =Section= and =Whole file=, a collapsed source preview, and the existing
+goal and run controls. Selected prose uses its exact mapped source range.
+The section choice means the innermost Org subtree, including its children.
+
+The task card carries a small source link: document title and starting part.
+Following it opens the same file at that location, including after source lines
+move. Existing task Files/references provide another route back. If the source
+changed, say so; if it cannot be resolved uniquely, show the captured snapshot
+and recovery message. Never silently jump to matching text in another section.
+
+Desktop source commands use the same capture and task/open path. Existing
+=#+begin_task= blocks keep their execution/reference behavior. Start, refine,
+steer, reply, cancel and inspect remain ordinary Omega operations.
+
+* Structural source model
+=bl.doc.spans= is the shared partition for blocks, headings, code and results.
+The generic document-source layer derives scopes and anchors from that
+partition. It knows no dossier component types. Presentation readers retain
+zero-based, end-exclusive source ranges on every rendered unit, including prose,
+tables, lists, recorded cells and unknown custom blocks.
+
+Rendered selection maps DOM nodes back to those ranges. Do not search for the
+first occurrence of the selected text. Identical prose elsewhere must not steal
+the starting location. Selection crossing units captures their complete source
+ranges, which the composer preview makes visible.
+
+Use Org's =ID= and =CUSTOM_ID= properties and =#+NAME:= where present, and the
+existing Beam Lisp block =:id=. Keep a captured revision, source text, scope and
+structural anchor in the task's facts and input reference. Existing files need
+no special dossier schema, question block or injected task block. No automatic
+source rewrite to manufacture IDs when reading or starting work.
+
+* Identity and movement
+Project/work/full-file spellings resolve to the existing buffer owner. The
+account host persists document admission in the same world database as tasks.
+Org file IDs provide identity across rename; otherwise a remembered document
+can recover a uniquely unchanged file in its attached project or original
+parent directory. Ambiguous matches require recovery, never a guess. Existing
+captured input remains available even when the original file is gone.
+
+Discovery is bounded, skips hidden/generated/dependency trees and does not
+follow directory symlinks. It is not a machine-wide file index. Project file
+navigation displays Org titles; filenames remain the underlying addresses.
+Org IDs are honored, not invented as a competing standard.
+
+* Host and presentation
+One account host serves many admitted documents with bounded render caches and
+explicit asset resolution. Reuse the dossier kit for its existing component
+families and ordinary editor/buffer revision guards for both source editing and
+structured feedback. Reading does not evaluate cells.
+
+The dossier renderer and general document-task commands are real bl-ed packages.
+No shared command/key mutation, alternate editor loop or new multi-pane page.
+Package unload restores ordinary presentation and removes package commands.
+
+* Current prototype
+The first document slice reuses the original dossier renderer, one canonical
+buffer per file, guarded answer saving, source editing and retained browser
+drafts. Its listener pool and startup were repaired after the initial memory
+failure. Proof is in [[file:../../spikes/workspace/dossier/dossier.bl.md][the dossier notes]].
+
+The general task slice is in [[file:../../spikes/workspace/document_tasks/document-tasks.bl.md][the document-task package]]. It extends the same task
+machinery with captured origins and source navigation. A separate ordinary Org
+fixture demonstrates that no dossier decision or known component is required.
+Acceptance uses scripted tasks in disposable copies; the hands-on trial uses
+the configured model service and a private durable world.
+
+* Acceptance
+- Source feedback saves without creating or continuing tasks.
+- Passage, arbitrary block, innermost section and whole-file starts capture the
+  intended source and use the existing task/open intent.
+- The source context does not populate the task's execution footprint.
+- Stale captured revisions refuse creation while preserving the written goal.
+- Work shows each task and its direct source reference, on desktop and phone.
+- Following a reference reveals its mapped location; changed/missing/ambiguous
+  source is reported honestly with its original snapshot available.
+- An Org-ID document can be renamed, the private host restarted, and its task
+  reference still resolves. Existing task reply/steer/cancel controls still work.
+- Package drive, vendor editor regressions and unchanged default-presentation
+  equivalence pass; real use/unuse screenshots are recorded.
+- A real-model task runs against a disposable file, with its source origin and
+  resulting file change visible through the existing UI.
+
+* Deferred
+Authentication is deferred at the user's explicit request. Assume trusted users
+for this prototype. The earlier audit remains recorded; do not expand it or
+change production access policy in this slice.
+
+Migrate no existing standalone dossier services until this interaction model is
+useful. The build-unification dossier remains a representative temporary copy;
+its original source and running service remain untouched. Broader discovery,
+external edits combined with a rename without an Org ID, and an unbounded global
+Org-ID index need further design and acceptance before production migration.

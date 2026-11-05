@@ -1,0 +1,326 @@
+#+title: Nurturing Forest — Ora's design language, shown
+#+subtitle: The tokens, faces, shapes and motions of the team machine, as one Beam Lisp module that is also its own specimen page.
+#+kicker: enchanted-skills / bl-org-dossier · design language · dossier.design.forest
+#+date: 2026-11-01
+#+status: Light tokens taken from the team machine as it ships; dark mode and motion are new, proposed here
+#+author: Claude for Othman
+#+design: forest
+
+* In one breath
+#+begin_lede
+Nurturing Forest is the team machine's look: deep forest green on a pale
+sage paper, one face (Manrope) doing every job, small soft radii, and status
+shown as a quiet tint rather than loud colour. This file is the language's
+single source. The kit =require=s it as =dossier.design.forest=. Its cells hold
+the tokens and build the CSS that dresses every mockup marked =:design forest=.
+The blocks below draw themselves from those same tokens.
+#+end_lede
+
+#+begin_stats
+30 | colour tokens | all taken from the app's CSS; 11 of its custom properties are checked live by the =parity= cell, the rest were hard-coded literals
+7 | steps in the type scale | one face, Manrope, from 28/750 down to 11/600
+8 | motion tokens | new; today the app has two 150 ms transitions and a shimmer
+2 | modes | light as shipped; dark is new ("forest at night")
+#+end_stats
+
+* Palette
+Light on the left of each chip, dark on the right. States are always a tint
+with ink of the same hue, never a solid fill.
+
+#+begin_palette :design forest
+#+end_palette
+
+* Type
+One face. Weight and tight negative tracking carry hierarchy; size barely moves.
+
+#+begin_type :design forest
+#+end_type
+
+* Shape
+Radii grow with the size of the surface. Lift is rare and soft: a card only
+rises on hover, and a sheet is the only thing that casts a real shadow.
+
+#+begin_shape :design forest
+#+end_shape
+
+* Components
+The kit's mockup lines, drawn in Forest. Nothing in the screen language changed.
+
+#+begin_screen :id f-cards :title "Cards and their tones" :caption "run breathes while work is in progress; turn is yours; approve waits; done rests; fail asks for repair." :answer love :note "I would like a proper component catalog here btw using the catalog annotation funciton as a basis and then extending the kit as needed, and more screens that build off of the catatlog. nice extra would be if i click on a component, i can filter to the views that use that component" :at "2026-11-01 20:52" :by timinou
+bar Needs you | @bell
+sub Othman · 2 things wait on you
+card run | Deliver: Architecture sketch | Team machine spine · draft ready | Omega drafted it from the nouns. | @edit! @attach @eye?
+card turn | Your call: Horizons | decision · open | | @check! @comment
+card approve | Check · Omega | flag · advice | "Storage is named twice." |
+card done | Problem statement | final · Othman |
+card fail | Change: Discussion guide | asked by Othman | Add the two consent questions. | @edit!
+#+end_screen
+
+#+begin_screen :id f-surfaces :title "Rows, chips, strips, actions" :caption "The quieter parts: rows for facts, chips for lenses, a strip for the one next thing." :answer fine :note "feels a bit too textual and hard to parse. you can find an even cooler layout." :at "2026-11-01 20:51" :by timinou
+bar < Team machine spine | @more
+chips Week | Cycle* | Quarter | Year
+section Facts | 4
+row Lead | Othman
+row Folder | Drive › Ora › Spine
+row From | Align before we build
+strip turn | Next gate: Ready to build · 1 hand-over left | Open
+banner ok | Gate 1 is open
+input Message Team machine spine | ↑
+actions Hand over! | Share as draft | Later?
+#+end_screen
+
+#+begin_desk :id f-desk :title "The app frame" :caption "Rail, top bar, three columns: the shell every Forest page sits in." :firm "Ora" :url "ora · work" :answer fine :note "This is fine, make sure that this kind of code builds on top of each other so it's structurally straightforward to include the whole interface without having to think about it (right here, a few components are missing such as the account view to go to user accoutns, the headings if there are any that are needed, etc. Make sure it is a skill improvement as well so that it's easy to do it for any app ever)" :at "2026-11-01 20:53" :by timinou
+nav @bell Needs you | @chat Talk | @flag Goals* | @folder Projects | @people People
+head Goals | run · cycle to 21 Nov | Capture! | New goal?
+col rail
+point run | @flag Goal · cycle | Agree on what the team machine is | 2 of 4 handed over | Open*
+col main
+card done | Problem statement | Othman · final |
+card run | Architecture sketch | Othman · draft ready |
+col rail
+row Lead | Othman
+msg agent | Amine: the nouns are in.
+#+end_desk
+
+* Motion
+Forest moves the way a plant does: slowly, then settled. Nothing bounces
+except the moment something is handed over, the one celebration the product
+allows itself. Every token below is playing at its real duration and curve,
+then resting.
+
+#+begin_motion :design forest
+#+end_motion
+
+#+begin_principles
+Settle, don't slide | Things arrive by rising a few pixels and fading in. Nothing travels across the screen.
+Extend in place | A card opens where it is (=unfold=). The sheet is the exception, for forms only.
+One celebration | =hand-over= is the only overshoot: the check draws, the card greens and lifts. Done is worth a moment.
+Work breathes | While the harness writes, the card breathes slowly (=draft=). Skeleton shimmers are retired.
+Gates ripple | When a gate opens, a ring spreads from the strip and the newly opened card settles in after it.
+Reduced motion is a mode, not a fallback | With reduced motion on, everything is instant except fades at or under 160 ms, which keep orientation.
+#+end_principles
+
+* The module
+The cells below /are/ =dossier.design.forest=. =bl doc run= proves them; the
+kit loads them.
+
+#+begin_src beam-lisp :id tokens
+(ns dossier.design.forest)
+
+(def font "Manrope,ui-sans-serif,system-ui,-apple-system,\"Segoe UI\",sans-serif")
+
+(def light
+  "As the team machine ships (assets/ora-base.css, ora-components.css)."
+  {:paper "#f5f6f1" :card "#ffffff" :field "#fcfdf9" :inset "#f0f3eb" :soft "#edf1e7"
+   :line "#dfe5d9" :edge "#d6dfcf"
+   :ink "#1e352c" :secondary "#56685c" :muted "#657268"
+   :forest "#204e3d" :deep "#163d30" :lime "#d5f78c" :focus "#668745" :progress "#a5c379" :on-forest "#ffffff"
+   :success "#346141" :success-bg "#eaf3e5" :pending "#855514" :pending-bg "#fff3d8"
+   :danger "#a14135" :danger-bg "#fff0ea" :neutral "#496057" :neutral-bg "#edf1eb"
+   :sage "#566f3b" :sage-bg "#e4edda" :sand "#886738" :sand-bg "#f1e5d3" :lilac "#76628c" :lilac-bg "#e9e2f2"})
+
+(def dark
+  "Forest at night: new. Same hues, ground lowered, primary lifted to the lime."
+  {:paper "#111a15" :card "#17221c" :field "#1b2720" :inset "#1d2a22" :soft "#22322a"
+   :line "#2a3a30" :edge "#35483b"
+   :ink "#e3ece0" :secondary "#b4c2b5" :muted "#94a396"
+   :forest "#b9dc7f" :deep "#d5f78c" :lime "#d5f78c" :focus "#9cc46d" :progress "#8fb766" :on-forest "#13201a"
+   :success "#9fcf8f" :success-bg "#1f3324" :pending "#e3b067" :pending-bg "#352a17"
+   :danger "#ef9a86" :danger-bg "#3a2019" :neutral "#a9bdb2" :neutral-bg "#22302a"
+   :sage "#b5cd94" :sage-bg "#26331d" :sand "#d9b884" :sand-bg "#33291b" :lilac "#c3b0dc" :lilac-bg "#2c2536"})
+
+(def palette
+  [["Ground" [:paper :card :field :inset :soft]]
+   ["Lines" [:line :edge]]
+   ["Ink" [:ink :secondary :muted]]
+   ["Forest" [:forest :deep :lime :focus :progress]]
+   ["States" [:success :pending :danger :neutral]]
+   ["State tints" [:success-bg :pending-bg :danger-bg :neutral-bg]]
+   ["Marks" [:sage :sand :lilac]]])
+
+(def type-scale
+  [{:role "Display" :size 28 :lh 1.3 :weight 750 :ls -1.1 :sample "Hello, Othman."}
+   {:role "Card title" :size 17 :lh 1.4 :weight 750 :ls -0.4 :sample "Team machine spine"}
+   {:role "Section" :size 15 :lh 1.5 :weight 750 :ls -0.25 :sample "Needs you"}
+   {:role "Row" :size 13 :lh 1.6 :weight 650 :sample "Sketch the architecture"}
+   {:role "Body" :size 13 :lh 1.65 :weight 400 :ink :secondary :sample "A body of work that serves a goal, or stands alone."}
+   {:role "Meta" :size 12 :lh 1.5 :weight 500 :ink :muted :sample "Othman · draft ready · 2 min ago"}
+   {:role "Label" :size 11 :lh 1.4 :weight 600 :ink :neutral :sample "In progress"}])
+
+(def radii [[:pill 5] [:control 8] [:rail 11] [:card 13] [:feature 14] [:sheet 16]])
+(def shadows [[:hover "0 3px 14px #26422809"] [:picker "0 10px 30px #243c2521"] [:sheet "0 25px 80px #17352c30"]])
+
+(def motion
+  "New. :from and :to are the demo's two states; a third :mid makes it go and return."
+  [{:name "press" :ms 120 :ease "cubic-bezier(.3,0,.5,1)" :use "A tap gives way and returns."
+    :from "transform:scale(1)" :mid "transform:scale(.95)" :to "transform:scale(1)"}
+   {:name "fade" :ms 160 :ease "linear" :use "Toasts and dismissals; survives reduced motion."
+    :from "opacity:0" :to "opacity:1"}
+   {:name "settle" :ms 240 :ease "cubic-bezier(.2,.8,.2,1)" :use "A new card lands: rises 8px and fades in."
+    :from "transform:translateY(8px);opacity:0" :to "transform:none;opacity:1"}
+   {:name "unfold" :ms 300 :ease "cubic-bezier(.2,.8,.2,1)" :use "A card extends in place to show the work."
+    :from "clip-path:inset(0 0 62% 0 round 13px)" :to "clip-path:inset(0 0 0 0 round 13px)"}
+   {:name "sheet" :ms 320 :ease "cubic-bezier(.32,.72,0,1)" :use "The rare sheet rises from the bottom edge."
+    :from "transform:translateY(100%)" :to "transform:none"}
+   {:name "hand-over" :ms 520 :ease "cubic-bezier(.34,1.45,.64,1)" :use "Final: the card greens and lifts, once."
+    :from "transform:none;background:var(--f-card)" :mid "transform:translateY(-4px) scale(1.03);background:var(--f-success-bg)" :to "transform:none;background:var(--f-success-bg)"}
+   {:name "gate" :ms 700 :ease "cubic-bezier(.2,.8,.2,1)" :use "A gate opens: a ring spreads from the strip."
+    :from "box-shadow:0 0 0 0 color-mix(in srgb,var(--f-forest) 45%,transparent)" :to "box-shadow:0 0 0 16px transparent"}
+   {:name "draft" :ms 2400 :ease "ease-in-out" :use "The harness is writing: the card breathes." :loop true
+    :from "opacity:1" :mid "opacity:.55" :to "opacity:1"}])
+
+(assert (every? (fn [[_ ks]] (every? (fn [k] (and (get light k) (get dark k))) ks)) palette))
+(assert (= (set (keys light)) (set (keys dark))))
+{:tokens (count light) :type-steps (count type-scale) :motion (vec (map :name motion))}
+#+end_src
+#+RESULTS: tokens
+: {:tokens 30, :type-steps 7, :motion ["press" "fade" "settle" "unfold" "sheet" "hand-over" "gate" "draft"]}
+
+
+#+begin_src beam-lisp :id css
+(defn- vars [m] (join ";" (for [[k v] m] (str "--f-" (name k) ":" v))))
+
+(def ^:private kit-map
+  "The kit's mockup variables, bound to Forest tokens."
+  (str "--bg:var(--f-paper);--card:var(--f-card);--paper:var(--f-inset);--line:var(--f-line);--latte:var(--f-edge);"
+       "--ink:var(--f-ink);--muted:var(--f-muted);--mocha:var(--f-secondary);--clay:var(--f-forest);"
+       "--sage:var(--f-success);--ochre:var(--f-pending);--slate:var(--f-neutral);--plum:var(--f-lilac);"
+       "--sans:" font ";--serif:" font ";"
+       "--k-bg:var(--f-paper);--k-paper:var(--f-card);--k-paper2:var(--f-field);--k-clay:var(--f-inset);--k-clay2:var(--f-soft);"
+       "--k-hair:var(--f-line);--k-hair2:var(--f-edge);--k-ink:var(--f-ink);--k-ink2:var(--f-secondary);--k-ink3:var(--f-muted);"
+       "--k-signal:var(--f-forest);--k-signal2:var(--f-deep);--k-on:var(--f-on-forest);--k-honey:var(--f-lime);"
+       "--k-honeyink:var(--f-pending);--k-hl:var(--f-success-bg);--k-ok:var(--f-success);--k-okbg:var(--f-success-bg);"
+       "--k-danger:var(--f-danger);--k-voice:" font ";--k-doc:" font ";--k-display:" font ";"))
+
+;; `:root .design-forest.design-forest` outranks the kit's own `.desk` and dark-mode rules.
+(def ^:private at ":root .design-forest.design-forest")
+(def ^:private dark-at (str "@media (prefers-color-scheme:dark){:root:not([data-theme=\"light\"]) .design-forest.design-forest{" (vars dark) "}}"
+                            ":root[data-theme=\"dark\"] .design-forest.design-forest{" (vars dark) "}"))
+
+(def ^:private components
+  (str
+    ".design-forest .screen,.design-forest .d-frame{font-family:" font "}"
+    ".design-forest .s-bar b{font:750 20px/1.2 " font ";letter-spacing:-.6px}"
+    ".design-forest .s-card{border-radius:13px;background:var(--f-card);border:1px solid var(--f-line)}"
+    ".design-forest .s-card.fail{border-left:3px solid var(--f-danger)}"
+    ".design-forest .s-card.fail .s-dot{background:var(--f-danger);box-shadow:none}"
+    ".design-forest .s-card.run .s-dot{animation:fm-draft 2400ms ease-in-out infinite}"
+    ".design-forest .s-card.done,.design-forest .s-card.idle{opacity:.86}"
+    ".design-forest .ib{border-radius:8px}"
+    ".design-forest .ib.primary,.design-forest .btn.primary{background:var(--f-forest);border-color:var(--f-forest);color:var(--f-on-forest)}"
+    ".design-forest .s-chips .on,.design-forest .s-tabs .on{background:var(--f-soft);color:var(--f-forest);border-color:var(--f-edge)}"
+    ".design-forest .s-strip{border-radius:11px;background:var(--f-soft)}"
+    ".design-forest .s-banner.ok{background:var(--f-success-bg);color:var(--f-success)}"))
+
+(def ^:private showcase
+  (str
+    ".lang-show{margin:16px 0;padding:16px;border-radius:14px;background:var(--f-paper);color:var(--f-ink);border:1px solid var(--f-line);font-family:" font "}"
+    ".lang-show>figcaption{font-weight:750;margin-bottom:8px}"
+    ".f-group h5{margin:10px 0 6px;font:650 12px " font ";color:var(--f-muted);text-transform:uppercase;letter-spacing:.06em}"
+    ".f-swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}"
+    ".f-sw{display:grid;gap:2px}.f-sw b{font-weight:650;font-size:13px}.f-sw code{font-size:11px;background:none;border:0;padding:0;color:var(--f-muted)}"
+    ".f-chip{display:grid;grid-template-columns:1fr 1fr;height:44px;border-radius:10px;overflow:hidden;border:1px solid var(--f-line)}"
+    ".f-type{display:grid;gap:2px;padding:10px 0;border-bottom:1px solid var(--f-line)}.f-type:last-child{border:0}"
+    ".f-type-meta{font-size:11px;color:var(--f-muted)}"
+    ".f-shapes{display:flex;flex-wrap:wrap;gap:12px;margin:6px 0 14px}"
+    ".f-shape{width:120px;height:76px;background:var(--f-card);border:1px solid var(--f-line);display:grid;place-content:center;text-align:center;font-size:12px}"
+    ".f-shape code{font-size:10.5px;background:none;border:0;color:var(--f-muted);max-width:110px;overflow-wrap:anywhere}"
+    ".f-motions{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}"
+    ".f-motion{display:grid;gap:3px}.f-motion b{font-weight:750}.f-motion code{font-size:11px;background:none;border:0;padding:0;color:var(--f-muted)}"
+    ".f-motion p{margin:0;font-size:12.5px;color:var(--f-secondary);line-height:1.45}"
+    ".f-stage{height:96px;border-radius:13px;background:var(--f-inset);display:grid;place-items:center;overflow:hidden;position:relative}"
+    ".f-demo{width:120px;height:52px;border-radius:13px;background:var(--f-card);border:1px solid var(--f-line);display:grid;place-items:center}"
+    ".f-demo span{width:60%;height:6px;border-radius:3px;background:var(--f-edge)}"
+    ".f-demo.fm-gate{background:var(--f-soft)}"))
+
+(defn- keyframes
+  "Each motion token plays at its real duration and curve, then rests, so the
+   eye can compare them; :loop tokens play without a rest."
+  [m]
+  (let [rest-ms (if (:loop m) 0 1400) total (+ (:ms m) rest-ms)
+        p (fn [x] (str (/ (erlang/round (* 1000.0 (/ x total))) 10.0) "%"))
+        e (str "animation-timing-function:" (:ease m))]
+    (str "@keyframes fm-" (:name m) "{"
+         "0%{" (:from m) ";" e "}"
+         (when (:mid m) (str (p (/ (:ms m) 2)) "{" (:mid m) ";" e "}"))
+         (p (:ms m)) "{" (:to m) "}"
+         "100%{" (:to m) "}}"
+         ".f-demo.fm-" (:name m) "{animation:fm-" (:name m) " " total "ms infinite}")))
+
+(def ^:private reduced
+  (str "@media (prefers-reduced-motion:reduce){.f-demo,.design-forest .s-dot{animation:none!important}"
+       ".f-demo.fm-fade{animation:fm-fade 1560ms infinite!important}}"))
+
+(def stylesheet
+  (str at "{" (vars light) ";" kit-map "}" dark-at components showcase
+       (join "" (map keyframes motion)) reduced))
+
+(def language
+  {:name "forest" :title "Nurturing Forest" :font font
+   :fonts ["https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap"]
+   :light light :dark dark :palette palette :type type-scale :radii radii :shadows shadows :motion motion
+   :css stylesheet})
+
+(assert (includes? stylesheet "--f-forest:#204e3d"))
+(assert (every? (fn [m] (includes? stylesheet (str "@keyframes fm-" (:name m)))) motion))
+{:css-bytes (count stylesheet) :keyframes (count motion)}
+#+end_src
+#+RESULTS: css
+: {:keyframes 8, :css-bytes 8338}
+
+
+** Parity with the app
+Today the app's CSS is the original and this module copies it. This cell reads
+the team machine's shipped stylesheets, when that checkout is present, and
+reports any token here that has drifted (the kit's tests fail on drift). When the app generates its tokens from
+this module (the work spine's roster item R9), the direction of the check
+flips.
+
+#+begin_src beam-lisp :id parity
+(def app-root (Path/expand "~/code/products/ora-hub/team-machine/assets"))
+
+(def sources
+  "token → [stylesheet, custom property] in the shipped app."
+  {:paper ["ora-base.css" "--paper"] :soft ["ora-base.css" "--soft"] :deep ["ora-base.css" "--deep"]
+   :lime ["ora-base.css" "--lime"] :ink ["ora-components.css" "--ora-ink"]
+   :secondary ["ora-components.css" "--ora-secondary"] :muted ["ora-components.css" "--ora-muted"]
+   :forest ["ora-components.css" "--ora-forest"] :line ["ora-components.css" "--ora-line"]
+   :inset ["ora-components.css" "--ora-inset"] :focus ["ora-components.css" "--ora-focus"]})
+
+(defn shipped [[file prop]]
+  (let [path (str app-root "/" file)]
+    (when (File/exists? path)
+      (let [m (Regex/run (Regex/compile! (str prop "\\s*:\\s*(#[0-9a-fA-F]{3,8})")) (File/read! path))]
+        (when m (lower-case (nth m 1)))))))
+
+(def checked (into {} (for [[k src] sources :let [v (shipped src)] :when v] [k [(get light k) v]])))
+(def drift (into {} (filter (fn [[_ [ours theirs]]] (not= ours theirs)) checked)))
+
+;; Reported, not asserted: the kit loads this module, and a drifted app must
+;; not stop every dossier from rendering. kit_test.bl asserts it instead.
+{:checked (count checked) :of (count sources) :drift drift}
+#+end_src
+#+RESULTS: parity
+: {:of 11, :checked 11, :drift {}}
+
+
+* What is new here
+#+begin_honest :title "Proposed, not shipped"
+Dark mode and the motion vocabulary don't exist in the app today. The app has
+no =prefers-color-scheme= rule, and its motion is two 150 ms transitions, a
+skeleton shimmer, and dialogs and toasts that appear without animation. Both are
+proposed here for you to react to. Everything under Palette (light), Type and
+Shape is copied from what ships, and the =parity= cell keeps it honest.
+#+end_honest
+
+#+begin_ask :id F1 :title "Dark mode: is forest at night right?" :options "Yes|Darker ground|Keep the primary forest-green, not lime" :answer Yes :at "2026-11-01 20:49" :by timinou
+In dark mode the primary moves to the lime (=#b9dc7f=) so that it stays readable on the dark ground.
+#+end_ask
+
+#+begin_ask :id F2 :title "Is hand-over the one celebration?" :options "Yes|Gate opening instead|No celebration at all" :answer Yes :note "gate opening is a smaller celebration but still one" :at "2026-11-01 20:50" :by timinou
+Only hand-over overshoots. Everything else settles.
+#+end_ask
+
+#+begin_ask :id F3 :title "Retire the skeleton shimmer for a breathing card?" :options "Yes|Keep shimmer for loading, breathe for drafting|Keep shimmer" :answer "Keep shimmer for loading, breathe for drafting" :at "2026-11-01 20:50" :by timinou
+=draft= breathes at 2.4 s while the harness writes. Loading the page is a different thing and could keep the shimmer.
+#+end_ask

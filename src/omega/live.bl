@@ -1,0 +1,423 @@
+; One world-owned experiment. Shared-buffer operations are its change journal.
+; The harness and the editor call the same verbs; proc.evolve owns publication.
+(ns omega.live
+ (:require [omega.env :as env] [omega.task :as task] [omega.loop :as loop]
+           [omega.codemode :as cm] [omega.change :as change] [omega.actor :as actor] [omega.llm :as llm] [buffer.model :as buffer]
+           [proc] [proc.evolve :as evolve] [reload.generation :as generation] [reload.state :as runtime-state]
+           [clojure.string :as str]))
+
+(def initial-source
+ "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 1\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n")
+
+(proc/defserver keeper
+ (init [_] (ok nil))
+ (handle-call f [_from st]
+  (reply (try (f) (catch error (tuple :live/error (ex-message error) (ex-data error)))) st)))
+(declare call-worker! tools submit! verify!)
+(proc/defserver traffic
+ (init [live] (erlang/send_after 500 (erlang/self) :tick) (ok live))
+ (handle-info :tick [live]
+  (try (call-worker! live) (catch _ nil))
+  (erlang/send_after 500 (erlang/self) :tick) (noreply live)))
+(defn start! [sys buffers opts]
+ (let [e (:env sys)]
+  ;; Prepared handles are VM-local. Reopening the journal never reconstructs or
+  ;; replays a publication whose acknowledgement may have been lost.
+  (doseq [p (change/all e)]
+   (when (contains? #{:rehearsed :needs-decision :approved :applying} (:status p))
+    (when (:question p) (actor/mark-read! e (:question p)))
+    (change/save! e (assoc p :status (if (= :applying (:status p)) :uncertain :stale)
+                          :recovery "Runtime epoch changed; inspect the receipt and prepare a new candidate. Never replay automatically."))))
+ {:sys sys :task-system (atom sys) :opts opts :buffers buffers :root (:root opts) :allowed? (boolean (:offline? opts))
+  :epoch (str "live-" (env/world e) "-" (erlang/unique_integer (list :positive)))
+  :path (str (:root opts) "/live-worker.bl") :address "work:project/live-worker.bl"
+  :controller (start keeper nil {}) :state (atom {:graphs [] :sequence 0})}))
+(defn install! [live sys] (reset! (:task-system live) sys) sys)
+(defn- environment [live] (:env (:sys live)))
+(defn- locked [live f]
+ (let [r (call (:controller live) f 120000)]
+  (if (and (tuple? r) (= 3 (erlang/tuple_size r)) (= :live/error (elem r 0)))
+   (throw (ex-info (elem r 1) (elem r 2))) r)))
+(defn- worker-turn [live f]
+ ;; Candidate compilation and rehearsal do not hold this gate. Publication
+ ;; finishes accepted calls, then queues new calls for its exact state switch.
+ (global/trans (tuple (tuple :omega/live-worker (:controller live)) (erlang/self)) f))
+(defn- require-demo! [live]
+ (when-not (:owner @(:state live)) (throw (ex-info "Start the isolated demonstration first." {}))))
+(defn- read-source [live]
+ (let [r (buffer/request! (:buffers live) [:read (:path live) {}])]
+  (when (:error r) (throw (ex-info (:error r) {}))) r))
+(defn- current [live]
+ (when-let [p (:owner @(:state live))]
+  (let [s (evolve/status p)]
+   {:pid (str p) :version (:version s) :digest (:digest s) :revision (:revision s)
+    :value (:last-value @(:state live) 0)})))
+(defn- record! [live kind meta data]
+ (let [r (buffer/request! (:buffers live)
+           [:record (:path live) {:meta (merge {:actor "human:me"} meta {:kind kind :runtime data})}])]
+  (when (:error r) (throw (ex-info (:error r) {})))
+  (str (:path live) "@" (:rev r))))
+(defn history [live]
+ (buffer/operations (:env (:sys live)) (:path live)))
+(defn- graph! [live source]
+ (when (>= (count (:graphs @(:state live))) 16)
+  (throw (ex-info "This demonstration retains at most 16 candidates. Restart the isolated world to continue." {})))
+ (let [g (generation/prepare!
+          {:application-id (str "omega-live-" (env/world (:env (:sys live))))
+           :fixed-runtime true :native-modules #{"erlang"}
+           :resources {:proposal (erlang/unique_integer (list :positive))}
+           :sources {"omega.live.worker" source}})]
+  (when-let [old (:initial @(:state live))] (generation/inherit-runtime! g old))
+  (swap! (:state live) update :graphs conj g) g))
+(defn- spec [g version]
+ (generation/invoke! g "omega.live.worker/definition" [version (:digest g)]))
+(defn demo! [live]
+ (locked live
+  (fn []
+   (when-not (:allowed? live)
+    (throw (ex-info "The demonstration writes only to an offline world. Open an isolated --offline --memory host." {})))
+   (if (:owner @(:state live)) {:status :running}
+    (do
+     (when (File/exists? (:path live))
+      (throw (ex-info "live-worker.bl already exists; use a fresh demonstration root." {})))
+     (let [r (buffer/request! (:buffers live) [:write (:path live) {:text initial-source :meta {:actor "system:live" :kind :write}}])]
+      (when (:error r) (throw (ex-info (:error r) {}))))
+     (let [g (graph! live initial-source)
+           _ (generation/with! g #(runtime-state/bind! {}))
+           p (generation/with! g #(evolve/start! (spec g 1) 0 {:managed true}))]
+      (swap! (:state live) assoc :owner p :initial g :installed initial-source :last-value 0)
+      (when-not (= false (get-in live [:opts :traffic?]))
+       (swap! (:state live) assoc :traffic (start traffic live {})))
+      (record! live :live/start {:actor "system:live"}
+       {:status :applied :after (current live) :source initial-source :note "Initial worker; state starts at zero."})
+      {:status :running :source (:address live)}))))))
+
+(defn rehearse! [live args meta]
+ (locked live
+  (fn []
+   (require-demo! live)
+   (let [buffer (read-source live)
+         selected (when (:change args) (first (filter #(= (:change args) (:op/id %)) (history live))))
+         _ (when (and (:change args) (nil? selected)) (throw (ex-info "Unknown history operation." {})))
+         source (if selected (or (get-in selected [:op/runtime :source]) (:op/after selected)) (:text buffer))
+         before (current live) sequence (inc (:sequence @(:state live)))
+         result (try
+                 (when (pos? (:drafts buffer)) (throw (ex-info "Publish or release shared drafts before rehearsal." {:kind :unpublished-draft})))
+                 (let [g (graph! live source)
+                       r (generation/with! g #(evolve/rehearse! (:owner @(:state live)) (:version before) (spec g (inc (:version before))))) ]
+                  {:graph g :result r})
+                 (catch error {:result {:status :refused :kind (or (:kind (ex-data error)) :invalid-source) :message (ex-message error)}}))
+         previous (:candidate @(:state live))
+         _ (when previous
+             (when-let [p (change/view (environment live) (:id previous))]
+              (when (contains? #{:rehearsed :needs-decision :approved} (:status p))
+               (when (:question p) (actor/mark-read! (environment live) (:question p)))
+               (change/save! (environment live) (assoc p :status :stale :recovery "Superseded by a new rehearsal.")))))
+         proposal (change/create! (environment live)
+                   {:target "worker" :task (:task meta) :cell (:cell meta) :epoch (:epoch live)
+                    :status (if (= :valid (get-in result [:result :status])) :rehearsed :refused)
+                    :source source :published-source (:text buffer) :source-rev (:rev buffer)
+                    :before before :return-of (:change args) :rehearsal (:result result)
+                    :policy (or (get-in (task/view (:sys live) (:task meta)) [:run :live]) {:policy "review"})})
+         candidate (merge result {:id (:id proposal) :source source :published-source (:text buffer)
+                                 :before before :return-of (:change args)})
+         public (assoc (:result result) :candidate (:id candidate))]
+    (swap! (:state live) assoc :sequence sequence :candidate candidate)
+    (record! live :live/rehearse meta
+     {:status (:status public) :before before :result public :candidate (:id candidate)
+      :source source :return-of (:change args) :note "Read-only rehearsal; serving state and behavior retained."})
+    public))))
+
+(defn- policy-error [live p meta]
+ (let [t (when (:task p) (task/view (:sys live) (:task p)))
+       policy (:policy p) mode (:policy policy)
+       expected (:delta policy)
+       bounded-source (when (and (integer? expected) (<= 1 expected 100))
+                        (str/replace (or (:installed @(:state live)) "") #"delta [0-9]+" (str "delta " expected)))]
+  (cond
+   (and (:task meta) (not= (:task meta) (:task p))) :task-mismatch
+   (and (:task p) (task/terminal? (:status t))) :task-ended
+   (and (:task p) (not= policy (or (get-in t [:run :live]) {:policy "review"}))) :policy-changed
+   (and (:task p) (= "scoped" mode)
+        (or (not= "worker" (:target policy)) (not= (:epoch live) (:epoch policy))
+            (nil? bounded-source) (not= bounded-source (:source p)) (:return-of p))) :outside-authorized-scope
+   (and (:task p) (not= "scoped" mode) (not= "apply" (get-in p [:decision :action]))) :decision-required
+   :else nil)))
+(defn apply! [live args meta]
+ (locked live
+  (fn []
+   (let [e (environment live) p (change/view e (:candidate args))]
+    (cond
+     ;; This is reconciliation by exact id, never another native commit.
+     (:receipt p) (assoc (:receipt p) :reconciled true)
+     (nil? p) {:status :refused :kind :unknown-candidate}
+     (not (:owner @(:state live))) {:status :refused :kind :target-unavailable}
+     (not= (:epoch live) (:epoch p)) {:status :refused :kind :stale-epoch}
+     (policy-error live p meta) {:status :refused :kind (policy-error live p meta)}
+     (not (contains? #{:rehearsed :approved} (:status p))) {:status :refused :kind :proposal-not-applicable}
+     :else
+     (let [c (:candidate @(:state live)) before (current live)
+           preflight (cond
+             (or (nil? c) (not= (:candidate args) (:id c))) :unknown-candidate
+             (not= :valid (get-in c [:result :status])) :rehearsal-required
+             (not= (:digest before) (get-in c [:before :digest])) :stale-version
+             (not= (:version before) (get-in c [:before :version])) :stale-version
+             (not= (:published-source c) (:text (read-source live))) :source-changed
+             (pos? (:drafts (read-source live))) :unpublished-draft)
+           admission (when-not preflight
+              (task/admit-effect! (:sys live) (:task p)
+               (fn []
+                (if-let [error (policy-error live p meta)] {:status :refused :kind error}
+                 (do
+                  (try
+                   (change/save! e (assoc p :status :applying :intent {:at (env/now e) :before before :cell (:cell meta)})
+                     [[:db/cas (env/eid e :buf/path (:path live)) :buf/text (:published-source c) (:published-source c)]])
+                   {:status :admitted}
+                   (catch error
+                    (if (= :buf/text (:attr (ex-data error))) {:status :refused :kind :source-changed}
+                     (throw error)))))))))
+           result (if (or preflight (= :refused (:status admission)))
+                    (or (when preflight {:status :refused :kind preflight}) admission)
+            (try
+             (worker-turn live #(generation/with! (:graph c)
+              (fn []
+               (loop [attempt 1]
+                (let [owner (:owner @(:state live))
+                      prepared (evolve/prepare-upgrade! owner (:version before) (spec (:graph c) (inc (:version before))))
+                      r (if (= :prepared (:status prepared)) (evolve/commit-upgrade! owner (:ticket prepared)) prepared)]
+                 (if (and (= :stale-preparation (:kind r)) (< attempt 3))
+                  (recur (inc attempt)) (assoc r :attempts attempt)))))))
+             (catch error {:status :unknown :kind :publication-unconfirmed :message (ex-message error)})))
+           applied? (= :applied (:status result))
+           _ (when applied? (swap! (:state live) assoc :installed (:source c) :candidate nil))
+           _ (when (= :unknown (:status result)) (swap! (:state live) assoc :installed nil))
+           receipt (assoc result :proposal (:id p) :before before :after (current live) :at (env/now e))]
+      ;; Persist the authoritative result BEFORE projecting it into Changes. A
+      ;; retry can return this receipt even if the caller lost its HTTP reply.
+      (change/save! e (assoc (change/view e (:id p)) :status (case (:status result) :applied :applied :unknown :uncertain :refused)
+                                                   :receipt receipt))
+      (record! live (if (:return-of c) :live/return :live/apply) meta
+       {:status (:status result) :before before :after (:after receipt) :result result :proposal (:id p)
+        :candidate (:id p) :source (when applied? (:source c)) :return-of (:return-of c)
+        :note (cond applied? "Behavior changed; accepted work retained. Publication receipt recorded."
+                    (= :unknown (:status result)) "Publication unconfirmed. Reconcile this receipt; never replay automatically."
+                    :else "Publication refused; the previous generation continues serving.")})
+      receipt))))))
+(defn discard! [live args meta]
+ (locked live
+  (fn []
+   (require-demo! live)
+   (if (not= (:candidate args) (get-in @(:state live) [:candidate :id]))
+    {:status :refused :kind :unknown-candidate}
+    (do (swap! (:state live) assoc :candidate nil)
+     (when-let [p (change/view (environment live) (:candidate args))]
+      (change/save! (environment live) (assoc p :status :discarded)))
+     (record! live :live/discard meta {:status :discarded :candidate (:candidate args) :before (current live)})
+     {:status :discarded})))))
+
+(defn snapshot [live]
+ (let [st @(:state live) c (:candidate st) e (:env (:sys live))]
+  {:schema "omega.live.v2" :available (:allowed? live) :running (boolean (:owner st)) :epoch (:epoch live)
+   :providers (llm/configured-public (or (get-in live [:opts :provider-root]) (:root live)))
+   :traffic (boolean (:traffic st))
+   :source (:address live) :changes (str "changes:" (:address live)) :current (current live)
+   :source-matches (when (:owner st) (= (:installed st) (:text (read-source live))))
+   :candidate (when c (-> (select-keys c [:id :before :return-of :result])
+                         (assoc :source (:source c) :installed-source (:installed st)
+                                :proposal (change/view e (:id c)))))
+   :proposals (vec (take 16 (reverse (change/all e))))
+   :task (when (:task st) (select-keys (task/view (:sys live) (:task st)) [:id :title :status :run :result :cost]))
+   :history (mapv (fn [op]
+                   {:id (:op/id op) :rev (:op/rev op) :actor (:op/actor op) :kind (:op/kind op)
+                    :task (when (:op/task op) (env/id-of e (:op/task op))) :cell (:op/cell op)
+                    :runtime (dissoc (:op/runtime op) :source)
+                    :returnable (or (and (:op/runtime op) (= :applied (get-in op [:op/runtime :status])))
+                                    (and (nil? (:op/runtime op)) (not (empty? (:op/after op)))))} )
+                  (take 32 (reverse (history live))))
+   :limits {:candidates 16 :history 32 :state "Observed, never rewound"}}))
+(defn perform! [live operation args meta]
+ (case operation
+  "snapshot" (snapshot live) "start-demo" (demo! live)
+  "rehearse" (rehearse! live args meta) "apply" (apply! live args meta)
+  "discard" (discard! live args meta)
+  "submit" (submit! live args meta) "verify" (verify! live args meta)
+  "receipt" (or (change/view (environment live) (:candidate args)) {:status :refused :kind :unknown-candidate})
+  "exercise" (call-worker! live)
+  (throw (ex-info "Unknown live operation." {:operation operation}))))
+(defn tools [live]
+ [{:name "live" :description "Inspect the owned worker; rehearse published source, then submit its exact candidate for a decision. submit parks the turn. After approval, apply and verify using the SAME candidate id. submit/apply/verify/receipt/discard ALL REQUIRE candidate. Example: {operation: verify, candidate: change-7}. receipt reconciles an earlier call without repeating publication. exercise makes one original-protocol worker request."
+   :input-schema {:type "object" :properties {:operation {:type "string" :enum ["snapshot" "rehearse" "submit" "apply" "verify" "receipt" "discard" "exercise"]}
+                                             :candidate {:type "string" :description "Exact proposal id returned by rehearse. REQUIRED for submit, apply, verify, receipt and discard."} :change {:type "string"}
+                                             :summary {:type "string"}} :required ["operation"]}
+   :run (fn [ctx args]
+          (if (and (contains? #{"submit" "apply" "verify" "receipt" "discard"} (:operation args))
+                   (str/blank? (str (:candidate args))))
+           {:error (str "Nothing ran: live " (:operation args) " requires a candidate argument containing the exact proposal id. Retry with candidate. Your proposals: "
+                        (pr-str (mapv #(select-keys % [:id :status]) (filter #(= (:task ctx) (:task %)) (change/all (environment live))))))}
+          (let [r (perform! live (:operation args) args
+                    {:actor (:task ctx) :task (:task ctx)
+                     :cell (cm/cell-id (:task ctx) (:step ctx) (get-in ctx [:block :id]))})]
+           (cond-> {:ok (pr-str r)} (= :needs-decision (:status r)) (assoc :pause true)))))}])
+(defn- worker-call! [live]
+ (require-demo! live)
+   (let [p (:owner @(:state live)) before (evolve/status p)
+       value (evolve/request! p 1 "inc")]
+    (when (number? value) (swap! (:state live) assoc :last-value value))
+    {:worker (str p) :observed-version (:version before) :value value}))
+(defn call-worker! [live] (worker-turn live #(worker-call! live)))
+(defn submit! [live args meta]
+ (locked live
+  (fn []
+   (let [e (environment live) p (change/view e (:candidate args))]
+    (cond
+     (nil? (:task meta)) {:status :refused :kind :task-required}
+     (not= (:task meta) (:task p)) {:status :refused :kind :task-mismatch}
+     (= :needs-decision (:status p)) {:status :needs-decision :proposal (:id p) :question (:question p)}
+     (not= :rehearsed (:status p)) {:status :refused :kind :rehearsal-required}
+     (= "scoped" (get-in p [:policy :policy])) {:status :authorized :proposal (:id p) :policy (:policy p)}
+     :else
+      (let [summary (subs (str (or (:summary args) "Apply this rehearsed worker change, preserving accepted work?")) 0
+                          (min 1200 (count (str (or (:summary args) "Apply this rehearsed worker change, preserving accepted work?")))))
+            choices [{:label "Apply" :text (str "apply " (:id p))}
+                     {:label "Revise" :text (str "revise " (:id p))}
+                     {:label "Discard" :text (str "discard " (:id p))}]
+            _ (actor/ensure! e "human:me" :human)
+            question (actor/prepare-message e {:from (:task p) :to "human:me" :kind :ask
+                       :text (str summary " [" (:id p) "] — current state is preserved; decide this exact proposal in Live or Pocket.")
+                       :data {:live-change (:id p) :choices choices}})
+            p (assoc p :status :needs-decision :question (:id question) :summary summary :choices choices)]
+       (change/save! e p [(assoc (:fact question) :db/id -2)])
+       (record! live :live/propose meta {:status :needs-decision :proposal (:id p) :question (:id question) :note summary})
+       {:status :needs-decision :proposal (:id p) :question (:id question) :summary summary}))))))
+(defn decide! [live args]
+ (locked live
+  (fn []
+   (let [e (environment live) p (change/view e (:proposal args)) action (:decision args)
+         t (when p (task/view (:sys live) (:task p)))]
+    (cond
+     (nil? p) {:status :refused :kind :unknown-proposal}
+     (:decision p) (do
+                    (when (and (:question p) (not (actor/reply-to e (:question p))))
+                     (actor/reply! e (:question p) (str (get-in p [:decision :action]) " " (:id p)) {:live-decision (:decision p)}))
+                    {:status :decided :decision (:decision p) :proposal (:id p)})
+     (task/terminal? (:status t)) {:status :refused :kind :task-ended}
+     (not= :needs-decision (:status p)) {:status :refused :kind :proposal-not-awaiting-decision}
+     (not (contains? #{"apply" "revise" "discard"} action)) {:status :refused :kind :exact-decision-required}
+     :else
+      (let [decision {:action action :by "human:me" :at (env/now e) :proposal (:id p)}
+            p (assoc p :decision decision :status (if (= "apply" action) :approved :discarded))]
+       (change/save! e p)
+       (when (and (not= "apply" action) (= (:id p) (get-in @(:state live) [:candidate :id])))
+        (swap! (:state live) assoc :candidate nil))
+       (record! live :live/decision {:actor "human:me" :task (:task p)}
+         {:status (:status p) :proposal (:id p) :decision decision :note (str "Exact proposal decision: " action)})
+       (actor/reply! e (:question p) (str action " " (:id p) ". " (or (:text args) "")) {:live-decision decision})
+       {:status :decided :decision decision :proposal (:id p)}))))))
+(defn answer! [live msg text]
+ (let [e (environment live) fact (env/pull e [:msg/data] (env/eid e :msg/id msg))
+       id (get-in fact [:msg/data :live-change])]
+  (if id
+   (if (not= msg (:question (change/view e id))) {:status :refused :kind :question-mismatch}
+   (let [action (first (keep (fn [a] (when (= (str a " " id) (str/trim text)) a)) ["apply" "revise" "discard"]))]
+    (if action (decide! live {:proposal id :decision action})
+     ;; Free text is a revision request, never implicit publication authority.
+     (decide! live {:proposal id :decision "revise" :text text}))))
+   {:reply (actor/reply! e msg text)})))
+(defn verify! [live args meta]
+ (locked live
+  (fn []
+   (let [e (environment live) p (change/view e (:candidate args)) expected (get-in p [:policy :delta])]
+    (cond
+     (not= :applied (:status p)) {:status :refused :kind :publication-required}
+     (and (:task meta) (not= (:task meta) (:task p))) {:status :refused :kind :task-mismatch}
+     (not= (get-in p [:receipt :after :digest]) (:digest (current live))) {:status :refused :kind :generation-changed}
+     :else
+      (let [result (worker-turn live
+                     (fn [] (let [a (worker-call! live) b (worker-call! live) delta (- (:value b) (:value a))]
+                       {:status (if (and expected (= expected delta)) :passed :failed)
+                        :expected-delta expected :observed-delta delta :first a :second b})))
+            p (assoc p :verification result)]
+       (change/save! e p)
+       (record! live :live/verify meta {:status (:status result) :proposal (:id p) :result result :note "Observed behavior through the original client protocol."})
+       result))))))
+
+(def HARNESS-PROMPT
+ (str "You are Omega's live-editing harness inside an isolated world. Use eval (Beam Lisp) and live. "
+      "Inspect live snapshot and read live-worker.bl before editing. Only change this owned worker's source, via (read), (edit) or (write) in eval. "
+      "Preserve its protocol and nonnegative state invariant; never restart the worker or reset state. No shell or network is needed. "
+      "Source publication does not publish code. After editing, live rehearse returns an exact candidate id. "
+      "Call live submit with that candidate id and a concise summary. In review policy submit parks this turn; do not call done before a decision. "
+      "After a human reply, inspect receipt for that exact id. If approved apply that same id, then verify using the SAME candidate argument. All submit/apply/verify/receipt/discard calls require candidate. If scoped submit returns authorized, apply and verify immediately. "
+      "If refused, investigate and prepare a new candidate; never silently widen scope. Never treat prose yes as approval. "
+      "If publication is uncertain inspect receipt and stop; do not reapply. A discarded proposal must not be applied. "
+      "After verification passes, call eval (done \"summary\"). For revision requests update the source and prepare a NEW candidate. "
+      "Keep tool calls small and sequential. Tool outputs are EDN. CodeMode already refers clojure.string as str. "
+      "Example eval: (let [s (read \"live-worker.bl\")] (println s)); (edit \"live-worker.bl\" [{:old \"delta 1\" :new \"delta 5\"}])."))
+(defn completion-error [live id]
+ (let [p (last (filter #(= id (:task %)) (change/all (environment live))))]
+  (cond
+   (and (= :applied (:status p)) (= :passed (get-in p [:verification :status]))
+        (= (:epoch live) (:epoch p)) (= (get-in p [:receipt :after :digest]) (:digest (current live)))) nil
+   (and (= :discarded (:status p)) (= "discard" (get-in p [:decision :action]))) nil
+   :else (str "Live task is not complete. "
+              (if (= :applied (:status p))
+               (str "Call live verify with candidate " (:id p) "; only finish after it passes.")
+               "Inspect the exact proposal receipt; prepare, submit and apply under its policy, or wait for a decision.")))))
+(defn harness-system [live sys run]
+ (let [provider (when-not (get-in live [:opts :harness-step])
+                  (llm/configured (or (get-in live [:opts :provider-root]) (:root live)) (:provider run)))]
+  (assoc sys :step (or (get-in live [:opts :harness-step]) (llm/step provider))
+             :tools (vec (concat
+                       [(assoc cm/eval-tool :run
+                         (fn [ctx args]
+                          (let [r ((:run cm/eval-tool) ctx args)]
+                           (if (:done r)
+                            (if-let [error (completion-error live (:task ctx))] {:error error} r)
+                            r))))]
+                       (tools live))) :system-prompt HARNESS-PROMPT
+             :max-steps 18 :token-budget {:input 100000 :output 24000})))
+(defn recover-system [live sys id]
+ (if-let [run (get-in (task/view sys id) [:run :live])]
+  (harness-system live sys run) sys))
+(defn run-harness!
+ ([live] (run-harness! live {}))
+ ([live args]
+ (locked live
+  (fn []
+   (require-demo! live)
+   (let [old (:task @(:state live))]
+    (if (and old (not (task/terminal? (:status (task/view (:sys live) old))))) {:task old :existing true}
+     (let [delta (or (:delta args) 5) mode (or (:policy args) "review")
+           _ (when-not (and (integer? delta) (<= 1 delta 100) (contains? #{"review" "scoped"} mode))
+               (throw (ex-info "Choose a delta from 1 to 100 and review or scoped publication." {})))
+           run {:provider (or (:provider args) "claude") :policy mode :delta delta :target "worker" :epoch (:epoch live)}
+           s (harness-system live @(:task-system live) run)
+           model (if (get-in live [:opts :harness-step]) "contract-model"
+                    (:model (llm/configured (or (get-in live [:opts :provider-root]) (:root live)) (:provider run))))
+           id (task/open! s {:goal (str "Change the live worker to count by " delta ". Preserve all accepted work, the PID and old clients. "
+                                         "Rehearse and submit the proposal. Publication policy: " mode ". After publication verify the actual increment, then finish.")
+                            :title (str "Live edit · " (:provider run)) :place "project" :home {:path (:address live)}
+                            :scope [(:path live)] :run {:model model :may "edit" :live run}})]
+      (swap! (:state live) assoc :task id) {:task id :provider (:provider run) :model model :policy mode})))))))
+(defn intents [live]
+ (merge (into {} (map (fn [operation]
+                       [(str "live/" operation) (fn [args] (perform! live operation args {:actor (str "human:" (or (:client args) "me"))}))])
+                  ["snapshot" "start-demo" "rehearse" "apply" "discard"]))
+        {"live/run-harness" (fn [args] (run-harness! live args))
+         "live/decide" (fn [args] (decide! live args))
+         "msg/answer" (fn [{:keys [msg text]}] (answer! live msg (str text)))
+         "live/stop-harness" (fn [_]
+                                (when-let [id (:task @(:state live))] (task/cancel! (:sys live) id))
+                                {:status :cancelled})}))
+(defn provider []
+ {:read (fn [_ _] {:title "Live editing" :read-only? true :text
+                  "#+TITLE: Live editing\n#+USE: live\n\nOpen Live with space r l.\nEdit the worker, rehearse, and choose what becomes live.\n"})})
+(defn stop! [live]
+ (when live
+  (when-let [p (:traffic @(:state live))] (when (Process/alive? p) (GenServer/stop p)))
+  (try
+   (locked live
+    (fn []
+     (when-let [p (:owner @(:state live))] (when (Process/alive? p) (GenServer/stop p)))
+     (doseq [g (reverse (:graphs @(:state live)))] (generation/retire! g))))
+   (finally (when (Process/alive? (:controller live)) (GenServer/stop (:controller live)))))) :ok)

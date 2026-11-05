@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {pathToFileURL} from 'node:url';
+import path from 'node:path';
+const out=path.resolve(process.env.BLED_OUT||'vendor/bl-ed/web/out');
+const load=n=>import(pathToFileURL(path.join(out,n+'.mjs')));
+const R=await load('rt'),M=await load('ed.main'),P=await load('ed.pkg'),D=await load('dossier.main'),T=await load('ed.text');
+const K=R.kw,g=(m,k)=>m?.get(K(k),null),map=R.hashMap;
+test('dossier use/unuse is exact in every editor, and source switching retains typing',()=>{
+ const boot=M.d_boot('#+TITLE: Original\n* Section\ntext\n','work:project/review.bl.org');
+ const original=boot.assoc(K('doc'),map(K('rev'),'0',K('data'),map(K('buffer'),true,K('dossier'),map(K('url'),'/documents/test/view'))));
+ let ed=P.d_use(original,D.d_bl_package);
+ const view=M.d_render(ed);assert.equal(g(g(g(view,'lines').toArray()[0],'host'),'package'),'dossier');
+ ed=M.d_handle(ed,map(K('type'),K('dossier/edit')));
+ assert.equal(g(D.d_render(ed),'lines'),undefined);
+ ed=M.d_handle(M.d_handle(ed,map(K('type'),K('key'),K('key'),'i')),map(K('type'),K('text'),K('text'),'DRAFT '));
+ const text=T.d_to_string(g(ed,'text'));ed=D.d_toggle(ed);ed=D.d_toggle(ed);
+ assert.equal(T.d_to_string(g(ed,'text')),text);
+ const restored=P.d_unuse(P.d_use(original,D.d_bl_package),'dossier');
+ for(const key of ['text','sels','saved-text','doc','mode','view','user-commands','user-keys'])assert.equal(R.printStr(g(restored,key)),R.printStr(g(original,key)),key);
+});

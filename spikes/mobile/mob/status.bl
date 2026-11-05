@@ -66,5 +66,5 @@
           :else p)))
 
 (defn one-line [text n]
-  (let [t (s/trim (first (s/split (str (or text "")) #"\n")))]
+  (let [t (s/trim (or (first (s/split (str (or text "")) #"\n")) ""))]
     (if (> (count t) n) (str (subs t 0 (dec n)) "…") t)))

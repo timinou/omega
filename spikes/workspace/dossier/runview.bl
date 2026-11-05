@@ -1,0 +1,131 @@
+; dossier/runview.bl — a person's screen, drawn from a procedure and its facts.
+;
+;   #+begin_run :id r1 :procedure demo-handoff :as ahmed :title "Ahmed, mid-review"
+;   team lead othman | reviewers ahmed amine | verifier omega
+;   fact drafted | demo | harness
+;   fact handed-over | demo | othman
+;   fact checked | reaction/amine | omega | flag | No source for the 40-person claim
+;   #+end_run
+;
+; Nothing on the screen is written by hand: the rail is the procedure's
+; steps, the cards are what the run asks of this person, the glyphs are
+; output states, the breathing chips are what the harness is doing, the
+; lock is the next gate and who it waits on. Change the facts and the
+; screen follows; change the procedure and every screen drawn from it does.
+
+(ns dossier.runview
+  (:require [dossier.ui :as ui] [ensemble.format :as f] [ensemble.run :as r]))
+
+(defn- cells [l] (vec (map trim (String/split l "|"))))
+
+(defn team-of
+  "`team lead othman | reviewers ahmed amine` (+ `load amine 1 | ahmed 4`) → team map."
+  [body]
+  (let [roles (into {} (for [l body :when (starts-with? (trim l) "team ") c (cells (subs (trim l) 5))
+                             :let [[role & who] (String/split c (Regex/compile! "\\s+"))] :when (seq who)]
+                         [(String/replace role "_" " ") (vec who)]))
+        load (into {} (for [l body :when (starts-with? (trim l) "load ") c (cells (subs (trim l) 5))
+                            :let [[who n] (String/split c (Regex/compile! "\\s+"))] :when n]
+                        [who (erlang/binary_to_integer n)]))]
+    {:members (vec (distinct (remove (fn [p] (contains? #{"omega" "harness"} p)) (apply concat (vals roles)))))
+     :roles roles :load load}))
+
+(defn facts-of
+  "`fact KIND | target | by | verdict-or-note | says` lines → facts."
+  [body]
+  (vec (for [l body :when (starts-with? (trim l) "fact ")]
+         (let [[kind target by x says] (cells (subs (trim l) 5))
+               k (keyword kind)]
+           (merge {:fact k :by by}
+                  (case k
+                    :called {:step target}
+                    :routed {:step target :to by}
+                    :checked {:output target :verdict (keyword (or x "ok")) :says says}
+                    :asked-change {:output target :note x}
+                    {:output target}))))))
+
+(defn- av [p] [:span {:class (str "rv-av a" (mod (erlang/phash2 p) 6)) :title p} (upper-case (subs p 0 1))])
+
+(defn- dot [state] [:i {:class (str "rv-dot " (name state)) :title (name state)}])
+
+(defn- last-by [run output]
+  (:by (last (filter (fn [x] (and (= output (:output x)) (contains? #{:drafted :shared :handed-over} (:fact x)))) (:facts run)))))
+
+(defn- acts [state]
+  (case state
+    :expected (list (ui/ico "edit") (ui/ico "attach"))
+    :draft (list [:b.rv-go (ui/ico "check")] (ui/ico "edit"))
+    :changes (list [:b.rv-go (ui/ico "edit")] (ui/ico "comment"))
+    (list)))
+
+(defn screen
+  "The phone screen of `me` in `run`, as hiccup children of `.screen`."
+  [run me title]
+  (let [v (r/view run)
+        steps (:steps v)
+        icon-of (into {} (for [s steps] [(:id s) (or (:icon s) "grid")]))
+        mine (get (:asks v) me [])
+        done (count (filter (fn [s] (= :done (:status s))) steps))
+        gate (first (filter (fn [s] (and (= "gate" (:verb s)) (= :open (:status s)))) steps))
+        others (for [[p as] (:asks v) :when (not= p me) a as] [p a])
+        checks (group-by :output (:checks v))]
+    (list
+      [:div.rv-head
+       [:div [:b title] [:small (str done " of " (count steps) " steps done")]]
+       [:div.rv-me (av me)]]
+      [:div.rv-rail
+       (for [s steps :when (not= "note" (:verb s))]
+         [:span {:class (str "rv-s " (:verb s) " " (name (:status s))
+                             (if (some (fn [p] (= p me)) (:who s)) " mine" ""))
+                 :title (str (:title s) " · " (name (:status s)))}
+          (ui/ico (or (:icon s) "grid"))])]
+      (if (seq mine)
+        (list [:div.rv-sec "For you" [:span (count mine)]]
+              (for [a mine :let [cs (get checks (:output a))]]
+                [:div {:class (str "rv-card " (name (:state a)))}
+                 [:span.rv-ico (ui/ico (get icon-of (:step a)))]
+                 [:div.rv-txt
+                  [:span {:class (str "rv-verb " (lower-case (:verb a)))} (:verb a)]
+                  [:b (first (String/split (:output a) "/"))]
+                  [:span.rv-meta (dot (:state a))
+                   (when (= "harness" (last-by run (:output a))) (list (ui/ico "spark") "drafted"))]
+                  (for [c cs] [:span {:class (str "rv-check " (name (:verdict c)))} (ui/ico "eye") (or (:says c) (name (:verdict c)))])]
+                 [:div.rv-acts (acts (:state a))]]))
+        [:div.rv-clear (ui/ico "check") [:span "Nothing waits on you"]])
+      (when (seq (:headless v))
+        [:div.rv-harness
+         (for [h (:headless v)]
+           [:span.rv-chip (ui/ico (case (:does h) :call "link" :check "eye" "spark"))
+            (or (:output h) (:step h))])])
+      (when (seq others)
+        (list [:div.rv-sec "Moving" [:span (count others)]]
+              [:div.rv-others
+               (for [[p a] others]
+                 [:div.rv-other (av p) (ui/ico (get icon-of (:step a))) [:span (first (String/split (:output a) "/"))] (dot (:state a))])]))
+      (when gate
+        [:div.rv-gate (ui/ico "lock")
+         [:span (:title gate)]
+         [:span.rv-wait (for [o (:outputs gate) i (r/instances run (:name o)) :when (not= :final (r/output-state run i))
+                              :let [w (second (String/split i "/"))]]
+                          (if w (av w) (dot (r/output-state run i))))]]))))
+
+(defn run-h
+  "A `run` block as a phone, with the same reactions as a screen."
+  [b proc]
+  (let [a (:attrs b)
+        run (reduce r/add (r/start proc (team-of (:body b)) (or (:id a) "run")) (facts-of (:body b)))]
+    [:figure {:class (str "phone rv" (if (:design a) (str " design-" (:design a)) "")) :id (str "screen-" (:id a))}
+     [:div.device
+      [:div.statusbar [:span "9:41"] [:span.notch] [:span "◔ ▮▮"]]
+      [:div.screen (screen run (or (:as a) (first (get-in run [:team :members]))) (or (:title proc) (:procedure a)))]]
+     [:figcaption
+      [:div.cap-top [:span.chip (:id a)] [:b (ui/md (or (:title a) ""))]]
+      (when (:caption a) [:p (ui/md (:caption a))])
+      (ui/feedback-h a [["love" "Love it"] ["fine" "Fine"] ["rework" "Rework"]] "How does it feel?")]]))
+
+(defn procedure-of-node
+  "The ensemble procedure a #+begin_procedure node holds."
+  [nd]
+  (let [a (:attrs nd)]
+    (first (f/procedures (str "#+begin_procedure :id " (:id a) " :title \"" (or (:title a) (:id a)) "\"\n"
+                              (join "\n" (:body nd)) "\n#+end_procedure")))))

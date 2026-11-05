@@ -178,6 +178,28 @@
 
 (declare layouts)
 
+(defn close-panel
+  "Remove an appended view, preserving every editor and the prior layout widths."
+  [fr]
+  (if-let [panel (:panel fr)]
+    (cond-> (-> fr (assoc :layout (:layout panel)) (dissoc :panel :column-widths))
+      (:column-widths panel) (assoc :column-widths (:column-widths panel))) fr))
+
+(defn open-panel
+  "Append a package layout's view panes to the current layout. Editor panes
+   remain intact. :of defaults to the emitting editor. Only one panel is open."
+  [fr request]
+  (let [fr (close-panel fr) ed (editor fr (:pane request))
+        layout (get (layouts ed) (:layout request))
+        source (or (:of request) (:pane request))
+        views (vec (filter view-pane? (:panes layout)))
+        ids (set (map :id (panes fr)))
+        provider (first (filter #(get-in % [:provides :layouts (:layout request)]) (reverse (pkg/packages ed))))]
+    (if (or (empty? views) (nil? (editor fr source)) (some #(contains? ids (:id %)) views)) fr
+      (-> fr
+          (assoc :panel {:package (:name provider) :layout (:layout fr) :column-widths (:column-widths fr)})
+          (update-in [:layout :panes] into (mapv #(assoc % :view [(first (:view %)) source]) views))))))
+
 (defn reconfigure
   "A package-requested layout transition. :keep maps destination pane ids to
    existing source ids (:origin names the sender); nil requests a fresh editor.
@@ -229,6 +251,7 @@
         fr (assoc fr :effects [])]
     (reduce (fn [f e]
               (cond
+                (= :frame-panel (:kind e)) (if (:layout e) (open-panel f e) (close-panel f))
                 (= :frame-layout (:kind e)) (reconfigure f e)
                 (= :frame-focus (:kind e))
                 (let [ids (editor-ids f)
@@ -294,6 +317,7 @@
                            (-> fr (assoc-in [:editors other] ed)
                                (update :effects into (map (fn [e] (assoc e :pane other)) effects)))))
                        fr (filter (fn [o] (not= o id)) (editor-ids fr)))
+            fr (if (some #(= % (get-in fr [:panel :package])) gone) (close-panel fr) fr)
             provided? (contains? (layouts now) (:name (:layout fr)))
             replacement? (some (fn [effect] (and (= :frame-layout (:kind effect))
                               (contains? (layouts now) (:layout effect)))) (:effects fr))]

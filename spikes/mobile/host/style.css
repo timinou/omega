@@ -129,3 +129,9 @@
 .mobile-app .change-heading strong {overflow-wrap:anywhere;min-width:0}
 .mobile-app .diff code {display:block}
 .mobile-app .sheet-error {border-left:2px solid var(--rose,#c98f8c);background:var(--rose-bg,#f5e6e4);padding:10px 12px;margin-top:32px;font-size:13px}
+
+/* Existing reader pane; retain the original dossier presentation within it. */
+.dossier-frame{display:block;width:100%;height:calc(100dvh - 190px);min-height:360px;border:0;background:transparent}.dossier-frame[hidden]{display:none}
+/* Document tasks use the existing composer, with one compact source reference. */
+.launch-origin{margin:8px 0 16px}.launch-origin .chips{display:flex;gap:6px;margin:8px 0}.launch-origin details{font-size:13px;max-width:100%}.origin-preview{max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.5}.origin-link{display:flex;align-items:center;gap:6px;max-width:100%;padding:6px 0;border:0;background:transparent;text-align:left;color:var(--muted);font-size:12px;min-height:32px}.origin-link span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.origin-link svg{flex-shrink:0}.reader-tools .icon-button{min-width:36px;min-height:40px}.source-origin{outline:1px solid var(--accent,#b86b4e);outline-offset:5px;background:rgba(184,107,78,.06)}
+.pocket .launch-origin{padding:0 16px}.pocket .launch-origin .chips{flex-wrap:wrap}.pocket .launch-origin .origin-preview{margin:8px 0}.origin-link{color:var(--ink,#3d3028)}

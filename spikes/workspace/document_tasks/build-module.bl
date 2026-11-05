@@ -1,0 +1,6 @@
+; Build-only entry: compile the current package against the same pinned runtime.
+(ns document-tasks.build-module (:require [bl.js :as js]))
+(let [[out] (BeamLisp/argv) root (File/cwd!)]
+  (println (js/build! "document-tasks.main"
+             {:paths (list (str root "/vendor/bl-ed") (str root "/spikes/workspace"))
+              :stub "lower" :with "reader" :host "eval-ed,eval-cells" :out out})))

@@ -1,0 +1,106 @@
+(ns document-task-context-test
+ (:require [omega.document-source :as source] [omega.documents :as documents]
+           [omega.workspace :as workspace] [omega.env :as env] [omega.task :as task]
+           [omega.loop :as loop] [omega.ed.providers :as pv] [links.model :as links]
+           [buffer.model :as buffer] [place.model :as place] [dossier.org :as org]
+           [clojure.string :as str]))
+(def text ":PROPERTIES:\n:ID: file-trial-123\n:END:\n#+TITLE: An ordinary Org file\n* First\n:PROPERTIES:\n:ID: section-first\n:END:\nA repeated sentence.\n\n#+NAME: strange-part\n#+begin_unusual :anything yes\nA repeated sentence.\n#+end_unusual\n** Child\nChild body.\n* Second\nA repeated sentence.\n")
+(deftest canonical-scopes-do-not-depend-on-components
+ (let [part (source/capture text {:scope "part" :row 12})
+       section (source/capture text {:scope "section" :row 12})
+       whole (source/capture text {:scope "document" :row 12})]
+  (is (= "file-trial-123" (:org-id (source/index text))))
+  (is (= [11 14] [(:start part) (:end part)]))
+  (is (= {:kind "name" :value "strange-part"} (:anchor part)))
+  (is (= [4 16] [(:start section) (:end section)]))
+  (is (= {:kind "id" :value "section-first"} (:anchor section)))
+  (is (= "An ordinary Org file" (:label whole)))
+  (is (str/includes? (:text whole) "* Second"))
+  (is (= 12 (:row (source/reveal (str "\n" text) part)))))
+ (let [nodes (:nodes (org/read-doc text)) block (first (filter #(= :block (:t %)) nodes))
+       paras (filter #(= :para (:t %)) nodes)]
+  (is (= [11 14] [(:from block) (:to block)]))
+  (is (= [8 15 17] (map :from paras)))
+  (is (= [9 16 18] (map :to paras)))))
+(deftest ids-recover-renamed-headings-and-ambiguity-never-guesses
+ (let [section (source/capture text {:scope "section" :row 12})
+       changed (str/replace text "* First" "* Renamed")
+       part (source/capture text {:scope "passage" :start 17 :end 18})]
+  (is (= "changed" (:state (source/reveal changed section))))
+  (is (= 4 (:row (source/reveal changed section))))
+  (is (= "ambiguous" (:state (source/reveal text (dissoc part :anchor)))))
+  (is (= "missing" (:state (source/reveal "#+TITLE: Empty\n" part))))))
+(defn fixture []
+ (let [root (str "/tmp/omega-document-task-" (System/pid) "-" (erlang/unique_integer (list :positive)))
+       db (str root "/db") _ (File/mkdir_p! root)
+       _ (File/write! (str root "/plan.bl.org") text)
+       e (env/open {:schema workspace/schema :path db})
+       server (workspace/start! e root)
+       base (task/start-system e {:root root :step (fn [_] (loop/say "Ready for follow-up."))})
+       sys (assoc base :documents (documents/registry base server {}))]
+  {:root root :db db :env e :server server :sys sys}))
+(defn close [f] (task/stop-system! (:sys f)) (workspace/stop! (:server f)) (env/close! (:env f)))
+(deftest separate-starts-have-durable-source-origins-and-save-answer-starts-nothing
+ (let [{:keys [root sys server] :as f} (fixture) r (:documents sys)]
+  (try
+   (File/write! (str root "/answers.bl.org") "#+TITLE: Review\n#+begin_ask :id q :options Yes|No\nProceed?\n#+end_ask\n")
+   (let [entry (documents/resolve-document r "project:project/answers.bl.org") d (documents/snapshot r entry)]
+     (is (:ok (documents/submit-answer! r entry {:id "q" :answer "Yes" :note "Only save this" :base (:rev d)})))
+     (is (empty? (task/all sys))))
+   (let [options (workspace/options sys server {}) intents (pv/intents sys options)
+         s (documents/context! r {:path "project:project/plan.bl.org" :scope "section" :row 12})
+         result ((get intents "task/open") {:goal "Consider this section, then work wherever useful." :selection s})
+         id (:id result) v (task/await sys id 5000)]
+    (is (= :idle (:status v)))
+    (is (= "section" (get-in v [:origin :scope])))
+    (is (= (:path s) (get-in v [:home :path])))
+    (is (= "section-first" (get-in v [:origin :anchor :value])))
+    (is (= "Consider this section, then work wherever useful." (:goal v)))
+    (let [request (loop/request sys id)]
+      (is (str/includes? (get-in request [:messages 0 :content 1 :text]) "not a restriction"))
+      (is (str/includes? (get-in request [:messages 0 :content 1 :text]) "#+begin_unusual")))
+    (is (= (:path s) (get-in (first (links/all (:env f) {:task id})) [:to :path])))
+    (is (empty? (:scope v)))
+    (File/rename (str root "/plan.bl.org") (str root "/renamed.bl.org"))
+    (is (= (str root "/renamed.bl.org") (:file (documents/reveal! r (:origin v)))))
+    (close f)
+    (let [e (env/open {:schema workspace/schema :path (:db f)}) server (workspace/start! e root)
+          sys (assoc (task/start-system e {:root root :step (fn [_] (loop/say "Recovered"))}) :documents nil)
+          sys (assoc sys :documents (documents/registry sys server {}))]
+      (try
+       (is (= "section-first" (get-in (task/view sys id) [:origin :anchor :value])))
+       (is (= 4 (:row (documents/reveal! (:documents sys) (:origin (task/view sys id))))))
+       (finally (task/stop-system! sys) (workspace/stop! server) (env/close! e)))))
+   (finally
+    (when (Process/alive? (:server f)) (close f))
+    (File/rm_rf! root)))))
+(deftest stale-launch-keeps-the-goal-and-does-not-create-a-task
+ (let [{:keys [root sys server] :as f} (fixture) r (:documents sys)]
+  (try
+   (let [s (documents/context! r {:path "project:project/plan.bl.org" :scope "document"})]
+    (File/write! (str root "/plan.bl.org") (str text "Changed externally\n"))
+    (is (try ((get (pv/intents sys (workspace/options sys server {})) "task/open") {:goal "Keep this goal" :selection s}) false (catch _ true)))
+    (is (empty? (task/all sys))))
+   (finally (close f) (File/rm_rf! root)))))
+
+(deftest org-affiliated-names-and-planning-lines-retain-standard-ids
+ (let [text "#+TITLE: Headers first\n:PROPERTIES:\n:ID: file-after-title\n:END:\n* TODO Plan\nSCHEDULED: <2026-11-04 Wed>\n:PROPERTIES:\n:ID: scheduled-section\n:END:\n\n#+NAME: totals\n| A | B |\n| 1 | 2 |\n"]
+   (is (= "file-after-title" (:org-id (source/index text))))
+   (is (= {:kind "id" :value "scheduled-section"} (:anchor (source/capture text {:scope "section" :row 12}))))
+   (is (= {:kind "name" :value "totals"} (:anchor (source/capture text {:scope "part" :row 12}))))))
+
+(deftest existing-task-blocks-and-followups-retain-the-same-captured-origin
+ (let [{:keys [root sys server] :as f} (fixture)
+       text "#+TITLE: Existing tasks\n#+begin_task :id work\nDo this.\n#+end_task\n"]
+  (try
+   (File/write! (str root "/tasks.bl.org") text)
+   (let [result ((get (pv/intents sys (workspace/options sys server {})) "task/open")
+                 {:goal "Do this." :path "project:project/tasks.bl.org" :block "work"})
+         id (:id result) first-view (task/await sys id 5000) origin (:origin first-view)]
+     (is (= "work" (get-in first-view [:home :block])))
+     (is (= {:kind "block" :value "work"} (:anchor origin)))
+     (is (= text (File/read! (str root "/tasks.bl.org"))))
+     (task/say! sys id "Also review the result.")
+     (task/await sys id 5000)
+     (is (= origin (:origin (task/view sys id)))))
+   (finally (close f) (File/rm_rf! root)))))

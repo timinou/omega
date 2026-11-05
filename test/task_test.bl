@@ -71,6 +71,24 @@
     (is (= "saw: no such file: /nonexistent/x" (:result v)))
     (task/stop-system! sys)))
 
+(deftest a-tool-can-park-a-turn-without-running-later-calls-in-the-batch
+ (let [side-effects (atom 0) calls (atom 0)
+       response {:content [{:type :tool-use :id "proposal" :name "park" :input {}}
+                           {:type :tool-use :id "later" :name "mutate" :input {}}] :stop :tool-use}
+       sys (task/start-system (env/open)
+             {:step (fn [_] (swap! calls inc) response)
+              :tools [{:name "park" :run (fn [_ _] {:ok "Ready for a decision" :pause true})}
+                      {:name "mutate" :run (fn [_ _] (swap! side-effects inc) {:ok "mutated"})}]})
+       id (task/open! sys {:goal "Prepare, then wait"})]
+  (try
+   (is (= :idle (:status (task/await sys id 5000))))
+   (is (= 1 @calls))
+   (is (= 0 @side-effects))
+   (let [results (:content (last (loop/turns sys id)))]
+    (is (= ["proposal" "later"] (map :id results)))
+    (is (= true (:error? (second results)))))
+   (finally (task/stop-system! sys) (env/close! (:env sys))))))
+
 (deftest a-model-error-fails-the-task
   (let [sys (system (loop/scripted [{:error {:status 529}}]))
         id (task/open! sys {:goal "x"})
@@ -112,6 +130,16 @@
       (is (= {:id id :status :cancelled :children [{:id (first kids) :status :cancelled :children []}]}
              (task/tree sys id))))
     (task/stop-system! sys)))
+
+(deftest a-cancelled-owner-cannot-admit-another-child
+ (let [sys (system (loop/scripted [(loop/say "ready")]))
+       id (task/open! sys {:goal "Owner"})]
+  (try
+   (task/await sys id 5000)
+   (task/cancel! sys id)
+   (is (try (task/open! sys {:goal "Too late" :owner id}) false (catch _ true)))
+   (is (= [] (task/children sys id)))
+   (finally (task/stop-system! sys) (env/close! (:env sys))))))
 
 (deftest a-failed-subtask-notifies-its-owner-bottom-up
   (let [sys (system (loop/by-goal {"parent" [(loop/call-tool "eval" {:code "(spawn \"child\")"})

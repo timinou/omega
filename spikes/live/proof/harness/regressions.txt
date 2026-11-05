@@ -1,0 +1,41 @@
+Real harness integration, 2026-11-05.
+
+Real provider tool-call and continuation smoke: Claude and DeepSeek passed.
+Configured Codex gateway returned HTTP 503; no fallback was substituted.
+Full real Claude CLI task: edited source -> rehearsed -> parked -> exact decision
+-> same-task apply -> verification -> done -> receipt reconciliation -> return.
+Real DeepSeek Pocket/desktop walkthrough: 7 checks, zero browser exceptions.
+Manual desktop walkthrough: 7 checks, zero browser exceptions.
+Mobile viewport sizes: 320x740, 390x844, 844x390, 1024x768.
+
+Native contracts: Live 89 + provider adapters 67 + tasks 44 assertions green.
+Compatibility: tasks 44, actors 15, CodeMode 15, packages 40,
+loop projection 30, core changes 29, workspace desk 20, buffers 48; all green.
+The 44 task assertions overlap the contracts run (397 distinct assertions total).
+An initial compatibility run exposed the task-admission/cancellation race;
+the final run passes after serializing admission/cancellation and rejecting
+children of closed owners. Premature harness completion is now refused until
+publication verification passes; a dedicated native contract checks it.
+
+Compiled package/Pocket drive: 26 tests passed.
+Entire vendored editor suite: 89 tests passed.
+Unchanged presentation equivalence check: 4 documents, no bad variants.
+PP_OUT printing facade only aliases real rt.printStr as core.pr_str; every
+comparison executes the actual remotely compiled pp.check.
+
+All proofs used disposable offline worlds. The real CLI proof used a temporary
+durable store; browser worlds were in memory. The account world was untouched.
+Proposal/receipt recovery does not restore VM-local worker state after VM loss.
+No Android APK was built, signed or deployed.
+
+The final Live run includes separate proposal/question identities in their
+atomic transaction and an actionable error for missing exact verification ids.
+The final real browser run uses that contract and the enforced completion gate.
+Codex diagnosis: gateway HTTP 503, overloaded_error, no usable upstream
+credential (codex-unavailable.json). Provider keys were never written to proof.
+
+Package unuse retention is measured synchronously in one browser JS turn,
+including all retained editor paths/text and Pocket composer drafts. The
+package must also be absent from every editor and its DOM panel removed.
+This isolates unuse from independent task-document refreshes. A live-preview
+diagnostic also retained every editor unchanged (unuse-diagnostic.json).

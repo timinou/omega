@@ -1,0 +1,42 @@
+:PROPERTIES:
+:ID: omega-document-task-acceptance
+:END:
+#+TITLE: Work from any Org document
+#+SUBTITLE: A part, a section, or the whole file — one source reference.
+
+* The plan
+:PROPERTIES:
+:ID: plan-section
+:END:
+This is ordinary Org prose. Start a task here without answering anything.
+
+** A detail
+:PROPERTIES:
+:CUSTOM_ID: detail
+:END:
+The same sentence appears twice.
+
+#+NAME: arbitrary-component
+#+begin_custom :title "An unfamiliar component"
+This block is deliberately not a dossier decision. It can still start work.
+#+end_custom
+
+* Review decisions
+:PROPERTIES:
+:ID: review-section
+:END:
+Save any number of answers. Start a task separately when you choose.
+
+#+begin_ask :id q1 :title "How should it feel?" :options Compact|Detailed
+Keep task creation separate from file feedback.
+#+end_ask
+
+#+begin_ask :id q2 :title "Where should it start?" :options Part|Section|File
+Choose an initial context without limiting what the agent may do.
+#+end_ask
+
+* Another section
+The same sentence appears twice.
+
+* Something real to try
+Ask a task to add a short closing paragraph here, then inspect its changes.

@@ -1,0 +1,131 @@
+; dossier/film.bl — a filmed scenario as a dossier block: the movie, its
+; scenes, each step and claim with its verdict, and the gaps.
+;
+;   #+begin_film :id f-review :title "Relire un projet" :run ../demos/relire-un-projet :src https://…/demo.mp4
+;   The experience, in a sentence or two.
+;   missing @upload Déposer depuis le bureau | why it cannot be filmed yet
+;   #+end_film
+;
+; A beat not filmed yet is best declared in the scenario itself, where it
+; belongs: a step whose act is [:missing "what" "why"], which the world records
+; without doing anything. It is drawn among the other steps in its own colour.
+;
+; :run is a scenario.demo output folder (run.json, film.json, film/manifest.json),
+; relative to the dossier. `enrich` reads it — the one impure function, called by
+; the server before rendering; `film-h` draws from the data it attached. The
+; gaps are computed, never typed: a scene that proves nothing, actions after a
+; scene's last claim, a claim not witnessed, a film not rendered, and the
+; `missing` beats the author declares.
+
+(ns dossier.film
+  (:require [bl.json :as json] [dossier.ui :as ui]))
+
+;; ── reading a run (I/O, server side) ─────────────────────────────────────
+
+(defn- read-json [p] (when (File/regular? p) (try (json/decode (File/read! p)) (catch _ nil))))
+
+(defn enrich
+  "The document with each film block's recorded run attached as :data."
+  [doc dir]
+  (assoc doc :nodes
+    (vec (for [nd (:nodes doc)]
+           (if (and (= :block (:t nd)) (= "film" (:lang nd)) (:run (:attrs nd)))
+             (let [root (Path/expand (Path/join dir (:run (:attrs nd))))]
+               (assoc nd :data {:run (read-json (Path/join root "run.json"))
+                                :failure (read-json (Path/join root "failure.json"))
+                                :film (read-json (Path/join root "film.json"))
+                                :manifest (read-json (Path/join root "film/manifest.json"))}))
+             nd)))))
+
+;; ── reading a step ───────────────────────────────────────────────────────
+
+(def ^:private cosmetic #{"pause" "hover" "wait" "missing"})
+
+(defn- step-kind [s] (get-in s ["trace" "kind"]))
+(defn- verb [s] (let [a (get-in s ["trace" "action"])] (when (= "act" (first a)) (first (nth a 2)))))
+(defn- target [s] (let [a (get-in s ["trace" "action"])] (when (= "act" (first a)) (str (or (second (nth a 2)) "")))))
+(defn- claim-msg [s] (let [a (get-in s ["trace" "action"])] (when (= "expect" (first a)) (str (last a)))))
+(defn- missing-of
+  "[what why] when the step is a beat not filmed yet."
+  [s] (let [a (get-in s ["trace" "action"])] (when (and (= "act" (first a)) (= "missing" (first (nth a 2)))) [(str (nth (nth a 2) 1)) (str (nth (nth a 2) 2 ""))])))
+
+(defn- mark [v]
+  (case v "witnessed" ["◉" "ok"] "proven" ["✓" "ok"] "refuted" ["✗" "ko"] "unknown" ["?" "unk"] ["·" ""]))
+
+(defn- short [t n] (let [t (str t)] (if (> (count t) n) (str (subs t 0 (dec n)) "…") t)))
+
+(defn- scene-ranges
+  "[{:id :title :say :from :to}] from film.json's step marks."
+  [film]
+  (vec (keep (fn [sc] (let [ms (map (fn [m] (get m "step")) (get sc "step-marks"))]
+                        (when (seq ms) {:id (get sc "id") :title (get sc "title") :say (get sc "say")
+                                        :from (reduce min ms) :to (reduce max ms)})))
+             (get film "scenes"))))
+
+(defn- gaps-of
+  "What this scene leaves unproven."
+  [steps]
+  (let [claims (filter (fn [s] (= "expect" (step-kind s))) steps)
+        last-claim (if (seq claims) (reduce max (map (fn [s] (get s "i")) claims)) 0)
+        acts (filter (fn [s] (and (= "act" (step-kind s)) (not (contains? cosmetic (verb s))))) steps)]
+    (concat
+      (when (and (seq acts) (empty? claims)) [["scene" "Scène sans preuve : ses gestes ne sont confirmés par aucune assertion"]])
+      (keep (fn [s] (when (> (get s "i") last-claim) ["act" (str "Geste non prouvé : " (verb s) " " (short (target s) 60))])) (when (seq claims) acts))
+      (keep (fn [s] (when (not (contains? #{"witnessed" "proven"} (get s "verdict")))
+                      ["claim" (str "Non vérifié (" (get s "verdict") ") : " (or (claim-msg s) (get s "label")))]))
+            claims)
+      (keep (fn [s] (when-let [[what why] (missing-of s)] ["missing" (str "Pas encore filmé : " what (if (not= "" why) (str " — " why) ""))])) steps))))
+
+;; ── drawing ──────────────────────────────────────────────────────────────
+
+(defn- step-h [s]
+  (let [[m cls] (mark (get s "verdict")) k (step-kind s)]
+    (if-let [[what why] (missing-of s)]
+      [:li.fs.missing [:span.fm "◌"] [:b what] (when (not= "" why) [:small why])]
+    (if (= "expect" k)
+      [:li {:class (str "fs claim " cls)} [:span.fm m] [:b (claim-msg s)]]
+      [:li {:class (str "fs act " cls (if (contains? cosmetic (verb s)) " quiet" ""))}
+       [:span.fm m] [:span.fa (get s "actor")] [:span.fv (verb s)] [:code (short (target s) 70)]]))))
+
+(defn- gap-h [[kind text]] [:li {:class (str "fg " kind)} [:span.fm "⚠"] text])
+
+(defn film-h [b]
+  (let [a (:attrs b) d (:data b) run (:run d) steps (vec (get run "steps")) film (:film d)
+        scenes (scene-ranges film)
+        chapters (into {} (map (fn [s] [(get s "id") (get s "offset")]) (get (:manifest d) "scenes")))
+        in (fn [from to] (filterv (fn [s] (and (>= (get s "i") from) (<= (get s "i") to))) steps))
+        first-scene (if (seq scenes) (:from (first scenes)) (inc (count steps)))
+        setup (in 1 (dec first-scene))
+        [vm vcls] (mark (or (get run "verdict") (when (:failure d) "refuted")))
+        body (vec (remove (fn [l] (starts-with? (trim l) "missing ")) (:body b)))
+        declared (keep (fn [l] (let [l (trim l)] (when (starts-with? l "missing ") (subs l 8)))) (:body b))
+        all-gaps (concat (when (and (:src a) (nil? (:manifest d))) [["render" "Pas encore rendu : le film n'a pas de vidéo"]])
+                         (when (and (nil? run) (nil? (:failure d))) [["render" "Aucune exécution enregistrée"]])
+                         (when (:failure d) [["claim" (str "Échec de capture : " (get (:failure d) "message"))]])
+                         (mapcat (fn [sc] (gaps-of (in (:from sc) (:to sc)))) scenes)
+                         (map (fn [x] (let [[t why] (map trim (String/split x "|"))] ["missing" (list "Pas encore filmé : " (ui/mdi t) (when why (str " — " why)))])) declared))]
+    [:figure.film {:id (str "film-" (:id a))}
+     [:header [:span.chip (:id a)] [:h4 (ui/md (:title a))]
+      [:span {:class (str "fverdict " vcls)} vm " " (or (get run "verdict") (if (:failure d) "échec" "pas lancé"))]
+      [:span.fcount (str (count (filter (fn [s] (= "expect" (step-kind s))) steps)) " assertions · " (count steps) " pas")]]
+     (when (seq body) [:div.fx (ui/md (join " " body))])
+     (when (:src a)
+       [:div.fplay
+        [:video {:controls true :preload "metadata" :playsinline true :src (:src a)}]
+        (when (seq scenes)
+          [:div.fchap
+           (for [sc scenes]
+             [:button {:type "button" :data-t (str (or (get chapters (:id sc)) 0))
+                       :onclick "var v=this.closest('.film').querySelector('video');v.currentTime=+this.dataset.t;v.play()"}
+              (ui/md (or (:title sc) (:id sc)))])])])
+     (when (seq all-gaps) [:ul.fgaps (map gap-h all-gaps)])
+     [:div.fscenes
+      (when (seq setup)
+        [:details.fscene.setup [:summary [:b "Mise en place"] [:span.n (count setup)]] [:ol (map step-h setup)]])
+      (for [sc scenes]
+        (let [ss (in (:from sc) (:to sc)) gs (gaps-of ss)]
+          [:details {:class (str "fscene" (if (seq gs) " gap" "")) :open (not (empty? gs))}
+           [:summary [:b (ui/md (or (:title sc) (:id sc)))] [:span.n (count ss)] (when (seq gs) [:span.fwarn "⚠"])]
+           (when (:say sc) [:p.fsay (:say sc)])
+           [:ol (map step-h ss)]]))]
+     (ui/feedback-h a [["love" "Love it"] ["fine" "Fine"] ["rework" "Rework"]] "Does the film show the experience?")]))

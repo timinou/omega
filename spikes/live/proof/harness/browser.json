@@ -1,0 +1,969 @@
+{
+  "provider": "deepseek",
+  "checks": [
+    "A real provider edits through CodeMode, rehearses, and parks the same Omega task for a decision",
+    "Real proposal controls fit phone portrait, landscape and tablet viewports",
+    "Pocket shows exact proposal choices and retains the task reply without polling the model",
+    "Tapping Apply resumes the same real task, which publishes, verifies old-client behavior and finishes",
+    "Retrying the exact publication returns its receipt without executing it again",
+    "Desktop returns to earlier behavior through shared Changes, retaining accepted work",
+    "Unusing Live restores Pocket and every retained editor after real model work"
+  ],
+  "errors": [],
+  "frontend": "/nix/store/z28zniawsq7fmjiv258b3dr3b74cwnls-omega-frontend-v2026.10",
+  "viewports": [
+    [
+      320,
+      740
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      844,
+      390
+    ],
+    [
+      1024,
+      768
+    ]
+  ],
+  "proposal": {
+    "at": 1793880755072,
+    "before": {
+      "digest": "4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2",
+      "pid": "#PID<0.1165.0>",
+      "revision": 21,
+      "value": 21,
+      "version": 1
+    },
+    "cell": "t-1/6/call_00_FZyGXoNNNdHuipYdAMCy6302",
+    "choices": [
+      {
+        "label": "Apply",
+        "text": "apply change-7"
+      },
+      {
+        "label": "Revise",
+        "text": "revise change-7"
+      },
+      {
+        "label": "Discard",
+        "text": "discard change-7"
+      }
+    ],
+    "decision": {
+      "action": "apply",
+      "at": 1793880769297,
+      "by": "human:me",
+      "proposal": "change-7"
+    },
+    "epoch": "live-w874-1466",
+    "id": "change-7",
+    "intent": {
+      "at": 1793880772514,
+      "before": {
+        "digest": "4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2",
+        "pid": "#PID<0.1165.0>",
+        "revision": 188,
+        "value": 188,
+        "version": 1
+      },
+      "cell": "t-1/13/call_00_BC6YbwIoDktzNB80gMc22275"
+    },
+    "policy": {
+      "delta": 5,
+      "epoch": "live-w874-1466",
+      "policy": "review",
+      "provider": "deepseek",
+      "target": "worker"
+    },
+    "published-source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+    "question": "msg-9",
+    "receipt": {
+      "after": {
+        "digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+        "pid": "#PID<0.1165.0>",
+        "revision": 189,
+        "value": 188,
+        "version": 2
+      },
+      "at": 1793880784996,
+      "attempts": 1,
+      "before": {
+        "digest": "4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2",
+        "pid": "#PID<0.1165.0>",
+        "revision": 188,
+        "value": 188,
+        "version": 1
+      },
+      "proposal": "change-7",
+      "revision": 189,
+      "status": "applied",
+      "version": 2
+    },
+    "rehearsal": {
+      "candidate-digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+      "candidate-version": 2,
+      "digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+      "messages": 0,
+      "revision": 154,
+      "scope": "proved-future-owner-inputs",
+      "status": "valid",
+      "version": 1
+    },
+    "return-of": null,
+    "source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+    "source-rev": "3",
+    "status": "applied",
+    "summary": "Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved.",
+    "target": "worker",
+    "task": "t-1",
+    "verification": {
+      "expected-delta": 5,
+      "first": {
+        "observed-version": 2,
+        "value": 193,
+        "worker": "#PID<0.1165.0>"
+      },
+      "observed-delta": 5,
+      "second": {
+        "observed-version": 2,
+        "value": 198,
+        "worker": "#PID<0.1165.0>"
+      },
+      "status": "passed"
+    }
+  },
+  "task": {
+    "cost": {
+      "cache-read": 18304,
+      "cache-write": 0,
+      "cache-write-1h": 0,
+      "cache-write-5m": 0,
+      "input": 3844,
+      "output": 713
+    },
+    "id": "t-1",
+    "result": "Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.",
+    "run": {
+      "live": {
+        "delta": 5,
+        "epoch": "live-w874-1466",
+        "policy": "review",
+        "provider": "deepseek",
+        "target": "worker"
+      },
+      "may": "edit",
+      "model": "deepseek-flash"
+    },
+    "status": "done",
+    "title": "Live edit \u00b7 deepseek"
+  },
+  "turns": [
+    {
+      "content": [
+        {
+          "text": "Change the live worker to count by 5. Preserve all accepted work, the PID and old clients. Rehearse and submit the proposal. Publication policy: review. After publication verify the actual increment, then finish.",
+          "type": "text"
+        }
+      ],
+      "n": 1,
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "text": "I'll start by inspecting the live worker's current state and source.",
+          "type": "text"
+        },
+        {
+          "id": "call_00_8IcEkqgF4uscN19sq04v1099",
+          "input": {
+            "operation": "snapshot"
+          },
+          "name": "live",
+          "type": "tool-use"
+        },
+        {
+          "id": "call_01_8P0B6dPf950WWXMTbqQF5283",
+          "input": {
+            "code": "(println (read \"live-worker.bl\"))"
+          },
+          "name": "eval",
+          "type": "tool-use"
+        }
+      ],
+      "n": 2,
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": "{:running true, :history [{:id \"/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@2\", :runtime {:status :applied, :after {:pid \"#PID<0.1165.0>\", :value 0, :version 1, :revision 0, :digest \"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\"}, :note \"Initial worker; state starts at zero.\"}, :rev 2, :kind :live/start, :cell nil, :actor \"system:live\", :task nil, :returnable true} {:id \"/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@1\", :runtime nil, :rev 1, :kind :write, :cell nil, :actor \"system:live\", :task nil, :returnable true}], :source \"work:project/live-worker.bl\", :current {:pid \"#PID<0.1165.0>\", :value 11, :version 1, :revision 11, :digest \"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\"}, :schema \"omega.live.v2\", :candidate nil, :providers [{:id \"claude\", :configured true, :model \"claude-sonnet-5-5\"} {:id \"codex\", :configured true, :model \"gpt-6.1-sol\"} {:id \"deepseek\", :configured true, :model \"deepseek-flash\"}], :epoch \"live-w874-1466\", :limits {:state \"Observed, never rewound\", :history 32, :candidates 16}, :task {:id \"t-1\", :status :running, :run {:live {:policy \"review\", :target \"worker\", :epoch \"live-w874-1466\", :provider \"deepseek\", :delta 5}, :model \"deepseek-flash\", :may \"edit\"}, :title \"Live edit \u00b7 deepseek\", :result nil, :cost {:input 1107, :output 85, :cache-read 128, :cache-write 0, :cache-write-5m 0, :cache-write-1h 0}}, :changes \"changes:work:project/live-worker.bl\", :available true, :traffic true, :source-matches true, :proposals []}",
+          "error?": false,
+          "id": "call_00_8IcEkqgF4uscN19sq04v1099",
+          "type": "tool-result"
+        },
+        {
+          "content": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 1\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n\n\n=> :ok",
+          "error?": false,
+          "id": "call_01_8P0B6dPf950WWXMTbqQF5283",
+          "type": "tool-result"
+        }
+      ],
+      "n": 3,
+      "role": "tool"
+    },
+    {
+      "content": [
+        {
+          "id": "call_00_4xHOLVddKhO91dOFgODI2500",
+          "input": {
+            "code": "(edit \"live-worker.bl\" [{:old \"  (let [delta 1\" :new \"  (let [delta 5\"}])\n(println (read \"live-worker.bl\"))"
+          },
+          "name": "eval",
+          "type": "tool-use"
+        }
+      ],
+      "n": 4,
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n\n\n=> :ok",
+          "error?": false,
+          "id": "call_00_4xHOLVddKhO91dOFgODI2500",
+          "type": "tool-result"
+        }
+      ],
+      "n": 5,
+      "role": "tool"
+    },
+    {
+      "content": [
+        {
+          "text": "Source edited (protocol, state validation, migration, and upcast untouched; only `delta` changed 1\u21925). Now rehearsing.",
+          "type": "text"
+        },
+        {
+          "id": "call_00_FZyGXoNNNdHuipYdAMCy6302",
+          "input": {
+            "operation": "rehearse"
+          },
+          "name": "live",
+          "type": "tool-use"
+        }
+      ],
+      "n": 6,
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": "{:messages 0, :scope :proved-future-owner-inputs, :status :valid, :version 1, :revision 154, :digest \"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\", :candidate \"change-7\", :candidate-version 2, :candidate-digest \"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\"}",
+          "error?": false,
+          "id": "call_00_FZyGXoNNNdHuipYdAMCy6302",
+          "type": "tool-result"
+        }
+      ],
+      "n": 7,
+      "role": "tool"
+    },
+    {
+      "content": [
+        {
+          "text": "Rehearsal is valid. Submitting candidate `change-7` for review.",
+          "type": "text"
+        },
+        {
+          "id": "call_00_rCCtuoQPxcgSc0dmRek32079",
+          "input": {
+            "candidate": "change-7",
+            "operation": "submit",
+            "summary": "Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved."
+          },
+          "name": "live",
+          "type": "tool-use"
+        }
+      ],
+      "n": 8,
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": "{:status :needs-decision, :question \"msg-9\", :summary \"Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved.\", :proposal \"change-7\"}",
+          "error?": false,
+          "id": "call_00_rCCtuoQPxcgSc0dmRek32079",
+          "type": "tool-result"
+        }
+      ],
+      "n": 9,
+      "role": "tool"
+    },
+    {
+      "content": [
+        {
+          "text": "[reply from human:me] apply change-7. ",
+          "type": "text"
+        }
+      ],
+      "n": 10,
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "text": "The human reply approves. Let me check the receipt for the exact candidate before applying.",
+          "type": "text"
+        },
+        {
+          "id": "call_00_r68V9ZI2P0Ikb934SSu90913",
+          "input": {
+            "candidate": "change-7",
+            "operation": "receipt"
+          },
+          "name": "live",
+          "type": "tool-use"
+        }
+      ],
+      "n": 11,
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": "{:id \"change-7\", :status :approved, :at 1793880755072, :policy {:policy \"review\", :target \"worker\", :epoch \"live-w874-1466\", :provider \"deepseek\", :delta 5}, :source \"(ns omega.live.worker)\\n\\n(defn accepts [message] (erlang/is_binary message))\\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\\n(defn migrate [value] value)\\n(defn upcast [message] message)\\n(defn handler [message value]\\n  (let [delta 5\\n        next (if (= message \\\"inc\\\") (+ value delta) value)]\\n    {:reply next :state next}))\\n(defn definition [version digest]\\n  {:version version :digest digest :accept? accepts :check-state state-valid\\n   :handler handler :migrate-state migrate :upcast upcast})\\n\", :target \"worker\", :cell \"t-1/6/call_00_FZyGXoNNNdHuipYdAMCy6302\", :question \"msg-9\", :epoch \"live-w874-1466\", :task \"t-1\", :before {:pid \"#PID<0.1165.0>\", :value 21, :version 1, :revision 21, :digest \"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\"}, :decision {:at 1793880769297, :action \"apply\", :by \"human:me\", :proposal \"change-7\"}, :summary \"Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved.\", :published-source \"(ns omega.live.worker)\\n\\n(defn accepts [message] (erlang/is_binary message))\\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\\n(defn migrate [value] value)\\n(defn upcast [message] message)\\n(defn handler [message value]\\n  (let [delta 5\\n        next (if (= message \\\"inc\\\") (+ value delta) value)]\\n    {:reply next :state next}))\\n(defn definition [version digest]\\n  {:version version :digest digest :accept? accepts :check-state state-valid\\n   :handler handler :migrate-state migrate :upcast upcast})\\n\", :source-rev \"3\", :return-of nil, :rehearsal {:messages 0, :scope :proved-future-owner-inputs, :status :valid, :version 1, :revision 154, :digest \"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\", :candidate-version 2, :candidate-digest \"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\"}, :choices [{:label \"Apply\", :text \"apply change-7\"} {:label \"Revise\", :text \"revise change-7\"} {:label \"Discard\", :text \"discard change-7\"}]}",
+          "error?": false,
+          "id": "call_00_r68V9ZI2P0Ikb934SSu90913",
+          "type": "tool-result"
+        }
+      ],
+      "n": 12,
+      "role": "tool"
+    },
+    {
+      "content": [
+        {
+          "text": "`change-7` is approved and its digest matches the rehearsal. Applying it now.",
+          "type": "text"
+        },
+        {
+          "id": "call_00_BC6YbwIoDktzNB80gMc22275",
+          "input": {
+            "candidate": "change-7",
+            "operation": "apply"
+          },
+          "name": "live",
+          "type": "tool-use"
+        }
+      ],
+      "n": 13,
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": "{:status :applied, :version 2, :at 1793880784996, :after {:pid \"#PID<0.1165.0>\", :value 188, :version 2, :revision 189, :digest \"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\"}, :revision 189, :before {:pid \"#PID<0.1165.0>\", :value 188, :version 1, :revision 188, :digest \"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\"}, :attempts 1, :proposal \"change-7\"}",
+          "error?": false,
+          "id": "call_00_BC6YbwIoDktzNB80gMc22275",
+          "type": "tool-result"
+        }
+      ],
+      "n": 14,
+      "role": "tool"
+    },
+    {
+      "content": [
+        {
+          "text": "Applied: same PID, counter preserved at 188, now version 2. Verifying with the same candidate.",
+          "type": "text"
+        },
+        {
+          "id": "call_00_pLe8D7hoXXrI9rGnhpyy2562",
+          "input": {
+            "candidate": "change-7",
+            "operation": "verify"
+          },
+          "name": "live",
+          "type": "tool-use"
+        }
+      ],
+      "n": 15,
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": "{:first {:value 193, :worker \"#PID<0.1165.0>\", :observed-version 2}, :second {:value 198, :worker \"#PID<0.1165.0>\", :observed-version 2}, :status :passed, :expected-delta 5, :observed-delta 5}",
+          "error?": false,
+          "id": "call_00_pLe8D7hoXXrI9rGnhpyy2562",
+          "type": "tool-result"
+        }
+      ],
+      "n": 16,
+      "role": "tool"
+    },
+    {
+      "content": [
+        {
+          "text": "Verification passed: two consecutive `inc` calls moved the counter 193 \u2192 198, an increment of **5**, on the same PID (`#PID<0.1165.0>`), version 2.",
+          "type": "text"
+        },
+        {
+          "id": "call_00_ZVFIctLDFdgoBOZeoOda9805",
+          "input": {
+            "code": "(done \"Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.\")"
+          },
+          "name": "eval",
+          "type": "tool-use"
+        }
+      ],
+      "n": 17,
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": "Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.",
+          "error?": false,
+          "id": "call_00_ZVFIctLDFdgoBOZeoOda9805",
+          "type": "tool-result"
+        }
+      ],
+      "n": 18,
+      "role": "tool"
+    }
+  ],
+  "retention": {
+    "before": [
+      [
+        "rail",
+        "workspace:all",
+        "{:lines [\"#+TITLE: Work\" \"Your tasks, in their places.\" \"\" \"* Places\" \"All places\" \"world\" \"* RECENTLY FINISHED (1)\" \"t-1 \u00b7 done \u00b7 Live edit \u00b7 deepseek \u00b7 Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.\" \"n new task \u00b7 Enter open \u00b7 g f place\" \"\"]}",
+        "nil"
+      ],
+      [
+        "task",
+        "task:t-1",
+        "{:lines [\"#+TITLE: t-1 \u00b7 Live edit \u00b7 deepseek \u00b7 \u2713 done \u00b7 33s \u00b7 cwd world\" \"home: \u2014 \u00b7 effects:t-1\" \"cwd: /tmp/omega-live-mobile-p00fbooe/world\" \"finished: its cells are history \u00b7 c copies one to scratch to run it in a new task \u00b7 C-o back\" \"\" \"* you \u00b7 1\" \"Change the live worker to count by 5. Preserve all accepted work, the PID and old clients. Rehearse and submit the proposal. Publication policy: review. After publication verify the actual increment, then finish.\" \"* model \u00b7 2\" \"I'll start by inspecting the live worker's current state and source.\" \"#+begin_src beam-lisp :id t-1/2-call_00_8IcEkqgF4uscN19sq04v1099 :ns omega.task.t-1\" \"{:operation \\\"snapshot\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/2-call_00_8IcEkqgF4uscN19sq04v1099\" \": {:running true, :history [{:id \\\"/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@2\\\", :runtime {:status :applied, :after {:pid \\\"#PID<0.1165.0>\\\", :value 0, :version 1, :revision 0, :digest \\\"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\\\"}, :note \\\"Initial worker; state starts at zero.\\\"}, :rev 2, :kind :live/start, :cell nil, :actor \\\"system:live\\\", :task nil, :returnable true} {:id \\\"/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@1\\\", :runtime nil, :rev 1, :kind :write, :cell nil, :actor \\\"system:live\\\", :task nil, :returnable true}], :source \\\"work:project/live-worker.bl\\\", :current {:pid \\\"#PID<0.1165.0>\\\", :value 11, :version 1, :revision 11, :digest \\\"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\\\"}, :schema \\\"omega.live.v2\\\", :candidate nil, :providers [{:id \\\"claude\\\", :configured true, :model \\\"claude-sonnet-5-5\\\"} {:id \\\"codex\\\", :configured true, :model \\\"gpt-6.1-sol\\\"} {:id \\\"deepseek\\\", :configured true, :model \\\"deepseek-flash\\\"}], :epoch \\\"live-w874-1466\\\", :limits {:state \\\"Observed, never rewound\\\", :history 32, :candidates 16}, :task {:id \\\"t-1\\\", :status :running, :run {:live {:policy \\\"review\\\", :target \\\"worker\\\", :epoch \\\"live-w874-1466\\\", :provider \\\"deepseek\\\", :delta 5}, :model \\\"deepseek-flash\\\", :may \\\"edit\\\"}, :title \\\"Live edit \u00b7 deepseek\\\", :result nil, :cost {:input 1107, :output 85, :cache-read 128, :cache-write 0, :cache-write-5m 0, :cache-write-1h 0}}, :changes \\\"changes:work:project/live-worker.bl\\\", :available true, :traffic true, :source-matches true, :proposals []}\" \"\" \"#+begin_src beam-lisp :id t-1/2-call_01_8P0B6dPf950WWXMTbqQF5283 :ns omega.task.t-1\" \"(println (read \\\"live-worker.bl\\\"))\" \"#+end_src\" \"#+RESULTS: t-1/2-call_01_8P0B6dPf950WWXMTbqQF5283\" \": (ns omega.live.worker)\" \": \" \": (defn accepts [message] (erlang/is_binary message))\" \": (defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\" \": (defn migrate [value] value)\" \": (defn upcast [message] message)\" \": (defn handler [message value]\" \":   (let [delta 1\" \":         next (if (= message \\\"inc\\\") (+ value delta) value)]\" \":     {:reply next :state next}))\" \": (defn definition [version digest]\" \":   {:version version :digest digest :accept? accepts :check-state state-valid\" \": \u2026 4 more lines\" \"\" \"* model \u00b7 4\" \"#+begin_src beam-lisp :id t-1/4 :ns omega.task.t-1\" \"(edit \\\"live-worker.bl\\\" [{:old \\\"  (let [delta 1\\\" :new \\\"  (let [delta 5\\\"}])\" \"(println (read \\\"live-worker.bl\\\"))\" \"#+end_src\" \"#+RESULTS: t-1/4\" \": (ns omega.live.worker)\" \": \" \": (defn accepts [message] (erlang/is_binary message))\" \": (defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\" \": (defn migrate [value] value)\" \": (defn upcast [message] message)\" \": (defn handler [message value]\" \":   (let [delta 5\" \":         next (if (= message \\\"inc\\\") (+ value delta) value)]\" \":     {:reply next :state next}))\" \": (defn definition [version digest]\" \":   {:version version :digest digest :accept? accepts :check-state state-valid\" \": \u2026 4 more lines\" \"\" \"* model \u00b7 6\" \"Source edited (protocol, state validation, migration, and upcast untouched; only `delta` changed 1\u21925). Now rehearsing.\" \"#+begin_src beam-lisp :id t-1/6 :ns omega.task.t-1\" \"{:operation \\\"rehearse\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/6\" \": {:messages 0, :scope :proved-future-owner-inputs, :status :valid, :version 1, :revision 154, :digest \\\"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\\\", :candidate \\\"change-7\\\", :candidate-version 2, :candidate-digest \\\"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\\\"}\" \"\" \"* model \u00b7 8\" \"Rehearsal is valid. Submitting candidate `change-7` for review.\" \"#+begin_src beam-lisp :id t-1/8 :ns omega.task.t-1\" \"{:operation \\\"submit\\\", :candidate \\\"change-7\\\", :summary \\\"Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved.\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/8\" \": {:status :needs-decision, :question \\\"msg-9\\\", :summary \\\"Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved.\\\", :proposal \\\"change-7\\\"}\" \"\" \"* you \u00b7 10\" \"[reply from human:me] apply change-7. \" \"* model \u00b7 11\" \"The human reply approves. Let me check the receipt for the exact candidate before applying.\" \"#+begin_src beam-lisp :id t-1/11 :ns omega.task.t-1\" \"{:operation \\\"receipt\\\", :candidate \\\"change-7\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/11\" \": {:id \\\"change-7\\\", :status :approved, :at 1793880755072, :policy {:policy \\\"review\\\", :target \\\"worker\\\", :epoch \\\"live-w874-1466\\\", :provider \\\"deepseek\\\", :delta 5}, :source \\\"(ns omega.live.worker)\\\\n\\\\n(defn accepts [message] (erlang/is_binary message))\\\\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\\\\n(defn migrate [value] value)\\\\n(defn upcast [message] message)\\\\n(defn handler [message value]\\\\n  (let [delta 5\\\\n        next (if (= message \\\\\\\"inc\\\\\\\") (+ value delta) value)]\\\\n    {:reply next :state next}))\\\\n(defn definition [version digest]\\\\n  {:version version :digest digest :accept? accepts :check-state state-valid\\\\n   :handler handler :migrate-state migrate :upcast upcast})\\\\n\\\", :target \\\"worker\\\", :cell \\\"t-1/6/call_00_FZyGXoNNNdHuipYdAMCy6302\\\", :question \\\"msg-9\\\", :epoch \\\"live-w874-1466\\\", :task \\\"t-1\\\", :before {:pid \\\"#PID<0.1165.0>\\\", :value 21, :version 1, :revision 21, :digest \\\"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\\\"}, :decision {:at 1793880769297, :action \\\"apply\\\", :by \\\"human:me\\\", :proposal \\\"change-7\\\"}, :summary \\\"Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved.\\\", :published-source \\\"(ns omega.live.worker)\\\\n\\\\n(defn accepts [message] (erlang/is_binary message))\\\\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\\\\n(defn migrate [value] value)\\\\n(defn upcast [message] message)\\\\n(defn handler [message value]\\\\n  (let [delta 5\\\\n        next (if (= message \\\\\\\"inc\\\\\\\") (+ value delta) value)]\\\\n    {:reply next :state next}))\\\\n(defn definition [version digest]\\\\n  {:version version :digest digest :accept? accepts :check-state state-valid\\\\n   :handler handler :migrate-state migrate :upcast upcast})\\\\n\\\", :source-rev \\\"3\\\", :return-of nil, :rehearsal {:messages 0, :scope :proved-future-owner-inputs, :status :valid, :version 1, :revision 154, :digest \\\"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\\\", :candidate-version 2, :candidate-digest \\\"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\\\"}, :choices [{:label \\\"Apply\\\", :text \\\"apply change-7\\\"} {:label \\\"Revise\\\", :text \\\"revise change-7\\\"} {:label \\\"Discard\\\", :text \\\"discard change-7\\\"}]}\" \"\" \"* model \u00b7 13\" \"`change-7` is approved and its digest matches the rehearsal. Applying it now.\" \"#+begin_src beam-lisp :id t-1/13 :ns omega.task.t-1\" \"{:operation \\\"apply\\\", :candidate \\\"change-7\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/13\" \": {:status :applied, :version 2, :at 1793880784996, :after {:pid \\\"#PID<0.1165.0>\\\", :value 188, :version 2, :revision 189, :digest \\\"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\\\"}, :revision 189, :before {:pid \\\"#PID<0.1165.0>\\\", :value 188, :version 1, :revision 188, :digest \\\"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\\\"}, :attempts 1, :proposal \\\"change-7\\\"}\" \"\" \"* model \u00b7 15\" \"Applied: same PID, counter preserved at 188, now version 2. Verifying with the same candidate.\" \"#+begin_src beam-lisp :id t-1/15 :ns omega.task.t-1\" \"{:operation \\\"verify\\\", :candidate \\\"change-7\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/15\" \": {:first {:value 193, :worker \\\"#PID<0.1165.0>\\\", :observed-version 2}, :second {:value 198, :worker \\\"#PID<0.1165.0>\\\", :observed-version 2}, :status :passed, :expected-delta 5, :observed-delta 5}\" \"\" \"* model \u00b7 17\" \"Verification passed: two consecutive `inc` calls moved the counter 193 \u2192 198, an increment of **5**, on the same PID (`#PID<0.1165.0>`), version 2.\" \"#+begin_src beam-lisp :id t-1/17 :ns omega.task.t-1\" \"(done \\\"Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.\\\")\" \"#+end_src\" \"#+RESULTS: t-1/17\" \": Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.\" \"\" \"* traces\" \"- completion \u00b7 t-1 \u2014 Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed v\u2026\" \"- tool \u00b7 eval#17/call_00_ZVFIctLDFdgoBOZeoOda9805 \u2014 eval ok\" \"- tool \u00b7 live#15/call_00_pLe8D7hoXXrI9rGnhpyy2562 \u2014 live ok\" \"- tool \u00b7 live#13/call_00_BC6YbwIoDktzNB80gMc22275 \u2014 live ok\" \"- tool \u00b7 live#11/call_00_r68V9ZI2P0Ikb934SSu90913 \u2014 live ok\" \"- tool \u00b7 live#8/call_00_rCCtuoQPxcgSc0dmRek32079 \u2014 live ok\" \"- tool \u00b7 live#6/call_00_FZyGXoNNNdHuipYdAMCy6302 \u2014 live ok\" \"- tool \u00b7 eval#4/call_00_4xHOLVddKhO91dOFgODI2500 \u2014 eval ok\" \"- tool \u00b7 eval#2/call_01_8P0B6dPf950WWXMTbqQF5283 \u2014 eval ok\" \"- tool \u00b7 live#2/call_00_8IcEkqgF4uscN19sq04v1099 \u2014 live ok\" \"* Outcome \u00b7 done\" \"Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.\" \"\" \"* say \u25b8  (RET to message the task, C-Enter to steer it)\"]}",
+        "{\"task:t-1\" \"Keep this direction while I inspect the proposal.\"}"
+      ],
+      [
+        "file",
+        "desk:welcome",
+        "{:lines [\"#+TITLE: A place for your work\" \"\" \"Select a task on the left.\" \"\" \"A task has a conversation, a working directory,\" \"and a home in your editable plans.\" \"\" \"j / k  browse tasks and places\" \"Enter  focus the selected conversation\" \"n      start a task in the selected place\" \"Alt+h / Alt+l  focus previous / next pane\" \"\"]}",
+        "nil"
+      ]
+    ],
+    "after": [
+      [
+        "rail",
+        "workspace:all",
+        "{:lines [\"#+TITLE: Work\" \"Your tasks, in their places.\" \"\" \"* Places\" \"All places\" \"world\" \"* RECENTLY FINISHED (1)\" \"t-1 \u00b7 done \u00b7 Live edit \u00b7 deepseek \u00b7 Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.\" \"n new task \u00b7 Enter open \u00b7 g f place\" \"\"]}",
+        "nil"
+      ],
+      [
+        "task",
+        "task:t-1",
+        "{:lines [\"#+TITLE: t-1 \u00b7 Live edit \u00b7 deepseek \u00b7 \u2713 done \u00b7 33s \u00b7 cwd world\" \"home: \u2014 \u00b7 effects:t-1\" \"cwd: /tmp/omega-live-mobile-p00fbooe/world\" \"finished: its cells are history \u00b7 c copies one to scratch to run it in a new task \u00b7 C-o back\" \"\" \"* you \u00b7 1\" \"Change the live worker to count by 5. Preserve all accepted work, the PID and old clients. Rehearse and submit the proposal. Publication policy: review. After publication verify the actual increment, then finish.\" \"* model \u00b7 2\" \"I'll start by inspecting the live worker's current state and source.\" \"#+begin_src beam-lisp :id t-1/2-call_00_8IcEkqgF4uscN19sq04v1099 :ns omega.task.t-1\" \"{:operation \\\"snapshot\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/2-call_00_8IcEkqgF4uscN19sq04v1099\" \": {:running true, :history [{:id \\\"/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@2\\\", :runtime {:status :applied, :after {:pid \\\"#PID<0.1165.0>\\\", :value 0, :version 1, :revision 0, :digest \\\"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\\\"}, :note \\\"Initial worker; state starts at zero.\\\"}, :rev 2, :kind :live/start, :cell nil, :actor \\\"system:live\\\", :task nil, :returnable true} {:id \\\"/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@1\\\", :runtime nil, :rev 1, :kind :write, :cell nil, :actor \\\"system:live\\\", :task nil, :returnable true}], :source \\\"work:project/live-worker.bl\\\", :current {:pid \\\"#PID<0.1165.0>\\\", :value 11, :version 1, :revision 11, :digest \\\"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\\\"}, :schema \\\"omega.live.v2\\\", :candidate nil, :providers [{:id \\\"claude\\\", :configured true, :model \\\"claude-sonnet-5-5\\\"} {:id \\\"codex\\\", :configured true, :model \\\"gpt-6.1-sol\\\"} {:id \\\"deepseek\\\", :configured true, :model \\\"deepseek-flash\\\"}], :epoch \\\"live-w874-1466\\\", :limits {:state \\\"Observed, never rewound\\\", :history 32, :candidates 16}, :task {:id \\\"t-1\\\", :status :running, :run {:live {:policy \\\"review\\\", :target \\\"worker\\\", :epoch \\\"live-w874-1466\\\", :provider \\\"deepseek\\\", :delta 5}, :model \\\"deepseek-flash\\\", :may \\\"edit\\\"}, :title \\\"Live edit \u00b7 deepseek\\\", :result nil, :cost {:input 1107, :output 85, :cache-read 128, :cache-write 0, :cache-write-5m 0, :cache-write-1h 0}}, :changes \\\"changes:work:project/live-worker.bl\\\", :available true, :traffic true, :source-matches true, :proposals []}\" \"\" \"#+begin_src beam-lisp :id t-1/2-call_01_8P0B6dPf950WWXMTbqQF5283 :ns omega.task.t-1\" \"(println (read \\\"live-worker.bl\\\"))\" \"#+end_src\" \"#+RESULTS: t-1/2-call_01_8P0B6dPf950WWXMTbqQF5283\" \": (ns omega.live.worker)\" \": \" \": (defn accepts [message] (erlang/is_binary message))\" \": (defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\" \": (defn migrate [value] value)\" \": (defn upcast [message] message)\" \": (defn handler [message value]\" \":   (let [delta 1\" \":         next (if (= message \\\"inc\\\") (+ value delta) value)]\" \":     {:reply next :state next}))\" \": (defn definition [version digest]\" \":   {:version version :digest digest :accept? accepts :check-state state-valid\" \": \u2026 4 more lines\" \"\" \"* model \u00b7 4\" \"#+begin_src beam-lisp :id t-1/4 :ns omega.task.t-1\" \"(edit \\\"live-worker.bl\\\" [{:old \\\"  (let [delta 1\\\" :new \\\"  (let [delta 5\\\"}])\" \"(println (read \\\"live-worker.bl\\\"))\" \"#+end_src\" \"#+RESULTS: t-1/4\" \": (ns omega.live.worker)\" \": \" \": (defn accepts [message] (erlang/is_binary message))\" \": (defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\" \": (defn migrate [value] value)\" \": (defn upcast [message] message)\" \": (defn handler [message value]\" \":   (let [delta 5\" \":         next (if (= message \\\"inc\\\") (+ value delta) value)]\" \":     {:reply next :state next}))\" \": (defn definition [version digest]\" \":   {:version version :digest digest :accept? accepts :check-state state-valid\" \": \u2026 4 more lines\" \"\" \"* model \u00b7 6\" \"Source edited (protocol, state validation, migration, and upcast untouched; only `delta` changed 1\u21925). Now rehearsing.\" \"#+begin_src beam-lisp :id t-1/6 :ns omega.task.t-1\" \"{:operation \\\"rehearse\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/6\" \": {:messages 0, :scope :proved-future-owner-inputs, :status :valid, :version 1, :revision 154, :digest \\\"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\\\", :candidate \\\"change-7\\\", :candidate-version 2, :candidate-digest \\\"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\\\"}\" \"\" \"* model \u00b7 8\" \"Rehearsal is valid. Submitting candidate `change-7` for review.\" \"#+begin_src beam-lisp :id t-1/8 :ns omega.task.t-1\" \"{:operation \\\"submit\\\", :candidate \\\"change-7\\\", :summary \\\"Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved.\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/8\" \": {:status :needs-decision, :question \\\"msg-9\\\", :summary \\\"Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved.\\\", :proposal \\\"change-7\\\"}\" \"\" \"* you \u00b7 10\" \"[reply from human:me] apply change-7. \" \"* model \u00b7 11\" \"The human reply approves. Let me check the receipt for the exact candidate before applying.\" \"#+begin_src beam-lisp :id t-1/11 :ns omega.task.t-1\" \"{:operation \\\"receipt\\\", :candidate \\\"change-7\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/11\" \": {:id \\\"change-7\\\", :status :approved, :at 1793880755072, :policy {:policy \\\"review\\\", :target \\\"worker\\\", :epoch \\\"live-w874-1466\\\", :provider \\\"deepseek\\\", :delta 5}, :source \\\"(ns omega.live.worker)\\\\n\\\\n(defn accepts [message] (erlang/is_binary message))\\\\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\\\\n(defn migrate [value] value)\\\\n(defn upcast [message] message)\\\\n(defn handler [message value]\\\\n  (let [delta 5\\\\n        next (if (= message \\\\\\\"inc\\\\\\\") (+ value delta) value)]\\\\n    {:reply next :state next}))\\\\n(defn definition [version digest]\\\\n  {:version version :digest digest :accept? accepts :check-state state-valid\\\\n   :handler handler :migrate-state migrate :upcast upcast})\\\\n\\\", :target \\\"worker\\\", :cell \\\"t-1/6/call_00_FZyGXoNNNdHuipYdAMCy6302\\\", :question \\\"msg-9\\\", :epoch \\\"live-w874-1466\\\", :task \\\"t-1\\\", :before {:pid \\\"#PID<0.1165.0>\\\", :value 21, :version 1, :revision 21, :digest \\\"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\\\"}, :decision {:at 1793880769297, :action \\\"apply\\\", :by \\\"human:me\\\", :proposal \\\"change-7\\\"}, :summary \\\"Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved.\\\", :published-source \\\"(ns omega.live.worker)\\\\n\\\\n(defn accepts [message] (erlang/is_binary message))\\\\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\\\\n(defn migrate [value] value)\\\\n(defn upcast [message] message)\\\\n(defn handler [message value]\\\\n  (let [delta 5\\\\n        next (if (= message \\\\\\\"inc\\\\\\\") (+ value delta) value)]\\\\n    {:reply next :state next}))\\\\n(defn definition [version digest]\\\\n  {:version version :digest digest :accept? accepts :check-state state-valid\\\\n   :handler handler :migrate-state migrate :upcast upcast})\\\\n\\\", :source-rev \\\"3\\\", :return-of nil, :rehearsal {:messages 0, :scope :proved-future-owner-inputs, :status :valid, :version 1, :revision 154, :digest \\\"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\\\", :candidate-version 2, :candidate-digest \\\"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\\\"}, :choices [{:label \\\"Apply\\\", :text \\\"apply change-7\\\"} {:label \\\"Revise\\\", :text \\\"revise change-7\\\"} {:label \\\"Discard\\\", :text \\\"discard change-7\\\"}]}\" \"\" \"* model \u00b7 13\" \"`change-7` is approved and its digest matches the rehearsal. Applying it now.\" \"#+begin_src beam-lisp :id t-1/13 :ns omega.task.t-1\" \"{:operation \\\"apply\\\", :candidate \\\"change-7\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/13\" \": {:status :applied, :version 2, :at 1793880784996, :after {:pid \\\"#PID<0.1165.0>\\\", :value 188, :version 2, :revision 189, :digest \\\"b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77\\\"}, :revision 189, :before {:pid \\\"#PID<0.1165.0>\\\", :value 188, :version 1, :revision 188, :digest \\\"4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2\\\"}, :attempts 1, :proposal \\\"change-7\\\"}\" \"\" \"* model \u00b7 15\" \"Applied: same PID, counter preserved at 188, now version 2. Verifying with the same candidate.\" \"#+begin_src beam-lisp :id t-1/15 :ns omega.task.t-1\" \"{:operation \\\"verify\\\", :candidate \\\"change-7\\\"}\" \"#+end_src\" \"#+RESULTS: t-1/15\" \": {:first {:value 193, :worker \\\"#PID<0.1165.0>\\\", :observed-version 2}, :second {:value 198, :worker \\\"#PID<0.1165.0>\\\", :observed-version 2}, :status :passed, :expected-delta 5, :observed-delta 5}\" \"\" \"* model \u00b7 17\" \"Verification passed: two consecutive `inc` calls moved the counter 193 \u2192 198, an increment of **5**, on the same PID (`#PID<0.1165.0>`), version 2.\" \"#+begin_src beam-lisp :id t-1/17 :ns omega.task.t-1\" \"(done \\\"Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.\\\")\" \"#+end_src\" \"#+RESULTS: t-1/17\" \": Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.\" \"\" \"* traces\" \"- completion \u00b7 t-1 \u2014 Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed v\u2026\" \"- tool \u00b7 eval#17/call_00_ZVFIctLDFdgoBOZeoOda9805 \u2014 eval ok\" \"- tool \u00b7 live#15/call_00_pLe8D7hoXXrI9rGnhpyy2562 \u2014 live ok\" \"- tool \u00b7 live#13/call_00_BC6YbwIoDktzNB80gMc22275 \u2014 live ok\" \"- tool \u00b7 live#11/call_00_r68V9ZI2P0Ikb934SSu90913 \u2014 live ok\" \"- tool \u00b7 live#8/call_00_rCCtuoQPxcgSc0dmRek32079 \u2014 live ok\" \"- tool \u00b7 live#6/call_00_FZyGXoNNNdHuipYdAMCy6302 \u2014 live ok\" \"- tool \u00b7 eval#4/call_00_4xHOLVddKhO91dOFgODI2500 \u2014 eval ok\" \"- tool \u00b7 eval#2/call_01_8P0B6dPf950WWXMTbqQF5283 \u2014 eval ok\" \"- tool \u00b7 live#2/call_00_8IcEkqgF4uscN19sq04v1099 \u2014 live ok\" \"* Outcome \u00b7 done\" \"Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.\" \"\" \"* say \u25b8  (RET to message the task, C-Enter to steer it)\"]}",
+        "{\"task:t-1\" \"Keep this direction while I inspect the proposal.\"}"
+      ],
+      [
+        "file",
+        "desk:welcome",
+        "{:lines [\"#+TITLE: A place for your work\" \"\" \"Select a task on the left.\" \"\" \"A task has a conversation, a working directory,\" \"and a home in your editable plans.\" \"\" \"j / k  browse tasks and places\" \"Enter  focus the selected conversation\" \"n      start a task in the selected place\" \"Alt+h / Alt+l  focus previous / next pane\" \"\"]}",
+        "nil"
+      ]
+    ],
+    "liveRemaining": false
+  },
+  "final": {
+    "available": true,
+    "candidate": null,
+    "changes": "changes:work:project/live-worker.bl",
+    "current": {
+      "digest": "691ea8f63f8c9c94dd87ff5d2421fe809a7b8c4fe3926628c2bdd23310fb7c58",
+      "pid": "#PID<0.1165.0>",
+      "revision": 233,
+      "value": 371,
+      "version": 3
+    },
+    "epoch": "live-w874-1466",
+    "history": [
+      {
+        "actor": "human:a6e73a81-3934-44f5-bce5-e8ead6666a75",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@10",
+        "kind": "live/return",
+        "returnable": true,
+        "rev": 10,
+        "runtime": {
+          "after": {
+            "digest": "691ea8f63f8c9c94dd87ff5d2421fe809a7b8c4fe3926628c2bdd23310fb7c58",
+            "pid": "#PID<0.1165.0>",
+            "revision": 225,
+            "value": 363,
+            "version": 3
+          },
+          "before": {
+            "digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+            "pid": "#PID<0.1165.0>",
+            "revision": 224,
+            "value": 358,
+            "version": 2
+          },
+          "candidate": "change-17",
+          "note": "Behavior changed; accepted work retained. Publication receipt recorded.",
+          "proposal": "change-17",
+          "result": {
+            "attempts": 1,
+            "revision": 225,
+            "status": "applied",
+            "version": 3
+          },
+          "return-of": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@2",
+          "status": "applied"
+        },
+        "task": null
+      },
+      {
+        "actor": "human:a6e73a81-3934-44f5-bce5-e8ead6666a75",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@9",
+        "kind": "live/rehearse",
+        "returnable": false,
+        "rev": 9,
+        "runtime": {
+          "before": {
+            "digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+            "pid": "#PID<0.1165.0>",
+            "revision": 199,
+            "value": 238,
+            "version": 2
+          },
+          "candidate": "change-17",
+          "note": "Read-only rehearsal; serving state and behavior retained.",
+          "result": {
+            "candidate": "change-17",
+            "candidate-digest": "691ea8f63f8c9c94dd87ff5d2421fe809a7b8c4fe3926628c2bdd23310fb7c58",
+            "candidate-version": 3,
+            "digest": "691ea8f63f8c9c94dd87ff5d2421fe809a7b8c4fe3926628c2bdd23310fb7c58",
+            "messages": 0,
+            "revision": 222,
+            "scope": "proved-future-owner-inputs",
+            "status": "valid",
+            "version": 2
+          },
+          "return-of": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@2",
+          "status": "valid"
+        },
+        "task": null
+      },
+      {
+        "actor": "t-1",
+        "cell": "t-1/15/call_00_pLe8D7hoXXrI9rGnhpyy2562",
+        "id": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@8",
+        "kind": "live/verify",
+        "returnable": false,
+        "rev": 8,
+        "runtime": {
+          "note": "Observed behavior through the original client protocol.",
+          "proposal": "change-7",
+          "result": {
+            "expected-delta": 5,
+            "first": {
+              "observed-version": 2,
+              "value": 193,
+              "worker": "#PID<0.1165.0>"
+            },
+            "observed-delta": 5,
+            "second": {
+              "observed-version": 2,
+              "value": 198,
+              "worker": "#PID<0.1165.0>"
+            },
+            "status": "passed"
+          },
+          "status": "passed"
+        },
+        "task": "t-1"
+      },
+      {
+        "actor": "t-1",
+        "cell": "t-1/13/call_00_BC6YbwIoDktzNB80gMc22275",
+        "id": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@7",
+        "kind": "live/apply",
+        "returnable": true,
+        "rev": 7,
+        "runtime": {
+          "after": {
+            "digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+            "pid": "#PID<0.1165.0>",
+            "revision": 189,
+            "value": 188,
+            "version": 2
+          },
+          "before": {
+            "digest": "4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2",
+            "pid": "#PID<0.1165.0>",
+            "revision": 188,
+            "value": 188,
+            "version": 1
+          },
+          "candidate": "change-7",
+          "note": "Behavior changed; accepted work retained. Publication receipt recorded.",
+          "proposal": "change-7",
+          "result": {
+            "attempts": 1,
+            "revision": 189,
+            "status": "applied",
+            "version": 2
+          },
+          "return-of": null,
+          "status": "applied"
+        },
+        "task": "t-1"
+      },
+      {
+        "actor": "human:me",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@6",
+        "kind": "live/decision",
+        "returnable": false,
+        "rev": 6,
+        "runtime": {
+          "decision": {
+            "action": "apply",
+            "at": 1793880769297,
+            "by": "human:me",
+            "proposal": "change-7"
+          },
+          "note": "Exact proposal decision: apply",
+          "proposal": "change-7",
+          "status": "approved"
+        },
+        "task": "t-1"
+      },
+      {
+        "actor": "t-1",
+        "cell": "t-1/8/call_00_rCCtuoQPxcgSc0dmRek32079",
+        "id": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@5",
+        "kind": "live/propose",
+        "returnable": false,
+        "rev": 5,
+        "runtime": {
+          "note": "Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved.",
+          "proposal": "change-7",
+          "question": "msg-9",
+          "status": "needs-decision"
+        },
+        "task": "t-1"
+      },
+      {
+        "actor": "t-1",
+        "cell": "t-1/6/call_00_FZyGXoNNNdHuipYdAMCy6302",
+        "id": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@4",
+        "kind": "live/rehearse",
+        "returnable": false,
+        "rev": 4,
+        "runtime": {
+          "before": {
+            "digest": "4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2",
+            "pid": "#PID<0.1165.0>",
+            "revision": 21,
+            "value": 21,
+            "version": 1
+          },
+          "candidate": "change-7",
+          "note": "Read-only rehearsal; serving state and behavior retained.",
+          "result": {
+            "candidate": "change-7",
+            "candidate-digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+            "candidate-version": 2,
+            "digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+            "messages": 0,
+            "revision": 154,
+            "scope": "proved-future-owner-inputs",
+            "status": "valid",
+            "version": 1
+          },
+          "return-of": null,
+          "status": "valid"
+        },
+        "task": "t-1"
+      },
+      {
+        "actor": "t-1",
+        "cell": "t-1/4/call_00_4xHOLVddKhO91dOFgODI2500",
+        "id": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@3",
+        "kind": "edit",
+        "returnable": true,
+        "rev": 3,
+        "runtime": null,
+        "task": "t-1"
+      },
+      {
+        "actor": "system:live",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@2",
+        "kind": "live/start",
+        "returnable": true,
+        "rev": 2,
+        "runtime": {
+          "after": {
+            "digest": "4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2",
+            "pid": "#PID<0.1165.0>",
+            "revision": 0,
+            "value": 0,
+            "version": 1
+          },
+          "note": "Initial worker; state starts at zero.",
+          "status": "applied"
+        },
+        "task": null
+      },
+      {
+        "actor": "system:live",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@1",
+        "kind": "write",
+        "returnable": true,
+        "rev": 1,
+        "runtime": null,
+        "task": null
+      }
+    ],
+    "limits": {
+      "candidates": 16,
+      "history": 32,
+      "state": "Observed, never rewound"
+    },
+    "ok": true,
+    "proposals": [
+      {
+        "at": 1793880808122,
+        "before": {
+          "digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+          "pid": "#PID<0.1165.0>",
+          "revision": 199,
+          "value": 238,
+          "version": 2
+        },
+        "cell": null,
+        "epoch": "live-w874-1466",
+        "id": "change-17",
+        "intent": {
+          "at": 1793880808691,
+          "before": {
+            "digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+            "pid": "#PID<0.1165.0>",
+            "revision": 224,
+            "value": 358,
+            "version": 2
+          },
+          "cell": null
+        },
+        "policy": {
+          "policy": "review"
+        },
+        "published-source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+        "receipt": {
+          "after": {
+            "digest": "691ea8f63f8c9c94dd87ff5d2421fe809a7b8c4fe3926628c2bdd23310fb7c58",
+            "pid": "#PID<0.1165.0>",
+            "revision": 225,
+            "value": 363,
+            "version": 3
+          },
+          "at": 1793880822258,
+          "attempts": 1,
+          "before": {
+            "digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+            "pid": "#PID<0.1165.0>",
+            "revision": 224,
+            "value": 358,
+            "version": 2
+          },
+          "proposal": "change-17",
+          "revision": 225,
+          "status": "applied",
+          "version": 3
+        },
+        "rehearsal": {
+          "candidate-digest": "691ea8f63f8c9c94dd87ff5d2421fe809a7b8c4fe3926628c2bdd23310fb7c58",
+          "candidate-version": 3,
+          "digest": "691ea8f63f8c9c94dd87ff5d2421fe809a7b8c4fe3926628c2bdd23310fb7c58",
+          "messages": 0,
+          "revision": 222,
+          "scope": "proved-future-owner-inputs",
+          "status": "valid",
+          "version": 2
+        },
+        "return-of": "/tmp/omega-live-mobile-p00fbooe/world/live-worker.bl@2",
+        "source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 1\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+        "source-rev": "8",
+        "status": "applied",
+        "target": "worker",
+        "task": null
+      },
+      {
+        "at": 1793880755072,
+        "before": {
+          "digest": "4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2",
+          "pid": "#PID<0.1165.0>",
+          "revision": 21,
+          "value": 21,
+          "version": 1
+        },
+        "cell": "t-1/6/call_00_FZyGXoNNNdHuipYdAMCy6302",
+        "choices": [
+          {
+            "label": "Apply",
+            "text": "apply change-7"
+          },
+          {
+            "label": "Revise",
+            "text": "revise change-7"
+          },
+          {
+            "label": "Discard",
+            "text": "discard change-7"
+          }
+        ],
+        "decision": {
+          "action": "apply",
+          "at": 1793880769297,
+          "by": "human:me",
+          "proposal": "change-7"
+        },
+        "epoch": "live-w874-1466",
+        "id": "change-7",
+        "intent": {
+          "at": 1793880772514,
+          "before": {
+            "digest": "4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2",
+            "pid": "#PID<0.1165.0>",
+            "revision": 188,
+            "value": 188,
+            "version": 1
+          },
+          "cell": "t-1/13/call_00_BC6YbwIoDktzNB80gMc22275"
+        },
+        "policy": {
+          "delta": 5,
+          "epoch": "live-w874-1466",
+          "policy": "review",
+          "provider": "deepseek",
+          "target": "worker"
+        },
+        "published-source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+        "question": "msg-9",
+        "receipt": {
+          "after": {
+            "digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+            "pid": "#PID<0.1165.0>",
+            "revision": 189,
+            "value": 188,
+            "version": 2
+          },
+          "at": 1793880784996,
+          "attempts": 1,
+          "before": {
+            "digest": "4adb086e05471380a4698ec731329ac1b072172cf8a7f18466992d4a1f0fc8f2",
+            "pid": "#PID<0.1165.0>",
+            "revision": 188,
+            "value": 188,
+            "version": 1
+          },
+          "proposal": "change-7",
+          "revision": 189,
+          "status": "applied",
+          "version": 2
+        },
+        "rehearsal": {
+          "candidate-digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+          "candidate-version": 2,
+          "digest": "b80f4c7d964c2688a92f99479b9f3695733ad632a29ac6785202738788c02b77",
+          "messages": 0,
+          "revision": 154,
+          "scope": "proved-future-owner-inputs",
+          "status": "valid",
+          "version": 1
+        },
+        "return-of": null,
+        "source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+        "source-rev": "3",
+        "status": "applied",
+        "summary": "Set worker increment delta from 1 to 5; protocol, state validation, migration and upcast unchanged, so live state (value 11) and PID are preserved.",
+        "target": "worker",
+        "task": "t-1",
+        "verification": {
+          "expected-delta": 5,
+          "first": {
+            "observed-version": 2,
+            "value": 193,
+            "worker": "#PID<0.1165.0>"
+          },
+          "observed-delta": 5,
+          "second": {
+            "observed-version": 2,
+            "value": 198,
+            "worker": "#PID<0.1165.0>"
+          },
+          "status": "passed"
+        }
+      }
+    ],
+    "providers": [
+      {
+        "configured": true,
+        "id": "claude",
+        "model": "claude-sonnet-5-5"
+      },
+      {
+        "configured": true,
+        "id": "codex",
+        "model": "gpt-6.1-sol"
+      },
+      {
+        "configured": true,
+        "id": "deepseek",
+        "model": "deepseek-flash"
+      }
+    ],
+    "running": true,
+    "schema": "omega.live.v2",
+    "source": "work:project/live-worker.bl",
+    "source-matches": false,
+    "task": {
+      "cost": {
+        "cache-read": 18304,
+        "cache-write": 0,
+        "cache-write-1h": 0,
+        "cache-write-5m": 0,
+        "input": 3844,
+        "output": 713
+      },
+      "id": "t-1",
+      "result": "Changed live worker increment delta 1->5 (change-7, review policy). Rehearsed valid, submitted, human-approved, applied and verified: observed delta 5 on same PID #PID<0.1165.0>. State, protocol, migration and upcast preserved; counter never reset.",
+      "run": {
+        "live": {
+          "delta": 5,
+          "epoch": "live-w874-1466",
+          "policy": "review",
+          "provider": "deepseek",
+          "target": "worker"
+        },
+        "may": "edit",
+        "model": "deepseek-flash"
+      },
+      "status": "done",
+      "title": "Live edit \u00b7 deepseek"
+    },
+    "traffic": true
+  }
+}

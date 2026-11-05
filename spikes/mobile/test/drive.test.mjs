@@ -10,6 +10,15 @@ const event=(ed,type,o)=>M.d_handle(ed,e(type,o));
 const boot=()=>P.d_use(M.d_boot('#+TITLE: Work\n','workspace:all'),U.d_bl_package);
 const task=(id='t-1')=>boot().assoc(K('path'),'task:'+id).assoc(K('doc'),map({'read-only?':true,data:map({desk:'task','task-id':id,'task-status':'idle',place:'omega',cwd:'/tmp/mobile/omega'})}));
 const effects=ed=>M.d_take_effects(ed).toArray()[1].toArray();
+test('structured VM tools render in the conversation without a CodeMode code field',async()=>{
+ const [Session,Status,HTML]=await Promise.all(['mob.session','mob.status','mob.html'].map(load));
+ const turns=R.vec(map({n:1,role:'assistant',content:R.vec(map({type:'tool-use',id:'live-1',name:'live',input:map({operation:'rehearse'})}))}));
+ const groups=Session.d_group_turns(turns),step=g(groups.nth(0),'steps').nth(0);
+ assert.equal(g(step,'label'),'Called live');assert.match(g(step,'code'),/rehearse/);
+ assert.equal(Status.d_one_line(null,60),'');assert.equal(Status.d_one_line('',60),'');
+ const html=HTML.d_html(Session.d_conversation(map({}),map({turns,'task-status':'running'})));
+ assert.match(html,/Called live/);assert.match(html,/rehearse/);
+});
 test('mobile is a removable layer and a real frame layout, with no user table mutation',()=>{
  const before=M.d_boot('ordinary text','welcome.bl.org').assoc(K('packages'),R.vec()),used=P.d_use(before,U.d_bl_package);
  assert.equal(R.printStr(P.d_unuse(used,'mobile')),R.printStr(before));

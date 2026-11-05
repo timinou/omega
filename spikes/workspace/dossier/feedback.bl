@@ -1,0 +1,28 @@
+; Shared HTTP save contract. Call only after the host authenticates the writer.
+(ns dossier.feedback
+  (:require [bl.json :as json] [dossier.answer :as answer]))
+
+(defn- reply [status body] {:status status :body body})
+
+(defn submit!
+  "Decode, validate and persist an authorized answer. Every outcome is JSON data;
+   malformed input and filesystem failures never become an empty HTTP response."
+  [path handle body]
+  (if (> (erlang/byte_size body) 16384)
+    (reply 413 {:error "Answer too large. Shorten the note and try again."})
+    (let [parsed (try {:value (json/decode body)} (catch _ {:invalid true}))
+          request (:value parsed)]
+      (if (or (:invalid parsed) (not (map? request)))
+        (reply 400 {:error "Invalid answer JSON. Your draft has not been saved."})
+        (let [id (get request "id") choice (get request "answer" "") note (get request "note" "")]
+          (if-not (and (map? request) (string? id) (string? choice) (string? note)
+                       (< (count id) 100) (< (count choice) 200) (< (count note) 12000))
+            (reply 400 {:error "Invalid answer fields. Your draft has not been saved."})
+            (try
+              (global/trans (tuple (tuple :dossier/feedback path) (erlang/self))
+                (fn []
+                  (let [result (answer/answer! path id choice note handle)]
+                    (if (:error result)
+                      (reply 404 {:error (:error result)})
+                      (reply 200 {:ok true :rev (str (erlang/phash2 (File/read! path)))})))))
+              (catch _ (reply 500 {:error "Could not write the answer. Your draft is still on this page; try again."})))))))))

@@ -1,0 +1,31 @@
+#+TITLE: Documents, without changing the workbench
+#+SUBTITLE: A private copy to try on desktop and phone
+#+STATUS: Prototype
+#+DESIGN: signal
+
+* Try it
+This document uses the same place, reader, source editor and Publish action.
+Open [[file:UNIFICATION.bl.org][the build unification dossier]] to try a real document.
+Nothing on this host modifies the original dossier.
+
+* Your decision
+#+begin_ask :id direction :title "Keep this flow?" :options "Keep it|Needs a change"
+Does opening, reading, answering and editing feel smooth enough?
+#+end_ask
+
+* Recorded evidence
+#+begin_src beam-lisp :id recorded
+(println "Reading this page does not execute me.")
+#+end_src
+#+RESULTS: recorded
+: A stored result, rendered with its source.
+
+* A small plan
+| Step | State |
+|------+-------|
+| Read | Ready |
+| Answer from phone | Try it |
+| Edit source | Try it |
+
+- [ ] Keep the existing UI
+- [X] Use one shared buffer

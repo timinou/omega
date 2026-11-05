@@ -1,0 +1,19 @@
+
+Testing omega.live-test
+
+12:01:36.055 [error] Process #PID<0.1242.0> raised an exception
+** (BeamLisp.ExInfo) Evolution state invariant refused
+    (beam_lisp 0.1.0) BeamLisp.ExInfo.raise_payload/1
+    (beam_lisp 0.1.0) BeamLisp.Ns.Body.Proc.Evolve."valid-state!"/2
+    (beam_lisp 0.1.0) /build/home/.cache/beam_lisp/aot/sdk-build/f421042f085570e3749431f76912371b997201764a15373fd7a5249a593241c3/beam_lisp-0.1.0/priv/lib/datom/conn.bl:453: BeamLisp.Ns.Body.Datom.Conn.observing/1
+    (beam_lisp 0.1.0) /build/home/.cache/beam_lisp/aot/sdk-build/f421042f085570e3749431f76912371b997201764a15373fd7a5249a593241c3/beam_lisp-0.1.0/priv/std/proc/fence.bl:27: anonymous fn/2 in BeamLisp.Ns.Body.Proc.Fence."fence-fn"/2
+    (beam_lisp 0.1.0) priv/host/env.bl:2623: BeamLisp.Env.with_owned_generation_execution/1
+    (beam_lisp 0.1.0) priv/host/env.bl:2600: BeamLisp.Env.with_owned_code_execution/2
+    (beam_lisp 0.1.0) BeamLisp.Env.run_code_callback_entry!/5
+    (beam_lisp 0.1.0) priv/host/refs.bl:443: BeamLisp.Refs.await_owned_start/2
+── ward: warm isolated test run ──
+
+  ✓ omega.live-test  89 passed
+
+  1 file(s) passed, 0 failed, 0 incoherent
+  ✓ all green

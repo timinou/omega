@@ -1,0 +1,237 @@
+{
+  "checks": [
+    "Pocket loads Live on demand as a full-width touch surface",
+    "Phone and desktop observe the same native worker and ordinary Omega task",
+    "Pocket edits and publishes the shared source in its file editor, retaining its Work list",
+    "A phone rehearsal and apply preserve the PID and appear in the desktop Live view",
+    "Live fits the recorded Pocket viewport sizes without horizontal overflow",
+    "Opening and closing Live retains the Pocket task, transcript and unsent composer draft",
+    "Pocket returns to an earlier behavior through the same Changes history while preserving accepted work",
+    "Unusing Live restores Pocket and all three retained editors"
+  ],
+  "errors": [],
+  "frontend": "/nix/store/7kvn0ysjnlpdm6fbrzz0gxccqk1cx3cd-omega-frontend-v2026.10",
+  "viewports": [
+    [
+      320,
+      740
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      844,
+      390
+    ],
+    [
+      1024,
+      768
+    ]
+  ],
+  "final": {
+    "available": true,
+    "candidate": null,
+    "changes": "changes:work:project/live-worker.bl",
+    "current": {
+      "digest": "664979fa2902aae0434f8612f039f9c7664bd7429c6959a66d9b63bd46c854fe",
+      "pid": "#PID<0.1137.0>",
+      "revision": 73,
+      "value": 119,
+      "version": 3
+    },
+    "history": [
+      {
+        "actor": "human:bf33ec55-618e-4dbb-9a61-c3a1d55734e7",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-e_xy4c9k/world/live-worker.bl@7",
+        "kind": "live/return",
+        "returnable": true,
+        "rev": 7,
+        "runtime": {
+          "after": {
+            "digest": "664979fa2902aae0434f8612f039f9c7664bd7429c6959a66d9b63bd46c854fe",
+            "pid": "#PID<0.1137.0>",
+            "revision": 70,
+            "value": 116,
+            "version": 3
+          },
+          "before": {
+            "digest": "6c4ad1e2b6faceb616b4ce0581a96db0c713ed0bc8081474211934a01622d5a6",
+            "pid": "#PID<0.1137.0>",
+            "revision": 69,
+            "value": 116,
+            "version": 2
+          },
+          "candidate": "candidate-2",
+          "note": "Behavior changed; current work and state retained. Source publication is separate.",
+          "result": {
+            "attempts": 1,
+            "revision": 70,
+            "status": "applied",
+            "version": 3
+          },
+          "return-of": "/tmp/omega-live-mobile-e_xy4c9k/world/live-worker.bl@2",
+          "status": "applied"
+        },
+        "task": null
+      },
+      {
+        "actor": "human:bf33ec55-618e-4dbb-9a61-c3a1d55734e7",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-e_xy4c9k/world/live-worker.bl@6",
+        "kind": "live/rehearse",
+        "returnable": false,
+        "rev": 6,
+        "runtime": {
+          "before": {
+            "digest": "6c4ad1e2b6faceb616b4ce0581a96db0c713ed0bc8081474211934a01622d5a6",
+            "pid": "#PID<0.1137.0>",
+            "revision": 51,
+            "value": 62,
+            "version": 2
+          },
+          "candidate": "candidate-2",
+          "note": "Read-only rehearsal; serving state and behavior retained.",
+          "result": {
+            "candidate": "candidate-2",
+            "candidate-digest": "664979fa2902aae0434f8612f039f9c7664bd7429c6959a66d9b63bd46c854fe",
+            "candidate-version": 3,
+            "digest": "664979fa2902aae0434f8612f039f9c7664bd7429c6959a66d9b63bd46c854fe",
+            "messages": 0,
+            "revision": 68,
+            "scope": "proved-future-owner-inputs",
+            "status": "valid",
+            "version": 2
+          },
+          "return-of": "/tmp/omega-live-mobile-e_xy4c9k/world/live-worker.bl@2",
+          "status": "valid"
+        },
+        "task": null
+      },
+      {
+        "actor": "human:bf33ec55-618e-4dbb-9a61-c3a1d55734e7",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-e_xy4c9k/world/live-worker.bl@5",
+        "kind": "live/apply",
+        "returnable": true,
+        "rev": 5,
+        "runtime": {
+          "after": {
+            "digest": "6c4ad1e2b6faceb616b4ce0581a96db0c713ed0bc8081474211934a01622d5a6",
+            "pid": "#PID<0.1137.0>",
+            "revision": 45,
+            "value": 44,
+            "version": 2
+          },
+          "before": {
+            "digest": "fb3d6b8393289ec6cde1ba8a41e7f2b5e097c3f3e7cb0b4e3d4d56cd532e21d8",
+            "pid": "#PID<0.1137.0>",
+            "revision": 44,
+            "value": 44,
+            "version": 1
+          },
+          "candidate": "candidate-1",
+          "note": "Behavior changed; current work and state retained. Source publication is separate.",
+          "result": {
+            "attempts": 1,
+            "revision": 45,
+            "status": "applied",
+            "version": 2
+          },
+          "return-of": null,
+          "status": "applied"
+        },
+        "task": null
+      },
+      {
+        "actor": "human:bf33ec55-618e-4dbb-9a61-c3a1d55734e7",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-e_xy4c9k/world/live-worker.bl@4",
+        "kind": "live/rehearse",
+        "returnable": false,
+        "rev": 4,
+        "runtime": {
+          "before": {
+            "digest": "fb3d6b8393289ec6cde1ba8a41e7f2b5e097c3f3e7cb0b4e3d4d56cd532e21d8",
+            "pid": "#PID<0.1137.0>",
+            "revision": 8,
+            "value": 8,
+            "version": 1
+          },
+          "candidate": "candidate-1",
+          "note": "Read-only rehearsal; serving state and behavior retained.",
+          "result": {
+            "candidate": "candidate-1",
+            "candidate-digest": "6c4ad1e2b6faceb616b4ce0581a96db0c713ed0bc8081474211934a01622d5a6",
+            "candidate-version": 2,
+            "digest": "6c4ad1e2b6faceb616b4ce0581a96db0c713ed0bc8081474211934a01622d5a6",
+            "messages": 0,
+            "revision": 43,
+            "scope": "proved-future-owner-inputs",
+            "status": "valid",
+            "version": 1
+          },
+          "return-of": null,
+          "status": "valid"
+        },
+        "task": null
+      },
+      {
+        "actor": "human:bf33ec55-618e-4dbb-9a61-c3a1d55734e7",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-e_xy4c9k/world/live-worker.bl@3",
+        "kind": "publish",
+        "returnable": true,
+        "rev": 3,
+        "runtime": null,
+        "task": null
+      },
+      {
+        "actor": "system:live",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-e_xy4c9k/world/live-worker.bl@2",
+        "kind": "live/start",
+        "returnable": true,
+        "rev": 2,
+        "runtime": {
+          "after": {
+            "digest": "fb3d6b8393289ec6cde1ba8a41e7f2b5e097c3f3e7cb0b4e3d4d56cd532e21d8",
+            "pid": "#PID<0.1137.0>",
+            "revision": 0,
+            "value": 0,
+            "version": 1
+          },
+          "note": "Initial worker; state starts at zero.",
+          "status": "applied"
+        },
+        "task": null
+      },
+      {
+        "actor": "system:live",
+        "cell": null,
+        "id": "/tmp/omega-live-mobile-e_xy4c9k/world/live-worker.bl@1",
+        "kind": "write",
+        "returnable": true,
+        "rev": 1,
+        "runtime": null,
+        "task": null
+      }
+    ],
+    "limits": {
+      "candidates": 16,
+      "history": 32,
+      "state": "Observed, never rewound"
+    },
+    "ok": true,
+    "running": true,
+    "schema": "omega.live.v1",
+    "source": "work:project/live-worker.bl",
+    "source-matches": false,
+    "task": {
+      "id": "t-1",
+      "status": "cancelled",
+      "title": "Live worker harness"
+    }
+  }
+}

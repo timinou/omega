@@ -1,0 +1,108 @@
+; ensemble/format.bl — procedures read from any .bl.org file.
+;
+; A procedure is one block, written in the line language people read:
+;
+;   #+begin_procedure :id demo-handoff :title "Demo hand-off" :on reaction
+;   route @people Who reviews | reviewers · everyone | reviewer
+;   step @spark Write the demo | lead | demo · dossier · draft
+;   call @link Publish it | dossier/publish | demo link · link
+;   check @eye Every claim has a source | verifier | demo
+;   step @eye React | reviewer | reaction · dossier
+;   gate @check Reactions are in | reviewer | reaction
+;   #+end_procedure
+;
+; Six verbs, one shape: `VERB @icon Title | who | output · kind · flag, …`.
+;   step   a person (or the role's holder) makes the outputs
+;   call   code makes them: a capability name, never inline code
+;   check  someone (often an agent) reads outputs and leaves advice
+;   gate   later lines wait until these outputs are final
+;   route  picks one holder of a role, by a rule, and names them
+;   note   prose kept with the procedure
+; Flags on an output: `draft` (the harness drafts it when the task opens),
+; `auto` (low stakes: an agent may make it final on its own).
+;
+; Pure: text in, data out. A procedure's revision is the hash of its own
+; block, so editing one procedure never stales another.
+
+(ns ensemble.format)
+
+(def verbs #{"step" "call" "check" "gate" "route" "note"})
+
+(defn slug [s]
+  (-> (lower-case (str s))
+      (String/replace (Regex/compile! "[^a-z0-9]+") "-")
+      (String/replace (Regex/compile! "^-|-$") "")))
+
+(defn sha [s] (lower-case (binary/encode_hex (crypto/hash :sha256 s))))
+
+(defn- attrs
+  "`:k v :k \"quoted v\"` from a block header → {:k \"v\"}."
+  [header]
+  (into {} (for [m (Regex/scan (Regex/compile! ":([a-z][a-z0-9-]*)\\s+(\"(?:[^\"\\\\]|\\\\.)*\"|[^\\s:][^\\s]*)") header)]
+             [(keyword (nth m 1))
+              (let [v (nth m 2)] (if (starts-with? v "\"") (String/replace (subs v 1 (dec (count v))) "\\\"" "\"") v))])))
+
+(defn- output [s]
+  (let [[nm kind & flags] (map trim (String/split s "·"))]
+    {:name nm :kind kind :draft? (boolean (some (fn [f] (= f "draft")) flags))
+     :auto? (boolean (some (fn [f] (= f "auto")) flags))}))
+
+(defn line
+  "One procedure line → a step map, or nil for prose."
+  [l]
+  (let [t (trim l)
+        m (Regex/run (Regex/compile! "^([a-z]+)\\s+(.*)$") t)]
+    (when (and m (contains? verbs (nth m 1)))
+      (let [verb (nth m 1)
+            [head who outs] (map trim (String/split (nth m 2) "|"))
+            ws (String/split (or head "") (Regex/compile! "\\s+"))
+            icon (first (filter (fn [w] (starts-with? w "@")) ws))
+            title (join " " (filter (fn [w] (not (starts-with? w "@"))) ws))
+            [who rule] (map trim (String/split (or who "") "·"))]
+        {:verb verb :id (slug title) :title title :icon (when icon (subs icon 1))
+         :who who :rule (when (and rule (not (blank? rule))) rule)
+         :outputs (vec (for [o (String/split (or outs "") ",") :when (not (blank? o))] (output o)))}))))
+
+(defn terms-of
+  "A block header without a reader's answer (:answer :note :at :by): answering a
+   procedure in a dossier never changes its revision."
+  [header]
+  (trim (reduce (fn [h k] (String/replace h (Regex/compile! (str "\\s+:" k "\\s+(\"(?:[^\"\\\\]|\\\\.)*\"|[^\\s]+)")) ""))
+                header ["answer" "note" "at" "by"])))
+
+(defn procedures
+  "Every procedure block in a .bl.org text: [{:id :title :attrs :steps :prose :revision} …]."
+  [text]
+  (let [lines (String/split text "\n")]
+    (loop [ls lines out []]
+      (if (empty? ls)
+        out
+        (let [l (first ls)]
+          (if (starts-with? (trim l) "#+begin_procedure")
+            (let [body (vec (take-while (fn [x] (not (starts-with? (trim x) "#+end_procedure"))) (rest ls)))
+                  a (attrs l)
+                  parsed (map (fn [x] [x (line x)]) body)]
+              (recur (drop (+ 2 (count body)) ls)
+                     (conj out {:id (or (:id a) (slug (:title a))) :title (or (:title a) (:id a)) :attrs a
+                                :steps (vec (keep second parsed))
+                                :prose (join " " (map trim (for [[x s] parsed :when (and (nil? s) (not (blank? x)))] x)))
+                                :revision (subs (sha (join "\n" (cons (terms-of l) body))) 0 12)})))
+            (recur (rest ls) out)))))))
+
+(defn by-id [procs id] (first (filter (fn [p] (= id (:id p))) procs)))
+
+(defn problems
+  "What is wrong with a procedure, as sentences. Empty means it can run."
+  [p]
+  (let [made (reduce (fn [acc s] (if (contains? #{"step" "call"} (:verb s)) (into acc (map :name (:outputs s))) acc)) #{} (:steps p))]
+    (vec (concat
+           (for [s (:steps p) :when (and (contains? #{"step" "call"} (:verb s)) (empty? (:outputs s)))]
+             (str (:title s) ": makes nothing"))
+           (for [s (:steps p) :when (and (= "call" (:verb s)) (blank? (:who s)))]
+             (str (:title s) ": a call names a capability"))
+           (for [s (:steps p) o (:outputs s)
+                 :when (and (contains? #{"check" "gate"} (:verb s)) (not (contains? made (:name o))))]
+             (str (:title s) ": nothing makes " (:name o)))
+           (let [ids (map :id (:steps p))]
+             (for [id (distinct ids) :when (> (count (filter (fn [x] (= x id)) ids)) 1)]
+               (str "two steps share the id " id)))))))

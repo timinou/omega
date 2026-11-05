@@ -19,10 +19,11 @@
    {:db/ident :op/before :db/valueType :db.type/string}
    {:db/ident :op/after :db/valueType :db.type/string}
    {:db/ident :op/reverts :db/valueType :db.type/ref}
+   {:db/ident :op/runtime}
    {:db/ident :op/at :db/valueType :db.type/long}])
 (defn operations [e path]
   (if-let [id (env/eid e :buf/path path)]
-    (vec (sort-by :op/rev (map (fn [[op]] (env/pull e [:op/id :op/rev :op/base :op/actor :op/task :op/cell :op/kind :op/span :op/old :op/new :op/before :op/after :op/reverts :op/at] op))
+    (vec (sort-by :op/rev (map (fn [[op]] (env/pull e [:op/id :op/rev :op/base :op/actor :op/task :op/cell :op/kind :op/span :op/old :op/new :op/before :op/after :op/reverts :op/runtime :op/at] op))
                              (env/q e '[:find ?op :in $ ?buf :where [?op :op/buf ?buf]] id)))) []))
 (defn- publish! [e path b]
   (try
@@ -33,7 +34,7 @@
     (catch err (assoc b :publish-pending true :publication-error
                       (str "Change accepted into the shared buffer, but disk publication failed: " (ex-message err))))))
 (defn- commit! [e path b text meta]
-  (if (= text (:text b)) b
+  (if (and (= text (:text b)) (nil? (:runtime meta))) b
     (let [rev (inc (:rev b)) c (m/change (:text b) text)
           fact (cond-> {:db/id -2 :op/id (str path "@" rev) :op/buf -1 :op/rev rev :op/base (:rev b)
                          :op/actor (or (:actor meta) "disk") :op/kind (or (:kind meta) :edit)
@@ -41,6 +42,7 @@
                          :op/before (:text b) :op/after text :op/at (env/now e)}
                  (:task meta) (assoc :op/task (env/eid e :task/id (:task meta)))
                  (:cell meta) (assoc :op/cell (str (:cell meta)))
+                 (:runtime meta) (assoc :op/runtime (:runtime meta))
                  (:reverts meta) (assoc :op/reverts (env/eid e :op/id (:reverts meta))))]
       (env/tx! e [{:db/id -1 :buf/path path :buf/text text :buf/rev rev :buf/publish-pending true} fact])
       (publish! e path (assoc b :text text :rev rev :publish-pending true)))))
@@ -122,6 +124,9 @@
                                (assoc :drafts (:ok drafts)) (assoc-in [:sequences client] sequence))]
                   [(response next) (assoc-in st [:bufs path] next)])))))
       (= kind :edit) (agent-edit st path (:meta args) (:edits args))
+      (= kind :record)
+        (let [next (commit! e path b (:text b) (:meta args))]
+          [(response next) (assoc-in st [:bufs path] next)])
       (= kind :write)
         (let [drafts (rebase-drafts b (:text args))]
           (if (:error drafts) [drafts st]
@@ -131,6 +136,7 @@
         (let [op (first (filter (fn [op] (= (:id args) (:op/id op))) (operations e path)))
               already? (some (fn [x] (= (env/eid e :op/id (:id args)) (:op/reverts x))) (operations e path))]
           (cond (nil? op) [{:error "Unknown operation."} st]
+                (:op/runtime op) [{:error "Runtime transitions require Live rehearsal; text undo cannot restore a process."} st]
                 already? [{:error "Operation already reverted."} st]
                 :else (let [r (m/merge-text (:op/after op) (:op/before op) (:text b))]
                         (if (:error r) [{:error "Later edits overlap this operation; undo refused."} st]

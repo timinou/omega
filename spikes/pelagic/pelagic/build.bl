@@ -2,14 +2,14 @@
 (ns pelagic.build
   (:require [bl.js :as js] [bl.json :as json]
             [pelagic.actor-build :as actors] [pelagic.artifact :as artifact]
-            [omega.frontend :as frontend] [omega.artifacts :as artifacts]))
+            [omega.frontend :as frontend] [omega.frontend-build :as remote] [omega.artifacts :as artifacts]))
 
-(def compiler "65c25b33")
+(def compiler "v2026.10")
 (defn home []
   (Path/expand ".." (Path/dirname (BeamLisp.Loader/source_path "pelagic.build"))))
 (defn root [] (Path/expand "../.." (home)))
 (defn package-manifests [] (frontend/manifests (root)
-  ["pelagic" "packages" "atlas" "present" "dwim" "workspace" "places" "references" "buffers" "workbench" "mobile" "runtime" "inspector" "home"]))
+  ["pelagic" "packages" "atlas" "present" "dwim" "workspace" "places" "references" "buffers" "workbench" "mobile" "runtime" "inspector" "live" "home" "dossier" "document-tasks"]))
 (defn assembly [] (frontend/assembly (root) (package-manifests)))
 (defn manifest-inputs []
   [(package-manifests)
@@ -44,7 +44,7 @@
  []
  [(compiler-identity)
   (mapv (fn [n] (let [path (BeamLisp.Loader/source_path n)] [path (artifact/sha256 (File/read! path))]))
-    ["pelagic.build" "pelagic.actor-build" "pelagic.artifact" "omega.frontend" "omega.artifacts"])])
+    ["pelagic.build" "pelagic.actor-build" "pelagic.artifact" "omega.frontend" "omega.artifacts" "omega.frontend-build"])])
 (def ^:private LOADED-TOOLS (tool-identity))
 (defn check-tools!
  "Refuse to label output with new tool sources while executing old loaded code."
@@ -62,6 +62,7 @@
      (sources (str (root) "/spikes/atlas"))
      (sources (str (root) "/spikes/mobile"))
      (sources (str (root) "/spikes/runtime"))
+     (sources (str (root) "/spikes/live"))
      (sources (str (root) "/spikes/home"))
      (sources (str (root) "/spikes/workspace"))
      (sources (str (root) "/spikes/dwim"))
@@ -133,30 +134,6 @@
       (json/encode {:name "pelagic-frontend" :compiler compiler :modules (count (:modules result))})))
   (println "PELAGIC: linking preparation actors against the checked shared graph")
   (actors/build! (home) (str stage "/out") (str stage "/pkg/pelagic/actor")))
-(defn- graph-unlocked!
-  "Compile the BL graph once. Asset-only edits reuse these checked modules."
-  []
-  (let [here (home) root (root) identity (graph-fingerprint)
-        output (str here "/dist/graph/" identity)]
-    (artifacts/clean-stages! (Path/dirname output))
-    (if (artifact-valid? output identity)
-      (do (println "PELAGIC: reusing compiled BL graph") output)
-      (let [stage (artifacts/stage! output)]
-        (File/mkdir_p! stage)
-        (try
-          (compile-graph-into! stage)
-          (File/write! (str stage "/.pelagic-graph") "PELAGIC compiled BL graph\n")
-          (when-not (= identity (graph-fingerprint))
-            (throw (ex-info "BL inputs changed during compilation; run the task again." {})))
-          (seal! stage identity)
-          (replace! stage output ".pelagic-graph")
-          output
-          (finally (when (File/exists? stage) (File/rm_rf! stage))))))))
-(defn graph! []
-  (check-tools!)
-  (artifacts/coordinated (str (home) "/dist/.graph.lock")
-    (fn [] (let [output (graph-unlocked!)]
-      (artifacts/collect! (Path/dirname output) ".pelagic-graph" 3 #{output}) output))))
 (defn- assemble-into!
   "Lay out the served frontend in `stage` from a compiled graph directory."
   [stage graph]
@@ -178,28 +155,13 @@
     (doseq [name ["core.bl" "sugar.bl"]]
       (copy! (str boot "/" name) (str stage "/out/src/priv/boot/" name)))))
   (File/write! (str stage "/.pelagic-server") "PELAGIC shared frontend\n"))
-(defn- frontend-unlocked!
-  "Return the shared, checked server frontend; compile only when inputs change."
-  []
-  (let [here (home) root (root) identity (fingerprint)
-        output (str here "/dist/frontend/" identity)]
-    (artifacts/clean-stages! (Path/dirname output))
-    (if (artifact-valid? output identity)
-      (do (println "PELAGIC: reusing compiled frontend") output)
-      (let [stage (artifacts/stage! output)]
-        (File/mkdir_p! (Path/dirname stage))
-        (try
-          (artifacts/reading (graph!) (fn [graph] (assemble-into! stage graph)))
-          (when-not (= identity (fingerprint))
-            (throw (ex-info "Frontend inputs changed during staging; run the task again." {})))
-          (seal! stage identity)
-          (replace! stage output ".pelagic-server")
-          output
-          (finally (when (File/exists? stage) (File/rm_rf! stage))))))))
 (defn frontend-into!
   "Build the checked frontend into the fresh directory `out`, with no cache, lock or
    collection. Nix gives the result an immutable store path; Build gives it the CPU."
   [out]
+  (when-not (System/get_env "NIX_BUILD_TOP")
+    (throw (ex-info "Frontend compilation requires a Nix derivation on Build; use bin/omega-build."
+                    {:kind :frontend-build-authority})))
   (check-tools!)
   (let [identity (fingerprint)
         graph (str (System/tmp_dir!) "/omega-graph-" (System/unique_integer (list :positive)))]
@@ -213,11 +175,17 @@
       (seal! out identity)
       out
       (finally (File/rm_rf! graph)))))
-(defn frontend! []
+(defn remote-fingerprint [] (remote/input-key (root) (fingerprint)))
+(defn frontend!
+  "Acquire a managed frontend from Build. Runtime/development launchers never
+   compile the browser graph locally; frontend-into! is the Nix build entry."
+  []
   (check-tools!)
-  (artifacts/coordinated (str (home) "/dist/.frontend.lock")
-    (fn [] (let [output (frontend-unlocked!)]
-      (artifacts/collect! (Path/dirname output) ".pelagic-server" 3 #{output}) output))))
+  (let [identity (remote-fingerprint)
+        output (remote/acquire! (root) identity compiler)]
+    (when-not (= identity (remote-fingerprint))
+      (throw (ex-info "Frontend inputs changed while Build was working; run the task again." {})))
+    output))
 (defn local-valid? [output identity]
   (and (artifact-valid? output identity)
     (try

@@ -1,0 +1,19 @@
+(ns omega.http-pool-test (:require [bl-ed.serve :as serve]))
+(deftest default-listener-keeps-idle-worker-count-bounded
+ (let [root (str (System/tmp_dir!) "/omega-http-pool-" (System/unique_integer (list :positive)))
+       probe (elem (gen_tcp/listen 0 (list :binary (tuple :active false))) 1)
+       port (elem (elem (inet/sockname probe) 1) 1)
+       before (set (erlang/processes))]
+  (gen_tcp/close probe) (File/mkdir_p! root) (File/write! (str root "/index.html") "bounded host")
+  (let [host (serve/start! {:root root :web root :port port})]
+   (try
+    ;; The previous default created over 200 idle HTTP processes. This catches
+    ;; loss of the native pool option, even if the BL config still says four.
+    (is (< (count (remove (fn [pid] (contains? before pid)) (erlang/processes))) 64))
+    (finally (serve/stop! host) (File/rm_rf! root)))
+   (is (not (Process/alive? (:listener host)))))))
+(deftest default-landing-is-only-for-an-unqualified-root
+ (let [cfg {:default-landing-page "/?use=home" :landing-pages {"special.test" "/special"}}]
+  (is (= "/?use=home" (serve/landing-page cfg "example.test:8792" "")))
+  (is (= "/special" (serve/landing-page cfg "special.test" "")))
+  (is (nil? (serve/landing-page cfg "example.test" "file=work:project/review.bl.org")))))

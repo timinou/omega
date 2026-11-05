@@ -1,0 +1,18 @@
+; Opt-in real-provider smoke. Emits only model ids, usage and error categories.
+(ns live.provider-proof (:require [omega.llm :as llm] [bl.json :as json]))
+(let [reports
+ (mapv (fn [name]
+  (let [p (llm/configured (File/cwd!) name) step (llm/step p)
+        req {:system "Call the echo function with text ready, then acknowledge its result in one short sentence."
+             :messages [{:role :user :content [{:type :text :text "Exercise the tool now."}]}]
+             :tools [{:name "echo" :description "Return the text unchanged."
+                      :input-schema {:type "object" :properties {:text {:type "string"}} :required ["text"]}}]}
+        a (step req) call (first (filter #(= :tool-use (:type %)) (:content a)))
+        b (when call (step (update req :messages into
+                              [{:role :assistant :content (:content a)}
+                               {:role :user :content [{:type :tool-result :id (:id call) :content "ready"}]}])))]
+   {:provider name :requested-model (:model p) :served-model (:model a)
+    :tool-called (boolean call) :tool-input (:input call) :acknowledged (boolean (some #(= :text (:type %)) (:content b)))
+    :first-error (select-keys (:error a) [:kind :status]) :second-error (select-keys (:error b) [:kind :status])
+    :usage (:usage a) :continuation-usage (:usage b)})) ["claude" "codex" "deepseek"])]
+ (println (json/encode reports)))

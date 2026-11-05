@@ -375,7 +375,7 @@ function setLoading(pane, path) {
 async function fetchDoc(path, signal) {
   const j = documents ? await documents.read(path, signal)
     : await (await fetch("/api/doc?path=" + encodeURIComponent(path), { signal })).json();
-  if (j.ok) j.packageEvents = await Promise.all(documentPackages(j.text, { loaded: fr ? new Set([...(get(ed$(), "packages") || [])].map(p => get(p, "name"))) : new Set(), suppressed: documentSuppressed }).map(async name => ({ name, event: await loadPackage(name) })));
+  if (j.ok) j.packageEvents = await Promise.all(documentPackages(j.text, { suggested: j.data?.packages || [], loaded: fr ? new Set([...(get(ed$(), "packages") || [])].map(p => get(p, "name"))) : new Set(), suppressed: documentSuppressed }).map(async name => ({ name, event: await loadPackage(name) })));
   return j;
 }
 function installDocumentPackages(j) {

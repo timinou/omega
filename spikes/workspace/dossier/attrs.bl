@@ -1,0 +1,67 @@
+; dossier/attrs.bl — the header line of a semantic block, read and written.
+;
+;   #+begin_ask :id q1 :title "Who drives?" :options "A|B" :answer B
+;
+; Attributes are an ORDERED vector of [key value] pairs so a write-back
+; keeps the author's order and only touches the keys it owns. A key with no
+; value is a flag ("true"). Pure; no IO.
+
+(ns dossier.attrs)
+
+(def ^:private attr-re
+  (Regex/compile! ":([A-Za-z][\\w-]*)(?:\\s+(\"(?:[^\"\\\\]|\\\\.)*\"|[^\\s:\"]\\S*))?"))
+
+(defn- unquote-value [v]
+  (cond
+    (nil? v) "true"
+    (starts-with? v "\"") (-> (subs v 1 (dec (count v)))
+                              (String/replace "\\\"" "\"")
+                              (String/replace "\\\\" "\\"))
+    :else v))
+
+(defn header-lang
+  "The block kind of a `#+begin_X …` line, lowercased, or nil."
+  [line]
+  (let [m (Regex/run (Regex/compile! "^\\s*#\\+begin_([A-Za-z][\\w-]*)" "i") line)]
+    (when m (lower-case (second m)))))
+
+(defn read-attrs
+  "[[key value] …] from a block header line, in source order."
+  [line]
+  (let [rest-of (or (second (Regex/run (Regex/compile! "^\\s*#\\+begin_\\S+(.*)$" "i") line)) "")]
+    (vec (for [m (Regex/scan attr-re rest-of)]
+           [(nth m 1) (unquote-value (when (> (count m) 2) (nth m 2)))]))))
+
+(defn attr-map
+  "The attributes as a map of keyword → string (last write wins)."
+  [pairs]
+  (into {} (for [[k v] pairs] [(keyword k) v])))
+
+(defn- quote-value [v]
+  (if (or (= "" v) (some? (Regex/run (Regex/compile! "[\\s\":]") v)))
+    (str "\"" (-> v (String/replace "\\" "\\\\") (String/replace "\"" "\\\"")) "\"")
+    v))
+
+(defn write-attrs
+  "The attribute part of a header line for `pairs`."
+  [pairs]
+  (join " " (for [[k v] pairs] (if (= "true" v) (str ":" k) (str ":" k " " (quote-value v))))))
+
+(defn header-line
+  "A header line for block `lang` with `pairs`, keeping the indentation of
+   `original`."
+  [original lang pairs]
+  (let [indent (or (second (Regex/run (Regex/compile! "^(\\s*)") original)) "")
+        a (write-attrs pairs)]
+    (str indent "#+begin_" lang (if (blank? a) "" (str " " a)))))
+
+(defn patch-line
+  "`line` with each key of `changes` (string → string-or-nil) removed and,
+   when non-nil, re-appended at the end. Every other byte of the line, the
+   author's quoting and order included, is kept as written."
+  [line changes]
+  (let [stripped (reduce (fn [l k]
+                           (String/replace l (Regex/compile! (str "\\s+:" k "(?:\\s+(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^\\s:\"]\\S*))?(?=\\s|$)")) ""))
+                         line (sort (keys changes)))
+        added (write-attrs (for [k ["answer" "note" "at" "by"] :when (some? (get changes k))] [k (get changes k)]))]
+    (if (blank? added) stripped (str stripped " " added))))

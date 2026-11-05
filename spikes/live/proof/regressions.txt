@@ -1,0 +1,23 @@
+Native compatibility checks against the public v2026.10 runtime:
+
+✓ core-changes-test  29 passed
+✓ workspace-buffer-test  48 passed
+✓ omega.frontend-test  15 passed
+✓ omega.frontend-build-test  19 passed
+✓ omega.dev-host-test  26 passed
+✓ omega.runtime-test  52 passed
+
+The runtime check was rerun after fixing its local binding named first,
+which shadowed the collection function used in the assertion.
+The other groups passed on the initial compatibility run.
+
+Live contracts: 41 assertions passed (native.log).
+Package + panel drive contracts: 20 tests passed (drive.log).
+Entire vendored editor suite: 89 tests passed (editor.log).
+BLED_ROOT points at the Beam Lisp source documentation corpus.
+The first editor attempt omitted that corpus root; the complete rerun is green.
+
+Presentation equivalence uses the unchanged spikes/present/test/check.mjs.
+A temporary PP_OUT facade aliases rt.printStr as core.pr_str for display only.
+All pp.check computations use the actual remotely compiled package.
+Four documents passed with no bad variants (equivalence.log).

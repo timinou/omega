@@ -1,3 +1,6 @@
 ; Nix entry: build the shared frontend into $out (flake output `frontend`).
 (ns pelagic.nix-frontend (:require [pelagic.build :as build]))
-(println (build/frontend-into! (first (BeamLisp/argv))))
+(try (println (build/frontend-into! (first (BeamLisp/argv))))
+ (catch error
+  (println (str "Frontend build detail: " (pr-str (ex-data error))))
+  (throw error)))

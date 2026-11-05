@@ -1,0 +1,18 @@
+; Document task commands are independent of the document's presentation and components.
+(ns document-tasks.main (:require [ed.core :as c] [ed.docs :as docs]))
+(defn context [ed scope]
+  (c/effect ed {:kind :intent :intent "document/context"
+                :args {:path (:path ed) :scope scope :row (first (c/cursor ed)) :rev (get-in ed [:doc :rev])}
+                :then :document-tasks/context}))
+(defn after [old ed ev]
+  (if (and (= :intent-result (:type ev)) (= :document-tasks/context (:then ev)))
+    (if-not (:ok? ev) (c/message ed (:message ev))
+      (let [selection (get-in ev [:data :selection])]
+        (docs/owned-prompt ed "document-tasks" (str "Work on " (:label selection) ": ")
+          (fn [ed goal] (c/effect ed {:kind :intent :intent "task/open" :args {:goal goal :selection selection :path (:path selection)} :then :visit-path}))))) ed))
+(def bl-package
+  {:name "document-tasks" :doc "Start a task from any Org part, section or document; retain its source."
+   :commands {:document-tasks/part {:doc "Work on this source part." :run #(context % "part")}
+              :document-tasks/section {:doc "Work on the current Org section." :run #(context % "section")}
+              :document-tasks/document {:doc "Work on the whole document." :run #(context % "document")}}
+   :on-event after})

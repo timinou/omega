@@ -1,0 +1,544 @@
+TAP version 13
+# Subtest: adjacent resizing conserves widths, skips hidden/docked panes and preserves a third column
+ok 1 - adjacent resizing conserves widths, skips hidden/docked panes and preserves a third column
+  ---
+  duration_ms: 97.740103
+  type: 'test'
+  ...
+# Subtest: incomplete/invalid measurements and nonadjacent boundaries cannot corrupt widths
+ok 2 - incomplete/invalid measurements and nonadjacent boundaries cannot corrupt widths
+  ---
+  duration_ms: 57.654302
+  type: 'test'
+  ...
+# Subtest: frame widths survive drawing and keys without changing editors or package layout; cancel/reset is exact
+ok 3 - frame widths survive drawing and keys without changing editors or package layout; cancel/reset is exact
+  ---
+  duration_ms: 247.758313
+  type: 'test'
+  ...
+# Subtest: late layout events and malformed width declarations are ignored
+ok 4 - late layout events and malformed width declarations are ignored
+  ---
+  duration_ms: 57.023023
+  type: 'test'
+  ...
+# Subtest: file-local package declaration accepts installed names, orders dependencies and excludes executable/remote references
+ok 5 - file-local package declaration accepts installed names, orders dependencies and excludes executable/remote references
+  ---
+  duration_ms: 1.649734
+  type: 'test'
+  ...
+# Subtest: explicit unload is respected across refreshes until explicitly used again
+ok 6 - explicit unload is respected across refreshes until explicitly used again
+  ---
+  duration_ms: 0.318605
+  type: 'test'
+  ...
+# Subtest: provider suggestions use the same bare-name and explicit-unload rules
+ok 7 - provider suggestions use the same bare-name and explicit-unload rules
+  ---
+  duration_ms: 0.22741
+  type: 'test'
+  ...
+# Subtest: normal-mode motions: hjkl, w selects a word, counts
+ok 8 - normal-mode motions: hjkl, w selects a word, counts
+  ---
+  duration_ms: 365.388216
+  type: 'test'
+  ...
+# Subtest: insert mode types, Escape returns, undo/redo round-trip
+ok 9 - insert mode types, Escape returns, undo/redo round-trip
+  ---
+  duration_ms: 95.93247
+  type: 'test'
+  ...
+# Subtest: multiple cursors: C adds a cursor below, typing goes to both
+ok 10 - multiple cursors: C adds a cursor below, typing goes to both
+  ---
+  duration_ms: 75.690947
+  type: 'test'
+  ...
+# Subtest: x selects lines; d deletes and yanks; p pastes
+ok 11 - x selects lines; d deletes and yanks; p pastes
+  ---
+  duration_ms: 89.682157
+  type: 'test'
+  ...
+# Subtest: org navigation: ]h [h g u ]b
+ok 12 - org navigation: ]h [h g u ]b
+  ---
+  duration_ms: 160.618924
+  type: 'test'
+  ...
+# Subtest: structural form motion inside a cell
+ok 13 - structural form motion inside a cell
+  ---
+  duration_ms: 180.017776
+  type: 'test'
+  ...
+# Subtest: paredit-style: wrap and raise
+ok 14 - paredit-style: wrap and raise
+  ---
+  duration_ms: 113.180609
+  type: 'test'
+  ...
+# Subtest: the command line evaluates Beam Lisp against the live editor
+ok 15 - the command line evaluates Beam Lisp against the live editor
+  ---
+  duration_ms: 129.757471
+  type: 'test'
+  ...
+# Subtest: the command line is the real language: macros, defn, destructuring, threading
+ok 16 - the command line is the real language: macros, defn, destructuring, threading
+  ---
+  duration_ms: 255.562966
+  type: 'test'
+  ...
+# Subtest: split cells: a local cell runs in the page; a beam cell becomes an effect
+ok 17 - split cells: a local cell runs in the page; a beam cell becomes an effect
+  ---
+  duration_ms: 279.693175
+  type: 'test'
+  ...
+# Subtest: the palette finds and runs commands by fuzzy name
+ok 18 - the palette finds and runs commands by fuzzy name
+  ---
+  duration_ms: 290.360119
+  type: 'test'
+  ...
+# Subtest: describe-key explains a binding
+ok 19 - describe-key explains a binding
+  ---
+  duration_ms: 44.811635
+  type: 'test'
+  ...
+# Subtest: search: / n N * with smart-case and wrap
+ok 20 - search: / n N * with smart-case and wrap
+  ---
+  duration_ms: 97.859438
+  type: 'test'
+  ...
+# Subtest: dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans
+ok 21 - dirty is derived: an edit dirties, undo back to the saved text cleans, a save at the current rev cleans
+  ---
+  duration_ms: 74.652553
+  type: 'test'
+  ...
+# Subtest: save is an effect, not a side effect
+ok 22 - save is an effect, not a side effect
+  ---
+  duration_ms: 34.578211
+  type: 'test'
+  ...
+# Subtest: an eval reload keeps the cursor and is one undo step
+ok 23 - an eval reload keeps the cursor and is one undo step
+  ---
+  duration_ms: 54.49616
+  type: 'test'
+  ...
+# Subtest: render model: segments, problems, status
+ok 24 - render model: segments, problems, status
+  ---
+  duration_ms: 24.06024
+  type: 'test'
+  ...
+# Subtest: incremental structure == full derive, over random typing in real documents
+ok 25 - incremental structure == full derive, over random typing in real documents
+  ---
+  duration_ms: 155741.851674
+  type: 'test'
+  ...
+# Subtest: round trip: every repo .bl.org is reproduced byte-for-byte
+ok 26 - round trip: every repo .bl.org is reproduced byte-for-byte
+  ---
+  duration_ms: 7139.061448
+  type: 'test'
+  ...
+# Subtest: deferred language: Enter keeps the draft, one effect, replays once on ready
+ok 27 - deferred language: Enter keeps the draft, one effect, replays once on ready
+  ---
+  duration_ms: 69.659882
+  type: 'test'
+  ...
+# Subtest: deferred language: Escape or an edit cancels the parked run
+ok 28 - deferred language: Escape or an edit cancels the parked run
+  ---
+  duration_ms: 51.279436
+  type: 'test'
+  ...
+# Subtest: deferred language: a failed load keeps the draft and says so; Enter retries
+ok 29 - deferred language: a failed load keeps the draft and says so; Enter retries
+  ---
+  duration_ms: 41.625217
+  type: 'test'
+  ...
+# Subtest: deferred language: a local cell keeps its text and resumes once; edits cancel stale results
+ok 30 - deferred language: a local cell keeps its text and resumes once; edits cancel stale results
+  ---
+  duration_ms: 100.061964
+  type: 'test'
+  ...
+# Subtest: named command events use normal command lookup and retain the read-only guard
+ok 31 - named command events use normal command lookup and retain the read-only guard
+  ---
+  duration_ms: 16.969623
+  type: 'test'
+  ...
+# Subtest: docked views span columns without occupying an editor column
+ok 32 - docked views span columns without occupying an editor column
+  ---
+  duration_ms: 2.352745
+  type: 'test'
+  ...
+# Subtest: observation coalesces after painting; unsubscribe and listener failure are isolated
+ok 33 - observation coalesces after painting; unsubscribe and listener failure are isolated
+  ---
+  duration_ms: 0.611915
+  type: 'test'
+  ...
+# Subtest: a package panel preserves every editor, draft and original column declaration
+ok 34 - a package panel preserves every editor, draft and original column declaration
+  ---
+  duration_ms: 473.331417
+  type: 'test'
+  ...
+# Subtest: one pane is today's bl-ed: the frame renders exactly ed.main/render
+ok 35 - one pane is today's bl-ed: the frame renders exactly ed.main/render
+  ---
+  duration_ms: 211.460168
+  type: 'test'
+  ...
+# Subtest: ed/layout arranges the window: the current editor is kept, other panes fetch their docs
+ok 36 - ed/layout arranges the window: the current editor is kept, other panes fetch their docs
+  ---
+  duration_ms: 101.911477
+  type: 'test'
+  ...
+# Subtest: a :select link: moving onto an object visits it in the linked pane (as an effect)
+ok 37 - a :select link: moving onto an object visits it in the linked pane (as an effect)
+  ---
+  duration_ms: 140.609414
+  type: 'test'
+  ...
+# Subtest: effects are tagged by pane; an answer for one pane changes only that pane
+ok 38 - effects are tagged by pane; an answer for one pane changes only that pane
+  ---
+  duration_ms: 64.565271
+  type: 'test'
+  ...
+# Subtest: space w w cycles focus over editor panes only; space w o keeps the focused editor
+ok 39 - space w w cycles focus over editor panes only; space w o keeps the focused editor
+  ---
+  duration_ms: 177.080711
+  type: 'test'
+  ...
+# Subtest: a view pane draws from the pane it views, through the package's :views
+ok 40 - a view pane draws from the pane it views, through the package's :views
+  ---
+  duration_ms: 89.296955
+  type: 'test'
+  ...
+# Subtest: (ed/layout nil) and unknown layouts
+ok 41 - (ed/layout nil) and unknown layouts
+  ---
+  duration_ms: 135.932914
+  type: 'test'
+  ...
+# Subtest: packages are frame-wide: unuse in one pane removes it everywhere, and its layout
+ok 42 - packages are frame-wide: unuse in one pane removes it everywhere, and its layout
+  ---
+  duration_ms: 99.856843
+  type: 'test'
+  ...
+# Subtest: boot layout without a command line: F.arrange(fr, layouts[name]) is what ed/layout does
+ok 43 - boot layout without a command line: F.arrange(fr, layouts[name]) is what ed/layout does
+  ---
+  duration_ms: 69.844271
+  type: 'test'
+  ...
+# Subtest: events for a pane that left (a late host answer) leave the frame untouched
+ok 44 - events for a pane that left (a late host answer) leave the frame untouched
+  ---
+  duration_ms: 95.845572
+  type: 'test'
+  ...
+# Subtest: a frame reuses unchanged pane models while another editor moves
+ok 45 - a frame reuses unchanged pane models while another editor moves
+  ---
+  duration_ms: 92.29628
+  type: 'test'
+  ...
+# Subtest: reconfigure retains named editors and blocks discarded text and prompt drafts
+ok 46 - reconfigure retains named editors and blocks discarded text and prompt drafts
+  ---
+  duration_ms: 34.877626
+  type: 'test'
+  ...
+# Subtest: source candidates keep an existing context or retain main when adding the first aside
+ok 47 - source candidates keep an existing context or retain main when adding the first aside
+  ---
+  duration_ms: 26.123807
+  type: 'test'
+  ...
+# Subtest: visit and focus candidates choose the existing pane and protect its file and prompt drafts
+ok 48 - visit and focus candidates choose the existing pane and protect its file and prompt drafts
+  ---
+  duration_ms: 50.93811
+  type: 'test'
+  ...
+# Subtest: a package that arranges the window on :use keeps the effects its :adopt emitted, tagged to the kept pane
+ok 49 - a package that arranges the window on :use keeps the effects its :adopt emitted, tagged to the kept pane
+  ---
+  duration_ms: 5.416539
+  type: 'test'
+  ...
+# Subtest: docked views carry geometry while preserving editor identity and ordinary view models
+ok 50 - docked views carry geometry while preserving editor identity and ordinary view models
+  ---
+  duration_ms: 12.310642
+  type: 'test'
+  ...
+# Subtest: latest visit wins: an older slow answer never overwrites a newer one
+ok 51 - latest visit wins: an older slow answer never overwrites a newer one
+  ---
+  duration_ms: 3.864083
+  type: 'test'
+  ...
+# Subtest: a stale ERROR is dropped; the newest request's error is shown
+ok 52 - a stale ERROR is dropped; the newest request's error is shown
+  ---
+  duration_ms: 0.463338
+  type: 'test'
+  ...
+# Subtest: superseded requests are aborted
+ok 53 - superseded requests are aborted
+  ---
+  duration_ms: 0.300349
+  type: 'test'
+  ...
+# Subtest: a background refresh never supersedes a foreground visit, nor lands on another path
+ok 54 - a background refresh never supersedes a foreground visit, nor lands on another path
+  ---
+  duration_ms: 0.957496
+  type: 'test'
+  ...
+# Subtest: a visit supersedes an in-flight refresh of the same pane
+ok 55 - a visit supersedes an in-flight refresh of the same pane
+  ---
+  duration_ms: 0.588384
+  type: 'test'
+  ...
+# Subtest: a disposed pane's answer is dropped
+ok 56 - a disposed pane's answer is dropped
+  ---
+  duration_ms: 0.357506
+  type: 'test'
+  ...
+# Subtest: memoFrame renders once per frame value
+ok 57 - memoFrame renders once per frame value
+  ---
+  duration_ms: 0.332027
+  type: 'test'
+  ...
+# Subtest: language: sync hooks never return a Promise; honest status, retry after failure
+ok 58 - language: sync hooks never return a Promise; honest status, retry after failure
+  ---
+  duration_ms: 12.946678
+  type: 'test'
+  ...
+# Subtest: awaitLanguage: answers ready once; failure carries the message; a vanished pane gets nothing
+ok 59 - awaitLanguage: answers ready once; failure carries the message; a vanished pane gets nothing
+  ---
+  duration_ms: 0.995894
+  type: 'test'
+  ...
+# Subtest: easing is elapsed-time based: 60/120/144 Hz settle alike and cover the distance
+ok 60 - easing is elapsed-time based: 60/120/144 Hz settle alike and cover the distance
+  ---
+  duration_ms: 1.161373
+  type: 'test'
+  ...
+# Subtest: one 60 Hz frame covers the former 32 %
+ok 61 - one 60 Hz frame covers the former 32 %
+  ---
+  duration_ms: 0.234752
+  type: 'test'
+  ...
+# Subtest: reduced motion and trackpad deltas apply directly, with no easing
+ok 62 - reduced motion and trackpad deltas apply directly, with no easing
+  ---
+  duration_ms: 0.236489
+  type: 'test'
+  ...
+# Subtest: wheel vs trackpad classification
+ok 63 - wheel vs trackpad classification
+  ---
+  duration_ms: 0.189761
+  type: 'test'
+  ...
+# Subtest: pane disposal: apply→false drops the glide; drop() cancels the frame
+ok 64 - pane disposal: apply→false drops the glide; drop() cancels the frame
+  ---
+  duration_ms: 0.271582
+  type: 'test'
+  ...
+# Subtest: packageUrl: bare names resolve under ./pkg
+ok 65 - packageUrl: bare names resolve under ./pkg
+  ---
+  duration_ms: 0.189703
+  type: 'test'
+  ...
+# Subtest: task navigation preserves package and theme bootstrap parameters on reload
+ok 66 - task navigation preserves package and theme bootstrap parameters on reload
+  ---
+  duration_ms: 0.516477
+  type: 'test'
+  ...
+# Subtest: presentation actions accept command names, including qualified keywords, without executable text
+ok 67 - presentation actions accept command names, including qualified keywords, without executable text
+  ---
+  duration_ms: 0.578194
+  type: 'test'
+  ...
+# Subtest: portable decimal parsing keeps the numeric predicate callable
+ok 68 - portable decimal parsing keeps the numeric predicate callable
+  ---
+  duration_ms: 42.716618
+  type: 'test'
+  ...
+# Subtest: C-Enter on a task block asks the world to open a task, then writes the reference
+ok 69 - C-Enter on a task block asks the world to open a task, then writes the reference
+  ---
+  duration_ms: 186.348628
+  type: 'test'
+  ...
+# Subtest: the reference row is drawn as a live card; the text stays the reference
+ok 70 - the reference row is drawn as a live card; the text stays the reference
+  ---
+  duration_ms: 94.289064
+  type: 'test'
+  ...
+# Subtest: y on a card answers its question; y elsewhere still yanks
+ok 71 - y on a card answers its question; y elsewhere still yanks
+  ---
+  duration_ms: 123.922945
+  type: 'test'
+  ...
+# Subtest: C-Enter again: same body focuses, an edited body refines, a finished task reopens
+ok 72 - C-Enter again: same body focuses, an edited body refines, a finished task reopens
+  ---
+  duration_ms: 264.175757
+  type: 'test'
+  ...
+# Subtest: a reference the world wrote (no digest) is adopted on C-Enter, not refined
+ok 73 - a reference the world wrote (no digest) is adopted on C-Enter, not refined
+  ---
+  duration_ms: 41.722748
+  type: 'test'
+  ...
+# Subtest: a finished task's reference is rewritten once with its summary
+ok 74 - a finished task's reference is rewritten once with its summary
+  ---
+  duration_ms: 20.672687
+  type: 'test'
+  ...
+# Subtest: visiting a read-only view: objects get their keys, edits are refused, C-o goes back
+ok 75 - visiting a read-only view: objects get their keys, edits are refused, C-o goes back
+  ---
+  duration_ms: 211.532412
+  type: 'test'
+  ...
+# Subtest: a refreshed read-only view keeps the cursor; a refreshed dirty file keeps your text
+ok 76 - a refreshed read-only view keeps the cursor; a refreshed dirty file keeps your text
+  ---
+  duration_ms: 124.998028
+  type: 'test'
+  ...
+# Subtest: a refresh of a read-only view keeps what you are typing in the minibuffer
+ok 77 - a refresh of a read-only view keeps what you are typing in the minibuffer
+  ---
+  duration_ms: 49.782524
+  type: 'test'
+  ...
+# Subtest: space a n opens a homeless task through the minibuffer
+ok 78 - space a n opens a homeless task through the minibuffer
+  ---
+  duration_ms: 44.142352
+  type: 'test'
+  ...
+# Subtest: ordinary cells still evaluate (C-Enter falls through to eval-cell)
+ok 79 - ordinary cells still evaluate (C-Enter falls through to eval-cell)
+  ---
+  duration_ms: 21.690549
+  type: 'test'
+  ...
+# Subtest: a refresh of a read-only view keeps your place: text above moves the row, the cursor follows its object
+ok 80 - a refresh of a read-only view keeps your place: text above moves the row, the cursor follows its object
+  ---
+  duration_ms: 65.88051
+  type: 'test'
+  ...
+# Subtest: a used package adds keys and commands; unuse removes exactly them
+ok 81 - a used package adds keys and commands; unuse removes exactly them
+  ---
+  duration_ms: 275.832843
+  type: 'test'
+  ...
+# Subtest: a package intercepts before the core, reacts after it, adopts visited documents
+ok 82 - a package intercepts before the core, reacts after it, adopts visited documents
+  ---
+  duration_ms: 81.045114
+  type: 'test'
+  ...
+# Subtest: ed/use asks the host for the module (an effect); a failed load is a message
+ok 83 - ed/use asks the host for the module (an effect); a failed load is a message
+  ---
+  duration_ms: 44.54374
+  type: 'test'
+  ...
+# Subtest: package observers see completed module installation and failed loads
+ok 84 - package observers see completed module installation and failed loads
+  ---
+  duration_ms: 5.121444
+  type: 'test'
+  ...
+# Subtest: cursor updates keep source colors stable while updating current row and position
+ok 85 - cursor updates keep source colors stable while updating current row and position
+  ---
+  duration_ms: 135.109377
+  type: 'test'
+  ...
+# Subtest: syntax edits and undo invalidate both token spans and structural diagnostics
+ok 86 - syntax edits and undo invalidate both token spans and structural diagnostics
+  ---
+  duration_ms: 164.679032
+  type: 'test'
+  ...
+# Subtest: visible row sets and alternating buffers do not reuse another projection’s tokens
+ok 87 - visible row sets and alternating buffers do not reuse another projection’s tokens
+  ---
+  duration_ms: 121.399832
+  type: 'test'
+  ...
+# Subtest: a placement update refreshes cached line metadata without changing the source
+ok 88 - a placement update refreshes cached line metadata without changing the source
+  ---
+  duration_ms: 72.141293
+  type: 'test'
+  ...
+# Subtest: a cold packaged server resolves virtual paths and serves changing task documents
+ok 89 - a cold packaged server resolves virtual paths and serves changing task documents
+  ---
+  duration_ms: 26309.374739
+  type: 'test'
+  ...
+1..89
+# tests 89
+# suites 0
+# pass 89
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 166105.880196

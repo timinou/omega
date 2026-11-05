@@ -1,0 +1,6 @@
+{:name "dossier" :editor "dossier" :editor-only true
+ :doc "Interactive .bl.org documents in the existing document pane."
+ :frontend {:version 1 :entry "dossier.main"
+  :roots ["vendor/bl-ed" "spikes/workspace"] :host ["eval-ed" "eval-cells"]
+  :loader {:host "dossier/host.mjs"}
+  :assets [{:from "spikes/workspace/dossier/host" :to "pkg/dossier" :suffixes [".mjs" ".css"]}]}}

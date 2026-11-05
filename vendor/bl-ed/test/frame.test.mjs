@@ -52,6 +52,37 @@ const demo = R.hashMap(K("name"), "demo",
     K("links"), R.hashMap("demo/item", (o) => "item:" + get(o, "key")),
     K("views"), R.hashMap(K("outline"), (ed) => R.hashMap(K("path"), get(ed, "path")))));
 
+test("a package panel preserves every editor, draft and original column declaration", () => {
+  const s = session();
+  s.cmd('(ed/layout "two")');
+  s.key("i").key("x").key("Escape");
+  const panel = ev(K("name"), "panel-test", K("provides"), ev(K("layouts"), R.hashMap("panel-test",
+    ev(K("name"), "panel-test", K("panes"), R.vec(ev(K("id"), K("inspection"),
+      K("view"), R.vec(K("outline"), K("main")), K("width"), R.vec(K("fr"), 2)))))));
+  s.send(ev(K("type"), K("use"), K("package"), panel));
+  const widths = ev(K("rail"), R.vec(K("fr"), 2), K("main"), R.vec(K("fr"), 3));
+  const before = s.fr.assoc(K("column-widths"), widths);
+  const request = ev(K("pane"), K("rail"), K("layout"), "panel-test");
+  let opened = F.d_open_panel(before, request);
+  assert.equal(get(opened, "editors"), get(before, "editors"));
+  assert.equal(get(opened, "focus"), get(before, "focus"));
+  assert.equal(get(get(opened, "layout"), "panes").toArray().length, 4);
+  assert.equal(get(get(opened, "layout"), "panes").toArray().at(-1).get(K("view")).nth(1), K("rail"));
+  opened = F.d_open_panel(opened, request);
+  assert.equal(get(get(opened, "layout"), "panes").toArray().length, 4, "reopening never duplicates a panel");
+  const closed = F.d_close_panel(opened);
+  assert.equal(get(closed, "layout"), get(before, "layout"));
+  assert.equal(get(closed, "column-widths"), widths);
+  assert.equal(get(closed, "editors"), get(before, "editors"));
+  const after = F.d_handle(opened, ev(K("type"), K("key"), K("key"), ":"));
+  let unuse = after;
+  for (const c of '(ed/unuse "panel-test")') unuse = F.d_handle(unuse, ev(K("type"), K("text"), K("text"), c));
+  unuse = F.d_handle(unuse, key("Enter"));
+  assert.equal(get(unuse, "layout"), get(before, "layout"));
+  for (const id of F.d_editor_ids(before))
+    assert.equal(R.printStr(get(F.d_editor(unuse, id), "text")), R.printStr(get(F.d_editor(before, id), "text")));
+});
+
 /** A frame session: host-side, answering :visit effects for the right pane. */
 function session(text = "notes\n", file = "x.bl.org") {
   let fr = F.d_single(M.d_boot(text, file));

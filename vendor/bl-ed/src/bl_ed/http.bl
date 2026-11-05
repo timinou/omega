@@ -1,0 +1,89 @@
+; Bounded HTTP listener for an editor host. The pinned web/serve does not
+; forward Thousand Island pool options; its default pool copies a large BL
+; callback context into hundreds of idle workers. Keep the same web lifecycle,
+; scoped callbacks, code leases and access log, with an explicit small pool.
+(ns bl-ed.http (:require [web :as w]))
+(defn- access! [conn status start error]
+  (try (IO/puts :stderr (pr-str
+    (cond-> {:at (erlang/system_time :millisecond) :method (w/method conn) :path (w/path conn)
+             :status status :ms (/ (- (erlang/monotonic_time :microsecond) start) 1000.0)}
+      error (assoc :error (ex-message error))))) (catch _ nil)))
+
+(defn- start-listener [opts modules]
+  ;; A failing start_link can deliver an EXIT as well as {:error reason}.
+  ;; Trap that signal in a short-lived bootstrap owner, never in user code.
+  ;; Retain the OTP parent until listener termination; it monitors the caller.
+  ;; Merely unlinking a supervisor does not transfer its proc_lib parent.
+  (let [owner (erlang/self) ref (erlang/make_ref)
+        action (BeamLisp.Env/convey
+          (fn [_]
+            (erlang/process_flag :trap_exit true)
+            (let [owner-ref (erlang/monitor :process owner)
+                  result (try
+                           ;; Loading modules is not starting their OTP app.
+                           ;; Bandit owns a supervised clock/cache needed by
+                           ;; every response, including from executable drops.
+                           (let [started (Application/ensure_all_started :bandit)]
+                             (if (= :ok (elem started 0))
+                               (erlang/apply :Elixir.Bandit :start_link (list opts))
+                               started))
+                           (catch e (tuple :error (ex-message e))))]
+              (if (= :ok (elem result 0))
+                (let [listener (elem result 1)]
+                  (erlang/send owner [:listener-started ref listener])
+                  (receive
+                    [:listener-adopted r] :when (= r ref)
+                      (receive
+                        [:DOWN r :process _ _] :when (= r owner-ref)
+                          (when (Process/alive? listener) (Supervisor/stop listener :normal 30000))
+                        [:EXIT pid _] :when (= pid listener) nil)
+                    [:DOWN r :process _ _] :when (= r owner-ref)
+                      (Supervisor/stop listener :normal 30000)
+                    (after 30000 (Supervisor/stop listener :normal 30000))))
+                (erlang/send owner [:listener-failed ref result])))))
+        started (BeamLisp.Refs/spawn_owned
+                  (fn [] (erlang/apply action (list nil))) :monitor modules)
+        worker (elem started 0) monitor (elem started 1)]
+    (receive
+      [:listener-started r listener] :when (= r ref)
+        (do (erlang/link listener)
+            (erlang/send worker [:listener-adopted ref])
+            (erlang/demonitor monitor (list :flush))
+            (tuple :ok listener))
+      [:listener-failed r result] :when (= r ref)
+        (do (erlang/demonitor monitor (list :flush)) result)
+      [:DOWN r :process _ reason] :when (= r monitor)
+        (tuple :error reason)
+      (after 30000
+        (erlang/exit worker :kill)
+        (erlang/demonitor monitor (list :flush))
+        (tuple :error :listener-start-timeout)))))
+
+(defn serve! [opts]
+ (let [handler (:plug opts)
+       modules (to-list (concat (BeamLisp.Env/callback_modules handler)
+                         (list (elem (erlang/fun_info (fn [] nil) :module) 1))))
+       cwd (BeamLisp/cwd) argv (BeamLisp/argv)
+       request (BeamLisp.Env/convey
+                 (fn [conn]
+                   (BeamLisp.Env/with_code_lease modules
+                     (fn []
+                       (let [start (erlang/monotonic_time :microsecond)]
+                         (try
+                           (let [response (handler conn)]
+                             (access! conn (w/status response) start nil)
+                             response)
+                           (catch error
+                             (access! conn 500 start error)
+                             (throw error))))))))
+       plug (fn [conn _]
+              (BeamLisp/with_cwd cwd
+                (fn [] (BeamLisp/with_argv argv
+                  (fn [] (erlang/apply request (list conn)))))))
+       acceptors (or (:acceptors opts) 4)
+       _ (when-not (and (erlang/is_integer acceptors) (<= 1 acceptors) (<= acceptors 64))
+           (throw (ex-info "HTTP acceptor count must be between 1 and 64." {})))
+       options (list (tuple :plug plug) (tuple :port (:port opts)) (tuple :scheme :http)
+                     (tuple :ip (:ip opts))
+                     (tuple :thousand_island_options (list (tuple :num_acceptors acceptors))))]
+   (start-listener options modules)))

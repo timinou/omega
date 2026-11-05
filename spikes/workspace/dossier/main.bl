@@ -1,0 +1,21 @@
+; Pure adapter: the ordinary source editor and an owned dossier reading surface.
+(ns dossier.main (:require [ed.pkg :as pkg] [ed.main :as m] [ed.core :as c]))
+(defn toggle [ed]
+  (update-in ed [:pkg-state "dossier" :editing] not))
+(defn render [ed]
+  (when (and (get-in ed [:doc :data :dossier]) (not (get-in ed [:pkg-state "dossier" :editing])))
+    (assoc (m/render-rows ed []) :lines
+      [{:ornament? true :key "dossier" :src 0 :vy 0 :size (max 1 (or (get-in ed [:view :height]) 30))
+        :segments [] :host {:package "dossier" :path (:path ed)
+                            :url (get-in ed [:doc :data :dossier :url])}}])))
+(def bl-package
+  {:name "dossier" :doc "Read an interactive dossier; edit its actual shared source."
+   :commands {:dossier/toggle {:doc "Switch dossier reading/source without replacing the buffer." :run toggle}
+              :dossier/unload {:doc "Remove the dossier reader and restore the editor." :run #(pkg/unuse % "dossier")}}
+   :keys {:normal {"g D" :dossier/toggle}}
+   :render render
+   :intercept (fn [ed ev]
+                (case (:type ev)
+                  :dossier/edit (toggle ed)
+                  :dossier/open (c/effect ed {:kind :visit :path (:path ev)})
+                  nil))})

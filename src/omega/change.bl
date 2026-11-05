@@ -1,0 +1,20 @@
+; Durable change intent and receipts, joined to ordinary tasks in the same store.
+; Live's controller serializes transitions; native generation handles never land here.
+(ns omega.change (:require [omega.env :as env]))
+(defn view [e id]
+ (when-let [eid (env/eid e :change/id id)]
+  (let [m (env/pull e [:change/id :change/status :change/data :change/at :change/target {:change/task [:task/id]}] eid)]
+   (merge (:change/data m) {:id (:change/id m) :status (:change/status m) :at (:change/at m)
+                           :target (:change/target m) :task (get-in m [:change/task :task/id])}))))
+(defn save!
+ ([e m] (save! e m []))
+ ([e m facts]
+ (let [fact (cond-> {:db/id -1 :change/id (:id m) :change/target (:target m) :change/status (:status m)
+                     :change/at (:at m) :change/data (dissoc m :id :target :status :at :task)}
+               (:task m) (assoc :change/task (env/eid e :task/id (:task m))))]
+  (env/tx! e (into [fact] facts)) m)))
+(defn create! [e m]
+ (save! e (assoc m :id (env/new-id e "change") :at (env/now e))))
+(defn all [e]
+ (vec (sort-by (fn [m] [(:at m) (:id m)])
+        (map (fn [[id]] (view e id)) (env/q e '[:find ?id :where [_ :change/id ?id]])))))

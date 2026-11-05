@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Build the immutable candidate on Build, then own a fresh offline demonstration.
+set -euo pipefail
+ROOT=$(CDPATH='' cd "$(dirname "$0")/../.." && pwd -P)
+cache="$ROOT/spikes/live/dist"
+mkdir -p "$cache"
+"$ROOT/bin/omega-build" "$ROOT#frontend-compiler" --out-link "$cache/compiler"
+"$ROOT/bin/omega-build" "$ROOT#frontend" --out-link "$cache/frontend"
+export OMEGA_BL="$cache/compiler/bin/bl"
+export OMEGA_HOME="$ROOT"
+export LIVE_FRONTEND
+LIVE_FRONTEND=$(readlink -f "$cache/frontend")
+export LIVE_WORLD=${LIVE_WORLD:-$(mktemp -d /tmp/omega-live-demo-XXXXXX)}
+export LIVE_PORT=${LIVE_PORT:-8792}
+export ELIXIR_ERL_OPTIONS="${ELIXIR_ERL_OPTIONS:-+S 2:2 +SDcpu 1:1 +SDio 1}"
+mkdir -p "$LIVE_WORLD"
+exec "$ROOT/bin/bl" --cold run "$ROOT/spikes/live/test/server.bl"

@@ -47,6 +47,14 @@
           (ui/tile p) (:name p)])
        [:button.chip {:data-act "add-places" :data-key "lp-other"} "Other…"]]
       [:div.where (where vm place)]
+      (when-let [origin (:selection vm)]
+        [:div.launch-origin {:data-key "origin"}
+         [:div.mono.tiny.muted (:document-title origin)]
+         [:div.chips {:role "group" :aria-label "Starting context"}
+          (for [[scope label] [["part" "This part"] ["section" "Section"] ["document" "Whole file"]]]
+           [:button {:class ["chip" (when (= scope (:scope origin)) "on")]
+                     :data-act "document-scope" :data-value scope :aria-pressed (str (= scope (:scope origin)))} label])]
+         [:details [:summary (:label origin)] [:pre.origin-preview (:text origin)]]])
       [:textarea.goal {:data-field "new-goal" :placeholder "What should happen?" :aria-label "Goal" :rows "5"} (or (:goal draft) "")]
       (when (seq refs)
         [:div.refs (map-indexed (fn [i r] [:span.ref {:data-key (str "ref" i)} (ui/icon :file "sm") (:label r)

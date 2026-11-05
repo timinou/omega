@@ -1,0 +1,61 @@
+(ns dossier-documents-test (:require [omega.documents :as d] [omega.env :as env]
+  [buffer.model :as buffer] [place.model :as place] [bl-ed.serve :as serve]
+  [clojure.string :as str]))
+(def source "#+TITLE: A shared dossier\n* Decision\n#+begin_ask :id direction :title Pick :options Yes|No\nContinue?\n#+end_ask\n\n* Evidence\n#+begin_src beam-lisp :id recorded\n(throw :never-run)\n#+end_src\n#+RESULTS: recorded\n: recorded result\n")
+(defn fixture []
+ (let [root (str "/tmp/omega-documents-" (System/pid) "-" (erlang/unique_integer (list :positive)))
+       e (env/open {:schema (vec (concat place/schema buffer/schema d/schema))}) server (buffer/start! e)
+       sys {:env e :root root} r (d/registry sys server {})]
+  (File/mkdir_p! root) (File/write! (str root "/review.bl.org") source)
+  (place/put! e {:id "a" :root root})
+  {:root root :env e :server server :registry r}))
+(defn cleanup [f] (GenServer/stop (:server f)) (env/close! (:env f)) (File/rm_rf! (:root f)))
+(deftest addresses-share-the-buffer-and-answers-preserve-source
+ (let [{:keys [root registry] :as f} (fixture)]
+  (try
+   (let [a (d/resolve-document registry "project:a/review.bl.org")
+         b (d/resolve-document registry (str "file://" root "/review.bl.org"))
+         c (d/resolve-document registry "work:a/review.bl.org")
+         before (d/snapshot registry a)]
+    (is (= (:address a) (:address b) (:address c)))
+    (is (:ok (d/submit-answer! registry a {:id "direction" :answer "Yes" :note "Keep the same UI" :base (:rev before)})))
+    (let [after (d/snapshot registry a)]
+     (is (str/includes? (:text after) ":answer Yes"))
+     (is (str/includes? (:text after) "Keep the same UI"))
+     (is (= (:text after) (File/read! (str root "/review.bl.org"))))
+     (is (str/ends-with? (:text after) "\n"))
+     (is (= (subvec (vec (str/split source "\n")) 3) (subvec (vec (str/split (:text after) "\n")) 3))))
+    (is (try (d/submit-answer! registry a {:id "direction" :answer "No" :note "stale" :base (:rev before)}) false (catch _ true)))
+    (is (str/includes? (:html (d/projection registry a)) "recorded result")))
+   (finally (cleanup f)))))
+(deftest project-symlink-escape-and-unadmitted-identities-refuse
+ (let [{:keys [root registry] :as f} (fixture)]
+  (try
+   (File/mkdir_p! (str root "-outside"))
+   (File/write! (str root "-outside/nope.bl.org") "private sibling")
+   (File/ln_s! (str root "-outside") (str root "/outside"))
+   (is (try (d/resolve-document registry "project:a/outside/nope.bl.org") false (catch _ true)))
+   (File/rm_rf! (str root "-outside"))
+   (is (try (d/resolve-document registry "document:guessed") false (catch _ true)))
+   (finally (cleanup f)))))
+(deftest unsent-typing-is-preserved-and-overlapping-answer-is-refused
+ (let [{:keys [registry server] :as f} (fixture)]
+  (try
+   (let [entry (d/resolve-document registry "project:a/review.bl.org") before (d/snapshot registry entry)]
+    (buffer/request! server [:draft (:path entry) {:text (str/replace source "#+begin_ask :id direction :title Pick :options Yes|No\nContinue?\n#+end_ask" "Deleted question") :base (:rev before) :client "editor" :sequence 1}])
+    (is (try (d/submit-answer! registry entry {:id "direction" :answer "Yes" :note "" :base (:rev before)}) false (catch _ true)))
+    (is (= source (File/read! (:path entry)))))
+   (finally (cleanup f)))))
+(deftest evidence-only-refresh-changes-render-generation-without-source-revision
+ (let [{:keys [root registry] :as f} (fixture)]
+  (try
+   (File/mkdir_p! (str root "/evidence"))
+   (File/write! (str root "/evidence/run.json") "{\"verdict\":\"proven\",\"steps\":[]}")
+   (File/write! (str root "/film.bl.org") "#+TITLE: Film\n* Evidence\n#+begin_film :id film :run evidence\nRecorded\n#+end_film\n")
+   (let [entry (d/resolve-document registry "project:a/film.bl.org") before (d/projection registry entry)]
+    (File/write! (str root "/evidence/run.json") "{\"verdict\":\"refuted\",\"steps\":[]}")
+    (let [after (d/projection registry entry)]
+     (is (= (:rev before) (:rev after)))
+     (is (not= (:generation before) (:generation after)))
+     (is (str/includes? (:html after) "refuted"))))
+   (finally (cleanup f)))))
