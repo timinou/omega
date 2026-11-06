@@ -1,6 +1,6 @@
 # App-only compilation against the tested APK's OWN compiler and mobile SDK.
 # Signing happens on Work, never in this derivation. baseApk is a store input.
-{ pkgs, baseApk, erlang, lazyNif, origin }:
+{ pkgs, baseApk, erlang, lazyNif, origin, legacyOrigins ? [] }:
 assert builtins.match "https://[a-zA-Z0-9.-]+\\.ts\\.net:[0-9]+" origin != null;
 pkgs.runCommand "omega-pocket-harness-modules" {
   nativeBuildInputs = [ pkgs.python3 ];
@@ -17,6 +17,7 @@ pkgs.runCommand "omega-pocket-harness-modules" {
   (def origin-file "pocket-harness-origin")
   (def extra-use ",live")
   (def developer? false)
+  (def legacy-origins ${builtins.toJSON legacyOrigins})
   BL
   python3 - ${baseApk} <<'PY'
   import io,sys,zipfile

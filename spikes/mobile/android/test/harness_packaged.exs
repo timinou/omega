@@ -34,3 +34,10 @@ for path <- ["//evil.test", "/\\evil.test", "/\n/evil.test"] do
   if apply(dev, :"path-ok?", [path]), do: raise("Unsafe device navigation")
 end
 IO.puts("PASS packaged device core: phone code gate and same-origin navigation")
+
+for legacy <- Tuple.to_list(Map.fetch!(BeamLisp.Env.fetch!("pocket.config", "legacy-origins"), :items)) do
+ unless apply(home, :"preferred-origin", [legacy]) == origin, do: raise("Retired preview origin was not migrated")
+end
+custom = "https://other.tail123.ts.net:18009"
+unless apply(home, :"preferred-origin", [custom]) == custom, do: raise("Custom origin was replaced")
+IO.puts("PASS packaged origin migration: retired preview moves to account; custom servers stay selected")

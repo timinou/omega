@@ -113,3 +113,17 @@ wait timeout was caused by the full cold startup under host load, not by the
 separate HEAD 405 responses. HEAD support is independently verified. Cold-start
 readiness is checked after actual startup; do not report the earlier CLI timeout
 as an application crash or claim HEAD fixed Work's readiness mechanism.
+
+** Final Pocket update and browser acceptance
+Pocket 0.1.4 now migrates only its retired 18079 preview preference to the
+canonical account origin, preserving custom servers. The remote packaged
+migration contract passes. Final APK SHA-256:
+10b2ca2b7bc350f75cb3af011c5cc9e24d23a1f8abb587e4ce35084ecb738538.
+Its modules were compared with the shipped runtime again; signing identity and
+all non-app runtime entries remain unchanged. Publication is atomic.
+The new desktop walkthrough passed all seven live edit/return/unuse checks.
+The real DeepSeek Pocket walkthrough passed all seven review, publication,
+receipt, Changes, rollback and exact-unuse checks at phone/tablet widths.
+No browser exceptions were reported. Both use disposable worlds and stop their
+VMs after completion. Screenshots and receipts are in the editor/mobile proof
+subdirectories.

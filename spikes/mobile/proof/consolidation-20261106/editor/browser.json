@@ -1,0 +1,433 @@
+{
+  "checks": [
+    "Live loads as a package beside the real editor and starts an owned native worker",
+    "An actual editor edit publishes into the shared buffer without changing running code",
+    "Rehearsal and publication preserve the native PID and world-owned traffic",
+    "An invalid state conversion is refused while the old worker and original client traffic continue",
+    "Choosing an earlier behavior creates a new version and preserves current work and later source edits",
+    "The existing Changes document contains the same source and runtime operations",
+    "Unuse removes the drawer and preserves every workspace editor"
+  ],
+  "errors": [],
+  "frontend": "/nix/store/r3nbi03w02g2bji9vlsmv5b064rvwff0-omega-frontend-v2026.10",
+  "final": {
+    "available": true,
+    "candidate": null,
+    "changes": "changes:work:project/live-worker.bl",
+    "current": {
+      "digest": "2a3e545b81496247e32b81e271d813a759bd388480023e203ccab36c9f3f9590",
+      "pid": "#PID<0.1194.0>",
+      "revision": 46,
+      "value": 100,
+      "version": 3
+    },
+    "epoch": "live-w562-1210",
+    "history": [
+      {
+        "actor": "human:7b1abc47-679a-4e9f-a314-28da57637af7",
+        "cell": null,
+        "id": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@9",
+        "kind": "live/return",
+        "returnable": true,
+        "rev": 9,
+        "runtime": {
+          "after": {
+            "digest": "2a3e545b81496247e32b81e271d813a759bd388480023e203ccab36c9f3f9590",
+            "pid": "#PID<0.1194.0>",
+            "revision": 46,
+            "value": 100,
+            "version": 3
+          },
+          "before": {
+            "digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 45,
+            "value": 100,
+            "version": 2
+          },
+          "candidate": "change-3",
+          "note": "Behavior changed; accepted work retained. Publication receipt recorded.",
+          "proposal": "change-3",
+          "result": {
+            "attempts": 1,
+            "revision": 46,
+            "status": "applied",
+            "version": 3
+          },
+          "return-of": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@2",
+          "status": "applied"
+        },
+        "task": null
+      },
+      {
+        "actor": "human:7b1abc47-679a-4e9f-a314-28da57637af7",
+        "cell": null,
+        "id": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@8",
+        "kind": "live/rehearse",
+        "returnable": false,
+        "rev": 8,
+        "runtime": {
+          "before": {
+            "digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 38,
+            "value": 65,
+            "version": 2
+          },
+          "candidate": "change-3",
+          "note": "Read-only rehearsal; serving state and behavior retained.",
+          "result": {
+            "candidate": "change-3",
+            "candidate-digest": "2a3e545b81496247e32b81e271d813a759bd388480023e203ccab36c9f3f9590",
+            "candidate-version": 3,
+            "digest": "2a3e545b81496247e32b81e271d813a759bd388480023e203ccab36c9f3f9590",
+            "messages": 0,
+            "revision": 44,
+            "scope": "proved-future-owner-inputs",
+            "status": "valid",
+            "version": 2
+          },
+          "return-of": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@2",
+          "status": "valid"
+        },
+        "task": null
+      },
+      {
+        "actor": "human:me",
+        "cell": null,
+        "id": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@7",
+        "kind": "live/rehearse",
+        "returnable": false,
+        "rev": 7,
+        "runtime": {
+          "before": {
+            "digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 32,
+            "value": 35,
+            "version": 2
+          },
+          "candidate": "change-2",
+          "note": "Read-only rehearsal; serving state and behavior retained.",
+          "result": {
+            "candidate": "change-2",
+            "kind": "candidate-refused",
+            "status": "refused"
+          },
+          "return-of": null,
+          "status": "refused"
+        },
+        "task": null
+      },
+      {
+        "actor": "human:proof-invalid",
+        "cell": null,
+        "id": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@6",
+        "kind": "publish",
+        "returnable": true,
+        "rev": 6,
+        "runtime": null,
+        "task": null
+      },
+      {
+        "actor": "human:7b1abc47-679a-4e9f-a314-28da57637af7",
+        "cell": null,
+        "id": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@5",
+        "kind": "live/apply",
+        "returnable": true,
+        "rev": 5,
+        "runtime": {
+          "after": {
+            "digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 31,
+            "value": 30,
+            "version": 2
+          },
+          "before": {
+            "digest": "665665dcb05bda30416eee9f233b274c808b9c7c876bc9b7be5704c46086f0d6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 30,
+            "value": 30,
+            "version": 1
+          },
+          "candidate": "change-1",
+          "note": "Behavior changed; accepted work retained. Publication receipt recorded.",
+          "proposal": "change-1",
+          "result": {
+            "attempts": 1,
+            "revision": 31,
+            "status": "applied",
+            "version": 2
+          },
+          "return-of": null,
+          "status": "applied"
+        },
+        "task": null
+      },
+      {
+        "actor": "human:7b1abc47-679a-4e9f-a314-28da57637af7",
+        "cell": null,
+        "id": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@4",
+        "kind": "live/rehearse",
+        "returnable": false,
+        "rev": 4,
+        "runtime": {
+          "before": {
+            "digest": "665665dcb05bda30416eee9f233b274c808b9c7c876bc9b7be5704c46086f0d6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 2,
+            "value": 2,
+            "version": 1
+          },
+          "candidate": "change-1",
+          "note": "Read-only rehearsal; serving state and behavior retained.",
+          "result": {
+            "candidate": "change-1",
+            "candidate-digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+            "candidate-version": 2,
+            "digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+            "messages": 0,
+            "revision": 29,
+            "scope": "proved-future-owner-inputs",
+            "status": "valid",
+            "version": 1
+          },
+          "return-of": null,
+          "status": "valid"
+        },
+        "task": null
+      },
+      {
+        "actor": "human:7b1abc47-679a-4e9f-a314-28da57637af7",
+        "cell": null,
+        "id": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@3",
+        "kind": "publish",
+        "returnable": true,
+        "rev": 3,
+        "runtime": null,
+        "task": null
+      },
+      {
+        "actor": "system:live",
+        "cell": null,
+        "id": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@2",
+        "kind": "live/start",
+        "returnable": true,
+        "rev": 2,
+        "runtime": {
+          "after": {
+            "digest": "665665dcb05bda30416eee9f233b274c808b9c7c876bc9b7be5704c46086f0d6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 0,
+            "value": 0,
+            "version": 1
+          },
+          "note": "Initial worker; state starts at zero.",
+          "status": "applied"
+        },
+        "task": null
+      },
+      {
+        "actor": "system:live",
+        "cell": null,
+        "id": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@1",
+        "kind": "write",
+        "returnable": true,
+        "rev": 1,
+        "runtime": null,
+        "task": null
+      }
+    ],
+    "limits": {
+      "candidates": 16,
+      "history": 32,
+      "state": "Observed, never rewound"
+    },
+    "ok": true,
+    "proposals": [
+      {
+        "at": 1793973719898,
+        "before": {
+          "digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+          "pid": "#PID<0.1194.0>",
+          "revision": 38,
+          "value": 65,
+          "version": 2
+        },
+        "cell": null,
+        "epoch": "live-w562-1210",
+        "id": "change-3",
+        "intent": {
+          "at": 1793973720163,
+          "before": {
+            "digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 45,
+            "value": 100,
+            "version": 2
+          },
+          "cell": null
+        },
+        "policy": {
+          "policy": "review"
+        },
+        "published-source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] -1)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+        "receipt": {
+          "after": {
+            "digest": "2a3e545b81496247e32b81e271d813a759bd388480023e203ccab36c9f3f9590",
+            "pid": "#PID<0.1194.0>",
+            "revision": 46,
+            "value": 100,
+            "version": 3
+          },
+          "at": 1793973724499,
+          "attempts": 1,
+          "before": {
+            "digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 45,
+            "value": 100,
+            "version": 2
+          },
+          "proposal": "change-3",
+          "revision": 46,
+          "status": "applied",
+          "version": 3
+        },
+        "rehearsal": {
+          "candidate-digest": "2a3e545b81496247e32b81e271d813a759bd388480023e203ccab36c9f3f9590",
+          "candidate-version": 3,
+          "digest": "2a3e545b81496247e32b81e271d813a759bd388480023e203ccab36c9f3f9590",
+          "messages": 0,
+          "revision": 44,
+          "scope": "proved-future-owner-inputs",
+          "status": "valid",
+          "version": 2
+        },
+        "return-of": "/tmp/omega-live-proof-jbyzbe47/world/live-worker.bl@2",
+        "source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 1\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+        "source-rev": "7",
+        "status": "applied",
+        "target": "worker",
+        "task": null
+      },
+      {
+        "at": 1793973713919,
+        "before": {
+          "digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+          "pid": "#PID<0.1194.0>",
+          "revision": 32,
+          "value": 35,
+          "version": 2
+        },
+        "cell": null,
+        "epoch": "live-w562-1210",
+        "id": "change-2",
+        "policy": {
+          "policy": "review"
+        },
+        "published-source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] -1)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+        "rehearsal": {
+          "kind": "candidate-refused",
+          "status": "refused"
+        },
+        "return-of": null,
+        "source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] -1)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+        "source-rev": "6",
+        "status": "refused",
+        "target": "worker",
+        "task": null
+      },
+      {
+        "at": 1793973704611,
+        "before": {
+          "digest": "665665dcb05bda30416eee9f233b274c808b9c7c876bc9b7be5704c46086f0d6",
+          "pid": "#PID<0.1194.0>",
+          "revision": 2,
+          "value": 2,
+          "version": 1
+        },
+        "cell": null,
+        "epoch": "live-w562-1210",
+        "id": "change-1",
+        "intent": {
+          "at": 1793973704834,
+          "before": {
+            "digest": "665665dcb05bda30416eee9f233b274c808b9c7c876bc9b7be5704c46086f0d6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 30,
+            "value": 30,
+            "version": 1
+          },
+          "cell": null
+        },
+        "policy": {
+          "policy": "review"
+        },
+        "published-source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+        "receipt": {
+          "after": {
+            "digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 31,
+            "value": 30,
+            "version": 2
+          },
+          "at": 1793973708423,
+          "attempts": 1,
+          "before": {
+            "digest": "665665dcb05bda30416eee9f233b274c808b9c7c876bc9b7be5704c46086f0d6",
+            "pid": "#PID<0.1194.0>",
+            "revision": 30,
+            "value": 30,
+            "version": 1
+          },
+          "proposal": "change-1",
+          "revision": 31,
+          "status": "applied",
+          "version": 2
+        },
+        "rehearsal": {
+          "candidate-digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+          "candidate-version": 2,
+          "digest": "c174c30c057d3328064af6203516254ca63d4a8bef4e1f7aa9e03ac092944cb6",
+          "messages": 0,
+          "revision": 29,
+          "scope": "proved-future-owner-inputs",
+          "status": "valid",
+          "version": 1
+        },
+        "return-of": null,
+        "source": "(ns omega.live.worker)\n\n(defn accepts [message] (erlang/is_binary message))\n(defn state-valid [value] (and (erlang/is_integer value) (>= value 0)))\n(defn migrate [value] value)\n(defn upcast [message] message)\n(defn handler [message value]\n  (let [delta 5\n        next (if (= message \"inc\") (+ value delta) value)]\n    {:reply next :state next}))\n(defn definition [version digest]\n  {:version version :digest digest :accept? accepts :check-state state-valid\n   :handler handler :migrate-state migrate :upcast upcast})\n",
+        "source-rev": "3",
+        "status": "applied",
+        "target": "worker",
+        "task": null
+      }
+    ],
+    "providers": [
+      {
+        "configured": true,
+        "id": "claude",
+        "model": "claude-sonnet-5-5"
+      },
+      {
+        "configured": true,
+        "id": "codex",
+        "model": "gpt-6.1-sol"
+      },
+      {
+        "configured": true,
+        "id": "deepseek",
+        "model": "deepseek-flash"
+      }
+    ],
+    "running": true,
+    "schema": "omega.live.v2",
+    "source": "work:project/live-worker.bl",
+    "source-matches": false,
+    "task": null,
+    "traffic": true
+  }
+}

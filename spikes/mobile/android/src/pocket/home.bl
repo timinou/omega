@@ -21,10 +21,13 @@
   (let [origin (trim (or (:origin assigns) ""))]
     (if (origin-valid? origin) (assoc assigns :origin origin :connected origin :error nil)
       (assoc assigns :error "Enter a private Tailscale HTTPS address, e.g. https://work.tailnet.ts.net:18001"))))
+(defn preferred-origin [saved]
+  (let [s (trim (or saved ""))]
+    (if (and (origin-valid? s) (not (some (fn [old] (= old s)) config/legacy-origins))) s config/origin)))
 (defn saved-origin []
   (if (jvm/available?)
     (try (let [s (trim (File/read! (Path/join (System/get_env "MOB_DATA_DIR") config/origin-file)))]
-           (if (origin-valid? s) s config/origin))
+           (preferred-origin s))
       (catch _ config/origin))
     config/origin))
 (defn remember-origin! [origin]
