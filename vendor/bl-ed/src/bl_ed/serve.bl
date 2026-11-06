@@ -323,7 +323,10 @@
              :resolve-path (:resolve-path opts)
              :generations (:generations opts) :closing (atom false)}
         port (or (:port opts) 8790)
-        handler (if-let [middleware (:middleware opts)] (middleware (router cfg)) (router cfg))
+        routed (if-let [middleware (:middleware opts)] (middleware (router cfg)) (router cfg))
+        ;; Standard HEAD semantics: run the GET routing/headers, suppress its
+        ;; body. Service readiness probes must agree with ordinary page reads.
+        handler (fn [conn] (routed (Plug.Head/call conn (list))))
         started (http/serve! {:port port :plug handler :acceptors (or (:http-acceptors opts) 4) :ip (erlang/list_to_tuple (list 127 0 0 1))})]
     (when-not (= :ok (elem started 0))
       (throw (ex-info "Cannot start editor listener" {:reason (elem started 1) :port port})))

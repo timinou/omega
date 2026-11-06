@@ -15,6 +15,12 @@
     ;; The previous default created over 200 idle HTTP processes. This catches
     ;; loss of the native pool option, even if the BL config still says four.
     (is (< (count (remove (fn [pid] (contains? before pid)) (erlang/processes))) 64))
+    (Application/ensure_all_started :inets)
+    (let [r (httpc/request :head (tuple (String/to_charlist (str "http://127.0.0.1:" port "/")) (list))
+                          (list (tuple :timeout 5000)) (list (tuple :body_format :binary)))]
+      (is (= :ok (elem r 0)))
+      (is (= 200 (elem (elem (elem r 1) 0) 1)))
+      (is (= "" (elem (elem r 1) 2))))
     (finally (serve/stop! host) (File/rm_rf! root)))
    (is (not (Process/alive? (:listener host)))))
    (is (= baseline (callbacks)))))

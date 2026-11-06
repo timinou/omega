@@ -94,3 +94,15 @@ The former independent projects clone, its dirty files, and a complete Git
 bundle are preserved under ~/.local/state/omega/consolidation-20261106. The old
 /tmp/omega-merge worktree was repaired against that archival clone; its prepared
 merge is already an ancestor of canonical main.
+
+** Release acceptance
+The full editor/Live drive suite passes: 94 tests, no failures. The default
+presentation equivalence runner is unchanged; all four documents have no bad
+variants. Native HTTP HEAD now returns 200 with no body (10 listener assertions),
+fixing Work's readiness check. Account download integration passes 18 assertions;
+the running authenticated host serves the signed 115,470,992-byte APK with
+SHA-256 98ffa3b1693847a888fd8dcaeb5c249e7b8eda03117ce614235c0b23ef665cd4.
+Ingress rejects a request without the owner identity (403), accepts the owner
+(200), and the actual tailnet HTTPS endpoint answers 200.
+The real t-316 run completed through Codex, preserving the physical-device
+validation limitation. No standalone model or APK server is needed.

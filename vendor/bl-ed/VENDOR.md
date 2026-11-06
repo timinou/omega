@@ -569,3 +569,8 @@ serving context. Requests still convey their scope and acquire the same code
 leases. The bootstrap owner releases the callback on listener/owner termination;
 explicit stop and failed startup release it as well. Native pool/lifetime tests
 and the cold HTTP changing-document contract cover the integration.
+
+HTTP HEAD uses the standard `Plug.Head` adapter before routing, matching GET
+status/headers while suppressing the body. Work readiness probes then recognize
+a ready editor instead of treating its former 405 response as unavailable.
+The native listener test issues a real HEAD and checks status and empty body.
