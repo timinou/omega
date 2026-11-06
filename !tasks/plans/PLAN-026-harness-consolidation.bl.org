@@ -141,3 +141,14 @@ The final APK was downloaded again through tailnet HTTPS: HTTP 200,
 115,470,992 bytes, SHA-256 10b2ca2b7bc350f75cb3af011c5cc9e24d23a1f8abb587e4ce35084ecb738538.
 Work reports the account ready. The canonical compiler and frontend GC roots
 both resolve to v2026.10. Physical Android validation is still outstanding.
+
+** Physical-phone startup follow-up
+The user reports an immediate APK black screen; the exact mobile URL works in
+that phone's browser. Published signed 0.1.5 with native startup progress/local
+copyable diagnostics and without crypto loading during first-screen mount.
+Packaged app initialization, real socket mount and first render pass; the
+startup overlay is visible on the isolated Android emulator. Cause remains
+unconfirmed pending the phone's result/details. Do not call the black screen
+resolved solely on these host/emulator checks. Evidence is under
+spikes/mobile/proof/startup-20261106; final artifact SHA-256
+39fd4a0b2bd49fd9249defb4f974a1c370451280a168128541c3a39906ef3cae.

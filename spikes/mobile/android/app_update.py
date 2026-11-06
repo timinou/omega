@@ -6,6 +6,8 @@ runtime stay byte-identical to the base release. Fresh AOT app modules (pocket.*
 replace or join the base's app modules inside assets/bl-runtime.zip; the manifest's
 version code and name are patched in place; the APK is zipaligned and signed with
 the existing Pocket identity, so it installs over the base with settings retained.
+An optional --shell-dir overlays the remotely built startup-status DEX; its base
+launcher hash must match. Other DEX and all native libraries remain unchanged.
 
   bl build src --out BEAMS --force          # app modules, any machine
   python3 app_update.py BASE.apk BEAMS 0.1.2 2026103101
@@ -68,6 +70,7 @@ def main():
     parser.add_argument('--base-version', default='0.1.1')
     parser.add_argument('--base-code', type=int, default=2026101601)
     parser.add_argument('--variant', choices=['harness'])
+    parser.add_argument('--shell-dir', type=Path, help='Remotely built startup status DEX, bound to this base launcher')
     args = parser.parse_args()
     base_apk, beams, name, code = args.base_apk, args.beams, args.name, args.code
     old_name, old_code = args.base_version, args.base_code
@@ -85,10 +88,17 @@ def main():
             xml = enable_notifications(xml)
         replace = {'assets/bl-runtime.zip': runtime, 'assets/bl-runtime.sha256': digest.encode(),
                    'AndroidManifest.xml': xml}
+        if args.shell_dir:
+            expected = (args.shell_dir / 'base-classes3.sha256').read_text().strip()
+            assert hashlib.sha256(base.read('classes3.dex')).hexdigest() == expected, 'Startup shell does not match base launcher'
+            assert 'classes4.dex' not in base.namelist(), 'Base already owns the additional DEX entry'
+            replace['classes3.dex'] = (args.shell_dir / 'classes3.dex').read_bytes()
         for entry in base.infolist():
             if entry.filename.startswith('META-INF/') and entry.filename.rsplit('.', 1)[-1] in {'SF', 'RSA', 'EC', 'DSA', 'MF'}:
                 continue  # any v1 signature belongs to the base
             out.writestr(entry, replace.get(entry.filename, base.read(entry.filename)))
+        if args.shell_dir:
+            out.writestr('classes4.dex', (args.shell_dir / 'classes4.dex').read_bytes())
     abi = 'arm64-v8a'
     variant = f'-{args.variant}' if args.variant else ''
     output = release / f'omega-pocket{variant}-{name}-{abi}.apk'

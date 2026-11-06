@@ -41,3 +41,16 @@ end
 custom = "https://other.tail123.ts.net:18009"
 unless apply(home, :"preferred-origin", [custom]) == custom, do: raise("Custom origin was replaced")
 IO.puts("PASS packaged origin migration: retired preview moves to account; custom servers stay selected")
+
+# Exercise the cold entry, rather than only pure URL/command helpers. A missing
+# import or native dependency during mount otherwise leaves Compose with no root.
+BeamLisp.Ns.Pocket.App.__bl_init__()
+ids = for _ <- 1..100, do: apply(dev, :"new-device-id", [])
+unless length(Enum.uniq(ids)) == 100 and Enum.all?(ids, &Regex.match?(~r/^d-[a-z0-9]{8,32}$/, &1)),
+  do: raise("Invalid or repeated startup device id")
+{:ok, socket} = apply(home, :mount, [%{}, %{}, struct(Mob.Socket, assigns: %{})])
+unless socket.assigns[:connected] == origin, do: raise("Cold mount lost account origin")
+tree = apply(home, :render, [socket.assigns])
+unless tree[:type] == :column and Enum.at(tree[:children], 1)[:type] == :web_view,
+  do: raise("Cold mount did not render the Pocket WebView")
+IO.puts("PASS packaged cold entry: app initialization, unique device IDs, mount and first WebView render")

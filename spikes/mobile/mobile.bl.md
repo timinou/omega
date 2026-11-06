@@ -324,3 +324,27 @@ The isolated Android 15 emulator installs the APK but cannot complete OTP boot
 (`erl_child_setup` failure under ARM translation). The unchanged 0.1.2 base
 reproduces the same failure before Pocket initialization. Physical-device launch
 and notification delivery are not verified in this session.
+
+## Pocket 0.1.5 startup investigation (2026-11-06)
+
+A physical-phone report found an immediate black APK screen while the exact
+Pocket URL loaded successfully in the phone browser. Host-VM contracts had not
+established native phone startup. The cause is not yet confirmed.
+
+0.1.5 removes the crypto NIF dependency from the first-screen device identifier;
+it is a routing label, not an authentication token. The packaged contract now
+initializes the app, mounts its actual Mob socket and renders the first WebView.
+A remotely built launcher overlay shows installation/VM startup progress until
+Mob commits its root. Startup details are stored locally and copied only on
+request; there is no automatic log upload. The existing native harness still
+owns the screen. A browser button opens the same server-side workbench.
+
+The signed update retains settings, the existing certificate, native libraries
+and all 7,619 non-app runtime entries. Only the startup DEX and AOT app modules
+change. `nix/pocket-startup.nix` runs on Build; `app_update.py --shell-dir` checks
+the base launcher hash before accepting its two DEX entries. Signing stays on Work.
+
+[Download Pocket 0.1.5](https://work.tailcb5318.ts.net:18001/downloads/omega-pocket-harness-0.1.5-arm64-v8a.apk).
+[Startup screenshot and receipts](proof/startup-20261106/). The native loading
+screen was observed on the isolated Android emulator. That emulator still cannot
+complete ARM helper execution; physical-phone confirmation is pending.

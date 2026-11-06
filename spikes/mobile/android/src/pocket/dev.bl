@@ -16,7 +16,10 @@
 
 (defn device-id? [s] (boolean (and (string? s) (re-matches #"d-[a-z0-9]{8,32}" s))))
 (defn new-device-id []
-  (str "d-" (lower-case (Base/encode16 (crypto/strong_rand_bytes 8)))))
+  ;; A routing label, not an authentication token. Keep native crypto loading
+  ;; off mount's critical path: a crypto NIF failure must not blank the app.
+  (str "d-" (lower-case (erlang/integer_to_binary (erlang/system_time :microsecond) 16))
+       (lower-case (erlang/integer_to_binary (erlang/unique_integer (list :positive)) 16))))
 
 (defn path-ok?
   "A same-origin path: absolute, no scheme, no authority, no backslash."
