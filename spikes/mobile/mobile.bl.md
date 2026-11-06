@@ -366,3 +366,7 @@ stubbed inside the disposable test VM; no request reaches the live host.
 The signed APK's actual app modules and startup DEX match the remotely tested
 outputs. It retains the existing signing identity/settings and startup details.
 Physical-phone confirmation after this fix is still pending.
+
+The user confirmed on the physical phone on 2026-11-06: "All good now it works."
+The 0.1.6 startup failure is resolved; broader native developer-operation testing
+remains separate from this startup confirmation.
