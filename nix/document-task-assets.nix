@@ -5,19 +5,19 @@ let
   omega = builtins.getFlake ("git+file://" + toString ../.);
   pkgs = omega.inputs.nixpkgs.legacyPackages.x86_64-linux;
   base = builtins.storePath baseFrontend;
-  compiler = omega.packages.x86_64-linux.frontend-compiler;
+  # The pinned public Beam Lisp, run under the flake's sandbox FHS adapter.
+  sandbox = omega.packages.x86_64-linux.frontend-sandbox;
   source = pkgs.lib.fileset.toSource {
     root = ../.;
     fileset = pkgs.lib.fileset.unions [ ../vendor/bl-ed/ed ../spikes/workspace/document_tasks ];
   };
   taskModule = pkgs.runCommand "omega-document-task-module" { nativeBuildInputs = [ pkgs.nodejs ]; } ''
     export DROP_STORE_ROOT=$TMPDIR/drop
-    cp ${compiler}/bl.drop $TMPDIR/bl
-    chmod +x $TMPDIR/bl
+    export HOME=$TMPDIR/home
     cp -r ${source} $TMPDIR/source
     chmod -R u+w $TMPDIR/source
     cd $TMPDIR/source
-    $TMPDIR/bl --cold run -p vendor/bl-ed -p spikes/workspace \
+    ${sandbox}/bin/bl-sandbox --cold run -p vendor/bl-ed -p spikes/workspace \
       spikes/workspace/document_tasks/build-module.bl -- $out
   '';
   host = ../spikes/mobile/host/host.mjs;
