@@ -99,10 +99,17 @@ merge is already an ancestor of canonical main.
 The full editor/Live drive suite passes: 94 tests, no failures. The default
 presentation equivalence runner is unchanged; all four documents have no bad
 variants. Native HTTP HEAD now returns 200 with no body (10 listener assertions),
-fixing Work's readiness check. Account download integration passes 18 assertions;
+supporting standard HEAD health checks. Account download integration passes 18 assertions;
 the running authenticated host serves the signed 115,470,992-byte APK with
 SHA-256 98ffa3b1693847a888fd8dcaeb5c249e7b8eda03117ce614235c0b23ef665cd4.
 Ingress rejects a request without the owner identity (403), accepts the owner
 (200), and the actual tailnet HTTPS endpoint answers 200.
 The real t-316 run completed through Codex, preserving the physical-device
 validation limitation. No standalone model or APK server is needed.
+
+** Startup observation correction
+Work's endpoint controller probes GET and accepts status below 500. Its initial
+wait timeout was caused by the full cold startup under host load, not by the
+separate HEAD 405 responses. HEAD support is independently verified. Cold-start
+readiness is checked after actual startup; do not report the earlier CLI timeout
+as an application crash or claim HEAD fixed Work's readiness mechanism.
