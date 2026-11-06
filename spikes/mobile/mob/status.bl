@@ -15,7 +15,7 @@
           (contains? #{"running" "open" "waiting"} st) "run"
           :else "done")))
 
-(def models [["claude-opus-5-5" "Opus 5.5"] ["claude-sonnet-5-5" "Sonnet 5.5"] ["claude-haiku-5-5" "Haiku 5.5"]])
+(def models [["deepseek-flash" "DeepSeek"] ["gpt-6.1-sol" "Codex"] ["claude-opus-5-5" "Opus 5.5"] ["claude-sonnet-5-5" "Sonnet 5.5"] ["claude-haiku-5-5" "Haiku 5.5"]])
 (defn model-name [id] (when id (or (some (fn [[k v]] (when (= k id) v)) models) id)))
 
 (def labels {"you" "Your turn" "run" "Running" "fail" "Failed" "done" "Done" "cancel" "Cancelled"})

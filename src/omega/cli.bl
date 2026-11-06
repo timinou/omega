@@ -273,7 +273,7 @@
   (let [o (parse args)
         root (or (:root o) (File/cwd!))
         _ (when (nil? (:goal o)) (throw (ex-info "usage: omega [--offline] [--notify] [--jev] [--cassette PATH] [--db DIR | --memory] \"goal\"" {})))
-        base (if (:offline o) (offline-model) (llm/step (llm/from-env (omega-home))))
+        base (if (:offline o) (offline-model) (llm/routed-step (omega-home)))
         step (if (:cassette o) (llm/cassette base (:cassette o) :auto) base)
         ;; offline runs are demos: kept nowhere unless --db asks
         db (when-not (or (:memory o) (and (:offline o) (nil? (:db o)))) (env/db-path root (:db o)))

@@ -5,7 +5,7 @@
             [buffer.model :as buffer] [buffer.server :as buffers]
             [ws.desk-server :as desk] [ws.repos :as repos] [omega.ed.providers :as pv]
             [bl-ed.serve :as serve] [clojure.string :as str]
-            [omega.documents :as documents] [omega.document-source :as source] [omega.task :as task] [omega.env :as env] [harness]))
+            [omega.llm :as llm] [omega.documents :as documents] [omega.document-source :as source] [omega.task :as task] [omega.env :as env] [harness]))
 (def schema (vec (concat place/schema link/schema buffer/schema documents/schema)))
 (defn start! [e root]
   ;; Only bootstrap an empty mount table. Existing place names and homes belong
@@ -22,12 +22,17 @@
 (defn- selection [value]
   ;; HTTP keywordizes the intent's outer map only; internal callers use keywords.
   (into {} (map (fn [[k v]] [(if (keyword? k) k (keyword k)) v]) value)))
-(def ^:private MODELS #{"claude-opus-5-5" "claude-sonnet-5-5" "claude-haiku-5-5" "claude-fable-5-1"})
 (defn- run-settings
   "Validate launch settings and create a requested worktree. Unknown keys are dropped."
   [sys args]
   (let [run (selection (or (:run args) {}))
-        model (when (contains? MODELS (:model run)) (:model run))
+        model (when (llm/model-provider (:model run)) (:model run))
+        requested (:provider run)
+        _ (when (and requested (not (contains? llm/PROVIDERS requested)))
+            (throw (ex-info "Choose deepseek, claude or codex." {})))
+        vendor (or requested (llm/model-provider model))
+        _ (when (and requested model (not= requested (llm/model-provider model)))
+            (throw (ex-info "The selected model belongs to another provider." {})))
         may (when (contains? #{"read" "edit" "run"} (:may run)) (:may run))
         notify (vec (filter #{"you" "done"} (or (:notify run) [])))
         base (:cwd (places/context sys (:path args) (:cwd args)))
@@ -36,7 +41,7 @@
                                                               #"[^a-z0-9]+" "-") 0
                                                  (min 24 (count (str (or (:title args) (:goal args))))))
                                           "-" (mod (System/os_time :millisecond) 100000))))
-        run (cond-> {} model (assoc :model model) may (assoc :may may) (seq notify) (assoc :notify notify)
+        run (cond-> {} model (assoc :model model) vendor (assoc :provider vendor) may (assoc :may may) (seq notify) (assoc :notify notify)
               tree (assoc :worktree true :branch (:branch tree))
               (not tree) (assoc :branch (repos/branch-of base)))]
     (cond-> (assoc args :run (into {} (remove (fn [[_ v]] (nil? v)) run)))

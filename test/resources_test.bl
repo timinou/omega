@@ -1,0 +1,11 @@
+(ns omega.resources-test (:require [omega.resources :as resources]))
+(deftest only-owned-supervisors-are-reclaimed
+ (let [root (elem (DynamicSupervisor/start_link (list (tuple :strategy :one_for_one))) 1)]
+  (try
+   (let [r (resources/reclaim-startup! [root root])]
+    (is (= 1 (:supervisors r)))
+    (is (pos? (:before-bytes r)))
+    (is (pos? (:after-bytes r)))
+    (is (Process/alive? root)))
+   (is (= 0 (:supervisors (resources/reclaim-startup! [nil]))))
+   (finally (Supervisor/stop root)))))

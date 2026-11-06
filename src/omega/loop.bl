@@ -44,7 +44,6 @@
             [clojure.string]
             [datom]))
 
-(def MAX-STEPS 40)
 
 (defn- hook
   "Run hook chain `kind` from the system's hooks (omega.ext), or return x."
@@ -316,7 +315,15 @@
   [req]
   ;; :record first: the stored turn becomes exactly what was sent minus the
   ;; volatile :tail, so the next request's prefix matches this one's
-  (let [t (vec (concat (:record req) (:tail req))) req (dissoc req :tail :record)]
+  (let [volatile (:tail req)
+        t (vec (concat (:record req) volatile)) req (dissoc req :tail :record)
+        ms (:messages req) i (dec (count ms))
+        same? (and (>= i 0) (= :user (:role (nth ms i))))
+        record-n (- (count t) (count volatile))
+        boundary (if (pos? record-n)
+                   [(if same? i (inc i)) (dec (+ (if same? (count (:content (nth ms i))) 0) record-n))]
+                   [i (dec (count (:content (last ms))))])
+        req (if (seq volatile) (assoc req :cache-boundary boundary) req)]
     (if (empty? t)
       req
       (let [ms (vec (:messages req)) i (dec (count ms))]
@@ -376,7 +383,9 @@
              :messages (with-origin (messages ts) origin)
              :tools (vec (map (fn [t] (select-keys t [:name :description :input-schema])) (tool-table sys)))
              :tail [] :record []}
-        req (if (:model run) (assoc req :model (:model run)) req)]
+        req (cond-> (assoc req :cache-key (str "omega/" (erlang/phash2 (or (:path (:env sys)) (env/world (:env sys)))) "/" id))
+              (:model run) (assoc :model (:model run))
+              (:provider run) (assoc :provider (:provider run)))]
     (hook sys :context req {:sys sys :task id :situation (situation sys id ts)}))))
 
 (defn- add-cost!
@@ -412,13 +421,13 @@
   (let [e (:env sys)
         world (env/world e)
         step (:step sys)
-        max-steps (or (:max-steps sys) MAX-STEPS)
+        max-steps (:max-steps sys)
         ts0 (drain! sys id (turns sys id))
         cost0 (:task/cost (env/entity e (env/eid e :task/id id)))]
     (emit sys :turn/start {:task id})
     (loop [n 1 ts ts0 cost cost0]
       (cond
-        (> n max-steps) {:status :idle :result (str "paused after " max-steps " steps")}
+        (and max-steps (> n max-steps)) {:status :idle :result (str "paused after " max-steps " steps")}
         (budget-exhausted? sys cost) {:status :idle :result "paused: reported token budget reached; durable partial outputs are retained"}
         :else (let [turn-n (inc (count ts))
               ;; deltas are broadcast, never recorded: the final content below is the fact

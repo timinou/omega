@@ -33,3 +33,11 @@ questions, explicit usage budgets, and interrupted-effect uncertainty.
 * Evidence and outcomes
 Updated as work proceeds. Production account writes execute the user's real
 requested tasks; tests use isolated worlds and never port 8790.
+
+** Provider verification
+The configured DeepSeek endpoint answered successfully. Anthropic prefix caching
+was exercised twice against the configured gateway: first request wrote 5,435
+cache tokens; second read all 5,435 and wrote zero (4 uncached input tokens each).
+Codex's configured gateway rejects requests with HTTP 503, "no usable upstream
+credential". This is an upstream credential failure, not a model fallback.
+Provider wire/accounting tests passed: 79 assertions on v2026.10.

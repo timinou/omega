@@ -9,7 +9,7 @@
   "Launch settings: the draft's choices over the place's saved defaults."
   [place draft]
   (let [c (or (:config place) {})]
-    {:model (or (:model draft) (:model c) "claude-opus-5-5")
+    {:model (or (:model draft) (:model c) "deepseek-flash")
      :may (or (:may draft) (:may c) "run")
      :worktree (if (contains? draft :worktree) (:worktree draft) (= "worktree" (:work-on c)))
      :notify-you (if (contains? draft :notify-you) (:notify-you draft) true)

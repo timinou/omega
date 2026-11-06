@@ -1,0 +1,177 @@
+; omega/device.bl — the live harness, extended to a phone running Pocket.
+;
+; The phone dials out; nothing dials in. While connected, Pocket's native shell
+; long-polls the host's ordinary intent route (POST /api/intent "device/poll"),
+; carrying the results of the commands it ran and receiving the next ones.
+; No Erlang distribution, no new port, no WebView bridge.
+;
+; Levels (spikes/mobile/dev-mode.bl.md):
+;   1 frontend  always on  each poll answers the newest admitted frontend
+;                          generation; the phone offers Load for it
+;   3 drive     always on  observe and drive the app: state, screenshot,
+;                          view-tree, reload, open a path on the same origin
+;   2 code      gated      eval and load compile ON the phone (its runtime
+;                          carries the compiler that built it). Only when BOTH
+;                          opt in: the phone's dev switch or dev APK, and this
+;                          host's dev mode (OMEGA_DEV=1 or :dev? on the host).
+;
+; From any task eval (the VM is shared):
+;   (omega.device/devices)                      → [{:id :ago-ms :dev? :app}]
+;   (omega.device/state nil)  (omega.device/screenshot nil "shot.jpg")
+;   (omega.device/eval nil "(+ 1 2)")  (omega.device/load! nil path)
+;   nil = the only connected device; otherwise its id.
+(ns omega.device
+  ;; clojure.re: #"…" literals autoload it only AFTER re-matches is resolved
+  (:require [clojure.re] [bl.json :as json]))
+
+(def ^:private REGISTRY (atom {}))
+(def POLL-HOLD-MS 15000)
+(def STALE-MS 60000)
+(def CODE-OPS #{"eval" "load" "rollback"})
+(def DRIVE-OPS #{"state" "screenshot" "view-tree" "reload" "open"})
+
+(defn- now [] (erlang/system_time :millisecond))
+
+(defn device-id? [s] (boolean (and (string? s) (re-matches #"d-[a-z0-9]{8,32}" s))))
+
+(defn host-dev?
+  "Level 2's host half: this world runs in dev mode."
+  [opts]
+  (or (true? (:dev? opts)) (= "1" (System/get_env "OMEGA_DEV"))))
+
+(defn allowed?
+  "Pure: whether op may be sent to a device. Code needs both opt-ins."
+  [op device host-dev]
+  (cond (contains? DRIVE-OPS op) true
+        (contains? CODE-OPS op) (boolean (and host-dev (true? (:dev? device))))
+        :else false))
+
+(defn checkin
+  "Pure: the registry after device id polled with report (string keys, as
+   decoded JSON), and the commands to hand it now."
+  [reg id report at]
+  (let [d (get reg id {:queue [] :results {}})
+        results (reduce (fn [m r] (assoc m (str (get r "id")) r)) (or (:results d) {}) (take 32 (or (get report "results") [])))
+        results (into {} (take 64 (sort-by key results)))
+        ready (or (:queue d) [])]
+    {:registry (assoc reg id (assoc d :seen at :dev? (true? (get report "dev"))
+                                      :app (str (or (get report "app") "?"))
+                                      :generation (get report "generation")
+                                      :results results :queue []))
+     :commands ready}))
+
+(defn enqueue
+  "Pure: the registry with command {:id :op :args} queued for device id."
+  [reg id command]
+  (when (>= (count (get-in reg [id :queue])) 32)
+    (throw (ex-info "Device command queue is full." {})))
+  (update-in reg [id :queue] (fn [q] (conj (or q []) command))))
+
+(defn newest-generation
+  "Pure: the most recently admitted frontend generation, or nil."
+  [generations]
+  (when-let [[id _] (last (sort-by (fn [[_ g]] (or (:at g) 0)) (seq generations)))]
+    {:generation id :path (str "/generations/" id "/")}))
+
+(defn poll-reply
+  "Pure: one poll's answer: commands, the frontend on offer, whether code is accepted."
+  [commands generations host-dev]
+  {:commands (vec commands) :frontend (newest-generation generations) :code (boolean host-dev)})
+
+;; ── the edges: the registry atom and the waiting ──────────────────────────
+
+(defn- locked [f]
+  (global/trans (tuple (tuple :omega/device-registry) (erlang/self)) f))
+(defn- drain! [id]
+  (locked (fn [] (let [q (get-in @REGISTRY [id :queue])]
+                  (swap! REGISTRY assoc-in [id :queue] []) q))))
+
+(defn poll!
+  "Check device id in, then hold until a command is queued or the hold ends."
+  ([id report generations host-dev] (poll! id report generations host-dev POLL-HOLD-MS))
+  ([id report generations host-dev hold-ms]
+   (when-not (device-id? id) (throw (ex-info "device id must be d-<8..32 lowercase alphanumerics>" {})))
+   (let [r (locked (fn []
+             (let [r (checkin @REGISTRY id report (now))]
+               (reset! REGISTRY (assoc-in (:registry r) [id :host-dev?] (boolean host-dev))) r)))
+         deadline (+ (now) hold-ms)
+         cmds (loop [c (:commands r)]
+                (cond (seq c) c
+                      (> (now) deadline) []
+                      :else (do (Process/sleep 100)
+                                (let [q (drain! id)]
+                                  (if (seq q) q (recur []))))))]
+     (swap! REGISTRY assoc-in [id :seen] (now))
+     (poll-reply cmds generations host-dev))))
+
+(defn devices
+  "Devices that polled within the last minute."
+  []
+  (vec (for [[id d] (sort-by key @REGISTRY) :let [ago (- (now) (or (:seen d) 0))] :when (< ago STALE-MS)]
+         {:id id :ago-ms ago :dev? (:dev? d) :app (:app d) :generation (:generation d)})))
+
+(defn- only-device []
+  (let [ds (devices)]
+    (if (= 1 (count ds)) (:id (first ds))
+      (throw (ex-info (str (count ds) " devices connected; name one of " (pr-str (mapv :id ds))) {})))))
+
+(defn send!
+  "Queue op for device (nil = the only connected one) and wait for its result."
+  ([device op args] (send! device op args 30000))
+  ([device op args timeout-ms]
+   (let [id (or device (only-device))
+         d (get @REGISTRY id)]
+     (when-not d (throw (ex-info (str "no device " id) {})))
+     (when-not (allowed? op d (:host-dev? d))
+       (throw (ex-info (str op " needs dev mode on the phone (switch or dev APK) and on this host (OMEGA_DEV=1)") {:op op})))
+     (let [cid (str "c-" (erlang/unique_integer (list :positive)))
+           deadline (+ (now) timeout-ms)]
+       (swap! REGISTRY enqueue id {:id cid :op op :args args})
+       (loop []
+         (if-let [r (get-in @REGISTRY [id :results cid])]
+           (do (swap! REGISTRY update-in [id :results] dissoc cid)
+               (if (get r "error")
+                 (throw (ex-info (str "device: " (get r "error")) {:op op}))
+                 (get r "value")))
+           (if (> (now) deadline)
+             (do (swap! REGISTRY update-in [id :queue] (fn [q] (vec (remove (fn [c] (= cid (:id c))) q))))
+                 (throw (ex-info (str "device " id " did not answer " op " within " timeout-ms " ms; is Pocket in the foreground?") {})))
+             (do (Process/sleep 100) (recur)))))))))
+
+;; ── what an agent calls ───────────────────────────────────────────────────
+
+(defn state "The native screen's assigns, as data." [device] (send! device "state" {}))
+(defn view-tree "The native view hierarchy." [device] (send! device "view-tree" {}))
+(defn reload! "Reload the WebView." [device] (send! device "reload" {}))
+(defn open!
+  "Point the WebView at a path on the connected origin, e.g. a generation."
+  [device path] (send! device "open" {:path path}))
+(defn screenshot
+  "Capture the app's window as JPEG and write it to file (an absolute path or
+   relative to the VM's cwd). Returns {:file :bytes}."
+  [device file]
+  (let [b64 (send! device "screenshot" {:quality 70 :scale 0.5} 45000)
+        bytes (Base/decode64! b64)]
+    (File/write! file bytes)
+    {:file file :bytes (byte_size bytes)}))
+(defn eval
+  "Level 2: evaluate source on the phone, in namespace ns (default pocket.dev).
+   Returns the printed value."
+  ([device src] (eval device src "pocket.dev"))
+  ([device src ns] (send! device "eval" {:src src :ns ns})))
+(defn load!
+  "Level 2: compile a namespace's source ON the phone and re-render the screen.
+   path is a .bl file. The phone keeps the previous source for rollback!."
+  [device path]
+  (send! device "load" {:src (File/read! path) :path path}))
+(defn rollback!
+  "Level 2: re-evaluate the source the phone held before its last load! of ns."
+  [device ns]
+  (send! device "rollback" {:ns ns}))
+
+(defn intents
+  "The device/poll intent, for the host's intent table. generations is the
+   host's admitted-frontend atom; opts carries :dev?."
+  [generations opts]
+  {"device/poll" (fn [args]
+                  (poll! (:device args) (or (:report args) {}) (if generations @generations {}) (host-dev? opts)))})

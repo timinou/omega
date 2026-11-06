@@ -218,7 +218,7 @@
         sys (if (flag? "--demo")
               (omega.ui.demo/start! "/tmp/omega-ui-demo")
               (task/start-system (if db (env/open-durable! db) (env/open))
-                                 {:step (omega.llm/step (omega.llm/from-env home))
+                                 {:step (omega.llm/routed-step home)
                                   :tools omega.codemode/tools :root root
                                   :system-prompt omega.cli/SYSTEM-PROMPT}))
         sys (omega.ext/install sys (if (flag? "--notify") [(omega.ext.notify/extension)] []))

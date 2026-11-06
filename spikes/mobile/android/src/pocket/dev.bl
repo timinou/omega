@@ -1,0 +1,130 @@
+;; Pocket's half of omega's live harness (host half: src/omega/device.bl).
+;; The phone dials out over the same verified Tailscale HTTPS origin and long-polls
+;; POST /api/intent device/poll. Nothing listens on the phone; Erlang distribution
+;; stays off; the WebView still has no bridge.
+;;
+;;   level 1  always   the host offers its newest frontend; the screen shows Load
+;;   level 3  always   state, screenshot, view-tree, reload, open (same origin)
+;;   level 2  gated    eval / load / rollback compile ON the phone. Both sides must
+;;                     opt in: this phone's developer switch (always on in the dev
+;;                     APK, org.beamlisp.omega.pocket.dev) and the host's OMEGA_DEV=1.
+(ns pocket.dev (:require [clojure.re] [bl.json :as json]))
+
+(def code-ops #{"eval" "load" "rollback"})
+(def drive-ops #{"state" "screenshot" "view-tree" "reload" "open"})
+(def retry-ms 5000)
+
+(defn device-id? [s] (boolean (and (string? s) (re-matches #"d-[a-z0-9]{8,32}" s))))
+(defn new-device-id []
+  (str "d-" (lower-case (Base/encode16 (crypto/strong_rand_bytes 8)))))
+
+(defn path-ok?
+  "A same-origin path: absolute, no scheme, no authority, no backslash."
+  [p]
+  (boolean (and (string? p) (starts-with? p "/") (not (starts-with? p "//"))
+                (not (includes? p "\\")) (not (includes? p "://")) (< (count p) 2048))))
+
+(defn jsonable
+  "Plain data for JSON: keywords become strings, anything opaque its printed form."
+  [v]
+  (cond (or (nil? v) (string? v) (number? v) (boolean? v)) v
+        (keyword? v) (name v)
+        (map? v) (into {} (map (fn [[k x]] [(if (keyword? k) (name k) (str k)) (jsonable x)]) v))
+        (or (vector? v) (seq? v) (set? v)) (mapv jsonable v)
+        :else (pr-str v)))
+
+(defn ns-of
+  "The namespace a source declares: (ns a.b …) → a.b, or nil."
+  [src]
+  (second (re-find #"^\s*(?:;[^\n]*\n\s*)*\(ns\s+([A-Za-z0-9._*+!?<>=-]+)" (str src))))
+
+(defn code-gate
+  "nil when code may run, else the reason it may not."
+  [dev? host-code?]
+  (cond (not dev?) "developer mode is off on this phone"
+        (not host-code?) "the host is not in dev mode (OMEGA_DEV=1)"
+        :else nil))
+
+(defn run-command
+  "One command → its result {id value} or {id error}. fx supplies every effect:
+   :state :screenshot :view-tree :reload :open :eval, plus :dev? :host-code?
+   and :history (an atom of ns → previous sources) — so this is testable on a desk."
+  [fx cmd]
+  (let [op (str (get cmd "op")) args (or (get cmd "args") {}) id (get cmd "id")]
+    (try
+      (let [why (when (contains? code-ops op) (code-gate (:dev? fx) (:host-code? fx)))
+            value
+            (cond
+              why (throw (ex-info why {}))
+              (= op "state") (jsonable ((:state fx)))
+              (= op "screenshot") ((:screenshot fx) (or (get args "quality") 70) (or (get args "scale") 0.5))
+              (= op "view-tree") ((:view-tree fx))
+              (= op "reload") (do ((:reload fx)) "reloaded")
+              (= op "open") (let [p (get args "path")]
+                              (when-not (path-ok? p) (throw (ex-info (str "not a same-origin path: " (pr-str p)) {})))
+                              ((:open fx) p) p)
+              (= op "eval") ((:eval fx) (str (get args "src")) (str (or (get args "ns") "pocket.dev-user")))
+              (= op "load") (let [src (str (get args "src")) n (ns-of src)]
+                              (when-not n (throw (ex-info "load needs a source that starts with (ns …)" {})))
+                              (let [r ((:eval fx) src n)]
+                                (swap! (:history fx) update n (fn [h] (conj (or h []) src)))
+                                ((:changed fx) n)
+                                {"ns" n "value" r "versions" (count (get @(:history fx) n))}))
+              (= op "rollback") (let [n (str (get args "ns")) h (get @(:history fx) n)]
+                                  (when (< (count h) 2)
+                                    (throw (ex-info (str "no earlier loaded version of " n "; restarting Pocket restores the shipped build") {})))
+                                  ((:eval fx) (nth h (- (count h) 2)) n)
+                                  (swap! (:history fx) assoc n (vec (butlast h)))
+                                  ((:changed fx) n)
+                                  {"ns" n "versions" (dec (count h))})
+              :else (throw (ex-info (str "unknown op " op) {})))]
+        {"id" id "value" value})
+      (catch e {"id" id "error" (ex-message e)}))))
+
+;; ── device effects (only on a phone; desk tests pass their own fx) ─────────
+
+(defn eval-source!
+  "Compile and run src on this phone's own Beam Lisp, in namespace n."
+  [src n]
+  (BeamLisp.Ns.Rt/print_str (BeamLisp.Compiler/eval_string src (BeamLisp.Compiler/new_env n) "pocket-dev")))
+
+(defn screenshot! [quality scale]
+  (let [b (mob_nif/screenshot :jpeg quality (* 1.0 scale))]
+    (if (binary? b) (Base/encode64 b) (throw (ex-info (str "screenshot failed: " (pr-str b)) {})))))
+
+(defn view-tree! []
+  (let [t (mob_nif/ui_view_tree)] (if (binary? t) (json/decode t) (jsonable t))))
+
+(defn reload! [] (mob_nif/webview_eval_js "location.reload()"))
+(defn open-path! [p] (mob_nif/webview_eval_js (str "location.assign(" (json/encode p) ")")))
+
+;; ── the poller: one process per connection, dialling out ───────────────────
+
+(defn poll-body [id report] {:intent "device/poll" :args {:device id :report report}})
+
+(defn decode-reply
+  "The host's answer, or nil when the host has no harness (older hosts: 404)."
+  [resp]
+  (when (= 200 (:status resp))
+    (try (let [b (json/decode (:body resp))] (when (get b "ok") b)) (catch _ nil))))
+
+(defn start-poller!
+  "Long-poll the host for the screen process. request! is pocket.http/request!.
+   The screen answers each [:dev-reply reply poller] with [:dev-results results report]."
+  [screen origin id report request!]
+  (spawn
+    (fn []
+      (loop [report report]
+        (when (Process/alive? screen)
+        (let [reply (decode-reply (request! {:method :post :url (str origin "/api/intent")
+                                             :body (poll-body id report) :timeout-ms 30000}))]
+          (if (nil? reply)
+            (do (erlang/send screen [:dev-reply nil (erlang/self)])
+                (Process/sleep retry-ms)
+                (recur (assoc report :results [])))
+            (do (erlang/send screen [:dev-reply reply (erlang/self)])
+                (receive [:dev-results results next] (recur (assoc next :results results))
+                         :stop :ok
+                         (after 120000 (recur (assoc report :results [])))))))))))
+
+(defn stop-poller! [pid] (when pid (erlang/exit pid :kill)) nil)

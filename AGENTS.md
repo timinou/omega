@@ -57,3 +57,10 @@ env.bl's `:bl` pin. Change `flake.nix`'s beam-lisp rev together with that pin.
 - Secrets never enter a derivation (the store is world-readable). Pocket's APK is
   signed on Work after the build by `spikes/mobile/android/app_update.py`, with the
   key in `~/.local/share/omega-pocket/signing` (0700).
+
+## Harness work: Beam Lisp first
+
+An Omega task's eval runs inside the Omega VM. Prefer structured Beam Lisp
+(data in/data out, one program per round trip) over shell pipelines; use `(sh …)`
+for git, Nix and one-liners. Reusable introspection helpers live in `tools/`;
+see `tools/README.md` for loading and the measured memory findings.

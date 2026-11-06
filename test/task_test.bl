@@ -205,3 +205,22 @@
     (task/await sys id 10000)
     (is (= 1 @calls) "continuing does not reset reported usage")
     (task/stop-system! sys)))
+
+(deftest a-task-continues-past-forty-steps-unless-an-explicit-limit-is-set
+ (let [n (atom 0)
+       step (fn [_] (if (<= (swap! n inc) 45) (loop/call-tool "tick" {} (str "tick-" @n)) (loop/say "finished")))
+       e (env/open)
+       sys (task/start-system e {:step step :tools [{:name "tick" :run (fn [_ _] {:ok "ok"})}]})]
+  (try
+   (let [id (task/open! sys {:goal "More than forty steps"})
+         result (task/await sys id 30000)]
+    (is (= :idle (:status result)))
+    (is (= "finished" (:result result)))
+    (is (= 46 @n)))
+   (reset! n 0)
+   (let [limited (assoc sys :max-steps 3)
+         id (task/open! limited {:goal "Explicitly bounded"})
+         result (task/await limited id 10000)]
+    (is (= "paused after 3 steps" (:result result)))
+    (is (= 3 @n)))
+   (finally (task/stop-system! sys) (env/close! e)))))

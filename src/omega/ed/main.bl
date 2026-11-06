@@ -19,7 +19,9 @@
             [omega.ext :as ext]
             [omega.artifacts :as artifacts]
             [omega.runtime :as runtime]
+            [omega.resources :as resources]
             [omega.live :as live]
+            [omega.device :as device]
             [omega.music-gen :as music-gen]
             [omega.workspace :as workspace]
             [omega.documents :as documents]
@@ -60,7 +62,7 @@
     (try
       (let [server (workspace/start! e root)
         _ (reset! workspace-owner server)
-        step (or (:step opts) (if (:offline? opts) (offline-model) (llm/step (llm/from-env home))))
+        step (or (:step opts) (if (:offline? opts) (offline-model) (llm/routed-step home)))
         sys (task/start-system e (merge (select-keys opts [:max-steps :token-budget :dev?])
                                   {:step step :tools (or (:tools opts) cm/tools) :root root :files (buffer/port server)
                                    :system-prompt (or (:system-prompt opts) cli/SYSTEM-PROMPT)}))
@@ -89,9 +91,10 @@
                          :middleware #(documents/middleware (:documents sys) %)
                          :providers (merge (:providers opts)
                                            (assoc (workspace/providers sys server context-opts) "bl" (:provider img) "runtime" (runtime/provider inspection) "live" (live/provider) "package" (packages/provider registry)))
-                         :intents (merge (pv/intents sys context-opts) (workspace/intents sys server) (:intents img) (runtime/intents inspection) (live/intents live-service) (music-gen/intents home)
+                         :intents (merge (pv/intents sys context-opts) (workspace/intents sys server) (:intents img) (runtime/intents inspection) (live/intents live-service) (music-gen/intents home) (device/intents generations opts)
                                    (when-let [factory (:intent-factory opts)] (factory sys))
                                    (packages/intents registry sys context-opts))})]
+    (resources/reclaim-startup! [(:sup sys) (:listener r)])
     (when db (println (str "omega: tasks are kept in " db (when (seq interrupted) (str " · interrupted: " (clojure.string/join " " interrupted))))))
     (assoc r :sys sys :env e :db db :buffers server :state state :ephemeral-state? ephemeral-state? :packages registry :runtime inspection :live live-service :frontend-pin @pinned :generations generations))
       (catch error
@@ -130,7 +133,7 @@
    (throw (ex-info "Eight frontend generations are retained; restart the host to continue" {})))
   (let [pin (artifacts/pin! web)]
    (when-not pin (throw (ex-info "Only managed immutable frontends can be admitted" {:path web})))
-   (swap! (:generations host) assoc id {:web web :pin pin})))
+   (swap! (:generations host) assoc id {:web web :pin pin :at (erlang/system_time :millisecond)})))
  {:generation id :path (str "/generations/" id "/") :url (str (:url host) "generations/" id "/")})
 
 (defn main

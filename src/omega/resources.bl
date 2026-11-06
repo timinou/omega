@@ -1,0 +1,21 @@
+; Bounded, owner-scoped startup heap reclamation. No VM-wide sweeper and no
+; inspection of task state: idle OTP supervisors otherwise retain their setup
+; heaps until another message happens to trigger GC.
+(ns omega.resources)
+(defn- supervisor-tree [pid]
+ (if-not (and (erlang/is_pid pid) (Process/alive? pid)) []
+  (try
+   (into [pid] (mapcat (fn [child]
+     (when (= :supervisor (elem child 2)) (supervisor-tree (elem child 1))))
+     (Supervisor/which_children pid)))
+   (catch _ []))))
+(defn reclaim-startup!
+ "Reclaim setup heaps only in the supplied owners' supervisor trees. Returns
+  counts/bytes for measurement. Existing tasks, caches and live state remain owned."
+ [roots]
+ (let [pids (vec (distinct (mapcat supervisor-tree roots)))
+       memory (fn [p] (let [i (erlang/process_info p :memory)]
+                        (if (tuple? i) (elem i 1) 0)))
+       before (reduce + (map memory pids))]
+  (doseq [p pids] (when (Process/alive? p) (erlang/garbage_collect p)))
+  {:supervisors (count pids) :before-bytes before :after-bytes (reduce + (map memory pids))}))

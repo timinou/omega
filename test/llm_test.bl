@@ -1,7 +1,7 @@
 (ns llm-test
-  (:require [omega.llm :as llm]))
+  (:require [omega.llm :as llm] [omega.loop] [omega.llm.usage]))
 
-(def p (llm/provider {:kind :anthropic}))
+(def p (llm/provider {:kind :anthropic :cache? false}))
 
 (deftest the-body-carries-identity-then-omega-system-and-tools
   (let [b (llm/anthropic-body p {:system "be omega"
@@ -139,3 +139,27 @@
   (is (= "disabled" (get-in body [:thinking :type])))
   (is (= :tool-use (:stop r)))
   (is (= "rehearse" (get-in r [:content 0 :input :operation])))))
+
+(deftest anthropic-caches-stable-history-before-volatile-tail
+ (let [req {:system "Stable instructions" :messages [{:role :user :content [{:type :text :text "Goal"}]}]
+            :record [{:type :text :text "Sticky guidance"}] :tail [{:type :text :text "Changing usage"}]}
+       wire (omega.loop/with-tail req)
+       body (llm/anthropic-body (assoc p :cache? true :cache-ttl "1h") wire)]
+  (is (= {:type "ephemeral" :ttl "1h"} (get-in body [:system 1 :cache_control])))
+  (is (= {:type "ephemeral"} (get-in body [:messages 0 :content 1 :cache_control])))
+  (is (nil? (get-in body [:messages 0 :content 2 :cache_control])))
+  (is (= "Changing usage" (get-in body [:messages 0 :content 2 :text])))))
+
+(deftest providers-route-by-model-family-and-default-to-deepseek
+ (is (= "claude" (llm/model-provider "claude-sonnet-5-5")))
+ (is (= "codex" (llm/model-provider "gpt-6.1-sol")))
+ (is (= "deepseek" (llm/model-provider "deepseek-flash")))
+ (is (nil? (llm/model-provider "unknown")))
+ (let [p (llm/from-env (env-root! nil))]
+  (is (= :deepseek (:provider p)))
+  (is (= :chat (:kind p)))))
+
+(deftest deepseek-cache-reads-are-accounted-without-double-counting
+ (let [u (omega.llm.usage/unify {"prompt_tokens" 1000 "completion_tokens" 10 "prompt_cache_hit_tokens" 896 "prompt_cache_miss_tokens" 104})]
+  (is (= 896 (:cache-read u)))
+  (is (= 104 (:input u)))))

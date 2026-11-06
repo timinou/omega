@@ -375,7 +375,7 @@
                             (if-let [error (completion-error live (:task ctx))] {:error error} r)
                             r))))]
                        (tools live))) :system-prompt HARNESS-PROMPT
-             :max-steps 18 :token-budget {:input 100000 :output 24000})))
+            )))
 (defn recover-system [live sys id]
  (if-let [run (get-in (task/view sys id) [:run :live])]
   (harness-system live sys run) sys))
@@ -390,7 +390,7 @@
      (let [delta (or (:delta args) 5) mode (or (:policy args) "review")
            _ (when-not (and (integer? delta) (<= 1 delta 100) (contains? #{"review" "scoped"} mode))
                (throw (ex-info "Choose a delta from 1 to 100 and review or scoped publication." {})))
-           run {:provider (or (:provider args) "claude") :policy mode :delta delta :target "worker" :epoch (:epoch live)}
+           run {:provider (or (:provider args) "deepseek") :policy mode :delta delta :target "worker" :epoch (:epoch live)}
            s (harness-system live @(:task-system live) run)
            model (if (get-in live [:opts :harness-step]) "contract-model"
                     (:model (llm/configured (or (get-in live [:opts :provider-root]) (:root live)) (:provider run))))

@@ -1,0 +1,40 @@
+(ns omega.device-test (:require [omega.device :as device]))
+
+(deftest drive-is-always-on-code-needs-both-opt-ins
+  (is (device/allowed? "state" {:dev? false} false))
+  (is (device/allowed? "screenshot" {} false))
+  (is (not (device/allowed? "eval" {:dev? true} false)) "host not in dev mode")
+  (is (not (device/allowed? "eval" {:dev? false} true)) "phone not in dev mode")
+  (is (device/allowed? "load" {:dev? true} true))
+  (is (not (device/allowed? "rm-rf" {:dev? true} true)) "unknown ops are refused"))
+
+(deftest checkin-files-results-and-drains-the-queue
+  (let [reg (device/enqueue {} "d-abcdefgh" {:id "c-1" :op "state" :args {}})
+        r (device/checkin reg "d-abcdefgh" {"dev" true "app" "0.2.0" "results" [{"id" "c-0" "value" 42}]} 100)]
+    (is (= [{:id "c-1" :op "state" :args {}}] (:commands r)))
+    (is (= [] (get-in (:registry r) ["d-abcdefgh" :queue])))
+    (is (= 42 (get-in (:registry r) ["d-abcdefgh" :results "c-0" "value"])))
+    (is (true? (get-in (:registry r) ["d-abcdefgh" :dev?])))))
+
+(deftest level-1-offers-the-newest-generation
+  (is (nil? (:frontend (device/poll-reply [] {} false))))
+  (is (= {:generation "bb" :path "/generations/bb/"}
+         (:frontend (device/poll-reply [] {"aa" {:at 1} "bb" {:at 2}} false))))
+  (is (false? (:code (device/poll-reply [] {} nil)))))
+
+(deftest a-round-trip-through-the-poll
+  (let [id (str "d-test" (erlang/unique_integer (list :positive)) "0000")
+        phone (spawn (fn []
+                       ;; first poll registers; the second carries the answer
+                       (let [r (device/poll! id {"app" "test"} {} false 3000)
+                             c (first (:commands r))
+                             r (if c r (device/poll! id {"app" "test"} {} false 3000))
+                             c (first (:commands r))]
+                         (device/poll! id {"app" "test" "results" [{"id" (:id c) "value" {"screen" "home"}}]} {} false 10))))]
+    (Process/sleep 300)
+    (is (some (fn [d] (= id (:id d))) (device/devices)))
+    (is (= {"screen" "home"} (device/state id)))
+    (is (thrown? (device/eval id "(+ 1 2)")) "code is refused without dev mode")))
+
+(deftest device-ids-are-checked
+  (is (thrown? (device/poll! "../etc" {} {} false 10))))

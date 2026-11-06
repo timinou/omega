@@ -36,7 +36,7 @@
   :live/start (send ed "start-demo" {})
   :live/provider (put ed :provider (:provider ev))
   :live/policy (put ed :policy (:policy ev))
-  :live/run (send ed "run-harness" {:provider (get (state ed) :provider "claude") :policy (get (state ed) :policy "review") :delta 5})
+  :live/run (send ed "run-harness" {:provider (get (state ed) :provider "deepseek") :policy (get (state ed) :policy "review") :delta 5})
   :live/decide (send ed "decide" (select-keys ev [:proposal :decision]))
   :live/stop (send ed "stop-harness" {})
   :live/rehearse (send ed "rehearse" (select-keys ev [:change]))

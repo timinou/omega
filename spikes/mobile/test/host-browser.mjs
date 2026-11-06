@@ -155,7 +155,7 @@ try{
  assert.equal(await page.locator('[data-field="new-goal"]').inputValue(),'An unsent goal','new work survives host recreation');
  await page.locator('[data-act="launch-start"]').click();
  const created=await page.evaluate(()=>events.filter(e=>e.type==='mobile/create').at(-1));
- assert.deepEqual([created.place,created.goal,created.run.model,created.run.may],['test','An unsent goal','claude-opus-5-5','run'],'Start sends the goal with its run settings');
+ assert.deepEqual([created.place,created.goal,created.run.model,created.run.may],['test','An unsent goal','deepseek-flash','run'],'Start sends the goal with its run settings');
  await page.evaluate(()=>{ms.rail.state.screen='task';ms.rail.objects=[];update();});
  await page.evaluate(()=>{ms.task={...ms.task,path:'links:task/1',text:'References opened by a native command',data:{},'read-only':true};update();});
  assert.equal(await page.locator('.reader').innerText(),'References opened by a native command','native command navigation exposes its resulting document');
