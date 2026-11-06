@@ -1,0 +1,35 @@
+#+TITLE: Omega harness consolidation and interrupted account tasks
+#+DATE: 2026-11-06
+
+* Goal
+One account host, one durable task history, and the same harness from Pocket,
+Org documents, the CLI and Live. DeepSeek is the default; Claude and Codex are
+explicit alternatives. No implicit turn ceiling. Retain cancellation, human
+questions, explicit usage budgets, and interrupted-effect uncertainty.
+
+* Inventory and recovery
+- Canonical checkout: /home/othman/code/undefine/omega, main 59b23d3.
+- Older account checkout: /home/othman/projects/omega, d227a63; contains
+  uncommitted device harness, tests and VM introspection tools to review.
+- Account world: /home/othman/.omega/db. Stopped before this work. A complete
+  pre-migration copy is retained outside Git in
+  ~/.local/state/omega/consolidation-20261106/account-before.
+- Account launcher still points at the older checkout and v2026.9 frontend.
+- Current canonical pin is v2026.10, confirmed latest published Enchant release
+  through GitHub releases on 2026-11-06.
+- Preserve existing Pocket typing/conversation performance work in this checkout.
+- Standalone Pocket review is still running; other Omega/dossier demos stopped.
+
+* Execution order
+1. Preserve reviewed existing changes and consolidate reusable tools.
+2. Unify provider routing and launch settings, add Anthropic prefix caching,
+   remove arbitrary 40/18 step defaults, and verify in disposable worlds.
+3. Address measured memory/latency causes and verify long task behavior.
+4. Prepare immutable frontend remotely, pair the account backend/runtime, and
+   bring up the account host with existing database and provider credentials.
+5. Inspect each unfinished saved task, reconcile any interrupted effects,
+   complete authorized work and record durable results. Commit meaningful stages.
+
+* Evidence and outcomes
+Updated as work proceeds. Production account writes execute the user's real
+requested tasks; tests use isolated worlds and never port 8790.

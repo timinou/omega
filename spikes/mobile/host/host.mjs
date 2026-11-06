@@ -2,7 +2,7 @@
 // editor documents, revisions, polling, intents and buffers use the real host.
 import {reconcile} from './dom.mjs';
 import {rich,inline as formatInline,unified} from './text.mjs';
-import {render as renderView,launchArgs} from './view.mjs';
+import {render as renderView,launchArgs,conversation as conversationView} from './view.mjs';
 const icons = {
  copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/>',
  work:'<rect x="4" y="6" width="16" height="15" rx="3"/><path d="M9 6V4h6v2M4 11h16M10 11v3h4v-3"/>',
@@ -30,6 +30,18 @@ export function createHost(api){
  const priorTitle=document.title;document.title='Omega · Pocket';
  document.documentElement.classList.add('omega-mobile');
  const send=(pane,event)=>api.dispatch({...event,pane});
+ // Typing stays local: the reply box owns its text and the package hears it in
+ // batches. Any action, blur, hide or teardown flushes first, so Send, a saved
+ // draft and a restored tab always carry every character typed.
+ let replyTimer=null,replyPending=null,sentDraft=null,renderMissed=false;
+ const replyText=t=>replyPending&&replyPending.path===t.path?replyPending.text:(t.draft||'');
+ function flushReply(){
+  clearTimeout(replyTimer);replyTimer=null;const p=replyPending;replyPending=null;
+  if(!p||disposed||task().path!==p.path)return;
+  sentDraft=p.text;send('task',{type:'mobile/draft',text:p.text});saveDraft(task(),p.text);
+ }
+ const flushHidden=()=>{if(document.visibilityState==='hidden')flushReply();};
+ document.addEventListener('visibilitychange',flushHidden);window.addEventListener('pagehide',flushReply);
  const rail=()=>models.get('rail')||{},task=()=>models.get('task')||{},file=()=>models.get('file')||{};
  const shell=()=>rail().state||{};
  const readerModel=()=>shell().screen==='task'&&(shell().tab||'conversation')==='conversation'&&task().path&&!task().path.startsWith('task:')&&task().path!=='desk:welcome'?task():file();
@@ -297,7 +309,7 @@ const restored=new Set(),restoring=new Set();
  }
  function composer(t){
   const d=t.data||{},pending=t.state?.pending;
-  return `<form class="composer" data-form="reply"><label class="sr-only" for="mobile-reply">${finished(d)?'Follow-up goal':'Instruction to agent'}</label><textarea id="mobile-reply" data-field="reply" rows="1" placeholder="${finished(d)?'New follow-up…':d['task-status']==='running'?'Steer…':d.ask?'Answer…':'Reply…'}">${esc(t.draft)}</textarea><div class="composer-foot"><span>${pending?'Sending to host…':!online()?'Offline · draft retained':finished(d)?'New task':d['task-status']==='running'?'Current turn':''}</span>${btn(icon('send'),'send','send-button',`aria-label="${finished(d)?'Start follow-up':'Send instruction'}" ${!online()||pending?'disabled':''}`)}</div></form>`;
+  return `<form class="composer" data-form="reply"><label class="sr-only" for="mobile-reply">${finished(d)?'Follow-up goal':'Instruction to agent'}</label><textarea id="mobile-reply" data-field="reply" rows="1" placeholder="${finished(d)?'New follow-up…':d['task-status']==='running'?'Steer…':d.ask?'Answer…':'Reply…'}">${esc(replyText(t))}</textarea><div class="composer-foot"><span>${pending?'Sending to host…':!online()?'Offline · draft retained':finished(d)?'New task':d['task-status']==='running'?'Current turn':''}</span>${btn(icon('send'),'send','send-button',`aria-label="${finished(d)?'Start follow-up':'Send instruction'}" ${!online()||pending?'disabled':''}`)}</div></form>`;
  }
  function artifactView(f,home,artifact){
   if(f.data?.dossier&&f.commands?.some(c=>c.name==='dossier/toggle'))return reader(f);
@@ -370,7 +382,7 @@ const restored=new Set(),restoring=new Set();
  }
  let rendering=false,renderQueued=false;
  function render(){
-  if(disposed||composing)return;
+  if(disposed)return;if(composing){renderMissed=true;return;}renderMissed=false;
   if(rendering){renderQueued=true;return;}
   rendering=true;
   try{renderNow();}
@@ -379,7 +391,8 @@ const restored=new Set(),restoring=new Set();
  function renderNow(){
   const root=mounts.get('rail')?.root;if(!root)return;
   const s=shell(),screen=s.screen||'work',which=s.tab||'conversation',t=task();
-  const fingerprint=JSON.stringify([...models.values()]);if(root._fingerprint===fingerprint)return;root._fingerprint=fingerprint;
+  // The task's draft is the reply box's own text: typing never redraws the screen.
+  const fingerprint=JSON.stringify([...models.values()].map(m=>m.draft===undefined?m:{...m,draft:null}));if(root._fingerprint===fingerprint)return;root._fingerprint=fingerprint;
   const reading=readerModel();
   const readerKey=JSON.stringify([screen,reading.path,reading.text,reading.state?.editing,s.modal]);
   const selection=window.getSelection(),anchor=selection?.anchorNode;
@@ -429,6 +442,7 @@ const restored=new Set(),restoring=new Set();
   if(field){const el=root.querySelector(`[data-field="${field}"]`);if(el){el.focus({preventScroll:true});if(typeof start==='number'&&el.setSelectionRange)el.setSelectionRange(start,end);}}
  }
  function handle(event){
+  flushReply();
   const el=event.target.closest('[data-act]');if(!el)return;if(event.isTrusted!==false&&!el.dataset.proxy)userActed=true;
   if(el.classList.contains('scrim')&&event.target!==el)return;
   const action=el.dataset.act,d=sessionData(),artifact=(d.artifacts||[]).find(a=>a.kind!=='home')||d.home;
@@ -551,8 +565,8 @@ const restored=new Set(),restoring=new Set();
    case 'unload':command('rail','mobile/unload');break;
   }
  }
- function input(event){const e=event.target,f=e.dataset.field;if(f?.startsWith('place-')){placeDraft[f.slice(6)]=e.value;session.placeDraft=placeDraft;if(f==='place-id')placeDraft.manualId=true;if(f==='place-name'&&!placeDraft.manualId){placeDraft.id=e.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');forceRender();}}if(f)fields[f]=e.value;if(f==='prompt')send(e.dataset.pane,{type:'mobile/prompt',text:e.value});if(f==='search'){queries.set(e.dataset.path||file().path,e.value);const root=mounts.get('rail')?.root;if(root)root._fingerprint=null;render();}if(['command-pane','command-query','eval-code'].includes(f))send('rail',{type:'mobile/field',field:f,value:e.value});if(f==='reply'){send('task',{type:'mobile/draft',text:e.value});saveDraft(task(),e.value);}if(f==='repo-query'||f==='palette-query'){if(f==='palette-query')fields['palette-index']=0;forceRender();}if(f==='file')send(e.dataset.pane||'file',{type:'mobile/edit',text:e.value});if(f?.startsWith('new-')){touched.add(f.slice(4));send('rail',{type:'mobile/new-field',field:f.slice(4),value:e.value});}saveSession();}
- function submit(event){const form=event.target.closest('form');if(!form)return;event.preventDefault();
+ function input(event){const e=event.target,f=e.dataset.field;if(f?.startsWith('place-')){placeDraft[f.slice(6)]=e.value;session.placeDraft=placeDraft;if(f==='place-id')placeDraft.manualId=true;if(f==='place-name'&&!placeDraft.manualId){placeDraft.id=e.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');forceRender();}}if(f)fields[f]=e.value;if(f==='prompt')send(e.dataset.pane,{type:'mobile/prompt',text:e.value});if(f==='search'){queries.set(e.dataset.path||file().path,e.value);const root=mounts.get('rail')?.root;if(root)root._fingerprint=null;render();}if(['command-pane','command-query','eval-code'].includes(f))send('rail',{type:'mobile/field',field:f,value:e.value});if(f==='reply'){replyPending={path:task().path,text:e.value};clearTimeout(replyTimer);replyTimer=setTimeout(flushReply,250);}if(f==='repo-query'||f==='palette-query'){if(f==='palette-query')fields['palette-index']=0;forceRender();}if(f==='file')send(e.dataset.pane||'file',{type:'mobile/edit',text:e.value});if(f?.startsWith('new-')){touched.add(f.slice(4));send('rail',{type:'mobile/new-field',field:f.slice(4),value:e.value});}saveSession();}
+ function submit(event){const form=event.target.closest('form');if(!form)return;event.preventDefault();flushReply();
   if(form.dataset.form==='place'){session.placeDraft=placeDraft;send('rail',{type:'mobile/place-save',...placeDraft});return;}
   if(form.dataset.form==='machine'){if(shell().evaluating)return;session.pendingCode=fields['machine-code'];send('rail',{type:'mobile/machine-eval',text:fields['machine-code']||''});return;}
   if(form.dataset.form==='search'){handle({target:form.querySelector('[data-act="find-next"]'),preventDefault(){}});return;}
@@ -576,8 +590,8 @@ const restored=new Set(),restoring=new Set();
  probeTimer=setInterval(probe,8000);queueMicrotask(probe);queueMicrotask(()=>intent('pocket/home',{}).then(j=>{if(j.ok&&j.home){homeDir=j.home;forceRender();}}).catch(()=>{}));queueMicrotask(restoreDrafts);
  return {mount(root){let role;const click=e=>{e.stopPropagation();handle(e);},onInput=e=>input(e),onSubmit=e=>submit(e),onScroll=e=>{if(e.target.matches?.('.mobile-scroll')){const app=root.querySelector('.mobile-app'),last=root._lastTop||0,top=e.target.scrollTop;fields.scrolled=top>40&&top>=last;if(app)app.classList.toggle('scrolled',fields.scrolled);root._lastTop=top;}if(e.target.matches?.('.mobile-scroll')&&root._viewKey){positions.set(root._viewKey,e.target.scrollTop);syncPrompt(root);saveSession();if(shell().screen==='task'&&(shell().tab||'conversation')==='conversation'&&fields.unseen===task().path&&e.target.scrollHeight-e.target.clientHeight-e.target.scrollTop<80){fields.unseen=null;forceRender();}}};root.addEventListener('scroll',onScroll,true);root.addEventListener('pointerup',passage);root.addEventListener('click',click);root.addEventListener('input',onInput);root.addEventListener('change',onInput);root.addEventListener('submit',onSubmit);
   // The editor's global keyboard sink must not swallow native mobile fields.
-  const compositionStart=()=>{composing=true;},compositionEnd=e=>{composing=false;input(e);render();};root.addEventListener('compositionstart',compositionStart);root.addEventListener('compositionend',compositionEnd);
+  const compositionStart=()=>{composing=true;},compositionEnd=e=>{composing=false;input(e);if(renderMissed||e.target?.dataset?.field!=='reply')render();};root.addEventListener('compositionstart',compositionStart);root.addEventListener('compositionend',compositionEnd);
   const stop=e=>{e.stopPropagation();if(e.type==='keydown'&&e.key==='Enter'&&e.target.matches?.('.card[role=link]')){e.preventDefault();e.target.click();return;}const dialog=root.querySelector('[role="dialog"]');if(e.type==='keydown'&&e.target.dataset?.field==='palette-query'){const q=fields['palette-query']||'';if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const n=root.querySelectorAll('.palette-list .cmd').length;fields['palette-index']=Math.max(0,Math.min(n-1,(fields['palette-index']||0)+(e.key==='ArrowDown'?1:-1)));forceRender();root.querySelector('.palette-list .cmd.sel')?.scrollIntoView({block:'nearest'});return;}if(e.key==='Enter'){e.preventDefault();if(q.startsWith(':')){const code=q.slice(1).trim();fields.evalTarget='machine';if(code&&!shell().evaluating){session.pendingCode=code;send('rail',{type:'mobile/machine-eval',text:code});}}else root.querySelector('.palette-list .cmd.sel')?.click();return;}}if(e.key==='Escape'&&dialog){e.preventDefault();const p=prompt();if(p)send(p[0],{type:'key',key:'Escape'});else modal(null);}if(e.key==='Tab'&&dialog){const items=[...dialog.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href]')];const first=items[0],last=items.at(-1);if(e.shiftKey&&(document.activeElement===first||!dialog.contains(document.activeElement))){e.preventDefault();last?.focus();}else if(!e.shiftKey&&(document.activeElement===last||!dialog.contains(document.activeElement))){e.preventDefault();first?.focus();}}};root.addEventListener('keydown',stop);root.addEventListener('beforeinput',stop);
   return {update(model){role=model.role;if(role==='task'&&model.data?.desk==='task'){const {turns,questions,...data}=model.data;sessionContext={path:model.path,data};}if(models.get(role)?.message!==model.message)messageOrder.set(role,++messageSequence);if(role==='rail'&&models.get(role)?.state?.['saving-place']&&model.state?.['saving-place']===false&&!model.state?.modal){session.placeDraft=null;placeDraft={};}models.set(role,model);if(session.pendingCode&&role==='rail'&&model.state?.['eval-result']!=null){session.repl=[...(session.repl||[]),{code:session.pendingCode,result:model.state['eval-result']}].slice(-100);session.lastEval=model.state['eval-result'];session.namespace=model.state['eval-namespace']||session.namespace;session.pendingCode=null;saveSession();}if(model.path&&model.path!=='desk:welcome'&&(role==='file'||role==='task'&&model.path.startsWith('task:')||role==='rail'&&/^(place|folder):/.test(model.path))){session.recent=[{path:model.path,title:model.data?.['task-title']||title(model)},...(session.recent||[]).filter(x=>x.path!==model.path)].slice(0,40);}mounts.set(role,{root});if(role==='task')syncDraft();render();},dispose(){if(mounts.get(role)?.root===root)mounts.delete(role);root.removeEventListener('scroll',onScroll,true);root.removeEventListener('pointerup',passage);root.removeEventListener('click',click);root.removeEventListener('input',onInput);root.removeEventListener('change',onInput);root.removeEventListener('submit',onSubmit);root.removeEventListener('compositionstart',compositionStart);root.removeEventListener('compositionend',compositionEnd);root.removeEventListener('keydown',stop);root.removeEventListener('beforeinput',stop);root.replaceChildren();}};},
- dispose(){disposed=true;clearInterval(probeTimer);clearTimeout(toastTimer);probeAbort?.abort();draftAbort?.abort();directoryAbort?.abort();window.removeEventListener('popstate',pop);window.removeEventListener('message',dossierMessage);document.removeEventListener('keydown',paletteKey,true);window.removeEventListener('online',network);window.removeEventListener('offline',network);css.remove();pocketCss.remove();document.documentElement.classList.remove('omega-mobile');document.title=priorTitle;models.clear();sessionContext=null;mounts.clear();positions.clear();history.length=0;queries.clear();restored.clear();restoring.clear();}};
+ dispose(){flushReply();disposed=true;document.removeEventListener('visibilitychange',flushHidden);window.removeEventListener('pagehide',flushReply);clearInterval(probeTimer);clearTimeout(toastTimer);probeAbort?.abort();draftAbort?.abort();directoryAbort?.abort();window.removeEventListener('popstate',pop);window.removeEventListener('message',dossierMessage);document.removeEventListener('keydown',paletteKey,true);window.removeEventListener('online',network);window.removeEventListener('offline',network);css.remove();pocketCss.remove();document.documentElement.classList.remove('omega-mobile');document.title=priorTitle;models.clear();sessionContext=null;mounts.clear();positions.clear();history.length=0;queries.clear();restored.clear();restoring.clear();}};
 }

@@ -1,0 +1,77 @@
+;; introspect.bl — live BEAM introspection of the Omega VM, as plain data.
+;; An omega task's eval runs INSIDE the omega VM, so these see the real system.
+;; Load with harness/eval-cell as documented in tools/README.md.
+;; Interop notes (beam-lisp v2026.9): pass Erlang lists with (list ...), not [...];
+;; read tuple fields with (nth t i); process_info returns () for dead pids.
+(ns introspect (:require [clojure.string :as str]))
+
+(defn mb [b] (Float/round (/ b 1048576.0) 1))
+(defn kv "Erlang proplist -> map." [i] (into {} (map (fn [t] [(nth t 0) (nth t 1)]) i)))
+(defn dict-get [d k] (some (fn [t] (when (= k (nth t 0)) (nth t 1))) d))
+
+(defn os-pid [] (List/to_string (os/getpid)))
+
+(defn vm
+  "VM-wide memory (MB), process/port counts, OS RSS."
+  []
+  {:memory (into {} (map (fn [[k v]] [k (mb v)]) (kv (erlang/memory))))
+   :processes (erlang/system_info :process_count)
+   :ports (erlang/system_info :port_count)
+   :modules (count (code/all_loaded))
+   :os-pid (os-pid)
+   :rss-mb (let [r (some #(when (str/starts-with? % "VmRSS") %) (str/split-lines (File/read! (str "/proc/" (os-pid) "/status"))))]
+             (when r (Float/round (/ (String/to_integer (re-find #"\d+" r)) 1024.0) 1)))})
+
+(defn proc
+  "One process as a map, or nil if dead. :kind is the true initial call (proc_lib-aware)."
+  [p]
+  (let [i (erlang/process_info p (list :memory :registered_name :message_queue_len :dictionary :initial_call :current_function :heap_size :total_heap_size))]
+    (when (seq? i)
+      (let [m (kv i) d (:dictionary m) a (dict-get d :"$ancestors") n (:registered_name m)]
+        {:pid p :bytes (:memory m) :mb (mb (:memory m))
+         :name (when (keyword? n) n)
+         :kind (str (or (dict-get d :"$initial_call") (:initial_call m)))
+         :cur (str (:current_function m))
+         :label (when-let [l (dict-get d :"$process_label")] (str l))
+         :parent (when (seq? a) (str (first a)))
+         :omega-task (dict-get d :"omega/task")
+         :heap-words (:heap_size m) :mq (:message_queue_len m)}))))
+
+(defn procs [] (doall (keep proc (erlang/processes))))
+
+(defn top "N largest processes." ([] (top 15)) ([n] (->> (procs) (sort-by :bytes >) (take n) (map #(dissoc % :pid :bytes)))))
+
+(defn by-kind
+  "Memory grouped by initial call: where the bytes live, by kind of process."
+  ([] (by-kind 12))
+  ([n] (->> (procs) (group-by :kind)
+            (map (fn [[k ps]] {:kind k :n (count ps) :mb (mb (reduce + (map :bytes ps)))
+                               :max-mb (mb (apply max (map :bytes ps)))}))
+            (sort-by :mb >) (take n))))
+
+(defn queues "Processes with non-empty mailboxes (backpressure / stuck consumers)." []
+  (->> (procs) (filter #(pos? (:mq %))) (sort-by :mq >) (map #(dissoc % :pid :bytes))))
+
+(defn ets-top "Largest ETS tables." ([] (ets-top 10))
+  ([n] (let [w (erlang/system_info :wordsize)]
+         (->> (ets/all)
+              (keep (fn [t] (let [i (ets/info t)] (when (seq? i) (let [m (kv i)] {:table (str (:name m)) :size (:size m) :mb (mb (* w (:memory m))) :owner (str (:owner m))})))))
+              (sort-by :mb >) (take n)))))
+
+(defn garbage
+  "Measure reclaimable heap: GC each matching process and report before/after. Mutates only GC state."
+  [pred]
+  (let [ps (filter pred (procs))
+        before (reduce + (map :bytes ps))
+        _ (doseq [p ps] (erlang/garbage_collect (:pid p)))
+        after (reduce + (keep #(:bytes (proc (:pid %))) ps))]
+    {:n (count ps) :before-mb (mb before) :after-mb (mb after) :freed-mb (mb (- before after))}))
+
+(defn kind= [k] (fn [p] (= (:kind p) k)))
+
+(defn tasks "Memory held by omega task cells, grouped by task id." []
+  (->> (procs) (filter :omega-task) (group-by :omega-task)
+       (map (fn [[t ps]] {:task t :n (count ps) :mb (mb (reduce + (map :bytes ps)))})) (sort-by :mb >)))
+
+(defn report "One-shot summary." []
+  {:vm (vm) :by-kind (by-kind 8) :ets (ets-top 5) :queues (take 5 (queues)) :tasks (take 5 (tasks))})

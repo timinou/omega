@@ -52,7 +52,8 @@
                                        (when (= "conversation" (or (:tab vm) "conversation")) (session/strip vm d))
                                        (when (:prompt-strip vm) [:div.conversation-prompt {:data-key "conversation-prompt" :aria-label "Current user message" :hidden true}]))
                          :body (if (and (= "conversation" (or (:tab vm) "conversation")) (not (:body-html vm)))
-                                 (session/conversation vm d) (raw (:body-html vm)))
+                                 (if (:conversation-html vm) (raw (:conversation-html vm)) (session/conversation vm d))
+                                 (raw (:body-html vm)))
                          :after (raw (:composer-html vm))}))
      "places" (frame vm {:header (places/list-header vm) :body (places/list-body vm) :nav "places"})
      "place" (let [p (:place vm)]

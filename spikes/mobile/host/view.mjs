@@ -4,6 +4,7 @@ import * as R from '../../out/rt.mjs';
 import * as A from '../../out/abi.mjs';
 import {jsToBL,blToJS} from '../../out/interop.mjs';
 import * as V from '../../out/mob.view.mjs';
+import * as S from '../../out/mob.session.mjs';
 
 const VOID=new Set(['input','img','br','hr','meta','link']);
 export const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -41,5 +42,19 @@ export function html(n){
 }
 const bl=x=>jsToBL(x,R.kw('keywordize-keys'),true);
 export const render=vm=>html(V.d_tree(bl(vm)));
+
+// The conversation is most of a long session's screen. Regroup only when the turns
+// change, and serialize each group once per (group, running?): new output or an
+// unrelated update rebuilds only what changed, never every past message.
+const RAW=R.kw('raw-html');
+let turnsKey=null,groups=null,groupHtml=new Map();
+export function conversation(session){
+ const turns=session.turns||[],key=JSON.stringify(turns);
+ if(key!==turnsKey){turnsKey=key;groups=S.d_group_turns(bl(turns));}
+ const d=bl({...session,turns:[]}),running=S.d_running$Q(d)===true,next=new Map();
+ const views=items(groups).map(g=>{const k=(running?'1':'0')+R.printStr(g);let h=groupHtml.get(k);if(h==null)h=html(S.d_group_view(g,running));next.set(k,h);return R.hashMap(RAW,h);});
+ groupHtml=next;
+ return html(S.d_conversation_of(R.EMPTY_MAP,d,groups,R.vecFromArray(views)));
+}
 export const launchArgs=vm=>blToJS(V.d_launch_args(bl(vm)));
 export const paletteCount=vm=>V.d_palette_count(bl(vm));

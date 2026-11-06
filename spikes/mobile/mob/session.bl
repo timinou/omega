@@ -149,14 +149,27 @@
         [:button.chip.ghost {:data-act "answer" :data-key "answer"} "Answer…"]
         [:button.chip.ghost {:data-act "snooze" :data-key "later"} "Later"]]])))
 
-(defn conversation [vm d]
-  (let [groups (group-turns (:turns d)) running? (= "run" (st/state (task-of d)))]
+(defn running? [d] (= "run" (st/state (task-of d))))
+
+(defn group-view
+  "One grouped turn's view. A host may cache its serialization by the group and running?."
+  [g running?]
+  (if (= :steps (:kind g)) (steps g running?) (message g)))
+
+(defn conversation-of
+  "The conversation around already-built group views (one per group, in order)."
+  [vm d groups views]
+  (let [running? (running? d)]
     [:div.conversation
-     (map (fn [g] (if (= :steps (:kind g)) (steps g running?) (message g))) groups)
+     views
      (when (and (:task-result d) (not (some (fn [g] (and (= :text (:kind g)) (s/includes? (str (:text g)) (str (:task-result d))))) groups)))
        [:article.msg.agent.outcome {:data-key "outcome"} [:div.who "Outcome"] [:div.body (:task-result d)]])
      (when running? [:div.working {:data-key "working" :role "status"} [:i] [:i] [:i]])
      (next-card vm d)]))
+
+(defn conversation [vm d]
+  (let [groups (group-turns (:turns d)) running? (running? d)]
+    (conversation-of vm d groups (map (fn [g] (group-view g running?)) groups))))
 
 (defn details-sheet [vm d]
   (let [place-root (:cwd d)]
