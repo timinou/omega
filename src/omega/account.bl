@@ -17,7 +17,7 @@
  (second (re-find #"^/downloads/(omega-pocket-harness-[0-9]+\.[0-9]+\.[0-9]+-arm64-v8a\.apk(?:\.sha256)?)$" (str path))))
 (defn downloads [directory handler]
  (fn [conn]
-  (if-let [name (and (contains? #{"GET" "HEAD"} (web/method conn)) (download-name (web/path conn)))]
+  (if-let [name (and (contains? #{"GET" "HEAD"} (str/upper-case (str (web/method conn)))) (download-name (web/path conn)))]
    (let [path (str directory "/" name)]
     (if (File/regular? path)
       (Plug.Conn/send_file (-> conn

@@ -31,3 +31,15 @@
  (is (account/download-name "/downloads/omega-pocket-harness-0.1.4-arm64-v8a.apk.sha256"))
  (doseq [path ["/downloads/../auth.json" "/downloads/auth.json" "/downloads/omega-pocket-harness-0.1.4-arm64-v8a.apk/../auth.json" "/downloads/%2e%2e/auth.json"]]
   (is (nil? (account/download-name path)))))
+
+(deftest account-download-serves-a-real-file-through-the-native-plug
+ (let [root (str (System/tmp_dir!) "/omega-download-" (System/pid))
+       filename "omega-pocket-harness-0.1.4-arm64-v8a.apk.sha256"]
+  (File/mkdir_p! root)
+  (try
+   (File/write! (str root "/" filename) "digest")
+   (let [handler (account/downloads root (fn [conn] (web/text conn 404 "fallback")))
+         response (handler (Plug.Test/conn :get (str "/downloads/" filename)))]
+    (is (= 200 (:status response)))
+    (is (= "digest" (:resp_body response))))
+   (finally (File/rm_rf! root)))))
