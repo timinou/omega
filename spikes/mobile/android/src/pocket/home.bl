@@ -82,9 +82,9 @@
 (defn start-polling! [origin]
   (begin-notifications!) (fetch! origin)
   (erlang/send_after attention/poll-ms (erlang/self) :poll))
-(defn developer? [a] (or config/developer? (true? (:developer a))))
+(defn developer? [a] (or config/developer? (= true (:developer a))))
 (defn device-report [a]
-  {:dev (developer? a) :app "omega-pocket/0.1.5" :generation (:generation a)})
+  {:dev (developer? a) :app "omega-pocket/0.1.6" :generation (:generation a)})
 (defn begin-harness! [a]
   (when (:connected a)
     (dev/start-poller! (erlang/self) (:connected a) (:device a) (device-report a) transport/request!)))

@@ -152,3 +152,15 @@ unconfirmed pending the phone's result/details. Do not call the black screen
 resolved solely on these host/emulator checks. Evidence is under
 spikes/mobile/proof/startup-20261106; final artifact SHA-256
 39fd4a0b2bd49fd9249defb4f974a1c370451280a168128541c3a39906ef3cae.
+
+** Confirmed phone startup cause and 0.1.6 fix
+Phone logs show undefined pocket.home/true? from developer? during :start,
+followed by exhausted screen restart intensity and no live screen. This was
+reproduced against shipped 0.1.5 AOT modules. It was not the earlier suspected
+crypto dependency. Replace true? with (= true value) for the bundled phone SDK.
+The remote packaged contract now exercises the actual :start callback, first
+poll, developer toggle and panel with HTTP stubbed; all pass. Signed 0.1.6
+(versionCode 2026110603) published; SHA-256
+4ccf1c7fc59870e6c78bf01b9e9c691644f3e5db19faf1928077f32d4d561c87.
+The actual phone's post-fix confirmation is pending. Reproduction and contracts:
+spikes/mobile/proof/startup-20261106/fix-0.1.6/.

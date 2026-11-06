@@ -348,3 +348,21 @@ the base launcher hash before accepting its two DEX entries. Signing stays on Wo
 [Startup screenshot and receipts](proof/startup-20261106/). The native loading
 screen was observed on the isolated Android emulator. That emulator still cannot
 complete ARM helper execution; physical-phone confirmation is pending.
+
+### Pocket 0.1.6 — confirmed startup crash fix
+
+The phone's copied diagnostics identified `undefined var: pocket.home/true?`
+in `developer?`, called from the immediate `:start` handler's device report.
+After six restarts Mob correctly gave up, leaving no screen. The failure was
+reproduced using the actual 0.1.5 modules and bundled SDK on the host.
+
+The phone SDK has no `true?`; use `(= true value)`. The packaged gate now tests
+the real `:start` handler through its first device poll, toggles developer mode
+both ways, and renders the connection panel. Only the HTTP implementation is
+stubbed inside the disposable test VM; no request reaches the live host.
+
+[Download 0.1.6](https://work.tailcb5318.ts.net:18001/downloads/omega-pocket-harness-0.1.6-arm64-v8a.apk).
+[Reproduction, passing startup contract and signed receipt](proof/startup-20261106/fix-0.1.6/).
+The signed APK's actual app modules and startup DEX match the remotely tested
+outputs. It retains the existing signing identity/settings and startup details.
+Physical-phone confirmation after this fix is still pending.

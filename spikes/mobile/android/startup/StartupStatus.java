@@ -132,7 +132,7 @@ public final class StartupStatus {
     }
 
     private static void showDetails(Activity activity) {
-        String text = "Pocket 0.1.5 · " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL
+        String text = "Pocket 0.1.6 · " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL
             + " · Android " + android.os.Build.VERSION.RELEASE + "\n" + phase + "\n\n" + log;
         TextView details = new TextView(activity);
         details.setText(text);

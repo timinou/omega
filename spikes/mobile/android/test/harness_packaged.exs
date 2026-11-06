@@ -54,3 +54,43 @@ tree = apply(home, :render, [socket.assigns])
 unless tree[:type] == :column and Enum.at(tree[:children], 1)[:type] == :web_view,
   do: raise("Cold mount did not render the Pocket WebView")
 IO.puts("PASS packaged cold entry: app initialization, unique device IDs, mount and first WebView render")
+
+# Reproduce the physical phone's actual failing callback. Pure mount/render
+# checks missed the immediate :start message and its device-report call.
+for {value, expected} <- [{false, false}, {nil, false}, {"true", false}, {true, true}] do
+  unless apply(home, :developer?, [%{developer: value}]) == expected,
+    do: raise("Wrong developer gate for #{inspect(value)}")
+  unless apply(home, :"device-report", [%{developer: value}])[:dev] == expected,
+    do: raise("Device report failed before the first poll")
+end
+IO.puts("PASS packaged startup report: phone developer gate and first device report")
+
+# Replace only the HTTPS edge inside this disposable test VM. Exercise the real
+# :start callback/poller without any request reaching the live account.
+Process.register(self(), :pocket_startup_contract)
+Code.compiler_options(ignore_module_conflict: true)
+Code.compile_string("""
+defmodule BeamLisp.Ns.Body.Pocket.Http do
+  def request!(req) do
+    send(:pocket_startup_contract, {:offline_request, req})
+    %{status: 0, error: :offline_contract}
+  end
+end
+""")
+{:noreply, started} = apply(home, :handle_info, [:start, socket])
+poller = started.assigns[:"dev-poller"]
+unless is_pid(poller) and Process.alive?(poller), do: raise("Startup poller did not survive")
+receive do
+  {:offline_request, %{method: :post, body: body}} ->
+    unless body[:intent] == "device/poll" and body[:args][:report][:dev] == false,
+      do: raise("Wrong first native device poll")
+after
+  2000 -> raise("Startup never reached the first device poll")
+end
+{:noreply, toggled} = apply(home, :handle_info, [{:tap, :"toggle-developer"}, started])
+unless apply(home, :developer?, [toggled.assigns]), do: raise("Developer switch did not enable")
+{:noreply, toggled} = apply(home, :handle_info, [{:tap, :"toggle-developer"}, toggled])
+if apply(home, :developer?, [toggled.assigns]), do: raise("Developer switch did not disable")
+apply(home, :render, [Map.put(toggled.assigns, :panel, true)])
+Process.exit(poller, :kill)
+IO.puts("PASS packaged :start callback: first device poll, developer toggle and connection panel; HTTP stubbed")
