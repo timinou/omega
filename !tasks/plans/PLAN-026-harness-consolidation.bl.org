@@ -127,3 +127,17 @@ receipt, Changes, rollback and exact-unuse checks at phone/tablet widths.
 No browser exceptions were reported. Both use disposable worlds and stop their
 VMs after completion. Screenshots and receipts are in the editor/mobile proof
 subdirectories.
+
+** Final task completion and publication
+Implementation and acceptance commit 3b4b561 is pushed to origin/main. The
+working tree was clean and origin/main matched HEAD before this final receipt.
+The resumed t-307 ran through DeepSeek, checked the canonical repository and
+merge ancestry, and called done. t-311 (DeepSeek typing/cache) and t-316 (Codex
+phone harness) are also done. Their statuses and models are recorded in
+saved-task-completion.json without copying private conversation transcripts.
+The separate Enchant t-303 remains idle with a durable external-owner blocker;
+it has not been represented as completed. All saved tasks were preserved.
+The final APK was downloaded again through tailnet HTTPS: HTTP 200,
+115,470,992 bytes, SHA-256 10b2ca2b7bc350f75cb3af011c5cc9e24d23a1f8abb587e4ce35084ecb738538.
+Work reports the account ready. The canonical compiler and frontend GC roots
+both resolve to v2026.10. Physical Android validation is still outstanding.
