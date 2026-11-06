@@ -13,16 +13,11 @@
 ;
 ; ══ PROVIDERS ═══════════════════════════════════════════════════════════════
 ;
-; :anthropic — the Messages API. Default base URL is the local better-ccflare
-; proxy (http://localhost:8080), which fronts a Claude subscription. That proxy
-; routes ONLY requests whose first system block is exactly the Claude Code
-; identity line (observed 2026-10-01: without it → 503 service_unavailable).
-; `:identity` holds that line; it is prepended, never replacing omega's own
-; system prompt. Point :base-url at api.anthropic.com with an :api-key and set
-; :identity nil for direct API use.
-;
-; Pure beam-lisp over OTP httpc; the vendored usage normaliser is relay's
-; (omega.llm.usage). Streaming is a later refinement; the seam does not change.
+; DeepSeek chat, Claude Messages and Codex Responses share the same task loop.
+; Explicit legacy Anthropic provider maps can still select the old local proxy
+; identity. Normal configuration chooses DeepSeek and each vendor's own URL/key.
+; Claude uses stable-prefix breakpoints; Codex can use either an API key or the
+; account's existing private login. Durable turns carry opaque reasoning state.
 
 (ns omega.llm
   (:require [omega.llm.usage :as usage]
@@ -237,10 +232,11 @@
             (mapcat (fn [b]
              (case (:type b)
               :provider-state (or (get-in b [:responses :items]) [])
-              :text [{:role (name (:role m)) :content (:text b)}]
+              :text [{:role (name (:role m)) :content [{:type (if (= :assistant (:role m)) "output_text" "input_text") :text (:text b)}]}]
               :tool-use [{:type "function_call" :call_id (:id b) :name (:name b) :arguments (encode (:input b))}]
               :tool-result [{:type "function_call_output" :call_id (:id b) :output (str (:content b))}]
               [])) (:content m))) (:messages req)))}
+  (:codex-auth-file p) (-> (dissoc :max_output_tokens) (assoc :stream true :instructions (or (:system req) "")))
   (:cache-key req) (assoc :prompt_cache_key (:cache-key req))
   (:system req) (assoc :instructions (:system req))
   (seq (:tools req)) (assoc :tools (mapv (fn [t] {:type "function" :name (:name t) :description (:description t)
@@ -281,14 +277,34 @@
                    :input (try (keywordize (decoded->data (json/decode (get-in c ["function" "arguments"])))) (catch _ {}))}) calls)))
    :model (get d "model") :usage (usage/unify (get d "usage"))
    :stop (cond (= "length" (get choice "finish_reason")) :max-tokens (seq calls) :tool-use :else :end)}))
+(defn responses-stream-response
+ "A stateless Responses SSE body: only its completed response is durable.
+  Interrupted streams remain failures, never partial tool calls to execute."
+ [body]
+ (let [[events _] (sse/split-events (str body "\n\n"))
+       completed (last (filter #(= "response.completed" (get % "type")) events))]
+  (if completed (responses-response (decoded->data (get completed "response")))
+   {:error {:kind :server :reason "Codex response stream ended without a completed response."}})))
+(defn- codex-credentials [p]
+ (try
+  (let [d (json/decode (File/read! (:codex-auth-file p))) tokens (get d "tokens")
+        token (get tokens "access_token") account (get tokens "account_id")]
+   (when (or (blank? token) (blank? account)) (throw (ex-info "Codex login is missing." {})))
+   {:api-key token :account account})
+  (catch _ {:error {:kind :auth :reason "The local Codex login is unavailable; sign in with codex login."}})))
 (defn- compatible-call [p req]
  (let [responses? (= :responses (:kind p))
-       r (post (str (:base-url p) (if responses? "/responses" "/chat/completions"))
-           (list (header "authorization" (str "Bearer " (:api-key p))))
-           (encode ((if responses? responses-body chat-body) p req)) (:timeout-ms p))]
-  (cond (:transport r) {:error {:kind :transport :reason (pr-str (:transport r))}}
-        (= 200 (:status r)) ((if responses? responses-response chat-response) (decoded->data (json/decode (:body r))))
-        :else {:error {:kind (error-kind (:status r)) :status (:status r)}})))
+       auth (if (:codex-auth-file p) (codex-credentials p) {:api-key (:api-key p)})]
+  (if (:error auth) auth
+   (let [headers (cond-> [(header "authorization" (str "Bearer " (:api-key auth)))]
+                   (:account auth) (conj (header "ChatGPT-Account-Id" (:account auth)) (header "originator" "omega"))
+                   (and (:account auth) (:cache-key req)) (conj (header "session-id" (:cache-key req))))
+         r (post (str (:base-url p) (if responses? "/responses" "/chat/completions"))
+             (to-list headers) (encode ((if responses? responses-body chat-body) p req)) (:timeout-ms p))]
+    (cond (:transport r) {:error {:kind :transport :reason (pr-str (:transport r))}}
+          (= 200 (:status r)) (if (:codex-auth-file p) (responses-stream-response (:body r))
+                                ((if responses? responses-response chat-response) (decoded->data (json/decode (:body r)))))
+          :else {:error {:kind (error-kind (:status r)) :status (:status r)}})))))
 
 (defn- configuration
  "Explicit harness provider selection. Credentials remain host-side; no fallback
@@ -306,10 +322,16 @@
         "deepseek" {:kind :chat :provider :deepseek :model (or (pick "OMEGA_DEEPSEEK_MODEL") "deepseek-flash")
                     :base-url (or (pick "DEEPSEEK_BASE_URL") "https://api.deepseek.com") :api-key (pick "DEEPSEEK_API_KEY")}
         (throw (ex-info "Choose claude, codex or deepseek." {})))]
-  (merge common p)))
+  (merge common p
+    (when (and (= selection "codex") (= "chatgpt" (pick "OMEGA_CODEX_AUTH")))
+      {:base-url "https://chatgpt.com/backend-api/codex"
+       :codex-auth-file (str (or (pick "CODEX_HOME") (str (System/get_env "HOME") "/.codex")) "/auth.json")
+       :api-key nil}))))
+(defn model-settings [root selection]
+ (select-keys (configuration root selection) [:provider :model]))
 (defn configured [root selection]
  (let [p (configuration root selection)]
-  (when (blank? (:api-key p)) (throw (ex-info "The selected provider has no configured credential." {:provider selection}))) p))
+  (when (and (blank? (:api-key p)) (not (and (:codex-auth-file p) (File/regular? (:codex-auth-file p))))) (throw (ex-info "The selected provider has no configured credential." {:provider selection}))) p))
 (defn configured-public [root]
  (mapv (fn [selection]
          (try (assoc (select-keys (configured root selection) [:model]) :id selection :configured true)
@@ -374,6 +396,8 @@
         pick (fn [k] (or (cenv/lookup env k) (System/get_env k)))
         model (pick "OMEGA_MODEL") base (pick "OMEGA_BASE_URL")
         selection (or (pick "OMEGA_PROVIDER") (model-provider model) (when base "claude") "deepseek")
+        _ (when (and (pick "OMEGA_PROVIDER") (model-provider model) (not= selection (model-provider model)))
+            (throw (ex-info "OMEGA_MODEL belongs to another provider than OMEGA_PROVIDER." {})))
         mt (parse-max-tokens (pick "OMEGA_MAX_TOKENS"))
         _ (when (:error mt) (throw (ex-info (:error mt) {:var "OMEGA_MAX_TOKENS"})))
         p (if (and (= "claude" selection) base)

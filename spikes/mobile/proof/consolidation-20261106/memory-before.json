@@ -1,0 +1,104 @@
+{
+  "by-kind": [
+    {
+      "kind": "{:supervisor, Supervisor.Default, 1}",
+      "max-mb": 237.2,
+      "mb": 948.8,
+      "n": 14
+    },
+    {
+      "kind": "{BeamLisp.Env, :\"-start_link/1-anonymous-2-\", 0}",
+      "max-mb": 258.5,
+      "mb": 258.5,
+      "n": 1
+    },
+    {
+      "kind": "{ThousandIsland.Acceptor, :run, 1}",
+      "max-mb": 68.0,
+      "mb": 238.0,
+      "n": 4
+    },
+    {
+      "kind": "{:supervisor, ThousandIsland.AcceptorSupervisor, 1}",
+      "max-mb": 50.7,
+      "mb": 202.9,
+      "n": 4
+    },
+    {
+      "kind": "{:erlang, :apply, 2}",
+      "max-mb": 56.7,
+      "mb": 85.8,
+      "n": 104
+    },
+    {
+      "kind": "{Bandit.DelegatingHandler, :init, 1}",
+      "max-mb": 56.7,
+      "mb": 56.7,
+      "n": 1
+    },
+    {
+      "kind": "{ThousandIsland.ShutdownListener, :init, 1}",
+      "max-mb": 56.7,
+      "mb": 56.7,
+      "n": 1
+    },
+    {
+      "kind": "{:supervisor, ThousandIsland.Server, 1}",
+      "max-mb": 50.7,
+      "mb": 50.7,
+      "n": 1
+    }
+  ],
+  "ets": [
+    {
+      "mb": 115.1,
+      "owner": "#PID<0.177.0>",
+      "size": 2865,
+      "table": "beam_lisp_source_lease_domains"
+    },
+    {
+      "mb": 78.4,
+      "owner": "#PID<0.177.0>",
+      "size": 20124,
+      "table": "beam_lisp_vars"
+    },
+    {
+      "mb": 4.8,
+      "owner": "#PID<0.177.0>",
+      "size": 40875,
+      "table": "beam_lisp_source_extent_heads"
+    },
+    {
+      "mb": 3.8,
+      "owner": "#PID<0.1025.0>",
+      "size": 80,
+      "table": "datom.query.results"
+    },
+    {
+      "mb": 2.4,
+      "owner": "#PID<0.50.0>",
+      "size": 1752,
+      "table": "code_server"
+    }
+  ],
+  "queues": [],
+  "tasks": [],
+  "vm": {
+    "memory": {
+      "atom": 2.0,
+      "atom_used": 2.0,
+      "binary": 29.0,
+      "code": 75.0,
+      "ets": 205.9,
+      "processes": 1721.2,
+      "processes_used": 1721.0,
+      "system": 471.1,
+      "total": 2192.3
+    },
+    "modules": 1467,
+    "os-pid": "2644444",
+    "ports": 4,
+    "processes": 284,
+    "rss-mb": 1439.8
+  }
+}

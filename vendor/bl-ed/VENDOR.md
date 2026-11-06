@@ -555,3 +555,17 @@ history and transition authority remain above the editor.
 
 2026-11-05 — inspector text wraps long resource identities and history addresses
 on phone widths. Domain-specific panel placement remains package CSS.
+
+Cold HTTP qualification may set `BLED_COLD_START_TIMEOUT_MS` (default 60 seconds,
+maximum 10 minutes) on a slow or swapping host. This changes only readiness
+waiting; the first virtual-document request and changing-document assertions
+remain the same. Omega qualifies the pinned public drop with a five-minute
+startup budget on Work.
+
+The bounded HTTP listener now retains its conveyed request callback once in
+`persistent_term`, behind a unique per-listener reference. Bandit acceptors and
+supervisors copy only the tiny plug/key, rather than each retaining the complete
+serving context. Requests still convey their scope and acquire the same code
+leases. The bootstrap owner releases the callback on listener/owner termination;
+explicit stop and failed startup release it as well. Native pool/lifetime tests
+and the cold HTTP changing-document contract cover the integration.

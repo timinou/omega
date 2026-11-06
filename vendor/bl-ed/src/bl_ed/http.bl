@@ -9,7 +9,10 @@
              :status status :ms (/ (- (erlang/monotonic_time :microsecond) start) 1000.0)}
       error (assoc :error (ex-message error))))) (catch _ nil)))
 
-(defn- start-listener [opts modules]
+(defn release-callback! [key]
+  (when key (persistent_term/erase key)) :ok)
+
+(defn- start-listener [opts modules callback-key]
   ;; A failing start_link can deliver an EXIT as well as {:error reason}.
   ;; Trap that signal in a short-lived bootstrap owner, never in user code.
   ;; Retain the OTP parent until listener termination; it monitors the caller.
@@ -17,6 +20,7 @@
   (let [owner (erlang/self) ref (erlang/make_ref)
         action (BeamLisp.Env/convey
           (fn [_]
+           (try
             (erlang/process_flag :trap_exit true)
             (let [owner-ref (erlang/monitor :process owner)
                   result (try
@@ -40,7 +44,8 @@
                     [:DOWN r :process _ _] :when (= r owner-ref)
                       (Supervisor/stop listener :normal 30000)
                     (after 30000 (Supervisor/stop listener :normal 30000))))
-                (erlang/send owner [:listener-failed ref result])))))
+                (erlang/send owner [:listener-failed ref result])))
+            (finally (release-callback! callback-key)))))
         started (BeamLisp.Refs/spawn_owned
                   (fn [] (erlang/apply action (list nil))) :monitor modules)
         worker (elem started 0) monitor (elem started 1)]
@@ -76,14 +81,25 @@
                            (catch error
                              (access! conn 500 start error)
                              (throw error))))))))
-       plug (fn [conn _]
+       scoped (fn [conn]
               (BeamLisp/with_cwd cwd
                 (fn [] (BeamLisp/with_argv argv
                   (fn [] (erlang/apply request (list conn)))))))
+       ;; Bandit copies its config into each acceptor and supervisor. A conveyed
+       ;; BL callback contains the serving context: retain it once, in a VM-shared
+       ;; immutable slot. The plug closes over only an opaque key. Conveyance and
+       ;; code leases still run for every request; shutdown retires the slot.
+       callback-key (tuple :bl-ed.http/callback (erlang/make_ref))
+       plug (fn [conn _] (erlang/apply (persistent_term/get callback-key) (list conn)))
        acceptors (or (:acceptors opts) 4)
        _ (when-not (and (erlang/is_integer acceptors) (<= 1 acceptors) (<= acceptors 64))
            (throw (ex-info "HTTP acceptor count must be between 1 and 64." {})))
        options (list (tuple :plug plug) (tuple :port (:port opts)) (tuple :scheme :http)
                      (tuple :ip (:ip opts))
                      (tuple :thousand_island_options (list (tuple :num_acceptors acceptors))))]
-   (start-listener options modules)))
+   (persistent_term/put callback-key scoped)
+   (try
+     (let [r (start-listener options modules callback-key)]
+       (if (= :ok (elem r 0)) (tuple :ok (elem r 1) callback-key)
+         (do (release-callback! callback-key) r)))
+     (catch error (release-callback! callback-key) (throw error)))))

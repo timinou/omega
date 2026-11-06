@@ -17,7 +17,9 @@ async function freePort() {
   return port;
 }
 
-test("a cold packaged server resolves virtual paths and serves changing task documents", { timeout: 90000 }, async (t) => {
+const startupMs=Number(process.env.BLED_COLD_START_TIMEOUT_MS||60000);
+assert.ok(Number.isFinite(startupMs)&&startupMs>0&&startupMs<=600000,'valid cold-start deadline');
+test("a cold packaged server resolves virtual paths and serves changing task documents", { timeout: startupMs+30000 }, async (t) => {
   const port = await freePort();
   const child = spawn(path.join(root, "bin/bl"), ["--cold", "run", "-p", path.join(root, "src"), "-p", path.join(root, "vendor/bl-ed/src"),
     path.join(root, "spikes/present/test/experience-world.bl"), "--", String(port)], { cwd: root, detached: true, stdio: ["ignore", "pipe", "pipe"] });
@@ -27,7 +29,8 @@ test("a cold packaged server resolves virtual paths and serves changing task doc
   t.after(() => { try { process.kill(-child.pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; } });
   const base = `http://127.0.0.1:${port}`;
   let ready = false;
-  for (let i = 0; i < 600; i++) {
+  const deadline=Date.now()+startupMs;
+  while (Date.now()<deadline) {
     if (spawnError) throw spawnError;
     if (child.exitCode !== null) throw new Error(`fixture exited ${child.exitCode}: ${logs}`);
     try { if ((await fetch(base + "/", { signal: AbortSignal.timeout(500) })).ok) { ready = true; break; } } catch { /* not listening yet */ }

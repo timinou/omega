@@ -62,3 +62,35 @@ replay. The restored host reports about 1.18 GB BEAM memory (about 1.14 GB after
 an eval), compared with the older checkout's recorded 7.17 GB investigation.
 These are different uptimes, not a controlled benchmark. Production remains
 separate from this /tmp world and port 8792 acceptance.
+
+** Completed typing run and remaining memory fix
+The real t-311 continuation used DeepSeek and reached done. Its durable result
+records the verified commits, browser evidence and the benchmark: approximately
+0.0–0.3 ms per reply key at 0/20/100 exchanges, versus the earlier 4.6/58/285 ms.
+It passed forty model/tool steps during continuation without an implicit pause.
+
+Live introspection still found about 949 MiB in fourteen default supervisors,
+238 MiB in four acceptors and 203 MiB in four acceptor supervisors. The conveyed
+HTTP callback was still copied with Bandit's options. Retaining that callback
+once behind a per-listener immutable reference removed the repeated contexts.
+A fresh restored account copy now measured 398.5 MiB total BEAM memory and
+581.7 MiB RSS, with 26 task executors totaling 3.2 MiB. Before that change the
+same copied-account startup reported roughly 1.18 GB BEAM memory. The live
+pre-change snapshot includes later evals and is retained separately; do not
+represent it as a controlled same-uptime benchmark.
+
+** Codex transport resolved
+The gateway's upstream credential remains unavailable, but the account's local
+Codex ChatGPT login is valid. Explicit OMEGA_CODEX_AUTH=chatgpt reads the existing
+private credential file per request and uses the Codex Responses transport;
+Codex keeps ownership of credential refresh. No token is copied to the store or
+transcript. Native Claude, Codex gpt-6.1-sol and DeepSeek each issued an actual
+tool call and acknowledged its result. Interrupted/incomplete Codex SSE is an
+error, never a partial tool call to run. All 85 provider assertions pass.
+
+** Canonical repository
+~/projects/omega now owns main. ~/code/undefine/omega is a compatibility alias.
+The former independent projects clone, its dirty files, and a complete Git
+bundle are preserved under ~/.local/state/omega/consolidation-20261106. The old
+/tmp/omega-merge worktree was repaired against that archival clone; its prepared
+merge is already an ancestor of canonical main.

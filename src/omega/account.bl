@@ -1,6 +1,6 @@
 ; One durable world for every account project and document. The workstation's
 ; owner-authenticated ingress remains outside the loopback application listener.
-(ns omega.account (:require [omega.ed.main :as app] [omega.env :as env] [omega.llm :as llm] [bl.json :as json]))
+(ns omega.account (:require [omega.ed.main :as app] [omega.env :as env] [omega.llm :as llm] [bl.json :as json] [web] [clojure.string :as str]))
 (defn guidance-paths [cwd home]
  (loop [path (Path/expand cwd) paths [] depth 0]
   (let [next (conj paths (str path "/AGENTS.md")) parent (Path/dirname path)]
@@ -13,6 +13,19 @@
        docs (keep (fn [p] (when (File/regular? p) (str "\nInstructions from " p ":\n" (File/read! p))))
                   (guidance-paths (or cwd home) home))]
   (update request :system str "\nRead the workstation and project guidance. More specific instructions refine home guidance.\n" (join "\n" docs))))
+(defn download-name [path]
+ (second (re-find #"^/downloads/(omega-pocket-harness-[0-9]+\.[0-9]+\.[0-9]+-arm64-v8a\.apk(?:\.sha256)?)$" (str path))))
+(defn downloads [directory handler]
+ (fn [conn]
+  (if-let [name (and (contains? #{"GET" "HEAD"} (web/method conn)) (download-name (web/path conn)))]
+   (let [path (str directory "/" name)]
+    (if (File/regular? path)
+      (Plug.Conn/send_file (-> conn
+        (web/resp-header "cache-control" "private, no-store")
+        (web/resp-header "content-type" (if (str/ends-with? name ".sha256") "text/plain" "application/vnd.android.package-archive"))
+        (web/resp-header "content-disposition" (str "attachment; filename=\"" name "\""))) 200 path)
+      (web/text conn 404 "Download not found.")))
+   (handler conn))))
 (defn start! [opts]
  (let [home (System/fetch_env! "HOME") root (or (:root opts) home)
        port (or (:port opts) 8812) web (or (:web opts) (System/fetch_env! "OMEGA_FRONTEND"))
@@ -20,6 +33,7 @@
        identity (json/encode {:schema "workstation.omega" :live (not (:offline? opts)) :root root :db (str root "/.omega/db")
                               :port port :provider (name (:provider (llm/from-env (or (System/get_env "OMEGA_HOME") root)))) :backend (System/get_env "OMEGA_HOME") :release "v2026.10"})]
   (let [host (app/start! (merge {:root root :port port :web web :dev? false
+                     :middleware (partial downloads (or (:downloads opts) (str home "/.local/state/omega/harness/downloads")))
                      :extensions [{:name :workstation-guidance :hooks {:context guidance}}]
                      :intent-factory (fn [_] {"frontend/admit" (fn [{:keys [web]}]
                        (let [id (when (File/regular? (str web "/.inputs")) (File/read! (str web "/.inputs")))]

@@ -328,7 +328,7 @@
     (when-not (= :ok (elem started 0))
       (throw (ex-info "Cannot start editor listener" {:reason (elem started 1) :port port})))
     {:url (str "http://127.0.0.1:" port "/") :port port :root (:root cfg)
-     :listener (elem started 1) :closing (:closing cfg)}))
+     :listener (elem started 1) :callback-key (elem started 2) :closing (:closing cfg)}))
 
 (defn stop!
   "Stop accepting requests and wait for the listener's supervised children."
@@ -336,11 +336,13 @@
   ; Release read-only observers before draining accepted requests. Writers keep
   ; their existing supervised shutdown budget and application state remains live.
   (when-let [closing (:closing server)] (reset! closing true))
-  (when-let [pid (:listener server)]
+  (try
+   (when-let [pid (:listener server)]
     (when (Process/alive? pid)
       (erlang/unlink pid)
       ; Each connection supervisor has its own finite shutdown budget. An
       ; unrelated parent deadline can expire before those children drain,
       ; falsely failing host cleanup while HTTP still owns the store.
       (Supervisor/stop pid :normal :infinity)))
+   (finally (http/release-callback! (:callback-key server))))
   :ok)

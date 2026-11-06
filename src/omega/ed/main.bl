@@ -88,7 +88,9 @@
         r (serve/start! {:port (or (:port opts) 8790) :root root :web web
                          :landing-pages (:landing-pages opts) :default-landing-page (:default-landing-page opts) :generations generations
                          :resolve-path #(documents/normalize (:documents sys) %)
-                         :middleware #(documents/middleware (:documents sys) %)
+                         :middleware (fn [handler]
+                           (let [handler (documents/middleware (:documents sys) handler)]
+                             (if-let [middleware (:middleware opts)] (middleware handler) handler)))
                          :providers (merge (:providers opts)
                                            (assoc (workspace/providers sys server context-opts) "bl" (:provider img) "runtime" (runtime/provider inspection) "live" (live/provider) "package" (packages/provider registry)))
                          :intents (merge (pv/intents sys context-opts) (workspace/intents sys server) (:intents img) (runtime/intents inspection) (live/intents live-service) (music-gen/intents home) (device/intents generations opts)

@@ -61,7 +61,7 @@
   (is (not (includes? (:error (llm/parse-max-tokens "sk-secret-value")) "sk-secret")) "the rejected text is never echoed"))
 
 (defn- env-root! [content]
-  (let [r (str "/tmp/omega-llm-env-" (erlang/unique_integer (to-list [:positive])))]
+  (let [r (str "/tmp/omega-llm-env-" (System/pid) "-" (erlang/unique_integer (to-list [:positive])))]
     (File/mkdir_p! r)
     (when content (File/write! (str r "/.env") content))
     r))
@@ -163,3 +163,15 @@
  (let [u (omega.llm.usage/unify {"prompt_tokens" 1000 "completion_tokens" 10 "prompt_cache_hit_tokens" 896 "prompt_cache_miss_tokens" 104})]
   (is (= 896 (:cache-read u)))
   (is (= 104 (:input u)))))
+
+(deftest codex-login-transport-retains-completed-reasoning-and-rejects-truncated-streams
+ (let [body (llm/responses-body {:model "gpt-6.1-sol" :codex-auth-file "/private/auth.json" :max-tokens 100}
+                {:system "Omega" :cache-key "task/stable" :messages [{:role :user :content [{:type :text :text "Go"}]}]})
+       event "data: {\"type\":\"response.completed\",\"response\":{\"model\":\"gpt-6.1-sol\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"ready\"}]}]}}\n\n"
+       r (llm/responses-stream-response event)]
+  (is (true? (:stream body)))
+  (is (= "task/stable" (:prompt_cache_key body)))
+  (is (not (contains? body :max_output_tokens)))
+  (is (= "input_text" (get-in body [:input 0 :content 0 :type])))
+  (is (= "ready" (get-in r [:content 0 :text])))
+  (is (= :server (get-in (llm/responses-stream-response "data: {\"type\":\"response.created\"}\n\n") [:error :kind])))))

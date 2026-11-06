@@ -1,0 +1,22 @@
+
+Testing omega.account-test
+warning: /home/othman/projects/omega/src/omega/llm.bl:59: json/encode is OTP's :json, which cannot encode beam-lisp vectors, sets or keywords. Use bl.json: (:require [bl.json :as json]), or call (erlang/apply :json :encode ...) to keep OTP's on purpose.
+warning: /home/othman/projects/omega/src/omega/llm.bl:166: json/decode is OTP's :json, which cannot encode beam-lisp vectors, sets or keywords. Use bl.json: (:require [bl.json :as json]), or call (erlang/apply :json :decode ...) to keep OTP's on purpose.
+warning: /home/othman/projects/omega/src/omega/llm.bl:247: json/decode is OTP's :json, which cannot encode beam-lisp vectors, sets or keywords. Use bl.json: (:require [bl.json :as json]), or call (erlang/apply :json :decode ...) to keep OTP's on purpose.
+warning: /home/othman/projects/omega/src/omega/llm.bl:277: json/decode is OTP's :json, which cannot encode beam-lisp vectors, sets or keywords. Use bl.json: (:require [bl.json :as json]), or call (erlang/apply :json :decode ...) to keep OTP's on purpose.
+warning: /home/othman/projects/omega/src/omega/llm.bl:290: json/decode is OTP's :json, which cannot encode beam-lisp vectors, sets or keywords. Use bl.json: (:require [bl.json :as json]), or call (erlang/apply :json :decode ...) to keep OTP's on purpose.
+warning: /home/othman/projects/omega/src/omega/llm.bl:304: json/decode is OTP's :json, which cannot encode beam-lisp vectors, sets or keywords. Use bl.json: (:require [bl.json :as json]), or call (erlang/apply :json :decode ...) to keep OTP's on purpose.
+
+Testing llm-test
+
+Testing omega.http-pool-test
+
+13:34:22.941 [info] Running #Function<10.47622058/2 in :"Elixir.BeamLisp.Ns.Body.Bl-ed.Http".serve!/1> with Bandit 1.12.4 at 127.0.0.1:46711 (http)
+── ward: warm isolated test run ──
+
+  ✓ omega.account-test  16 passed
+  ✓ llm-test  85 passed
+  ✓ omega.http-pool-test  7 passed
+
+  3 file(s) passed, 0 failed, 0 incoherent
+  ✓ all green

@@ -69,11 +69,27 @@ Closing a browser tab or native window does not stop the shared world.
 
 ## Live work and shell commands
 
-Copy `.env.example` to `.env` in this repository and configure the model endpoint
-and key. The example selects the direct Anthropic API. Without an override,
-Omega uses the local proxy at `http://localhost:8080`. Optional Jev integrations
-use `TYPESAFE_API_KEY`. Credentials come from Omega's home, not an attached project.
-`OMEGA_MAX_TOKENS` controls the reply limit (default 8000, range 1–128000).
+Configure provider URLs and credentials in the host environment or this repository's
+private `.env`. DeepSeek is the default (`DEEPSEEK_API_KEY`, optional
+`DEEPSEEK_BASE_URL` and `OMEGA_DEEPSEEK_MODEL`). Choose Claude or Codex in Pocket's
+new-session model picker, or use `bin/omega --provider claude "goal"` /
+`bin/omega --provider codex "goal"`. `--model` selects a specific model. Launch
+settings stay with the task; changing a paused task's provider uses the ordinary
+`task/configure` intent and preserves its history and permissions.
+
+Claude uses `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` with stable-prefix caching
+on by default; `OMEGA_CACHE_TTL=1h` opts into the longer system-prefix lifetime.
+Codex uses the Responses API (`OPENAI_API_KEY` / `OPENAI_BASE_URL`), or
+`OMEGA_CODEX_AUTH=chatgpt` explicitly selects the existing private Codex login in
+`$CODEX_HOME/auth.json` (default `~/.codex/auth.json`). Codex owns refreshing that
+login; Omega reads the current credential per request and never copies it into
+bundles, artifacts or task transcripts. Each provider stays selected; errors do
+not silently switch providers. The account launcher uses this local Codex login.
+
+There is no implicit turn limit. Cancellation, questions, review pauses and
+explicit step/token budgets remain available. `OMEGA_MAX_TOKENS` controls the
+reply limit (default 8000, range 1–128000). Optional Jev integrations use
+`TYPESAFE_API_KEY`. Credentials come from Omega's home, not an attached project.
 
 ```sh
 bin/bl omega -- --browser              # live Home; omit --browser for a native window

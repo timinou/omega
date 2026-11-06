@@ -25,3 +25,9 @@
     (task/cancel! sys id)
     (is (thrown? (workspace/configure-task! sys {:id id :provider "codex"}))))
    (finally (task/stop-system! sys) (env/close! e) (File/rm_rf! root)))))
+
+(deftest downloads-only-name-published-pocket-artifacts
+ (is (= "omega-pocket-harness-0.1.4-arm64-v8a.apk" (account/download-name "/downloads/omega-pocket-harness-0.1.4-arm64-v8a.apk")))
+ (is (account/download-name "/downloads/omega-pocket-harness-0.1.4-arm64-v8a.apk.sha256"))
+ (doseq [path ["/downloads/../auth.json" "/downloads/auth.json" "/downloads/omega-pocket-harness-0.1.4-arm64-v8a.apk/../auth.json" "/downloads/%2e%2e/auth.json"]]
+  (is (nil? (account/download-name path)))))
