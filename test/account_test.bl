@@ -1,0 +1,27 @@
+(ns omega.account-test (:require [omega.account :as account] [omega.workspace :as workspace]
+                                 [omega.task :as task] [omega.env :as env] [omega.loop :as loop]))
+(deftest guidance-covers-home-and-more-specific-projects-once
+ (let [paths (account/guidance-paths "/home/test/projects/omega" "/home/test")]
+  (is (= "/home/test/AGENTS.md" (first paths)))
+  (is (= "/home/test/projects/omega/AGENTS.md" (last paths)))
+  (is (= 3 (count paths)))))
+(deftest a-paused-task-can-change-provider-without-losing-its-history-or-authority
+ (let [root (str (System/tmp_dir!) "/omega-routing-" (erlang/unique_integer (list :positive)))
+       _ (File/mkdir_p! root)
+       _ (File/write! (str root "/.env") "DEEPSEEK_API_KEY=test-only\nOPENAI_API_KEY=test-only\n")
+       e (env/open) sys (task/start-system e {:root root :provider-root root :step (loop/scripted [(loop/say "paused")])})]
+  (try
+   (let [id (task/open! sys {:goal "Continue later" :cwd root :run {:may "read" :model "claude-sonnet-5-5"}})
+         _ (task/await sys id 10000)
+         before (loop/turns sys id)
+         r (workspace/configure-task! sys {:id id :provider "deepseek"})
+         t (task/view sys id)]
+    (is (= "deepseek" (:provider r)))
+    (is (= "deepseek-flash" (get-in t [:run :model])))
+    (is (= "read" (get-in t [:run :may])))
+    (is (= root (:cwd t)))
+    (is (= before (loop/turns sys id)))
+    (is (thrown? (workspace/configure-task! sys {:id id :provider "claude" :model "deepseek-flash"})))
+    (task/cancel! sys id)
+    (is (thrown? (workspace/configure-task! sys {:id id :provider "codex"}))))
+   (finally (task/stop-system! sys) (env/close! e) (File/rm_rf! root)))))

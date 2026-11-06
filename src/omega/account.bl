@@ -1,0 +1,32 @@
+; One durable world for every account project and document. The workstation's
+; owner-authenticated ingress remains outside the loopback application listener.
+(ns omega.account (:require [omega.ed.main :as app] [omega.env :as env] [omega.llm :as llm] [bl.json :as json]))
+(defn guidance-paths [cwd home]
+ (loop [path (Path/expand cwd) paths [] depth 0]
+  (let [next (conj paths (str path "/AGENTS.md")) parent (Path/dirname path)]
+   (if (or (= path parent) (= path home) (>= depth 32))
+    (vec (distinct (cons (str home "/AGENTS.md") (reverse next))))
+    (recur parent next (inc depth))))))
+(defn guidance [request context]
+ (let [sys (:sys context) home (System/fetch_env! "HOME") id (:task context)
+       cwd (when id (:task/cwd (env/pull (:env sys) [:task/cwd] (env/eid (:env sys) :task/id id))))
+       docs (keep (fn [p] (when (File/regular? p) (str "\nInstructions from " p ":\n" (File/read! p))))
+                  (guidance-paths (or cwd home) home))]
+  (update request :system str "\nRead the workstation and project guidance. More specific instructions refine home guidance.\n" (join "\n" docs))))
+(defn start! [opts]
+ (let [home (System/fetch_env! "HOME") root (or (:root opts) home)
+       port (or (:port opts) 8812) web (or (:web opts) (System/fetch_env! "OMEGA_FRONTEND"))
+       host-ref (atom nil)
+       identity (json/encode {:schema "workstation.omega" :live (not (:offline? opts)) :root root :db (str root "/.omega/db")
+                              :port port :provider (name (:provider (llm/from-env (or (System/get_env "OMEGA_HOME") root)))) :backend (System/get_env "OMEGA_HOME") :release "v2026.10"})]
+  (let [host (app/start! (merge {:root root :port port :web web :dev? false
+                     :extensions [{:name :workstation-guidance :hooks {:context guidance}}]
+                     :intent-factory (fn [_] {"frontend/admit" (fn [{:keys [web]}]
+                       (let [id (when (File/regular? (str web "/.inputs")) (File/read! (str web "/.inputs")))]
+                         (app/admit-frontend! @host-ref id web)))})
+                     :providers {"launch" {:read (fn [_ _] {:text identity :rev identity :read-only? true})}}} opts))]
+   (reset! host-ref host) host)))
+(defn main []
+ (let [port (erlang/binary_to_integer (or (System/get_env "OMEGA_BACKEND_PORT") "8812")) host (start! {:port port})]
+  (println (str "Omega account host: " (:url host)))
+  (try (receive :stop nil) (finally (app/stop! host)))))

@@ -2,7 +2,7 @@
 (ns pocket.home (:require [android.screen :refer [defscreen]] [android.ui :as ui]
                           [android.app :as app] [android.jvm :as jvm] [pocket.config :as config]
                           [pocket.attention :as attention] [android.notify :as notify]
-                          [android.events :as events] [pocket.http :as transport]))
+                          [android.events :as events] [pocket.http :as transport] [pocket.dev :as dev]))
 (defscreen)
 (def query (str "/?file=workspace:all&use=present,dwim,workspace,places,references,buffers,workbench,mobile"
                 config/extra-use "&layout=mobile&app=pocket"))
@@ -34,7 +34,8 @@
 ;; screen polls its own work document and announces tasks that wait on the person.
 ;; `attend` is pure (assigns + items -> assigns + effects); `perform!` is the IO.
 (defn start-url [a]
-  (if-let [key (:open a)] (attention/task-url (:connected a) query key) (str (:connected a) query)))
+  (let [query (if (:preview-path a) (str (:preview-path a) (subs query 1)) query)]
+    (if-let [key (:open a)] (attention/task-url (:connected a) query key) (str (:connected a) query))))
 (defn attend
   "Pure: the next assigns and the notifications to post or withdraw for one poll."
   [a items]
@@ -78,6 +79,17 @@
 (defn start-polling! [origin]
   (begin-notifications!) (fetch! origin)
   (erlang/send_after attention/poll-ms (erlang/self) :poll))
+(defn developer? [a] (or config/developer? (true? (:developer a))))
+(defn device-report [a]
+  {:dev (developer? a) :app "omega-pocket/0.1.4" :generation (:generation a)})
+(defn begin-harness! [a]
+  (when (:connected a)
+    (dev/start-poller! (erlang/self) (:connected a) (:device a) (device-report a) transport/request!)))
+(defn device-effects [a host-code?]
+  {:dev? (developer? a) :host-code? host-code? :history (:dev-history a)
+   :state (fn [] (select-keys a [:connected :panel :open :poll-failed :generation :developer]))
+   :screenshot dev/screenshot! :view-tree dev/view-tree! :reload dev/reload! :open dev/open-path!
+   :eval dev/eval-source! :changed (fn [_] nil)})
 (defn- flex [node] (assoc-in node [:props :weight] 1))
 (def toolbar-button {:fill-width false :background "#f7f3ee" :color "#3b2c24" :size :sm :padding 0})
 (defn panel
@@ -87,6 +99,14 @@
     (ui/text "Connection" {:size :lg :color "#3b2c24"})
     (ui/text (str "Connected to " (subs (:connected a) 8)) {:color :ink-3})
     (ui/text (if (:poll-failed a) "Can't reach Work. Is Tailscale on?" "Live · notifications on") {:color (if (:poll-failed a) :care "#55704f")})
+    (when-let [offer (:frontend-offer a)]
+      (when-not (= (:generation a) (get offer "generation"))
+        (ui/row {:gap 8}
+          (ui/text "Frontend preview available" {:color "#55704f"})
+          (ui/button "Load preview" [(erlang/self) :load-preview] toolbar-button))))
+    (ui/button (if (developer? a) "Developer mode: on" "Developer mode: off") [(erlang/self) :toggle-developer] toolbar-button)
+    (ui/text (if (developer? a) "This trusted host may compile code on the phone; previous loaded versions can be restored."
+                                 "State, screenshots and frontend previews are available. Enable developer mode to load native code.") {:color :ink-3})
     (ui/row {:gap 8}
       (flex (ui/button "Back to Pocket" [(erlang/self) :close-panel] {:background "#3b2c24" :color "#f7f3ee"}))
       (ui/button "Reload" [(erlang/self) :reload] toolbar-button)
@@ -114,7 +134,8 @@
     (when (origin-valid? origin) (erlang/send (erlang/self) :start))
     (tuple :ok (app/assign socket {:origin origin :draft-origin origin
                                  :connected (when (origin-valid? origin) origin) :error nil
-                                 :watch {} :items {} :running false :panel false :open nil :poll-failed false}))))
+                                 :watch {} :items {} :running false :panel false :open nil :poll-failed false
+                                 :device (dev/new-device-id) :dev-history (atom {}) :developer false :dev-poller nil}))))
 (defn handle_info [msg socket]
   (let [a (app/assigns socket)]
     (cond
@@ -124,12 +145,30 @@
       (tuple :noreply (app/assign socket :draft-origin (erlang/element 3 msg)))
       (= msg (tuple :tap :connect))
       (let [next (connect (assoc a :origin (or (:draft-origin a) (:origin a))))]
+        (dev/stop-poller! (:dev-poller a))
         (when (:connected next) (remember-origin! (:connected next)) (start-polling! (:connected next)))
-        (tuple :noreply (app/assign socket next)))
+        (let [poller (begin-harness! next)]
+        (tuple :noreply (app/assign socket (assoc next :dev-poller poller)))))
       (= msg (tuple :tap :server))
-      (tuple :noreply (app/assign socket {:connected nil :panel false :draft-origin (:origin a)}))
+      (do (dev/stop-poller! (:dev-poller a))
+          (tuple :noreply (app/assign socket {:connected nil :panel false :dev-poller nil :draft-origin (:origin a)})))
       (= msg :start)
-      (do (when (:connected a) (start-polling! (:connected a))) (tuple :noreply socket))
+      (do (when (:connected a) (start-polling! (:connected a)))
+          (tuple :noreply (app/assign socket :dev-poller (begin-harness! a))))
+      (= msg (tuple :tap :toggle-developer))
+      (tuple :noreply (app/assign socket :developer (not (developer? a))))
+      (= msg (tuple :tap :load-preview))
+      (let [offer (:frontend-offer a) path (get offer "path")]
+        (tuple :noreply (if (dev/path-ok? path)
+                          (app/assign socket {:preview-path path :generation (get offer "generation") :panel false}) socket)))
+      (= msg :dev-render) (tuple :noreply socket)
+      (and (vector? msg) (= :dev-reply (first msg)))
+      (let [reply (second msg) poller (nth msg 2)]
+        (if (not= poller (:dev-poller a)) (tuple :noreply socket)
+          (do
+            (when reply (dev/execute! (erlang/self) poller (device-effects a (get reply "code"))
+                           (or (get reply "commands") []) (device-report a)))
+            (tuple :noreply (app/assign socket :frontend-offer (get reply "frontend"))))))
       (= msg :poll)
       (do (when (:connected a) (fetch! (:connected a)) (erlang/send_after attention/poll-ms (erlang/self) :poll))
           (tuple :noreply socket))

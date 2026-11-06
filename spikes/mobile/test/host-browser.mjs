@@ -148,7 +148,7 @@ try{
  assert.equal(await page.evaluate(()=>!!document.activeElement.closest('[role="dialog"]')),true,'modal contains keyboard focus');
  await page.keyboard.press('Escape');assert.equal(await page.locator('[role="dialog"]').count(),0,'Escape dismisses sheet');
  await page.evaluate(()=>{ms.rail.state.screen='launch';ms.rail.objects=[{type:'desk/scope',place:'test',title:'Test',root:'/tmp/test',branch:'main'}];update();});
- assert.match(await page.locator('details.run summary').innerText(),/Opus 5\.5 · on main · can edit & run/,'launch says how the session runs');
+ assert.match(await page.locator('details.run summary').innerText(),/DeepSeek · on main · can edit & run/,'launch says how the session runs');
  await page.locator('[data-field="new-goal"]').fill('An unsent goal');
  await dispose();await start(456);await page.waitForTimeout(100);
  await page.evaluate(()=>{ms.rail.state.screen='launch';ms.rail.objects=[{type:'desk/scope',place:'test',title:'Test',root:'/tmp/test',branch:'main'}];update();});
@@ -161,10 +161,10 @@ try{
  assert.equal(await page.locator('.reader').innerText(),'References opened by a native command','native command navigation exposes its resulting document');
  assert.equal(await page.locator('.hdr .id b').innerText(),'Task','reference reading keeps its session title');
  await page.locator('[data-act="tab-conversation"]').click();assert.equal(await page.evaluate(()=>events.filter(e=>e.type==='mobile/nav').at(-1).path),'task:1','Conversation returns from a reference to its session');
- await page.evaluate(()=>{ms.rail.state.screen='document';update();});
+ await page.evaluate(()=>{ms.rail.state.screen='document';ms.file.commands=[{name:'document-tasks/part'}];update();});
  await page.locator('.reader-line').first().evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);el.dispatchEvent(new PointerEvent('pointerup',{bubbles:true}));});
  assert.equal(await page.evaluate(()=>window.getSelection().toString()),'Selected words','Ask selection preserves native copy');
- assert.equal(await page.locator('[data-act="ask-passage"]').isDisabled(),false);
+ assert.equal(await page.locator('[data-act="document-task"]').count(),1,'the generic document task action is available');
  assert.equal(await page.locator('[data-act="copy-passage"]').isDisabled(),false,'selected passage enables Copy without destroying the native range');
  await dispose();assert.equal(await page.locator('[data-mobile-resource]').count(),0);
  assert.deepEqual(errors,[]);

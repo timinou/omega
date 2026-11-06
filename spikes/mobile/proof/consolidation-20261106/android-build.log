@@ -1,0 +1,29 @@
+warning: Git tree '/home/othman/code/undefine/omega' is dirty
+this derivation will be built:
+  /nix/store/gwljl9dwcpbf7h47daalywj5df9jrifa-omega-pocket-harness-modules.drv
+building '/nix/store/gwljl9dwcpbf7h47daalywj5df9jrifa-omega-pocket-harness-modules.drv' on 'ssh-ng://nix-ssh@100.66.112.86'...
+copying 2 paths...
+copying path '/nix/store/k70zh90cn3rjii7ha6xyc8awnx2bx789-src' to 'ssh-ng://nix-ssh@100.66.112.86'...
+copying path '/nix/store/rc3766ibd5q85za2jf4860xcq3glpcs9-harness_packaged.exs' to 'ssh-ng://nix-ssh@100.66.112.86'...
+building '/nix/store/gwljl9dwcpbf7h47daalywj5df9jrifa-omega-pocket-harness-modules.drv'...
+omega-pocket-harness-modules> Starting packaged compiler
+omega-pocket-harness-modules>     warning: found quoted keyword "force?" but the quotes are not required. Note that keywords are always atoms, even when quoted. Similar to atoms, keywords made exclusively of ASCII letters, numbers, and underscores and not beginning with a number do not require quotes
+omega-pocket-harness-modules>     │
+omega-pocket-harness-modules>   8 │ opts = %{sources: sources, out: out, "force?": true, jobs: 1}
+omega-pocket-harness-modules>     │                                      ~
+omega-pocket-harness-modules>     │
+omega-pocket-harness-modules>     └─ /nix/store/czrllnhaxin57753bcnm673b24wqk1df-build_app.exs:8:38
+omega-pocket-harness-modules> 
+omega-pocket-harness-modules> Pocket app compilation: %{
+omega-pocket-harness-modules>   native: %{
+omega-pocket-harness-modules>     errors: %BeamLisp.Vector{items: {}, meta: nil},
+omega-pocket-harness-modules>     cached: 0,
+omega-pocket-harness-modules>     built: 0,
+omega-pocket-harness-modules>     artifacts: %BeamLisp.Vector{items: {}, ...}
+omega-pocket-harness-modules>   },
+omega-pocket-harness-modules>   ...
+omega-pocket-harness-modules> }
+omega-pocket-harness-modules> PASS packaged app: harness default, separate preference, Live package, HTTPS validation, exact proposal action
+omega-pocket-harness-modules> PASS packaged device core: phone code gate and same-origin navigation
+copying 1 paths...
+copying path '/nix/store/ib7zs0m8bd0cc0m46sxv3mia3r6bq5dy-omega-pocket-harness-modules' from 'ssh-ng://nix-ssh@100.66.112.86'...

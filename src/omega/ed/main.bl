@@ -64,7 +64,7 @@
         _ (reset! workspace-owner server)
         step (or (:step opts) (if (:offline? opts) (offline-model) (llm/routed-step home)))
         sys (task/start-system e (merge (select-keys opts [:max-steps :token-budget :dev?])
-                                  {:step step :tools (or (:tools opts) cm/tools) :root root :files (buffer/port server)
+                                  {:step step :provider-root (or (:provider-root opts) home) :tools (or (:tools opts) cm/tools) :root root :files (buffer/port server)
                                    :system-prompt (or (:system-prompt opts) cli/SYSTEM-PROMPT)}))
         _ (reset! acquired sys)
         live-service (live/start! sys server (assoc opts :root root))

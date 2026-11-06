@@ -22,7 +22,7 @@
   "A same-origin path: absolute, no scheme, no authority, no backslash."
   [p]
   (boolean (and (string? p) (starts-with? p "/") (not (starts-with? p "//"))
-                (not (includes? p "\\")) (not (includes? p "://")) (< (count p) 2048))))
+                (not (includes? p "\\")) (not (includes? p "://")) (not (re-find #"[\s\x00-\x1f\x7f]" p)) (< (count p) 2048))))
 
 (defn jsonable
   "Plain data for JSON: keywords become strings, anything opaque its printed form."
@@ -90,10 +90,10 @@
 
 (defn screenshot! [quality scale]
   (let [b (mob_nif/screenshot :jpeg quality (* 1.0 scale))]
-    (if (binary? b) (Base/encode64 b) (throw (ex-info (str "screenshot failed: " (pr-str b)) {})))))
+    (if (erlang/is_binary b) (Base/encode64 b) (throw (ex-info (str "screenshot failed: " (pr-str b)) {})))))
 
 (defn view-tree! []
-  (let [t (mob_nif/ui_view_tree)] (if (binary? t) (json/decode t) (jsonable t))))
+  (let [t (mob_nif/ui_view_tree)] (if (erlang/is_binary t) (json/decode t) (jsonable t))))
 
 (defn reload! [] (mob_nif/webview_eval_js "location.reload()"))
 (defn open-path! [p] (mob_nif/webview_eval_js (str "location.assign(" (json/encode p) ")")))
@@ -127,4 +127,27 @@
                          :stop :ok
                          (after 120000 (recur (assoc report :results [])))))))))))
 
+)
+
 (defn stop-poller! [pid] (when pid (erlang/exit pid :kill)) nil)
+
+(defn execute!
+ "Execute a bounded command batch away from the native screen process. A timed
+  out effect is reported as unknown and is never replayed automatically."
+ [screen poller fx commands report]
+ (spawn (fn []
+  (let [owner (erlang/self) token (erlang/make_ref)
+        child (spawn (fn []
+                (erlang/process_flag :max_heap_size {:size 67108864 :kill true :error_logger false})
+                (erlang/send owner [token (mapv #(run-command fx %) (take 32 commands))])))
+        monitor (erlang/monitor :process child)
+        results (receive
+                  [r values] :when (= r token) values
+                  [:DOWN r :process _ _] :when (= r monitor)
+                    (mapv (fn [c] {"id" (get c "id") "error" "device command exited; effect unknown"}) commands)
+                  (after 60000
+                   (erlang/exit child :kill)
+                   (mapv (fn [c] {"id" (get c "id") "error" "device command timed out; effect unknown"}) commands)))]
+   (erlang/demonitor monitor (list :flush))
+   (erlang/send poller [:dev-results results report])
+   (erlang/send screen :dev-render)))))

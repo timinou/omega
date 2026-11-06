@@ -6,7 +6,7 @@ config = BeamLisp.Ns.Pocket.Config
 home = BeamLisp.Ns.Pocket.Home
 attention = BeamLisp.Ns.Pocket.Attention
 origin = BeamLisp.Env.fetch!("pocket.config", "origin")
-unless String.ends_with?(origin, ".ts.net:18079"), do: raise("Wrong default harness server")
+unless Regex.match?(~r/^https:\/\/[a-zA-Z0-9.-]+\.ts\.net:[0-9]+$/, origin), do: raise("Wrong default account server")
 unless BeamLisp.Env.fetch!("pocket.config", "origin-file") == "pocket-harness-origin", do: raise("Account preference would be reused")
 query = BeamLisp.Env.fetch!("pocket.home", "query")
 unless String.contains?(query, ",live&"), do: raise("Live package is absent")
@@ -20,3 +20,17 @@ intent = apply(attention, :"reply-intent", [item, "p0", nil])
 unless intent[:intent] == "msg/answer" and intent[:args][:msg] == "msg-10" and intent[:args][:text] == "apply change-8",
  do: raise("Notification action lost the exact proposal identity")
 IO.puts("PASS packaged app: harness default, separate preference, Live package, HTTPS validation, exact proposal action")
+
+# The command core runs without Android. Code needs both opt-ins; load/rollback
+# preserve exact versions, and navigation cannot escape the connected origin.
+dev = BeamLisp.Ns.Pocket.Dev
+dev.__bl_init__()
+history = nil
+fx = %{dev?: false, "host-code?": true, history: history, state: fn -> %{screen: "home"} end,
+       eval: fn src, _ns -> src end, changed: fn _ -> nil end, open: fn p -> p end}
+denied = apply(dev, :"run-command", [fx, %{"id" => "c1", "op" => "eval", "args" => %{"src" => "(+ 1 2)"}}])
+unless denied["error"], do: raise("Code ran without phone opt-in")
+for path <- ["//evil.test", "/\\evil.test", "/\n/evil.test"] do
+  if apply(dev, :"path-ok?", [path]), do: raise("Unsafe device navigation")
+end
+IO.puts("PASS packaged device core: phone code gate and same-origin navigation")

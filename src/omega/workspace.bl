@@ -5,7 +5,7 @@
             [buffer.model :as buffer] [buffer.server :as buffers]
             [ws.desk-server :as desk] [ws.repos :as repos] [omega.ed.providers :as pv]
             [bl-ed.serve :as serve] [clojure.string :as str]
-            [omega.llm :as llm] [omega.documents :as documents] [omega.document-source :as source] [omega.task :as task] [omega.env :as env] [harness]))
+            [omega.llm :as llm] [omega.documents :as documents] [omega.document-source :as source] [omega.trace :as trace] [omega.task :as task] [omega.env :as env] [harness]))
 (def schema (vec (concat place/schema link/schema buffer/schema documents/schema)))
 (defn start! [e root]
   ;; Only bootstrap an empty mount table. Existing place names and homes belong
@@ -101,8 +101,29 @@
             (if (:error r) {:ok false :message (:error r)}
               {:namespace ns :result (str (:stdout r) (:value r))}))
           (finally (BeamLisp.Env/undefine_var ns "world")))))))
+(defn configure-task!
+  "Change only an idle task's model/provider. Preserve cwd, permissions, source
+   and history. The routed step reads these durable settings on continuation."
+  [sys {:keys [id provider model]}]
+  (let [t (task/view sys id)
+        selected (or provider (llm/model-provider model))]
+    (when-not t (throw (ex-info "Task not found." {})))
+    (when (or (task/terminal? (:status t)) (not= :idle (:status t)))
+      (throw (ex-info "Pause the task before changing its model." {})))
+    (when-not (contains? llm/PROVIDERS selected) (throw (ex-info "Choose deepseek, claude or codex." {})))
+    (when (and model (not= selected (llm/model-provider model)))
+      (throw (ex-info "The selected model belongs to another provider." {})))
+    (let [p (llm/configured (or (:provider-root sys) (System/get_env "OMEGA_HOME") (:root sys)) selected)
+          model (or model (:model p))
+          run (assoc (or (:run t) {}) :provider selected :model model)]
+      (task/admit-effect! sys id (fn []
+        (when-not (= :idle (task/status sys id)) (throw (ex-info "Task is no longer paused." {})))
+        (env/tx! (:env sys) [[:db/add (env/eid (:env sys) :task/id id) :task/run run]])
+        (trace/leave! (:env sys) id {:kind :note :subject id :text (str "Harness provider selected: " selected " / " model)})
+        {:task id :provider selected :model model})))))
 (defn intents [sys server]
   (assoc (merge (places/intents sys) (links/intents sys) (buffers/intents sys server) (repos/intents sys))
+    "task/configure" (fn [args] (configure-task! sys args))
     "document/context" (fn [args] {:selection (documents/context! (:documents sys) args)})
     "document/index" (fn [{:keys [project]}] {:documents (documents/index! (:documents sys) project)})
     "document/reveal" (fn [{:keys [task origin]}]

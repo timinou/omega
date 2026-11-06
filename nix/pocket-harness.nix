@@ -16,6 +16,7 @@ pkgs.runCommand "omega-pocket-harness-modules" {
   (def origin "${origin}")
   (def origin-file "pocket-harness-origin")
   (def extra-use ",live")
+  (def developer? false)
   BL
   python3 - ${baseApk} <<'PY'
   import io,sys,zipfile

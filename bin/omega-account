@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# The durable account host, paired with its public compiler and immutable frontend.
+set -euo pipefail
+ROOT=$(CDPATH='' cd "$(dirname "$0")/.." && pwd -P)
+state=${XDG_STATE_HOME:-$HOME/.local/state}/omega
+runtime=${OMEGA_RUNTIME:-$state/compiler/bin/bl}
+frontend=${OMEGA_FRONTEND:-$(cat "$HOME/.config/omega/frontend.path")}
+release=$(sed -n 's/^ *:bl "\([^"]*\)".*/\1/p' "$ROOT/env.bl")
+test -x "$runtime" || { echo 'Prepare the account compiler with bin/omega-build .#frontend-compiler --out-link ~/.local/state/omega/compiler' >&2; exit 2; }
+test -f "$frontend/.omega-managed"
+test "$(cat "$frontend/share/omega/beam-lisp-release")" = "$release" || { echo 'Account frontend and compiler release must match.' >&2; exit 2; }
+export OMEGA_HOME="$ROOT" OMEGA_BL="$runtime" OMEGA_FRONTEND="$frontend"
+export OMEGA_BACKEND_PORT=${OMEGA_BACKEND_PORT:-8812}
+export OMEGA_PROVIDER=${OMEGA_PROVIDER:-deepseek}
+export ELIXIR_ERL_OPTIONS=${ELIXIR_ERL_OPTIONS:-'+S 2:2 +SDcpu 1:1 +SDio 1'}
+unset BL_USE
+"$ROOT/bin/bl" --cold run "$ROOT/scripts/account.bl" &
+child=$!
+exec python3 "$ROOT/scripts/account-proxy.py" --child "$child" --port "${PORT:?work supplies PORT}" \
+  --backend "$OMEGA_BACKEND_PORT" --owner "${OMEGA_OWNER_LOGIN:?account tailnet owner is required}"

@@ -41,3 +41,24 @@ cache tokens; second read all 5,435 and wrote zero (4 uncached input tokens each
 Codex's configured gateway rejects requests with HTTP 503, "no usable upstream
 credential". This is an upstream credential failure, not a model fallback.
 Provider wire/accounting tests passed: 79 assertions on v2026.10.
+
+** Saved task ownership
+- t-307: prepared merge 6022fa3 in /tmp/omega-merge retained and merged into the
+  canonical main. It carries the needed frontend-sandbox/document-assets fix.
+- t-311: preserve, complete and verify the Pocket debounce/conversation cache;
+  browser acceptance now passes with the actual newly compiled frontend.
+- t-316: phone poller, host device control, frontend preview selection and
+  opt-in native code loading integrated. Remote Android compilation and packaged
+  contract passed; signed Pocket harness 0.1.4 uses the existing certificate.
+- t-303: Enchant consolidation overlaps the active "Migrating Datoms" Codex
+  session (01a19cf5-69b0-7ae1-91a7-051371028744). Its main changed during this
+  work, and its Datom/release qualification is still active. Preserve the old
+  live-fixes branch; do not merge over, relocate or publish that session's work.
+
+** Recovery and memory
+A copied account store reopens on v2026.10 with all 40 tasks; t-303/t-307/t-311
+become idle and their unknown interrupted tool effects are repaired without
+replay. The restored host reports about 1.18 GB BEAM memory (about 1.14 GB after
+an eval), compared with the older checkout's recorded 7.17 GB investigation.
+These are different uptimes, not a controlled benchmark. Production remains
+separate from this /tmp world and port 8792 acceptance.

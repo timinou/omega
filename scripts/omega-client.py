@@ -31,6 +31,8 @@ def main():
     parser.add_argument('--offline', action='store_true', help='Start an offline shared host if absent')
     parser.add_argument('--no-start', action='store_true', help='Require a running shared host')
     parser.add_argument('--json', action='store_true')
+    parser.add_argument('--provider', choices=['deepseek', 'claude', 'codex'], help='Model provider for a new task')
+    parser.add_argument('--model', help='Model for a new task; its provider is inferred')
     parser.add_argument('words', nargs='*', help='Goal, or: list | read ADDRESS | answer MSG TEXT | say TASK TEXT | steer TASK TEXT | cancel TASK | attach DIR')
     args = parser.parse_args()
     if not args.words:
@@ -87,7 +89,8 @@ def main():
         ident = Path(cwd).name + '-' + hashlib.sha256(cwd.encode()).hexdigest()[:8]
         intent('place/put', text='{:id ' + json.dumps(ident) + ' :name ' + json.dumps(Path(cwd).name) + ' :root ' + json.dumps(cwd) + '}')
         goal = ' '.join(words).strip()
-        result = intent('task/open', goal=goal, title=goal.split('\n')[0], path='place:' + ident, cwd=cwd)
+        run = {k: v for k, v in {'provider': args.provider, 'model': args.model}.items() if v}
+        result = intent('task/open', goal=goal, title=goal.split('\n')[0], path='place:' + ident, cwd=cwd, run=run)
     print(json.dumps(result, ensure_ascii=False) if args.json else result.get('text', result.get('path', json.dumps(result))))
     return 0
 

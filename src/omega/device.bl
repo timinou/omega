@@ -101,7 +101,7 @@
                       :else (do (Process/sleep 100)
                                 (let [q (drain! id)]
                                   (if (seq q) q (recur []))))))]
-     (swap! REGISTRY assoc-in [id :seen] (now))
+     (locked (fn [] (swap! REGISTRY assoc-in [id :seen] (now))))
      (poll-reply cmds generations host-dev))))
 
 (defn devices
@@ -126,15 +126,15 @@
        (throw (ex-info (str op " needs dev mode on the phone (switch or dev APK) and on this host (OMEGA_DEV=1)") {:op op})))
      (let [cid (str "c-" (erlang/unique_integer (list :positive)))
            deadline (+ (now) timeout-ms)]
-       (swap! REGISTRY enqueue id {:id cid :op op :args args})
+       (locked (fn [] (swap! REGISTRY enqueue id {:id cid :op op :args args})))
        (loop []
          (if-let [r (get-in @REGISTRY [id :results cid])]
-           (do (swap! REGISTRY update-in [id :results] dissoc cid)
+           (do (locked (fn [] (swap! REGISTRY update-in [id :results] dissoc cid)))
                (if (get r "error")
                  (throw (ex-info (str "device: " (get r "error")) {:op op}))
                  (get r "value")))
            (if (> (now) deadline)
-             (do (swap! REGISTRY update-in [id :queue] (fn [q] (vec (remove (fn [c] (= cid (:id c))) q))))
+             (do (locked (fn [] (swap! REGISTRY update-in [id :queue] (fn [q] (vec (remove (fn [c] (= cid (:id c))) q))))))
                  (throw (ex-info (str "device " id " did not answer " op " within " timeout-ms " ms; is Pocket in the foreground?") {})))
              (do (Process/sleep 100) (recur)))))))))
 
