@@ -175,8 +175,9 @@
                  (str header (when-not (empty? text) (str (String/replace text "\n" newline) newline))
                       (:org/close attrs (str "#+end_src" newline)))))
      (fail :unsupported-block-type))) (:org/suffix attrs ""))))
+(defn- source-key? [key] (and (keyword? key) (starts-with? (pr-str key) ":org/")))
 (defn- source-attrs [attrs]
- (into {} (filter (fn [[key _]] (starts-with? (str key) ":org/")) attrs)))
+ (into {} (filter (fn [[key _]] (source-key? key)) attrs)))
 (defn validate-transition
  "A host checks the proposed document against its committed typed snapshot.
   Generic document metadata edits cannot replace the source anchoring itself."
@@ -199,7 +200,7 @@
                      (update b :attrs #(merge protected %)))
                     ;; Duplicating a block copies its visible content, not IDs,
                     ;; drawers, affiliated declarations or a forged raw payload.
-                    (update b :attrs #(into {} (remove (fn [[key _]] (starts-with? (str key) ":org/")) %)))))
+                    (update b :attrs #(into {} (remove (fn [[key _]] (source-key? key)) %)))))
                   (:blocks document))
        current (into {} (map (fn [b] [(:id b) b]) resolved))]
   (when (some #(or (:parent %) (not= "body" (:slot % "body"))) resolved) (fail :unsupported-nesting))
