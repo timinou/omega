@@ -5,7 +5,7 @@
   (is (= source (canvas/write-source doc)))
   (is (= (String/replace source "Body text." "مرحبا") (canvas/write-source next)))
   (is (= (String/replace source "[ ]" "[X]") (canvas/write-source (assoc-in doc [:blocks 3 :attrs :checked] true))))
-  (is (thrown? (canvas/write-source (assoc-in doc [:meta :org/tail] ""))))
+  (is (thrown? (canvas/write-source (assoc-in doc [:meta :org/tail] "Tampered tail"))))
   (is (= source (canvas/write-source (canvas/read-source source "another-session"))))))
 (deftest empty-and-unterminated-source-stay-exact
  (doseq [text ["" "#+title: Empty\n" "No trailing newline" "* Heading\nText\n\n"]]
