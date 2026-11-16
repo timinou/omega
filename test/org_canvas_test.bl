@@ -31,10 +31,10 @@
 (deftest new-work-identities-are-stable-within-an-editor-and-fresh-after-source-reset
  (let [heading (fn [id] (-> (canvas/read-source "" id) (assoc-in [:blocks 0 :type] "heading")
                            (assoc-in [:blocks 0 :attrs :level] 1) (assoc-in [:blocks 0 :text] "TODO New work")))
-       first (canvas/write-source (heading "first-editor") "shared-document")
-       second (canvas/write-source (heading "second-editor") "shared-document")
+       first-source (canvas/write-source (heading "first-editor") "shared-document")
+       second-source (canvas/write-source (heading "second-editor") "shared-document")
        id (fn [text] (second (re-find #":ID: ([^\n]+)" text)))]
-  (is (string? (id first)))
-  (is (= first (canvas/write-source (heading "first-editor") "shared-document")))
-  (is (not= (id first) (id second)))
-  (is (= first (canvas/write-source (canvas/read-source first "third-editor") "shared-document")))))
+  (is (string? (id first-source)))
+  (is (= first-source (canvas/write-source (heading "first-editor") "shared-document")))
+  (is (not= (id first-source) (id second-source)))
+  (is (= first-source (canvas/write-source (canvas/read-source first-source "third-editor") "shared-document")))))

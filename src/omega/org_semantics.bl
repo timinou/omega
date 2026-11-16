@@ -26,7 +26,7 @@
          (assoc out key (cond-> {:date date :stamp (subs raw 0 (min 2000 (count raw)))
                                  :stamp-truncated? (> (count raw) 2000) :row (+ offset index)
                                  :valid-date? (boolean (and date (= :ok (elem (Date/from_iso8601 date) 0))))}
-                        repeater (assoc :repeater repeater) time (assoc :time time)))))) out ["SCHEDULED" "DEADLINE" "CLOSED"])))
+                        repeater (assoc :repeater repeater) time (assoc :time time))))))) out ["SCHEDULED" "DEADLINE" "CLOSED"])))
   {} (planning-rows lines)))
 (defn read-source
  ([text] (read-source text (merge default-profile (profile/read-source text))))
