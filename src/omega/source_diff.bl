@@ -1,0 +1,22 @@
+;; Portable line comparison for history/review. Pure; no rendering or IO.
+(ns omega.source-diff)
+(defn difference
+ "One conservative changed range between exact common prefix/suffix lines.
+  Ranges are zero-based/end-exclusive; replacing before.lines with after.lines
+  reconstructs the new source exactly, including newline style and final EOF."
+ ([before after] (difference before after 3))
+ ([before after context]
+ (when-not (and (string? before) (string? after) (integer? context) (<= 0 context 20))
+  (throw (ex-info "Compare source strings with at most 20 context lines." {:kind :omega/source-diff})))
+ (let [old (vec (String/split before "\n")) next (vec (String/split after "\n"))
+       common (min (count old) (count next))
+       prefix (loop [at 0] (if (and (< at common) (= (nth old at) (nth next at))) (recur (inc at)) at))
+       suffix (loop [at 0]
+               (if (and (< at (- common prefix)) (= (nth old (- (count old) at 1)) (nth next (- (count next) at 1))))
+                (recur (inc at)) at))
+       old-end (- (count old) suffix) new-end (- (count next) suffix)]
+  {:equal? (= before after) :prefix-lines prefix :suffix-lines suffix
+   :before {:start prefix :end old-end :lines (subvec old prefix old-end) :total-lines (count old)}
+   :after {:start prefix :end new-end :lines (subvec next prefix new-end) :total-lines (count next)}
+   :context {:before (subvec old (max 0 (- prefix context)) prefix)
+             :after (subvec next new-end (min (count next) (+ new-end context)))}})))

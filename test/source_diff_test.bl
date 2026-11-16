@@ -1,0 +1,25 @@
+(ns omega.source-diff-test (:require [omega.source-diff :as diff]))
+(defn rebuild [before delta]
+ (let [lines (vec (String/split before "\n"))]
+  (join "\n" (concat (subvec lines 0 (get-in delta [:before :start])) (get-in delta [:after :lines])
+                     (subvec lines (get-in delta [:before :end]))))))
+(deftest changed-ranges-reconstruct-exact-org-bytes
+ (doseq [[before after] [["A\nB\nC\n" "A\nA new B\nC\n"]
+                        ["A\nC" "A\nB\nC"] ["A\nB\nC" "A\nC"]
+                        ["" "A\n"] ["A\n" ""] ["A\n" "A"]
+                        ["#+title: 🍃\r\n* Café\r\n" "#+title: 🍃\n* Café\n"]
+                        ["A\nB\nC\nD\nE" "A\nChanged B\nC\nChanged D\nE"]
+                        ["A\nB" "A\nB"]]]
+  (let [delta (diff/difference before after)]
+   (is (= after (rebuild before delta)))
+   (is (= (= before after) (:equal? delta))))))
+(deftest comparisons-retain-locations-context-and-final-newlines
+ (let [delta (diff/difference "Same\nBefore\nTail\n" "Same\nAfter\nTail\n" 1)]
+  (is (= 1 (get-in delta [:before :start])))
+  (is (= 2 (get-in delta [:before :end])))
+  (is (= ["Before"] (get-in delta [:before :lines])))
+  (is (= ["After"] (get-in delta [:after :lines])))
+  (is (= ["Same"] (get-in delta [:context :before])))
+  (is (= ["Tail"] (get-in delta [:context :after]))))
+ (is (not (:equal? (diff/difference "A\n" "A"))))
+ (is (thrown? (diff/difference "a" "b" 21))))
