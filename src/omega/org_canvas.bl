@@ -175,6 +175,14 @@
                  (str header (when-not (empty? text) (str (String/replace text "\n" newline) newline))
                       (:org/close attrs (str "#+end_src" newline)))))
      (fail :unsupported-block-type))) (:org/suffix attrs ""))))
+(defn- source-attrs [attrs]
+ (into {} (filter (fn [[key _]] (starts-with? (str key) ":org/")) attrs)))
+(defn validate-transition
+ "A host checks the proposed document against its committed typed snapshot.
+  Generic document metadata edits cannot replace the source anchoring itself."
+ [before after]
+ (when-not (= (source-attrs (:meta before)) (source-attrs (:meta after))) (fail :protected-source))
+ after)
 (defn write-source
  "Serialize ordinary Org, restoring source metadata after presentation-only
   type changes. A host document ID also materializes stable IDs for new work."
@@ -185,7 +193,13 @@
        baseline (into {} (map (fn [b] [(:id b) b]) (:blocks before)))
        resolved (mapv (fn [b]
                    (if-let [old (get baseline (:id b))]
-                    (update b :attrs #(merge (into {} (filter (fn [[k _]] (starts-with? (str k) ":org/")) (:attrs old))) %)) b))
+                    (let [protected (source-attrs (:attrs old))]
+                     (doseq [[key value] (source-attrs (:attrs b))]
+                      (when-not (= value (get protected key ::absent)) (fail :protected-source)))
+                     (update b :attrs #(merge protected %)))
+                    ;; Duplicating a block copies its visible content, not IDs,
+                    ;; drawers, affiliated declarations or a forged raw payload.
+                    (update b :attrs #(into {} (remove (fn [[key _]] (starts-with? (str key) ":org/")) %)))))
                   (:blocks document))
        current (into {} (map (fn [b] [(:id b) b]) resolved))]
   (when (some #(or (:parent %) (not= "body" (:slot % "body"))) resolved) (fail :unsupported-nesting))

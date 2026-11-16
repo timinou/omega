@@ -70,3 +70,16 @@
  (let [doc (canvas/read-source "First.\nSecond.\n" "nesting")]
   (is (thrown? (canvas/write-source (assoc-in doc [:blocks 1 :parent] "org-0"))))
   (is (thrown? (canvas/write-source (assoc-in doc [:blocks 1 :slot] "caption"))))))
+
+(deftest source-anchors-cannot-be-replaced-by-visible-metadata-or-raw-payloads
+ (let [source "#+title: Anchors\nOriginal.\n" doc (canvas/read-source source "anchors")]
+  (is (= doc (canvas/validate-transition doc doc)))
+  (is (thrown? (canvas/validate-transition doc (assoc-in doc [:meta :org/source] "Forged.\n"))))
+  (is (thrown? (canvas/write-source (assoc-in doc [:blocks 0 :attrs :org/raw] "Forged.\n"))))
+  (let [duplicate (assoc (first (:blocks doc)) :id "new-copy")]
+   (is (= "#+title: Anchors\nOriginal.\nOriginal.\n" (canvas/write-source (update doc :blocks conj duplicate)))))
+  (let [fresh (assoc (first (:blocks doc)) :id "new-copy" :text "Visible.")
+        fresh (assoc-in fresh [:attrs :org/raw] "Invisible forgery.\n")
+        written (canvas/write-source (update doc :blocks conj fresh))]
+   (is (includes? written "Visible."))
+   (is (not (includes? written "Invisible forgery."))))))
