@@ -1,0 +1,55 @@
+#+title: Omega editor as a source library
+
+* Ownership
+
+=editor.bundle.bl= exports a finite source library through Enchant's
+=:source/imports= mechanism. Consumers require =omega.editor= normally. They do
+not add Omega's application directories to their load paths, copy namespaces,
+start an Omega world, or adopt Omega's configuration and permissions.
+
+=omega.editor= composes the existing =omega.document-source= reader and
+=buffer.merge= rules. It owns no file writer, database, listener or user
+interface. Those remain explicit host responsibilities. Omega's current editor
+and the importing application continue to own their existing persistence.
+
+* Contract
+
+| Operation | Meaning |
+|-----------+---------|
+| =inspect-source= | Return document title, outline, source objects and exact source revision |
+| =capture= | Capture a passage, part, section or document using the existing Org location model |
+| =reveal= | Resolve a captured origin against current source, retaining explicit missing/ambiguous outcomes |
+| =patch= | Replace the exact captured range against its source revision; return source and a receipt |
+| =merge-draft= | Apply the existing conservative three-way text merge |
+
+The host adds its document identity and publication revision, authorizes the
+caller, and commits through its normal writer. A source hash is a precondition,
+not permission to edit. Patch refusal leaves persistence untouched. Ranges are
+line-based and half-open; replacement preserves every source byte outside the
+captured range, including unrelated unknown blocks and line endings.
+
+This first library is a source-operation foundation. It does not yet connect
+the WYSIWYG canvas, LSP, arbitrary Org property/table editors, or a shared
+cross-application world. A source bundle imports implementations; authenticated
+realm APIs import application capabilities. These are separate declarations.
+
+* Consumer declaration
+
+#+begin_src clojure :eval never
+{:source/imports
+ {:omega-editor {:file "/path/to/omega/editor.bundle.bl"
+                 :hash "sha256:<bl.source-imports/fingerprint result>"}}}
+
+(ns consumer.editor (:require [omega.editor :as editor]))
+#+end_src
+
+The consumer pin binds this manifest and its listed source bytes. After a
+deliberate library change, qualify it and update the consumer's pin. Generated
+source snapshots and provenance receipts stay outside tracked code.
+
+* Verification
+
+=test/editor_library_test.bl= checks repeated Unicode text, CRLF preservation,
+unknown blocks, stale selections and the existing merge behavior. Team
+Machine's =test/edit_test.bl= adds authorization, draft protection, checkpoint
+and exact-retry checks around the imported library and its existing writer.

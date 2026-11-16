@@ -1,0 +1,36 @@
+;; Reusable source editing over Omega's existing Org locations and merge rules.
+;; This library owns no world, database, listener, principal or application UI.
+(ns omega.editor
+ (:require [omega.document-source :as source] [buffer.merge :as merge]))
+(def FORMAT "omega.editor/1")
+(defn revision [text]
+ (str "sha256:" (Base/encode16 (crypto/hash :sha256 text) (list (tuple :case :lower)))))
+(defn inspect-source [text]
+ (let [index (source/index text)]
+  {:format FORMAT :revision (revision text) :title (trim (:title index))
+   :org-id (:org-id index) :outline (:outline index) :objects (:blocks index)}))
+(defn capture [text target]
+ (assoc (source/capture text target) :format FORMAT :revision (revision text)))
+(defn reveal [text origin] (source/reveal text origin))
+(defn- refuse [reason]
+ (throw (ex-info "Source edit refused; retain the attempted text."
+                {:kind :omega/editor :reason reason})))
+(defn patch
+ "Replace one captured source range against exact source bytes. The host
+  commits the returned source through its existing authorized writer."
+ [text origin replacement]
+ (when-not (and (= FORMAT (:format origin)) (= (:revision origin) (revision text)))
+  (refuse :stale-source))
+ (when-not (and (string? replacement) (<= (erlang/byte_size replacement) 2000000))
+  (refuse :replacement))
+ (let [lines (source/lines text) start (:start origin) end (:end origin)]
+  (when-not (and (integer? start) (integer? end) (<= 0 start) (< start end) (<= end (count lines))
+                 (= (:text origin) (source/text-at lines start end)))
+   (refuse :target-changed))
+  (let [from (reduce + 0 (map #(inc (erlang/byte_size %)) (subvec lines 0 start)))
+        to (+ from (erlang/byte_size (:text origin)))
+        next (str (erlang/binary_part text 0 from) replacement
+                  (erlang/binary_part text to (- (erlang/byte_size text) to)))]
+   {:source next :receipt {:format FORMAT :basis (:revision origin) :revision (revision next)
+                          :target (select-keys origin [:scope :start :end :anchor])}})))
+(defn merge-draft [base local remote] (merge/merge-text base local remote))

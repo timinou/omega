@@ -1,0 +1,14 @@
+(ns omega.editor-library-test (:require [omega.editor :as editor]))
+(def original "#+title: Shared\r\n\r\n* A\r\nSame 🌿\r\n\r\n* B\r\nSame 🌿\r\n\r\n#+begin_unknown\r\nKeep exactly.\r\n#+end_unknown\r\n")
+(deftest targeted-source-changes-preserve-repeated-text-and-unknown-source
+ (let [origin (editor/capture original {:scope "passage" :start 6 :end 7})
+       result (editor/patch original origin "Changed 🌿\r")]
+  (is (= "Shared" (:title (editor/inspect-source original))))
+  (is (= (str "#+title: Shared\r\n\r\n* A\r\nSame 🌿\r\n\r\n* B\r\nChanged 🌿\r\n\r\n#+begin_unknown\r\nKeep exactly.\r\n#+end_unknown\r\n") (:source result)))
+  (is (= (editor/revision original) (get-in result [:receipt :basis])))
+  (is (= (editor/revision (:source result)) (get-in result [:receipt :revision])))
+  (is (thrown? (editor/patch (str original "Newer") origin "Attempt")))
+  (is (thrown? (editor/patch original (assoc origin :text "different") "Attempt")))) )
+(deftest a-draft-uses-the-existing-conservative-omega-merge
+ (is (= {:ok "FIRST middle LAST"} (editor/merge-draft "first middle last" "FIRST middle last" "first middle LAST")))
+ (is (:error (editor/merge-draft "ab" "aXb" "aYb"))))
