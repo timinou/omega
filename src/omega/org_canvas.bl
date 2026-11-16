@@ -145,11 +145,12 @@
        reread (when-not (contains? #{"code" "org-retained"} type) (inline/read-text text (:id block)))
        annotated? (and (not unchanged?) reread
                       (not= [(:text block) (mark-data (:marks block))] [(:text reread) (mark-data (:marks reread))]))
+       annotation (when annotated? (edn/write-string (mark-data (:marks block))))
        text (if annotated? (:text block) text)
        prefix (if unchanged? (:org/prefix attrs "")
                  (String/replace (:org/prefix attrs "") (Regex/compile! "(?im)^#\\+attr_enchant: +:inline +[^\\r\\n]*\\r?\\n?") ""))
-       prefix (str prefix (when annotated? (str "#+attr_enchant: :inline " (pr-str (mark-data (:marks block))) newline)))]
-  (when (and annotated? (> (erlang/byte_size (pr-str (mark-data (:marks block)))) 65536)) (fail :inline-annotation-size))
+       prefix (str prefix (when annotated? (str "#+attr_enchant: :inline " annotation newline)))]
+  (when (and annotated? (> (erlang/byte_size annotation) 65536)) (fail :inline-annotation-size))
   (when-not (and (<= (count (:wraps block)) 1)
                 (every? #(and (= "text/callout" (:function %)) (contains? #{"note" "warning"} (get-in % [:args :tone]))) (:wraps block)))
    (fail :unsupported-block-function))

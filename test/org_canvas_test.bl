@@ -130,3 +130,17 @@
   (is (= (mapv #(str "org-" %) (range 2048)) (mapv :id (:blocks document))))
   (is (= source (canvas/write-source document)))
   (is (= (String/replace source "Paragraph 2047." "A changed last paragraph.") (canvas/write-source edited)))))
+
+
+(deftest large-inline-annotations-keep-full-link-data
+ (let [href (str "https://example.test/" (apply str (repeat 7000 "a")) "#{literal}")
+       original (canvas/read-source "Word.\n" "long-link")
+       mark {:from 1 :to 2 :call {:id "long-link" :function "text/link" :version 1 :args {:href href}}}
+       edited (assoc-in original [:blocks 0 :marks] [mark {:from 0 :to 1 :call {:id "partial-bold" :function "text/bold" :version 1 :args {}}}])
+       source (canvas/write-source edited) reread (canvas/read-source source "reread")]
+  (is (includes? source "#+attr_enchant: :inline "))
+  (is (= "Word." (get-in reread [:blocks 0 :text])))
+  (is (= href (get-in reread [:blocks 0 :marks 0 :call :args :href])))
+  (is (= 1 (get-in reread [:blocks 0 :marks 0 :from])))
+  (is (= 2 (get-in reread [:blocks 0 :marks 0 :to])))
+  (is (= source (canvas/write-source reread)))))
