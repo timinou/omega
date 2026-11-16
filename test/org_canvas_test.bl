@@ -111,3 +111,22 @@
   (is (= (str "#+icon: leaf\r\n" text) (canvas/write-source (assoc-in doc [:meta :icon] "leaf")))))
  (is (thrown? (source/write-keyword "Body." "invalid:key" "Value")))
  (is (thrown? (source/write-keyword "Body." "title" "Injected\nline"))))
+
+(deftest block-numbering-keeps-its-contract-through-code-and-retained-code
+ (let [source "First.\n#+begin_src text\nLiteral.\n#+end_src\nSecond.\n#+begin_custom\nRetained.\n#+end_custom\nThird.\n"
+       document (canvas/read-source source "numbering")]
+  (is (= ["org-0" "org-code-1" "org-1" "org-2" "org-3"] (mapv :id (:blocks document))))
+  (is (= source (canvas/write-source document))))
+ (let [source (str "#+begin_src text\n" (apply str (repeat 66000 "x")) "\n#+end_src\nAfter.\n")
+       document (canvas/read-source source "retained-code")]
+  (is (= ["org-retained" "paragraph"] (mapv :type (:blocks document))))
+  (is (= ["org-code-0" "org-1"] (mapv :id (:blocks document))))
+  (is (= source (canvas/write-source document)))))
+(deftest many-short-paragraphs-keep-identities-and-exact-unchanged-source
+ (let [source (join "" (for [index (range 2048)] (str "Paragraph " index ".\n\n")))
+       document (canvas/read-source source "many-paragraphs")
+       edited (assoc-in document [:blocks 2047 :text] "A changed last paragraph.")]
+  (is (= 2048 (count (:blocks document))))
+  (is (= (mapv #(str "org-" %) (range 2048)) (mapv :id (:blocks document))))
+  (is (= source (canvas/write-source document)))
+  (is (= (String/replace source "Paragraph 2047." "A changed last paragraph.") (canvas/write-source edited)))))

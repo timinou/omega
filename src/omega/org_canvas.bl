@@ -64,13 +64,13 @@
  (let [lines (vec (String/split prefix #"(?<=\n)"))
        at (first (keep-indexed #(when (match "^#\\+(name|caption|attr_[A-Za-z_]+):" %2) %1) lines))]
   (if at [(join "" (subvec lines 0 at)) (join "" (subvec lines at))] [prefix ""])))
-(defn- block-id [blocks] (str "org-" (count (remove #(= "code" (:type %)) blocks))))
+(defn- block-id [index] (str "org-" index))
 (defn read-source
  "Create an ephemeral canvas projection. Metadata, drawers and unknown blocks
   are retained verbatim. Editable block IDs belong to this projection session."
  [source id]
  (let [lines (vec (String/split source "\n")) count-lines (count lines)]
-  (loop [row 0 prefix "" blocks [] drawer? false]
+  (loop [row 0 prefix "" blocks [] drawer? false next-block 0]
    (if (>= row count-lines)
     (let [[header affiliated] (if (seq blocks) (prefix-parts (get-in blocks [0 :attrs :org/prefix])) [source ""])]
      {:schema 2 :id id :meta {:title (source/keyword-value source "title" "Untitled")
@@ -96,30 +96,33 @@
               close (str (nth lines stop) (when (< to count-lines) "\n"))
               attrs (merge {:org/open raw :org/close close}
                       (when (= type "code") {:language (second source-header)})
-                      (when (= type "callout") {:icon "lightbulb" :tone (if (= kind "warning") "rose" "amber")}))]
-         (recur to "" (conj blocks (block (if (= type "code") (str "org-code-" row) (block-id blocks)) type text attrs prefix chunk ending)) false))
-        (recur to "" (conj blocks (block (block-id blocks) "org-retained" ""
+                      (when (= type "callout") {:icon "lightbulb" :tone (if (= kind "warning") "rose" "amber")}))
+              typed (block (if (= type "code") (str "org-code-" row) (block-id next-block)) type text attrs prefix chunk ending)]
+         ;; Oversized code becomes retained source and participates in the old
+         ;; non-code numbering contract. Count the emitted type, not the header.
+         (recur to "" (conj blocks typed) false (if (= "code" (:type typed)) next-block (inc next-block))))
+        (recur to "" (conj blocks (block (block-id next-block) "org-retained" ""
           {:org/kind kind :org/label (if configuration? "Document configuration" (str "Org " kind " block"))}
-          prefix chunk ending)) false)))
+          prefix chunk ending)) false (inc next-block))))
       (starts-with? (trim line) "|")
       (let [to (loop [at (inc row)]
                  (if (and (< at count-lines) (starts-with? (trim (nth lines at)) "|")) (recur (inc at)) at))
             chunk (str (join "\n" (subvec lines row to)) (when (< to count-lines) "\n"))]
-       (recur to "" (conj blocks (block (block-id blocks) "org-retained" ""
-         {:org/kind "table" :org/label "Org table"} prefix chunk ending)) false))
+       (recur to "" (conj blocks (block (block-id next-block) "org-retained" ""
+         {:org/kind "table" :org/label "Org table"} prefix chunk ending)) false (inc next-block)))
       (or drawer? (match "^ *:PROPERTIES: *$" line) (match "^ *:LOGBOOK: *$" line))
       (if (= "heading" (get-in (last blocks) [:attrs :org/retained-type] (:type (last blocks))))
        (recur (inc row) "" (update-in blocks [(dec (count blocks)) :attrs :org/suffix] #(str % prefix raw))
-              (not (some? (match "^ *:END: *$" line))))
-       (recur (inc row) (str prefix raw) blocks (not (some? (match "^ *:END: *$" line)))))
+              (not (some? (match "^ *:END: *$" line))) next-block)
+       (recur (inc row) (str prefix raw) blocks (not (some? (match "^ *:END: *$" line))) next-block))
       (and (= "heading" (get-in (last blocks) [:attrs :org/retained-type] (:type (last blocks)))) (match "^ *(SCHEDULED:|DEADLINE:|CLOSED:)" line))
-      (recur (inc row) "" (update-in blocks [(dec (count blocks)) :attrs :org/suffix] #(str % prefix raw)) false)
+      (recur (inc row) "" (update-in blocks [(dec (count blocks)) :attrs :org/suffix] #(str % prefix raw)) false next-block)
       (or (blank? line) (starts-with? (trim line) "#") (starts-with? (trim line) "|")
           (match "^ *(SCHEDULED:|DEADLINE:|CLOSED:)" line))
-      (recur (inc row) (str prefix raw) blocks false)
+      (recur (inc row) (str prefix raw) blocks false next-block)
       :else
       (let [[type text attrs] (classify line)]
-       (recur (inc row) "" (conj blocks (block (block-id blocks) type text attrs prefix raw ending)) false))))))))
+       (recur (inc row) "" (conj blocks (block (block-id next-block) type text attrs prefix raw ending)) false (inc next-block)))))))))
 (defn- marked [block]
  (if (empty? (:marks block)) (:text block)
  (let [text (:text block) points (vec (unicode/characters_to_list text)) marks (:marks block)
