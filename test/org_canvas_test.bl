@@ -91,6 +91,7 @@
        expected (-> text (String/replace "Native 🌿" "مرحبا 🌿") (String/replace "#+ICON: leaf" "#+ICON: folder"))
        written (canvas/write-source edited) reread (canvas/read-source written "rebuilt")]
   (is (= "Native 🌿" (get-in doc [:meta :title])))
+  (is (= "Native 🌿" (:title (source/index text))))
   (is (= "leaf" (get-in doc [:meta :icon])))
   (is (= text (canvas/write-source doc)))
   (is (= expected written))

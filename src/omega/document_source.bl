@@ -41,8 +41,7 @@
      :org-id (let [limit (or (some #(when (not= :prose (:kind %)) (:from %)) bs) (count ls))
                    drawer (first (filter #(= ":PROPERTIES:" (str/upper-case (str/trim (nth ls %)))) (range limit)))]
                (when drawer (get (properties ls drawer) "ID")))
-     :title (or (some #(when (= :prose (:kind %))
-                        (some (fn [i] (match-value #"(?i)^#\+TITLE:\s*(.*)$" (nth ls i))) (range (:from %) (:to %)))) bs) "Untitled")}))
+     :title (keyword-value text "title" "Untitled")}))
 (defn heading-at [idx row] (last (filter #(and (<= (:row %) row) (< row (:end %))) (:outline idx))))
 (defn- block-at [idx row] (first (filter #(and (<= (:from %) row) (< row (:to %))) (:blocks idx))))
 (defn- anchor-for [idx scope row block]
