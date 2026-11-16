@@ -7,7 +7,7 @@
 (defn- keyword-entries [text key]
  (when-not (and (string? key) (re-matches #"[A-Za-z_]+" key))
   (throw (ex-info "Use an Org keyword name." {:kind :omega/org-keyword})))
- (let [ls (lines text) pattern (Regex/compile! (str "^(#\\+" key ":[ \\t]*)([^\\r\\n]*)(\\r?)$") "i")]
+ (let [ls (vec (String/split text "\n")) pattern (Regex/compile! (str "^(#\\+" key ":[ \\t]*)([^\\r\\n]*)(\\r?)$") "i")]
   (vec (for [span (sp/spans ls :org {:headings? true}) :when (= :prose (:kind span))
              row (range (:from span) (:to span))
              :let [found (Regex/run pattern (nth ls row))] :when found]
@@ -24,8 +24,8 @@
   (throw (ex-info "Use a single-line Org keyword value." {:kind :omega/org-keyword})))
  (if-let [entry (last (keyword-entries text key))]
   (if (= value (:value entry)) text
-   (str/join "\n" (assoc (lines text) (:row entry) (str (:prefix entry) value (:ending entry)))))
-  (let [first-line (first (lines text)) ending (if (str/ends-with? first-line "\r") "\r\n" "\n")]
+   (str/join "\n" (assoc (vec (String/split text "\n")) (:row entry) (str (:prefix entry) value (:ending entry)))))
+  (let [first-line (or (first (String/split text "\n")) "") ending (if (str/ends-with? first-line "\r") "\r\n" "\n")]
    (str "#+" (str/lower-case key) ": " value ending text))))
 (defn properties [ls row]
   (let [start (first (drop-while #(or (str/blank? (nth ls %)) (re-find #"(?i)^\s*(?:SCHEDULED|DEADLINE|CLOSED):" (nth ls %))) (range row (count ls))))
