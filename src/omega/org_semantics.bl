@@ -1,0 +1,39 @@
+;; Data-only semantic Org reader. Profiles extend interpretation, not syntax.
+(ns omega.org-semantics (:require [omega.document-source :as source] [clojure.re]))
+(def default-profile
+ {:types #{"task" "project"} :open #{"TODO" "NEXT" "DOING" "WAIT" "REVIEW"} :done #{"DONE" "DROP"}})
+(defn- date-at [lines key]
+ (some (fn [line] (second (re-find (Regex/compile! (str key ": *[<\\[]([0-9]{4}-[0-9]{2}-[0-9]{2})")) line))) lines))
+(defn read-source
+ ([text] (read-source text default-profile))
+ ([text profile]
+ (let [index (source/index text) lines (:lines index)
+       workflows (some #(when-let [m (re-find #"(?i)^#\+TODO: +(.*)$" %)] (second m)) lines)
+       words (when workflows (String/split workflows #" +"))
+       divider (when words (first (keep-indexed #(when (= "|" %2) %1) words)))
+       open (if divider (set (take divider words)) (:open profile))
+       done (if divider (set (drop (inc divider) words)) (:done profile))
+       headings (:outline index)
+       rows (mapv (fn [h]
+        (let [properties (source/properties lines (inc (:row h)))
+              title (trim (String/replace (nth lines (:row h)) #"^\*+ +" "")) keyword (first (String/split title #" +"))
+              state (when (contains? (into open done) keyword) keyword)
+              title (if state (subs title (inc (count state))) title)
+              tag-match (re-find #" +(:[A-Za-z0-9_@#%:-]+:) *$" title)
+              tags (if tag-match (set (remove empty? (String/split (second tag-match) ":"))) #{})
+              title (if tag-match (trim (String/replace title (first tag-match) "")) title)
+              kind (or (get properties "TYPE") (get properties "KIND") (when (contains? tags "project") "project") (when state "task"))
+              next-heading (first (filter #(> (:row %) (:row h)) headings))
+              body-end (or (:row next-heading) (:end h))
+              body (subvec lines (inc (:row h)) body-end)]
+         {:id (get properties "ID") :type kind :recognized? (contains? (:types profile) kind)
+          :title title :state state :done? (contains? done state) :tags tags :properties properties
+          :scheduled (date-at body "SCHEDULED") :deadline (date-at body "DEADLINE")
+          :row (:row h) :end (:end h) :level (:level h)})) headings)
+       duplicates (set (for [[id n] (frequencies (keep :id rows)) :when (> n 1)] id))]
+  {:objects rows :workflow {:open open :done done}
+   :diagnostics (vec (concat
+    (for [row rows :when (and (:recognized? row) (blank? (:id row)))]
+     {:code :missing-id :row (:row row) :message "Add an ID property to edit this object across views."})
+    (for [row rows :when (contains? duplicates (:id row))]
+     {:code :duplicate-id :row (:row row) :id (:id row) :message "Org IDs must be unique within a document."})))})))

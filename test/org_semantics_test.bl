@@ -1,0 +1,17 @@
+(ns omega.org-semantics-test (:require [omega.org-semantics :as org]))
+(def source "#+TODO: READY ACTIVE | FINISHED\n* Launch :project:\n:PROPERTIES:\n:ID: launch\n:END:\n** ACTIVE Call client :sales:\nSCHEDULED: <2026-11-16 Mon> DEADLINE: <2026-11-20 Fri>\n:PROPERTIES:\n:ID: call\n:ASSIGNEE: alice\n:END:\n** FINISHED Done\n:PROPERTIES:\n:ID: done\n:END:\n#+begin_src org\n* TODO Not a task\n#+end_src\n")
+(deftest source-semantics-use-native-org
+ (let [parsed (org/read-source source) rows (:objects parsed)]
+  (is (= 3 (count rows)))
+  (is (= "project" (:type (first rows))))
+  (is (= "Call client" (:title (nth rows 1))))
+  (is (= "alice" (get-in rows [1 :properties "ASSIGNEE"])))
+  (is (= "2026-11-16" (:scheduled (nth rows 1))))
+  (is (= "2026-11-20" (:deadline (nth rows 1))))
+  (is (:done? (last rows)))
+  (is (empty? (:diagnostics parsed)))))
+(deftest profiles-and-diagnostics
+ (let [text "* Firm\n:PROPERTIES:\n:ID: firm\n:TYPE: organisation\n:END:\n* TODO Missing identity\n* TODO Duplicate\n:PROPERTIES:\n:ID: firm\n:END:\n"
+       parsed (org/read-source text (assoc org/default-profile :types #{"organisation" "task"}))]
+  (is (:recognized? (first (:objects parsed))))
+  (is (= #{:missing-id :duplicate-id} (set (map :code (:diagnostics parsed)))))))
