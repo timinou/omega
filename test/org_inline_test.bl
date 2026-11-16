@@ -25,3 +25,26 @@
   (is (= "warning" (get-in read [:blocks 0 :wraps 0 :args :tone])))
   (is (= written (canvas/write-source read)))
   (is (= "#+title: Notes\n\nPay attention.\n" (canvas/write-source (assoc-in read [:blocks 0 :wraps] []))))))
+
+(deftest partial-word-crossing-and-literal-syntax-use-readable-org-affiliations
+ (let [semantic (fn [block] [(:text block) (mapv (fn [m] [(:from m) (:to m) (select-keys (:call m) [:function :version :args])]) (:marks block))])
+       mark (fn [id from to function] {:from from :to to :call {:id id :function function :version 1 :args {}}})]
+  (doseq [marks [[(mark "part" 1 4 "text/bold")]
+                [(mark "bold" 0 4 "text/bold") (mark "cross" 2 6 "text/emphasis")]
+                [(mark "code" 0 6 "text/code") (mark "bold" 1 4 "text/bold")]]]
+   (let [doc (-> (canvas/read-source "abcdef.\r\n" "marks") (assoc-in [:blocks 0 :marks] marks))
+         written (canvas/write-source doc) reread (canvas/read-source written "again")]
+    (is (includes? written "#+attr_enchant: :inline "))
+    (is (= (semantic (first (:blocks doc))) (semantic (first (:blocks reread)))))
+    (is (= written (canvas/write-source reread)))
+    (let [plain (canvas/write-source (assoc-in reread [:blocks 0 :marks] []))]
+     (is (= "abcdef.\r\n" plain)))))
+  (let [doc (assoc-in (canvas/read-source "A sentence.\n" "literal") [:blocks 0 :text] "Keep *literal* markers.")
+        written (canvas/write-source doc)]
+   (is (includes? written "#+attr_enchant: :inline []"))
+   (is (= "Keep *literal* markers." (get-in (canvas/read-source written "literal-again") [:blocks 0 :text]))))))
+(deftest invalid-inline-annotations-are-retained-without-running-their-forms
+ (doseq [declaration ["(File/write! \"/tmp/should-not-exist\" \"no\")" "[{:from 0 :to 900 :function \"text/bold\" :version 1 :args {}}]"]]
+  (let [source (str "#+attr_enchant: :inline " declaration "\nText.\n") doc (canvas/read-source source "invalid")]
+   (is (= "org-retained" (get-in doc [:blocks 0 :type])))
+   (is (= source (canvas/write-source doc))))))
