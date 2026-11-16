@@ -4,6 +4,29 @@
 (defn lines [text] (vec (str/split text "\n")))
 (defn text-at [ls start end] (str/join "\n" (subvec ls start end)))
 (defn- match-value [pattern line] (second (re-find pattern (or line ""))))
+(defn- keyword-entries [text key]
+ (when-not (and (string? key) (re-matches #"[A-Za-z_]+" key))
+  (throw (ex-info "Use an Org keyword name." {:kind :omega/org-keyword})))
+ (let [ls (lines text) pattern (Regex/compile! (str "^(#\\+" key ":[ \\t]*)([^\\r\\n]*)(\\r?)$") "i")]
+  (vec (for [span (sp/spans ls :org {:headings? true}) :when (= :prose (:kind span))
+             row (range (:from span) (:to span))
+             :let [found (Regex/run pattern (nth ls row))] :when found]
+   {:row row :prefix (nth found 1) :value (str/trim (nth found 2)) :ending (nth found 3)}))))
+(defn keyword-value
+ "Read the last prose declaration, excluding code/results and retained blocks."
+ [text key fallback]
+ (if-let [entry (last (keyword-entries text key))] (:value entry) fallback))
+(defn write-keyword
+ "Patch only the effective prose keyword value, preserving surrounding bytes.
+  Absent declarations are prepended with the source's first line ending."
+ [text key value]
+ (when-not (and (string? value) (<= (erlang/byte_size value) 65536) (not (re-find #"[\r\n\x00]" value)))
+  (throw (ex-info "Use a single-line Org keyword value." {:kind :omega/org-keyword})))
+ (if-let [entry (last (keyword-entries text key))]
+  (if (= value (:value entry)) text
+   (str/join "\n" (assoc (lines text) (:row entry) (str (:prefix entry) value (:ending entry)))))
+  (let [first-line (first (lines text)) ending (if (str/ends-with? first-line "\r") "\r\n" "\n")]
+   (str "#+" (str/lower-case key) ": " value ending text))))
 (defn properties [ls row]
   (let [start (first (drop-while #(or (str/blank? (nth ls %)) (re-find #"(?i)^\s*(?:SCHEDULED|DEADLINE|CLOSED):" (nth ls %))) (range row (count ls))))
         boundary (when start (or (first (filter #(re-find #"^\*+ " (nth ls %)) (range (inc start) (count ls)))) (count ls)))

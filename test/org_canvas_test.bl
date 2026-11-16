@@ -1,4 +1,4 @@
-(ns omega.org-canvas-test (:require [omega.org-canvas :as canvas]))
+(ns omega.org-canvas-test (:require [omega.org-canvas :as canvas] [omega.document-source :as source]))
 (def source "#+title: Native 🌿\r\n\r\n* TODO Review :project:\r\n:PROPERTIES:\r\n:ID: review\r\n:END:\r\nSCHEDULED: <2026-11-16 Mon>\r\nBody text.\r\n\r\n#+begin_src beam-lisp\r\n(+ 1 1)\r\n#+end_src\r\n\r\n- [ ] Check this\r\n#+begin_unknown\r\nKeep everything\r\n#+end_unknown\r\n")
 (deftest native-projection-roundtrip-and-protected-source
  (let [doc (canvas/read-source source "native") next (assoc-in doc [:blocks 1 :text] "مرحبا")]
@@ -83,3 +83,30 @@
         written (canvas/write-source (update doc :blocks conj fresh))]
    (is (includes? written "Visible."))
    (is (not (includes? written "Invisible forgery."))))))
+
+(deftest visible-metadata-is-native-and-patches-only-effective-prose-declarations
+ (let [text "#+TITLE:  Earlier\r\n#+begin_src text\r\n#+title: Literal cell title\r\n#+icon: literal\r\n#+end_src\r\n#+TiTlE:\tNative 🌿\r\n#+ICON: leaf\r\nBody.\r\n"
+       doc (canvas/read-source text "metadata")
+       edited (-> doc (assoc-in [:meta :title] "مرحبا 🌿") (assoc-in [:meta :icon] "folder"))
+       expected (-> text (String/replace "Native 🌿" "مرحبا 🌿") (String/replace "#+ICON: leaf" "#+ICON: folder"))
+       written (canvas/write-source edited) reread (canvas/read-source written "rebuilt")]
+  (is (= "Native 🌿" (get-in doc [:meta :title])))
+  (is (= "leaf" (get-in doc [:meta :icon])))
+  (is (= text (canvas/write-source doc)))
+  (is (= expected written))
+  (is (= "مرحبا 🌿" (get-in reread [:meta :title])))
+  (is (= "folder" (get-in reread [:meta :icon])))
+  (is (= written (canvas/write-source reread)))
+  (is (thrown? (canvas/write-source (assoc-in doc [:meta :title] "Injected\n* TODO Other"))))
+  (is (thrown? (canvas/write-source (assoc-in doc [:meta :icon] "<svg>"))))
+  (is (thrown? (canvas/validate-transition doc (assoc-in doc [:meta :custom] "Unsaved")))))
+ (doseq [text ["" "Body without trailing newline" "#+title: Before" "#+title: Before\r\nBody.\r\n"]]
+  (let [doc (canvas/read-source text "metadata") edited (assoc-in doc [:meta :title] "After")
+        written (canvas/write-source edited)]
+   (is (= "After" (source/keyword-value written "title" nil)))
+   (is (= written (canvas/write-source (canvas/read-source written "rebuilt"))))
+   (when (includes? text "Body") (is (includes? written "Body")))))
+ (let [text "#+title: Before\r\nBody.\r\n" doc (canvas/read-source text "icon")]
+  (is (= (str "#+icon: leaf\r\n" text) (canvas/write-source (assoc-in doc [:meta :icon] "leaf")))))
+ (is (thrown? (source/write-keyword "Body." "invalid:key" "Value")))
+ (is (thrown? (source/write-keyword "Body." "title" "Injected\nline"))))

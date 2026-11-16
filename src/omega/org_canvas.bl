@@ -1,6 +1,6 @@
 ;; Portable Org <-> canvas projection. No database, UI, runtime or execution.
-(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.org-inline :as inline] [omega.org-semantics :as semantics]))
-(def codec-revision "omega.org-canvas/2")
+(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-semantics :as semantics]))
+(def codec-revision "omega.org-canvas/3")
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
 ;; Native emphasis cannot represent partial-word or crossing ranges. A bounded
@@ -73,7 +73,8 @@
   (loop [row 0 prefix "" blocks [] drawer? false]
    (if (>= row count-lines)
     (let [[header affiliated] (if (seq blocks) (prefix-parts (get-in blocks [0 :attrs :org/prefix])) [source ""])]
-     {:schema 2 :id id :meta {:title "Untitled" :icon "sparkles" :org/tail (if (seq blocks) prefix "")
+     {:schema 2 :id id :meta {:title (source/keyword-value source "title" "Untitled")
+                             :icon (source/keyword-value source "icon" "sparkles") :org/tail (if (seq blocks) prefix "")
                              :org/header header :org/source source :org/codec codec-revision}
       :blocks (if (seq blocks) (assoc-in blocks [0 :attrs :org/prefix] affiliated)
                 [(block "intro" "paragraph" "" {} "" "" "")])})
@@ -185,7 +186,17 @@
   Generic document metadata edits cannot replace the source anchoring itself."
  [before after]
  (when-not (= (source-attrs (:meta before)) (source-attrs (:meta after))) (fail :protected-source))
+ (when-not (= (dissoc (:meta before) :title :icon) (dissoc (:meta after) :title :icon)) (fail :unsupported-metadata))
  after)
+(defn- write-metadata [text before after]
+ (reduce (fn [text key]
+  (let [value (get after key) previous (get before key (case key :title "Untitled" :icon "sparkles"))]
+   (if (= previous value) text
+    (do
+     (when-not (and (string? value) (not (re-find #"[\r\n\x00]" value))
+                   (if (= key :title) (<= (count value) 300) (some? (re-matches #"[A-Za-z][A-Za-z0-9_-]{0,63}" value))))
+      (fail :invalid-metadata))
+     (source/write-keyword text (name key) value))))) text [:title :icon]))
 (defn write-source
  "Serialize ordinary Org, restoring source metadata after presentation-only
   type changes. A host document ID also materializes stable IDs for new work."
@@ -225,4 +236,6 @@
                   (:source (semantics/assign-identities text
                     (fn [_] (str "org-" (subs (Base/encode16 (crypto/hash :sha256 (erlang/term_to_binary [document-id (:id document) (:id b)]))
                                                           (list (tuple :case :lower))) 0 24))) profile)) text))) resolved)]
-   (str (get-in document [:meta :org/header] "") (join "" parts) (get-in document [:meta :org/tail] ""))))))
+   (write-metadata
+    (str (get-in document [:meta :org/header] "") (join "" parts) (get-in document [:meta :org/tail] ""))
+    (:meta before) (:meta document))))))
