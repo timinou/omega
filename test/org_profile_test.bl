@@ -1,0 +1,29 @@
+(ns omega.org-profile-test (:require [omega.org-profile :as profile] [omega.org-semantics :as org]))
+(def declaration
+ {:format "org.profile/1" :id "contacts"
+  :types {"contact" {:role :data :title "Contact"
+                    :fields {"EMAIL" {:type :text :required true} "SCORE" {:type :number} "ACTIVE" {:type :boolean}
+                             "STAGE" {:type :enum :values ["new" "met"]} "FIRM" {:type :ref :target "organisation"}}}
+          "task-template" {:role :definition :fields {}}}
+  :rules [{:property "ROLE" :todo true :type "task-template"}]})
+(defn block [data] (str "#+name: org-profile\n#+begin_src edn\n" (pr-str data) "\n#+end_src\n"))
+(deftest declarative-profiles-recognize-native-objects-and-retain-unknown-fields
+ (let [source (str (block declaration) "* Jane\n:PROPERTIES:\n:ID: jane\n:TYPE: contact\n:EMAIL: jane@example.org\n:SCORE: 42\n:ACTIVE: t\n:STAGE: met\n:FIRM: [[id:firm][Firm]]\n:CUSTOM: keep me\n:END:\n* TODO Daily work\n:PROPERTIES:\n:ID: repeat\n:ROLE: sales\n:END:\n")
+       parsed (org/read-source source) rows (:objects parsed)]
+  (is (= "contact" (:type (first rows))))
+  (is (= :data (:role (first rows))))
+  (is (= {"EMAIL" "jane@example.org" "SCORE" 42 "ACTIVE" true "STAGE" "met" "FIRM" "firm"} (:fields (first rows))))
+  (is (= "keep me" (get-in rows [0 :properties "CUSTOM"])))
+  (is (= :definition (:role (second rows))))
+  (is (empty? (:diagnostics parsed)))
+  (let [next (org/update-object source "jane" {:properties {"SCORE" 43 "ACTIVE" false "CUSTOM" nil}})]
+   (is (= 43 (get-in (org/read-source next) [:objects 0 :fields "SCORE"])))
+   (is (false? (get-in (org/read-source next) [:objects 0 :fields "ACTIVE"])))
+   (is (not (includes? next ":CUSTOM:"))))))
+(deftest profile-diagnostics-and-no-executable-options
+ (let [parsed (org/read-source (str (block declaration) "* Jane\n:PROPERTIES:\n:ID: jane\n:TYPE: contact\n:SCORE: bad\n:END:\n"))]
+  (is (= #{:required-field :field-type} (set (map :code (:diagnostics parsed))))))
+ (is (thrown? (profile/validate (assoc-in declaration [:types "contact" :role] :person))))
+ (is (thrown? (profile/validate (assoc-in declaration [:types "contact" :render] '(File/write! "/tmp/not-run" "x")))))
+ (is (thrown? (profile/read-source (str (block declaration) (block declaration)))))
+ (is (thrown? (org/update-object "* TODO Test\n:PROPERTIES:\n:ID: test\n:END:\n" "test" {:properties {"ID" "changed"}}))))

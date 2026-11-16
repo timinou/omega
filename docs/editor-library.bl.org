@@ -53,3 +53,30 @@ source snapshots and provenance receipts stay outside tracked code.
 unknown blocks, stale selections and the existing merge behavior. Team
 Machine's =test/edit_test.bl= adds authorization, draft protection, checkpoint
 and exact-retry checks around the imported library and its existing writer.
+
+* Native Org authoring libraries
+The bundle also exports =omega.org-canvas=, =omega.org-inline=,
+=omega.org-semantics= and =omega.org-profile=. They own no application database,
+account, listener or filesystem authority.
+
+The canvas reads/writes ordinary Org with retained opaque source, typed inline
+marks, editable code/quote blocks and small affiliated callout annotations.
+Pass a host document ID to =write-source= to materialize stable IDs for newly
+authored work. The host still owns authorization, durable transactions and
+operation receipts.
+
+The semantic reader exposes workflow sequences, priorities, IDs, source ranges,
+tags, properties and planning. It understands TODO fast keys/logging suffixes
+and excludes directives/headings inside literal source blocks. Bare keyword
+headings remain incomplete rather than failing while the author types.
+
+An optional =org-profile= EDN declaration extends recognized types, typed fields
+and property/tag/TODO selectors. Roles distinguish work, projects, ordinary data
+and definitions. Profiles are data: they cannot introduce execution, accounts,
+render functions or application grants. Unknown properties remain native source.
+=assign-identities= materializes missing IDs at admission; =update-object= changes
+fields by ID while preserving unrelated source.
+
+Current limits remain explicit: arbitrary custom rich functions require a codec;
+full native tables, every nesting gesture and every inline-boundary combination
+are not claimed qualified by these initial tests.

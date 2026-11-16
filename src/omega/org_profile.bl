@@ -1,0 +1,79 @@
+;; Declarative Org object profiles. Data only: no loading/evaluating cells.
+(ns omega.org-profile (:require [clojure.edn :as edn] [clojure.re] [bl.doc.spans :as spans]))
+(def builtins {"task" {:role :task :fields {}} "project" {:role :project :fields {}}})
+(def field-types #{:text :number :date :boolean :ref :enum :tags})
+(defn- need! [ok message] (when-not ok (throw (ex-info message {:kind :omega/org-profile}))))
+(defn- keys! [m allowed] (need! (and (map? m) (every? allowed (keys m))) "Unknown Org profile option."))
+(defn- identifier? [s] (and (string? s) (some? (re-matches #"[A-Za-z][A-Za-z0-9_.-]{0,79}" s))))
+(defn validate [profile]
+ (keys! profile #{:format :id :types :rules})
+ (need! (and (= "org.profile/1" (:format profile)) (identifier? (:id profile))) "Give the org.profile/1 declaration an ID.")
+ (need! (and (map? (:types profile)) (<= (count (:types profile)) 32)) "Declare at most 32 object types.")
+ (doseq [[type spec] (:types profile)]
+  (need! (identifier? type) "Use a simple object type name.")
+  (keys! spec #{:role :title :fields})
+  (when (:title spec) (need! (and (string? (:title spec)) (<= (count (:title spec)) 120)) "Use a short type title."))
+  (need! (contains? #{:task :project :data :definition} (:role spec :data)) "Choose task, project, data or definition as the reader role.")
+  (need! (and (map? (:fields spec {})) (<= (count (:fields spec {})) 32)) "Declare at most 32 fields per type.")
+  (doseq [[field spec] (:fields spec {})]
+   (need! (and (string? field) (some? (re-matches #"[A-Z][A-Z0-9_+-]{0,63}" field))) "Use uppercase Org property names.")
+   (keys! spec #{:type :required :values :target :title})
+   (when (:title spec) (need! (and (string? (:title spec)) (<= (count (:title spec)) 120)) "Use a short field title."))
+   (when (:target spec) (need! (identifier? (:target spec)) "Use a declared object type as the relation target."))
+   (need! (and (contains? field-types (:type spec)) (contains? #{nil true false} (:required spec))) "Choose a supported field type.")
+   (when (= :enum (:type spec))
+    (need! (and (vector? (:values spec)) (<= 1 (count (:values spec)) 64)
+                 (every? #(and (string? %) (<= 1 (count %) 160)) (:values spec))) "Declare the enum's allowed text values."))))
+ (need! (and (vector? (:rules profile [])) (<= (count (:rules profile [])) 32)) "Declare at most 32 reader rules.")
+ (doseq [rule (:rules profile [])]
+  (keys! rule #{:property :value :tag :todo :type})
+  (need! (and (or (nil? (:property rule)) (and (string? (:property rule)) (re-matches #"[A-Z][A-Z0-9_+-]{0,63}" (:property rule))))
+              (or (nil? (:tag rule)) (identifier? (:tag rule)))
+              (or (nil? (:todo rule)) (boolean? (:todo rule)))
+              (or (nil? (:value rule)) (and (string? (:value rule)) (<= (count (:value rule)) 2000))))
+         "Use Org property, tag and TODO selectors in reader rules.")
+  (need! (and (contains? (merge builtins (:types profile)) (:type rule))
+              (or (string? (:property rule)) (string? (:tag rule)) (boolean? (:todo rule)))) "A reader rule needs a known type and an Org selector."))
+ profile)
+(defn read-source [text]
+ (let [lines (vec (String/split text "\n"))
+       blocks (filterv (fn [span]
+                (and (contains? #{:cell :prose-code} (:kind span))
+                     (or (= "org-profile" (:explicit-id span))
+                         (and (pos? (:from span)) (re-find #"(?i)^ *#\+name: *org-profile *\r?$" (nth lines (dec (:from span))))))))
+               (spans/spans lines :org {:headings? true}))
+       block (first blocks)]
+  (need! (<= (count blocks) 1) "Include at most one org-profile declaration.")
+  (if-not block {:id "org" :declarations builtins :types (set (keys builtins)) :rules []}
+   (do
+    (need! (and (not (:open? block)) (contains? #{"edn" "beam-lisp"} (:lang block))) "Close the org-profile EDN data block.")
+    (let [body (join "\n" (subvec lines (:code-from block) (:code-to block)))
+          _ (need! (<= (erlang/byte_size body) 65536) "Keep the Org profile below 64 KB.")
+          forms (edn/read-string-all body)
+          _ (need! (= 1 (count forms)) "The Org profile is one data map.")
+          declaration (validate (first forms))
+          types (merge builtins (into {} (map (fn [[type spec]] [type (merge {:role :data :fields {}} spec)]) (:types declaration))))]
+     {:id (:id declaration) :declarations types :types (set (keys types)) :rules (:rules declaration [])})))))
+(defn rule-type [profile properties tags todo]
+ (:type (first (filter (fn [rule]
+   (and (or (nil? (:property rule)) (contains? properties (:property rule)))
+        (or (nil? (:value rule)) (= (:value rule) (get properties (:property rule))))
+        (or (nil? (:tag rule)) (contains? tags (:tag rule)))
+        (or (nil? (:todo rule)) (= (:todo rule) (some? todo))))) (:rules profile)))))
+(defn- field-value [spec value]
+ (case (:type spec)
+  :text value
+  :number (let [forms (edn/read-string-all value)] (need! (and (= 1 (count forms)) (number? (first forms))) "Use a number.") (first forms))
+  :date (do (need! (= :ok (first (Date/from_iso8601 value))) "Use an ISO date.") value)
+  :boolean (do (need! (contains? #{"true" "false" "t" "nil" "yes" "no"} (lower-case value)) "Use true or false.") (contains? #{"true" "t" "yes"} (lower-case value)))
+  :enum (do (need! (some #{value} (:values spec)) "Choose a declared enum value.") value)
+  :ref (or (second (re-find #"^\[\[id:([^\]]+)\](?:\[[^\]]*\])?\]$" value)) value)
+  :tags (vec (remove blank? (map trim (String/split value #"[,:]+"))))))
+(defn fields [profile type properties row]
+ (reduce (fn [out [field spec]]
+   (let [raw (get properties field)]
+    (if (blank? (or raw ""))
+     (if (:required spec) (update out :diagnostics conj {:code :required-field :row row :field field :message (str "Add " field ".")}) out)
+     (try (assoc-in out [:values field] (field-value spec raw))
+      (catch _ (update out :diagnostics conj {:code :field-type :row row :field field :message (str "Check " field " (" (name (:type spec)) ").")}))))))
+  {:values {} :diagnostics []} (get-in profile [:declarations type :fields] {})))

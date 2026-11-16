@@ -49,7 +49,7 @@
             to (min count-lines (inc stop))
             chunk (str (join "\n" (subvec lines row to)) (when (< to count-lines) "\n"))
             source-header (match "^ *#\\+begin_src +([^ ]+)(.*)$" line)
-            configuration? (match "(?m)#\\+name: *machine-[^\\r\\n]+\\r?\\n$" prefix)
+            configuration? (match "(?m)#\\+name: *(machine-[^\\r\\n]+|org-profile)\\r?\\n$" prefix)
             type (case kind "src" "code" "quote" "quote" "note" "callout" "warning" "callout" nil)]
        (if (and type (< stop count-lines) (not configuration?))
         (let [text (join "\n" (map #(if (ends-with? % "\r") (erlang/binary_part % 0 (dec (erlang/byte_size %))) %) (subvec lines (inc row) stop)))
@@ -136,7 +136,8 @@
     (when-not (= (get-in b [:attrs key]) (get-in current [(:id b) :attrs key])) (fail :protected-source)))
    (when-not (= (get-in before [:meta :org/header]) (get-in document [:meta :org/header])) (fail :protected-source))
    (when-not (= (get-in before [:meta :org/tail]) (get-in document [:meta :org/tail])) (fail :protected-source)))
-  (let [profile (merge semantics/default-profile (:workflow (semantics/read-source (get-in document [:meta :org/header] ""))))
+  (let [reading (semantics/read-source (get-in document [:meta :org/source] (get-in document [:meta :org/header] "")))
+        profile (merge semantics/default-profile (:profile reading) (:workflow reading))
         parts (mapv (fn [b]
                 (let [text (serialize-block b)]
                  (if (and document-id (= "heading" (:type b)))

@@ -40,3 +40,17 @@
   (is (= (:source prepared) (:source (org/assign-identities (:source prepared) (fn [_] "never-used")))))
   (is (thrown? (org/assign-identities text (fn [_] "same")))))
  (is (thrown? (org/assign-identities "* TODO Broken\n:PROPERTIES:\n:CUSTOM: value\n* TODO Next\n:PROPERTIES:\n:ID: next\n:END:\n" (fn [_] "new")))))
+
+(deftest org-workflow-fast-keys-priorities-and-literal-code-directives
+ (let [text "#+TODO: NEXT(n) WAIT(w@/!) | DONE(d!)\n#+SEQ_TODO: IDEA(i) | DROPPED(x)\n* NEXT [#A] Important :work:\n:PROPERTIES:\n:ID: important\n:END:\n#+begin_src org\n#+TODO: WRONG | ALSO_WRONG\n#+end_src\n"
+       parsed (org/read-source text) object (first (:objects parsed))]
+  (is (= #{"NEXT" "WAIT" "IDEA"} (get-in parsed [:workflow :open])))
+  (is (= #{"DONE" "DROPPED"} (get-in parsed [:workflow :done])))
+  (is (= "Important" (:title object)))
+  (is (= "A" (:priority object)))
+  (is (includes? (org/update-object text "important" {:done? true}) "* DONE [#A] Important :work:"))))
+
+(deftest a-property-edit-preserves-the-entire-heading-and-other-source
+ (let [text "* TODO [#B] A :z:a:\r\n:PROPERTIES:\r\n:ID: a\r\n:CUSTOM: old\r\n:END:\r\n\r\nNotes.\r\n"]
+  (is (= (String/replace text ":CUSTOM: old" ":CUSTOM: new")
+         (org/update-object text "a" {:properties {"CUSTOM" "new"}})))))
