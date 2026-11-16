@@ -5,11 +5,11 @@
  [:aside {:class "org-retained-card" :contenteditable "false" :role "note"
           :aria-label (get-in block [:attrs :org/label] "Retained Org")
           :data-retained-org (get-in block [:attrs :org/kind] "source")}
-  [:span {:class "org-retained-icon" :data-icon "file-code"}]
+  [:span {:class "org-retained-icon" :data-icon "code"}]
   [:div [:strong (get-in block [:attrs :org/label] "Retained Org")]
    [:p "Kept exactly in the Org source. Open Source to inspect or edit it."]]])
 (def package
  {:name "omega-org-presentation"
   :provides {:editor/blocks
-   {"org-retained" {:label "Retained Org" :icon "file-code" :description "Preserved source; edit in Source"
+   {"org-retained" {:label "Retained Org" :icon "code" :description "Preserved source; edit in Source"
                     :slots [] :insertable false :render retained}}}})
