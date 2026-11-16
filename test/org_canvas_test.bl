@@ -48,7 +48,7 @@
           (canvas/write-source (assoc-in doc [:blocks 0 :text] "A revised heading")))))))
 (deftest retained-constructs-are-visible-exact-and-source-owned
  (doseq [source ["#+title: Retained\n\n#+begin_custom\r\nKeep 🌿 exactly\r\n#+end_custom\r\n"
-                 "#+title: Retained\n| Name | Count |\n|------+-------|\n| A | 2 |\n"
+                 "#+title: Retained\n| Name | Count |\n|------+-------|\n| A | 2 |\n|------+-------|\n"
                  "#+name: org-profile\n#+begin_src edn\n{:format \"org.profile/1\" :id \"empty\" :types {}}\n#+end_src\n"
                  "#+begin_unfinished\nKeep this too"]]
   (let [doc (canvas/read-source source "retained")]

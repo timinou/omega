@@ -1,6 +1,6 @@
 ;; Portable Org <-> canvas projection. No database, UI, runtime or execution.
-(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-semantics :as semantics]))
-(def codec-revision "omega.org-canvas/3")
+(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-table :as table] [omega.org-semantics :as semantics]))
+(def codec-revision "omega.org-canvas/4")
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
 (declare block)
@@ -35,19 +35,27 @@
        at (first (keep-indexed #(when (match "^#\\+(name|caption|attr_[A-Za-z_]+):" %2) %1) lines))]
   (if at [(join "" (subvec lines 0 at)) (join "" (subvec lines at))] [prefix ""])))
 (defn- block-id [index] (str "org-" index))
+(defn- retained-document [source id]
+ {:schema 2 :id id :meta {:title (source/keyword-value source "title" "Untitled")
+                          :icon (source/keyword-value source "icon" "sparkles") :org/header "" :org/tail ""
+                          :org/source source :org/codec codec-revision}
+  :blocks [(block "org-budget" "org-retained" "" {:org/kind "document-budget" :org/label "Large Org document"} "" source "")]})
 (defn read-source
  "Create an ephemeral canvas projection. Metadata, drawers and unknown blocks
   are retained verbatim. Editable block IDs belong to this projection session."
  [source id]
  (let [lines (vec (String/split source "\n")) count-lines (count lines)]
   (loop [row 0 prefix "" blocks [] drawer? false next-block 0]
-   (if (>= row count-lines)
+   (cond
+    (> (count blocks) 9999) (retained-document source id)
+    (>= row count-lines)
     (let [[header affiliated] (if (seq blocks) (prefix-parts (get-in blocks [0 :attrs :org/prefix])) [source ""])]
      {:schema 2 :id id :meta {:title (source/keyword-value source "title" "Untitled")
                              :icon (source/keyword-value source "icon" "sparkles") :org/tail (if (seq blocks) prefix "")
                              :org/header header :org/source source :org/codec codec-revision}
       :blocks (if (seq blocks) (assoc-in blocks [0 :attrs :org/prefix] affiliated)
                 [(block "intro" "paragraph" "" {} "" "" "")])})
+    :else
     (let [raw-line (nth lines row) line (if (ends-with? raw-line "\r") (erlang/binary_part raw-line 0 (dec (erlang/byte_size raw-line))) raw-line)
           ending (if (< row (dec count-lines)) (if (ends-with? raw-line "\r") "\r\n" "\n") "")
           raw (str line ending) begin (match "^ *#\\+begin_([^ ]+)(.*)$" line)]
@@ -78,8 +86,11 @@
       (let [to (loop [at (inc row)]
                  (if (and (< at count-lines) (starts-with? (trim (nth lines at)) "|")) (recur (inc at)) at))
             chunk (str (join "\n" (subvec lines row to)) (when (< to count-lines) "\n"))]
-       (recur to "" (conj blocks (block (block-id next-block) "org-retained" ""
-         {:org/kind "table" :org/label "Org table"} prefix chunk ending)) false (inc next-block)))
+       (let [parsed (table/read-source chunk prefix (block-id next-block))
+             parsed (when (and parsed (<= (+ (count blocks) (count parsed)) 9999)) parsed)]
+        (recur to "" (if parsed (into blocks parsed)
+                         (conj blocks (block (block-id next-block) "org-retained" ""
+                          {:org/kind "table" :org/label "Org table needing source review"} prefix chunk ending))) false (inc next-block))))
       (or drawer? (match "^ *:PROPERTIES: *$" line) (match "^ *:LOGBOOK: *$" line))
       (if (= "heading" (get-in (last blocks) [:attrs :org/retained-type] (:type (last blocks))))
        (recur (inc row) "" (update-in blocks [(dec (count blocks)) :attrs :org/suffix] #(str % prefix raw))
@@ -142,6 +153,24 @@
 (defn- source-key? [key] (and (keyword? key) (starts-with? (pr-str key) ":org/")))
 (defn- source-attrs [attrs]
  (into {} (filter (fn [[key _]] (source-key? key)) attrs)))
+(defn- validate-structure [blocks]
+ (when-not (and (<= 1 (count blocks) 10000) (= (count blocks) (count (set (mapv :id blocks)))))
+  (fail :invalid-structure))
+ (loop [remaining blocks active-table nil active-row nil]
+  (when (seq remaining)
+   (let [b (first remaining) type (:type b) parent (:parent b)]
+    (cond
+     (nil? parent)
+     (do (when-not (= "body" (:slot b "body")) (fail :unsupported-nesting))
+         (when (contains? #{"table-row" "table-cell"} type) (fail :unsupported-nesting))
+         (recur (rest remaining) (when (= "table" type) (:id b)) nil))
+     (= "table-row" type)
+     (do (when-not (and active-table (= active-table parent) (= "rows" (:slot b))) (fail :unsupported-nesting))
+         (recur (rest remaining) active-table (:id b)))
+     (= "table-cell" type)
+     (do (when-not (and active-row (= active-row parent) (= "cells" (:slot b))) (fail :unsupported-nesting))
+         (recur (rest remaining) active-table active-row))
+     :else (fail :unsupported-nesting))))))
 (defn validate-transition
  "A host checks the proposed document against its committed typed snapshot.
   Generic document metadata edits cannot replace the source anchoring itself."
@@ -177,7 +206,7 @@
                     (update b :attrs #(into {} (remove (fn [[key _]] (source-key? key)) %)))))
                   (:blocks document))
        current (into {} (map (fn [b] [(:id b) b]) resolved))]
-  (when (some #(or (:parent %) (not= "body" (:slot % "body"))) resolved) (fail :unsupported-nesting))
+  (validate-structure resolved)
   (when original
    (doseq [b (:blocks before) :when (= "org-retained" (:type b))]
     (let [now (get current (:id b))]
@@ -191,12 +220,13 @@
    (when-not (= (get-in before [:meta :org/tail]) (get-in document [:meta :org/tail])) (fail :protected-source)))
   (let [reading (semantics/read-source (get-in document [:meta :org/source] (get-in document [:meta :org/header] "")))
         profile (merge semantics/default-profile (:profile reading) (:workflow reading))
+        grouped (group-by :parent resolved)
         parts (mapv (fn [b]
-                (let [text (serialize-block b)]
+                (let [text (if (= "table" (:type b)) (table/write-source b grouped) (serialize-block b))]
                  (if (and document-id (= "heading" (:type b)))
                   (:source (semantics/assign-identities text
                     (fn [_] (str "org-" (subs (Base/encode16 (crypto/hash :sha256 (erlang/term_to_binary [document-id (:id document) (:id b)]))
-                                                          (list (tuple :case :lower))) 0 24))) profile)) text))) resolved)]
+                                                          (list (tuple :case :lower))) 0 24))) profile)) text))) (get grouped nil []))]
    (write-metadata
     (str (get-in document [:meta :org/header] "") (join "" parts) (get-in document [:meta :org/tail] ""))
     (:meta before) (:meta document))))))

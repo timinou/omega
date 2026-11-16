@@ -1,0 +1,185 @@
+;; Pure native Org tables. Generic editor structure and interactions live in Enchant.
+(ns omega.org-table (:require [clojure.re] [clojure.edn :as edn] [omega.org-inline :as inline]))
+(defn- fail [reason] (throw (ex-info "This Org table needs source review." {:kind :omega/org-table :reason reason})))
+(defn- ending [line] (cond (ends-with? line "\r\n") "\r\n" (ends-with? line "\n") "\n" :else ""))
+(defn- body [line] (erlang/binary_part line 0 (- (erlang/byte_size line) (erlang/byte_size (ending line)))))
+(defn- fields [line]
+ (let [[_ lead text] (Regex/run #"^([ \t]*)\|(.*)$" (body line))
+       parts (vec (String/split text "|")) closing (some? (re-find #"\|[ \t]*$" text))]
+  {:lead lead :parts (if closing (pop parts) parts) :closing closing :trail (if closing (last parts) "") :ending (ending line) :raw line}))
+(defn- cookie? [value] (some? (re-matches #"<(?:[lcr][0-9]*|[0-9]+)>" (trim value))))
+(defn- cookie-row? [row]
+ (and (some cookie? (:parts row)) (every? #(or (blank? %) (cookie? %)) (:parts row))))
+(defn- cell-value [text id]
+ ;; Entities in verbatim/code ranges stay literal. Boundary offsets remain
+ ;; codepoints after replacing a documented pipe entity with one visible glyph.
+ (let [parsed (inline/read-text text id) points (vec (unicode/characters_to_list (:text parsed))) n (count points)
+       code-ranges (filterv #(= "text/code" (get-in % [:call :function])) (:marks parsed))]
+  (loop [at 0 out [] boundaries [0]]
+   (if (>= at n)
+    {:text (unicode/characters_to_binary (to-list out))
+     :marks (vec (keep (fn [mark]
+                   (let [from (nth boundaries (:from mark)) to (nth boundaries (:to mark))]
+                    (when (< from to) (assoc mark :from from :to to)))) (:marks parsed)))}
+    (let [long? (and (<= (+ at 7) n) (= [92 118 101 114 116 123 125] (subvec points at (+ at 7))))
+          short? (and (<= (+ at 5) n) (= [92 118 101 114 116] (subvec points at (+ at 5)))
+                      (or (= (+ at 5) n) (not (<= 65 (nth points (+ at 5)) 90)))
+                      (or (= (+ at 5) n) (not (<= 97 (nth points (+ at 5)) 122))))
+          size (cond long? 7 short? 5 :else 0)
+          protected (some #(and (<= (:from %) at) (< at (:to %))) code-ranges)]
+     (if (and (pos? size) (not protected))
+      (recur (+ at size) (conj out 124) (into boundaries (repeat size (inc (count out)))))
+      (recur (inc at) (conj out (nth points at)) (conj boundaries (inc (count out))))))))))
+(defn- annotation [prefix rows columns]
+ (if-let [match (Regex/run #"(?im)^#\+attr_enchant: +:table +([^\r\n]+)\r?$" prefix)]
+  (let [raw (second match) _ (when (> (erlang/byte_size raw) 65536) (fail :annotation-budget))
+        forms (edn/read-string-all raw) value (first forms) cells (:cells value)]
+   (when-not (and (= 1 (count forms)) (map? value) (= #{:format :cells} (set (keys value)))
+                 (= "org.table/1" (:format value)) (vector? cells) (<= (count cells) 4096)
+                 (= (count cells) (count (set (mapv #(vector (:row %) (:column %)) cells))))) (fail :annotation))
+   (into {} (mapv (fn [entry]
+              (when-not (and (= #{:row :column :text :marks} (set (keys entry)))
+                            (integer? (:row entry)) (integer? (:column entry))
+                            (<= 0 (:row entry)) (< (:row entry) rows) (<= 0 (:column entry)) (< (:column entry) columns))
+               (fail :annotation))
+              [[(:row entry) (:column entry)] entry]) cells))) {}))
+(defn- node [id type text attrs parent slot marks]
+ {:id id :type type :text text :attrs attrs :parent parent :slot slot :marks marks :wraps []})
+(defn read-source
+ "Return an editable rectangular table, or nil for exact retained-source fallback."
+ [raw prefix id]
+ (try
+  (when (re-find #"(?im)^#\+attr_enchant: +:callout" prefix) (fail :table-callout))
+  (let [lines (filterv #(not (empty? %)) (String/split raw #"(?<=\n)"))
+        scanned (reduce (fn [state line]
+                   (if (re-find #"^[ \t]*\|-" (body line))
+                    (do (when-not (and (= 1 (count (:rows state))) (nil? (:rule state))
+                                       (re-matches #"[ \t]*\|[-+|]+[ \t]*" (body line))) (fail :horizontal-rules))
+                        (assoc state :rule line))
+                    (let [row (fields line)]
+                     (if (cookie-row? row)
+                      (do (when (:cookie state) (fail :multiple-cookies))
+                          (assoc state :cookie row :cookie-after (count (:rows state))))
+                      (update state :rows conj row))))) {:rows []} lines)
+        rows (:rows scanned) columns (count (:parts (first rows)))
+        _ (when-not (and (<= 1 (count rows) 256) (<= 1 columns 32)
+                         (every? #(= columns (count (:parts %))) rows)
+                         (or (nil? (:cookie scanned)) (= columns (count (get-in scanned [:cookie :parts]))))) (fail :shape))
+        cookie (get-in scanned [:cookie :parts])
+        alignments (mapv (fn [at] (let [text (trim (get cookie at ""))]
+                                  (get {"l" "left" "c" "center" "r" "right"} (second (Regex/run #"^<([lcr])" text)) "left"))) (range columns))
+        widths (mapv #(or (second (Regex/run #"([0-9]+)>$" (trim (get cookie % "")))) "") (range columns))
+        annotations (annotation prefix (count rows) columns) header (some? (:rule scanned))
+        eol (or (first (remove empty? (mapv ending lines))) "\n")
+        root (node id "table" ""
+               {:header header :rows (count rows) :columns columns
+                :org/type "table" :org/text "" :org/marks [] :org/wraps [] :org/prefix prefix :org/raw raw :org/ending eol
+                :org/terminal (ending (last lines)) :org/header-enabled header :org/header-rule (:rule scanned "")
+                :org/cookie (get-in scanned [:cookie :raw] "")
+                :org/cookie-after (if (pos? (:cookie-after scanned 0)) (str id "/r" (dec (:cookie-after scanned))) "")
+                :org/rows (mapv #(str id "/r" %) (range (count rows)))} nil "body" [])]
+   (into [root]
+    (mapcat (fn [row-at]
+      (let [row (nth rows row-at) row-id (str id "/r" row-at) header? (and header (zero? row-at))
+            row-node (node row-id "table-row" ""
+                       {:header header? :org/raw (:raw row) :org/lead (:lead row) :org/parts (:parts row)
+                        :org/closing (:closing row) :org/trail (:trail row) :org/ending (:ending row)
+                        :org/cells (mapv #(str row-id "/c" %) (range columns))} id "rows" [])]
+       (into [row-node]
+        (mapv (fn [column]
+          (let [cell-id (str row-id "/c" column) entry (get annotations [row-at column])
+                parsed (if entry (inline/read-data (:text entry) (:marks entry) cell-id)
+                         (cell-value (trim (nth (:parts row) column)) cell-id))
+                _ (when (> (erlang/length (unicode/characters_to_list (:text parsed))) 65536) (fail :cell-budget))]
+           (node cell-id "table-cell" (:text parsed)
+             {:header header? :align (nth alignments column) :org/align (nth alignments column) :org/width (nth widths column)
+              :org/header header? :org/text (:text parsed) :org/marks (:marks parsed) :org/annotated (some? entry)}
+             row-id "cells" (:marks parsed)))) (range columns))))) (range (count rows)))))
+  (catch _ nil)))
+(defn- source-key? [key] (and (keyword? key) (starts-with? (pr-str key) ":org/")))
+(defn- attributes! [block allowed]
+ (when-not (every? #(or (source-key? %) (contains? allowed %)) (keys (:attrs block))) (fail :unsupported-attributes)))
+(defn- semantic [cell] [(:text cell) (inline/mark-data (:marks cell))])
+(defn- unchanged-content? [cell]
+ (and (= "table-cell" (:type cell)) (empty? (:wraps cell))
+      (= (semantic cell) [(get-in cell [:attrs :org/text]) (inline/mark-data (get-in cell [:attrs :org/marks] []))])))
+(defn- unchanged-cell? [cell]
+ (and (unchanged-content? cell)
+      (= (get-in cell [:attrs :header]) (get-in cell [:attrs :org/header]))
+      (= (get-in cell [:attrs :align]) (get-in cell [:attrs :org/align]))))
+(defn- escape-cell [text] (-> text (String/replace "|" "\\vert{}") (String/replace "\r\n" "\\\\ ")
+                                (String/replace "\n" "\\\\ ") (String/replace "\r" "\\\\ ")))
+(defn- cell-source [cell]
+ (let [native (escape-cell (inline/write-text cell)) reread (cell-value (trim native) "candidate")
+       annotated (not= (semantic cell) [(:text reread) (inline/mark-data (:marks reread))])]
+  {:text (if annotated (escape-cell (:text cell)) native) :annotated annotated}))
+(defn- padded [raw value]
+ (let [[_ lead _ trail] (Regex/run #"^([ \t]*)(.*?)([ \t]*)$" raw)] (str lead value trail)))
+(defn write-source
+ "Validate a complete table subtree and serialize native Org without dropping cells."
+ [table grouped]
+ (let [rows (get grouped (:id table) []) cells (mapv #(get grouped (:id %) []) rows)
+       columns (count (first cells)) attrs (:attrs table) header (:header attrs false)
+       _ (when-not (and (= "table" (:type table)) (empty? (:text table)) (empty? (:marks table)) (empty? (:wraps table))
+                        (boolean? header) (<= 1 (count rows) 256) (<= 1 columns 32)
+                        (= (count rows) (:rows attrs)) (= columns (:columns attrs))
+                        (every? #(= columns (count %)) cells)) (fail :shape))
+       _ (attributes! table #{:header :rows :columns})
+       _ (doseq [row-at (range (count rows))]
+          (let [row (nth rows row-at) header? (and header (zero? row-at))]
+           (attributes! row #{:header})
+           (when-not (and (= "table-row" (:type row)) (= "rows" (:slot row))
+                          (empty? (:text row)) (empty? (:marks row)) (empty? (:wraps row))
+                          (= header? (get-in row [:attrs :header]))) (fail :row))
+           (doseq [column (range columns)]
+            (let [cell (get-in cells [row-at column])]
+             (attributes! cell #{:header :align})
+             (when-not (and (= "table-cell" (:type cell)) (= "cells" (:slot cell)) (empty? (:wraps cell))
+                            (empty? (get grouped (:id cell))) (= header? (get-in cell [:attrs :header]))
+                            (contains? #{"left" "center" "right"} (get-in cell [:attrs :align]))
+                            (= (get-in cell [:attrs :align]) (get-in cells [0 column :attrs :align]))) (fail :cell))))))
+       unchanged (and (= (mapv :id rows) (:org/rows attrs)) (= header (:org/header-enabled attrs))
+                      (every? (fn [row-at] (and (= (mapv :id (nth cells row-at)) (get-in rows [row-at :attrs :org/cells]))
+                                               (every? unchanged-cell? (nth cells row-at)))) (range (count rows))))]
+  (if unchanged (str (:org/prefix attrs "") (:org/raw attrs))
+   (let [eol (:org/ending attrs "\n")
+         serial (mapv (fn [row-at]
+                  (let [row (nth rows row-at) row-cells (nth cells row-at)
+                        original-parts (into {} (mapv vector (get-in row [:attrs :org/cells] []) (get-in row [:attrs :org/parts] [])))
+                        entries (mapv cell-source row-cells)
+                        cookie-like (and (some #(cookie? (:text %)) entries) (every? #(or (blank? (:text %)) (cookie? (:text %))) entries))]
+                   (mapv (fn [column]
+                     (let [cell (nth row-cells column) old-raw (get original-parts (:id cell))
+                           reuse (and old-raw (unchanged-content? cell)) entry (nth entries column)
+                           forced (and cookie-like (zero? column))
+                           text (if forced (str "=" (:text entry) "=") (:text entry))]
+                      {:raw (cond (and reuse (not forced)) old-raw old-raw (padded old-raw text) :else (str " " text " "))
+                       :annotation (when (or (:annotated entry) forced (and reuse (get-in cell [:attrs :org/annotated])))
+                                     {:row row-at :column column :text (:text cell) :marks (inline/mark-data (:marks cell))})})) (range columns)))) (range (count rows)))
+         declarations (vec (keep :annotation (mapcat identity serial)))
+         annotation (when (seq declarations) (edn/write-string {:format "org.table/1" :cells declarations}))
+         _ (when (and annotation (> (erlang/byte_size annotation) 65536)) (fail :annotation-budget))
+         prefix (String/replace (:org/prefix attrs "") #"(?im)^#\+attr_enchant: +:table +[^\r\n]*\r?\n?" "")
+         prefix (str prefix (when annotation (str "#+attr_enchant: :table " annotation eol)))
+         alignments (mapv #(get-in % [:attrs :align]) (first cells))
+         widths (mapv #(get-in % [:attrs :org/width] "") (first cells))
+         cookie-needed (or (not (empty? (:org/cookie attrs ""))) (some #(not= "left" %) alignments) (some #(not (empty? %)) widths))
+         cookie-unchanged (and (= (count (first cells)) (count (get-in rows [0 :attrs :org/cells])))
+                               (every? #(= (get-in % [:attrs :align]) (get-in % [:attrs :org/align])) (first cells)))
+         cookie (when cookie-needed (if cookie-unchanged (:org/cookie attrs)
+                   (str "| " (join " | " (mapv (fn [alignment width] (str "<" (get {"left" "l" "center" "c" "right" "r"} alignment) width ">")) alignments widths)) " |" eol)))
+         anchor (when (some #(= (:id %) (:org/cookie-after attrs)) rows) (:org/cookie-after attrs))
+         rule (when header (if (= columns (count (get-in rows [0 :attrs :org/cells]))) (:org/header-rule attrs)
+                             (str "|" (join "+" (repeat columns "---")) "|" eol)))
+         rule (when header (if (blank? rule) (str "|" (join "+" (repeat columns "---")) "|" eol) rule))
+         parts (mapcat (fn [row-at]
+                  (let [row (nth rows row-at) row-end (get-in row [:attrs :org/ending] eol)
+                        raw (str (get-in row [:attrs :org/lead] "") "|" (join "|" (mapv :raw (nth serial row-at)))
+                                 (when (get-in row [:attrs :org/closing] true) "|") (get-in row [:attrs :org/trail] ""))]
+                   (vec (remove nil? [(str raw (if (empty? row-end) eol row-end)) (when (and header (zero? row-at)) rule)
+                                      (when (= (:id row) anchor) cookie)])))) (range (count rows)))
+         result (str prefix (when-not anchor cookie) (join "" parts))
+         terminal (:org/terminal attrs eol)]
+    ;; Physical rows need separators while the source's final EOF choice remains exact.
+    (if (and (empty? terminal) (ends-with? result eol))
+     (erlang/binary_part result 0 (- (erlang/byte_size result) (erlang/byte_size eol))) result)))))

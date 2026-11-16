@@ -1,0 +1,87 @@
+(ns omega.org-table-test
+ (:require [omega.org-canvas :as canvas] [omega.org-inline :as inline]
+           [live.edit.document :as d] [live.edit.extensions :as extensions] [live.edit.standard :as standard]
+           [live.edit.commands :as commands]))
+(def registry (extensions/build [standard/package]))
+(defn block [doc id] (first (filter #(= id (:id %)) (:blocks doc))))
+(defn edit [doc id f] (update doc :blocks #(mapv (fn [b] (if (= id (:id b)) (f b) b)) %)))
+(defn values [doc] (mapv #(vector (:text %) (inline/mark-data (:marks %))) (filter #(= "table-cell" (:type %)) (:blocks doc))))
+(defn command [doc id name seed]
+ (let [plan (commands/plan registry {:document (d/prepare doc) :selection {:anchor {:block id :offset 0} :head {:block id :offset 0}}} name {} seed)]
+  (reduce (fn [doc op] (:document (d/apply-op (:functions registry) doc op))) doc (:ops plan))))
+(deftest ordinary-tables-round-trip-with-their-source-bytes
+ (doseq [source ["| Name | Value |\n|------+-------|\n| A | 2 |\n"
+                 "#+title: Native\r\n#+caption: Evidence\r\n  | Name | Value |\r\n  |------+-------|\n  | λ🌱 | 2 |"
+                 "| One | Two\n| Three | Four"
+                 "| <l12> | <r> |\n| Name | Value |\n|------+-------|\n| A | 2 |\n"
+                 "| *A* | [[https://example.test][Link]] |\n"]]
+  (let [doc (canvas/read-source source "table")]
+   (is (= "table" (get-in doc [:blocks 0 :type])))
+   (is (d/valid? doc))
+   (is (= source (canvas/write-source doc))))))
+(deftest one-cell-edits-preserve-all-other-source-bytes
+ (let [source "#+title: Native\r\n#+caption: Evidence\r\n  | Name   | Value |\r\n  |--------+-------|\n  | Alpha  | 2     |\r\nAfter."
+       doc (canvas/read-source source "one-cell")
+       edited (edit doc "org-0/r1/c0" #(assoc % :text "Changed"))]
+  (is (= (String/replace source "Alpha" "Changed") (canvas/write-source edited)))
+  (is (= "After." (:text (last (:blocks doc)))))
+  (is (= ["Name" "Value" "Changed" "2"] (mapv first (values (canvas/read-source (canvas/write-source edited) "again")))))))
+(deftest documented-pipe-entities-respect-verbatim-ranges
+ (let [doc (canvas/read-source "| A\\vert{}B | =a\\vert{}b= | *X\\vert{}Y* |\n" "pipes")
+       cells (filterv #(= "table-cell" (:type %)) (:blocks doc))]
+  (is (= ["A|B" "a\\vert{}b" "X|Y"] (mapv :text cells)))
+  (is (= "text/code" (get-in cells [1 :marks 0 :call :function])))
+  (is (= [0 3] [(get-in cells [2 :marks 0 :from]) (get-in cells [2 :marks 0 :to])]))
+  (is (= "| A\\vert{}B | =a\\vert{}b= | *X\\vert{}Y* |\n" (canvas/write-source doc)))))
+(deftest rich-cell-affiliations-are-complete-and-data-only
+ (let [doc (canvas/read-source "| Word | Link |\n" "annotations")
+       href (str "https://example.test/" (apply str (repeat 7000 "a")))
+       edited (-> doc
+                 (edit "org-0/r0/c0" #(assoc % :marks [{:from 1 :to 2 :call {:id "partial" :function "text/bold" :version 1 :args {}}}]))
+                 (edit "org-0/r0/c1" #(assoc % :text "  Line\nwith | pipes  "
+                   :marks [{:from 2 :to 6 :call {:id "link" :function "text/link" :version 1 :args {:href href}}}])) )
+       source (canvas/write-source edited) reread (canvas/read-source source "reread")]
+  (is (includes? source "#+attr_enchant: :table "))
+  (is (includes? source "\\vert{}"))
+  (is (= (values edited) (values reread)))
+  (is (= source (canvas/write-source reread)))
+  (let [other-edit (edit reread "org-0/r0/c1" #(assoc % :text "Another line." :marks []))
+        again (canvas/read-source (canvas/write-source other-edit) "again")]
+   (is (= (first (values edited)) (first (values again)))))))
+(deftest shared-structural-commands-write-native-org
+ (let [source "| Name | Value |\r\n|------+-------|\r\n| Alpha | 2 |\r\n"
+       doc (canvas/read-source source "commands")
+       expanded (-> doc (command "org-0/r1/c0" "table/add-row" "row")
+                        (command "org-0/r1/c0" "table/add-column" "column")
+                        (command "org-0/r1/c1" "table/align-column" "alignment"))
+       written (canvas/write-source expanded) reread (canvas/read-source written "reread")]
+  (is (includes? written "<c>"))
+  (is (= 9 (count (values reread))))
+  (is (= (values expanded) (values reread)))
+  (is (includes? written "Alpha"))
+  (is (= written (canvas/write-source reread)))
+  (let [without-header (command expanded "org-0" "table/toggle-header" "header")
+        reread (canvas/read-source (canvas/write-source without-header) "no-header")]
+   (is (false? (get-in reread [:blocks 0 :attrs :header])))
+   (is (= (values without-header) (values reread))))))
+(deftest unknown-tables-and-invalid-affiliations-remain-exact-source
+ (doseq [source ["| A | B |\n|---+---|\n| C | D |\n|---+---|\n"
+                 "| A | B |\n| C |\n"
+                 "#+attr_enchant: :table {:format \"org.table/1\" :cells [{:row 99 :column 0 :text \"x\" :marks []}]}\n| A | B |\n"
+                 "#+attr_enchant: :table (throw \"never execute\")\n| A | B |\n"]]
+  (let [doc (canvas/read-source source "retained")]
+   (is (= "org-retained" (get-in doc [:blocks 0 :type])))
+   (is (= source (canvas/write-source doc))))))
+(deftest malformed-typed-tables-cannot-hide-content
+ (let [doc (canvas/read-source "| A | B |\n| C | D |\n" "malformed")]
+  (is (thrown? (canvas/write-source (update doc :blocks #(filterv (fn [b] (not= "org-0/r0/c0" (:id b))) %)))))
+  (is (thrown? (canvas/write-source (assoc-in doc [:blocks 0 :attrs :org/raw] "Forged"))))
+  (is (thrown? (canvas/write-source (edit doc "org-0/r0/c0" #(assoc % :slot "body")))))))
+(deftest editing-budgets-retain-all-native-source
+ (let [source (apply str (repeat 257 "| A | B |\n")) doc (canvas/read-source source "large-table")]
+  (is (= "org-retained" (get-in doc [:blocks 0 :type])))
+  (is (= source (canvas/write-source doc))))
+ (let [source (apply str (repeat 10001 "Paragraph.\n\n")) doc (canvas/read-source source "large-document")]
+  (is (= 1 (count (:blocks doc))))
+  (is (= "document-budget" (get-in doc [:blocks 0 :attrs :org/kind])))
+  (is (= source (canvas/write-source doc)))))
