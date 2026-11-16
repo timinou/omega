@@ -15,3 +15,16 @@
        parsed (org/read-source text (assoc org/default-profile :types #{"organisation" "task"}))]
   (is (:recognized? (first (:objects parsed))))
   (is (= #{:missing-id :duplicate-id} (set (map :code (:diagnostics parsed)))))))
+(deftest semantic-edits-retain-notes-code-and-planning-repeaters
+ (let [text "* TODO Meet :work:\nSCHEDULED: <2026-11-16 Mon 10:00 +1w> DEADLINE: <2026-11-20 Fri>\n:PROPERTIES:\n:ID: meet\n:ASSIGNEE: alice\n:CUSTOM: retained\n:END:\n\nNotes.\n\n#+begin_src org\nSCHEDULED: <2000-01-01>\n#+end_src\n"
+       next (org/update-object text "meet" {:done? true :assignee "bob" :scheduled "2026-11-17"})]
+  (is (starts-with? next "* DONE Meet :work:"))
+  (is (includes? next "SCHEDULED: <2026-11-17 10:00 +1w> DEADLINE: <2026-11-20 Fri>"))
+  (is (includes? next ":ASSIGNEE: bob\n:CUSTOM: retained"))
+  (is (ends-with? next "\n\nNotes.\n\n#+begin_src org\nSCHEDULED: <2000-01-01>\n#+end_src\n"))
+  (is (not (includes? (org/update-object text "meet" {:scheduled ""}) "2026-11-16")))
+  (is (thrown? (org/update-object text "absent" {:done? true})))
+  (is (thrown? (org/update-object text "meet" {:title "Bad\n* injection"})))))
+(deftest dates-in-code-are-not-task-planning
+ (let [parsed (org/read-source "* TODO Note\n:PROPERTIES:\n:ID: note\n:END:\nText\n#+begin_src org\nSCHEDULED: <2000-01-01>\n#+end_src\n")]
+  (is (nil? (:scheduled (first (:objects parsed)))))))
