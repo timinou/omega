@@ -3,41 +3,11 @@
 (def codec-revision "omega.org-canvas/3")
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
-;; Native emphasis cannot represent partial-word or crossing ranges. A bounded
-;; ordinary Org affiliation retains those exact semantic ranges without execution.
-(def inline-functions #{"text/bold" "text/emphasis" "text/italic" "text/underline" "text/strike" "text/code" "text/highlight" "text/link"})
-(defn- inline-args? [function args]
- (and (map? args)
-  (case function
-   "text/link" (and (= #{:href} (set (keys args))) (string? (:href args))
-                    (some? (re-find #"^(https?://|mailto:|/|#)" (:href args))))
-   "text/highlight" (and (= #{:tone} (set (keys args))) (contains? #{"amber" "mint" "rose"} (:tone args)))
-   (empty? args))))
-(defn- read-annotation [prefix text id]
- (when-let [found (match "(?m)^#\\+attr_enchant: +:inline +([^\\r\\n]+)\\r?$" prefix)]
-  (let [raw (second found)]
-   (try
-    (when (> (erlang/byte_size raw) 65536) (fail :inline-annotation-size))
-    (let [forms (edn/read-string-all raw) declarations (first forms)
-          length (erlang/length (unicode/characters_to_list text))]
-     (when-not (and (= 1 (count forms)) (vector? declarations) (<= (count declarations) 512)) (fail :inline-annotation))
-     {:text text :marks
-      (mapv (fn [at mark]
-       (when-not (and (map? mark) (= #{:from :to :function :version :args} (set (keys mark)))
-                     (integer? (:from mark)) (integer? (:to mark)) (<= 0 (:from mark)) (< (:from mark) (:to mark)) (<= (:to mark) length)
-                     (contains? inline-functions (:function mark)) (= 1 (:version mark)) (inline-args? (:function mark) (:args mark)))
-        (fail :inline-annotation))
-       {:from (:from mark) :to (:to mark)
-        :call {:id (str id "-annotation-" at) :function (:function mark) :version 1 :args (:args mark)}})
-       (range (count declarations)) declarations)})
-    (catch _ {:retained true})))))
-(defn- mark-data [marks]
- (mapv (fn [mark] (merge (select-keys mark [:from :to]) (select-keys (:call mark) [:function :version :args]))) marks))
 (declare block)
 (defn- block [id type text attrs prefix raw ending]
  (if (> (erlang/length (unicode/characters_to_list text)) 65536)
   (block id "org-retained" "" {:org/kind type :org/label (str "Long " type) :org/retained-type type} prefix raw ending)
- (let [annotation (when-not (contains? #{"code" "org-retained"} type) (read-annotation prefix text id))
+ (let [annotation (when-not (contains? #{"code" "org-retained"} type) (inline/read-annotation prefix text id))
        retained? (:retained annotation)
        attrs (if retained? (merge attrs {:org/kind "inline-annotation" :org/label "Inline annotation needing review"}) attrs)
        type (if retained? "org-retained" type)
@@ -123,29 +93,16 @@
       :else
       (let [[type text attrs] (classify line)]
        (recur (inc row) "" (conj blocks (block (block-id next-block) type text attrs prefix raw ending)) false (inc next-block)))))))))
-(defn- marked [block]
- (if (empty? (:marks block)) (:text block)
- (let [text (:text block) points (vec (unicode/characters_to_list text)) marks (:marks block)
-       token (fn [m opening?]
-               (case (get-in m [:call :function])
-                "text/bold" "*" "text/emphasis" "/" "text/italic" "/" "text/underline" "_" "text/strike" "+" "text/code" "~"
-                "text/highlight" (if opening? (str "[[highlight:" (get-in m [:call :args :tone]) "][") "]]")
-                "text/link" (if opening? (str "[[" (get-in m [:call :args :href]) "][") "]]")
-                (fail :unsupported-inline-function)))]
-  (join "" (for [at (range (inc (count points)))]
-   (str (join "" (map #(token % false) (reverse (filterv #(= at (:to %)) marks))))
-        (join "" (map #(token % true) (filterv #(= at (:from %)) marks)))
-        (when (< at (count points)) (unicode/characters_to_binary (list (nth points at))))))))))
 (defn- serialize-block [block]
- (let [attrs (:attrs block) type (:type block) text (marked block) newline (get attrs :org/ending "\n")
+ (let [attrs (:attrs block) type (:type block) text (inline/write-text block) newline (get attrs :org/ending "\n")
        newline (if (empty? newline) "\n" newline)
        unchanged? (and (= (:text block) (:org/text attrs)) (= type (:org/type attrs))
                        (= (:marks block) (:org/marks attrs)) (= (:wraps block) (:org/wraps attrs))
                        (= (:level attrs) (:org/level attrs)) (= (:checked attrs) (:org/checked attrs)) (= (:language attrs) (:org/language attrs)))
        reread (when-not (contains? #{"code" "org-retained"} type) (inline/read-text text (:id block)))
        annotated? (and (not unchanged?) reread
-                      (not= [(:text block) (mark-data (:marks block))] [(:text reread) (mark-data (:marks reread))]))
-       annotation (when annotated? (edn/write-string (mark-data (:marks block))))
+                      (not= [(:text block) (inline/mark-data (:marks block))] [(:text reread) (inline/mark-data (:marks reread))]))
+       annotation (when annotated? (edn/write-string (inline/mark-data (:marks block))))
        text (if annotated? (:text block) text)
        prefix (if unchanged? (:org/prefix attrs "")
                  (String/replace (:org/prefix attrs "") (Regex/compile! "(?im)^#\\+attr_enchant: +:inline +[^\\r\\n]*\\r?\\n?") ""))

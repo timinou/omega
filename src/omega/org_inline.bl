@@ -1,5 +1,5 @@
 ;; Native Org inline marks, projected as data for a host's rich editor.
-(ns omega.org-inline (:require [clojure.re]))
+(ns omega.org-inline (:require [clojure.re] [clojure.edn :as edn]))
 (defn- cut [s from size] (erlang/binary_part s from size))
 (defn- points [s] (erlang/length (unicode/characters_to_list s)))
 (defn- candidate [pattern text kind]
@@ -36,3 +36,55 @@
       (into (conj marks {:call call :from start :to (+ start length)})
             (mapv #(-> % (update :from + start) (update :to + start)) (:marks parsed))) (inc serial))))
    {:text (str plain remaining) :marks marks})))
+
+(defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
+;; Native emphasis cannot represent partial-word or crossing ranges. A bounded
+;; ordinary Org affiliation retains those exact semantic ranges without execution.
+(def inline-functions #{"text/bold" "text/emphasis" "text/italic" "text/underline" "text/strike" "text/code" "text/highlight" "text/link"})
+(defn- inline-args? [function args]
+ (and (map? args)
+  (case function
+   "text/link" (and (= #{:href} (set (keys args))) (string? (:href args))
+                    (some? (re-find #"^(https?://|mailto:|/|#)" (:href args))))
+   "text/highlight" (and (= #{:tone} (set (keys args))) (contains? #{"amber" "mint" "rose"} (:tone args)))
+   (empty? args))))
+(defn read-data
+ "Validate bounded declarative inline ranges and assign projection-local call IDs."
+ [text declarations id]
+ (let [length (when (string? text) (erlang/length (unicode/characters_to_list text)))]
+  (when-not (and length (<= length 65536) (vector? declarations) (<= (count declarations) 512))
+   (fail :inline-annotation))
+  {:text text :marks
+   (mapv (fn [at mark]
+    (when-not (and (map? mark) (= #{:from :to :function :version :args} (set (keys mark)))
+                  (integer? (:from mark)) (integer? (:to mark)) (<= 0 (:from mark)) (< (:from mark) (:to mark)) (<= (:to mark) length)
+                  (contains? inline-functions (:function mark)) (= 1 (:version mark)) (inline-args? (:function mark) (:args mark)))
+     (fail :inline-annotation))
+    {:from (:from mark) :to (:to mark)
+     :call {:id (str id "-annotation-" at) :function (:function mark) :version 1 :args (:args mark)}})
+    (range (count declarations)) declarations)}))
+(defn read-annotation [prefix text id]
+ (when-let [found (Regex/run (Regex/compile! "(?im)^#\\+attr_enchant: +:inline +([^\\r\\n]+)\\r?$") prefix)]
+  (let [raw (second found)]
+   (try
+    (when (> (erlang/byte_size raw) 65536) (fail :inline-annotation-size))
+    (let [forms (edn/read-string-all raw)]
+     (when-not (= 1 (count forms)) (fail :inline-annotation))
+     (read-data text (first forms) id))
+    (catch _ {:retained true})))))
+(defn mark-data [marks]
+ (mapv (fn [mark] (merge (select-keys mark [:from :to]) (select-keys (:call mark) [:function :version :args]))) marks))
+
+(defn write-text [block]
+ (if (empty? (:marks block)) (:text block)
+ (let [text (:text block) points (vec (unicode/characters_to_list text)) marks (:marks block)
+       token (fn [m opening?]
+               (case (get-in m [:call :function])
+                "text/bold" "*" "text/emphasis" "/" "text/italic" "/" "text/underline" "_" "text/strike" "+" "text/code" "~"
+                "text/highlight" (if opening? (str "[[highlight:" (get-in m [:call :args :tone]) "][") "]]")
+                "text/link" (if opening? (str "[[" (get-in m [:call :args :href]) "][") "]]")
+                (fail :unsupported-inline-function)))]
+  (join "" (for [at (range (inc (count points)))]
+   (str (join "" (map #(token % false) (reverse (filterv #(= at (:to %)) marks))))
+        (join "" (map #(token % true) (filterv #(= at (:from %)) marks)))
+        (when (< at (count points)) (unicode/characters_to_binary (list (nth points at))))))))))
