@@ -81,7 +81,7 @@
         title (get changes :title (:title object))
         _ (when (or (blank? title) (re-find #"[\r\n]" title)) (throw (ex-info "Use a single-line Org title." {})))
         workflow (:workflow parsed) done? (:done? changes)
-        state (cond (contains? changes :state) (:state changes)
+        state (cond (contains? changes :state) (when-not (blank? (:state changes)) (:state changes))
                     (contains? changes :done?)
                     (if done? (if (contains? (:done workflow) "DONE") "DONE" (first (sort (:done workflow))))
                                (if (contains? (:open workflow) "TODO") "TODO" (first (sort (:open workflow)))))

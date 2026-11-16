@@ -54,3 +54,11 @@
  (let [text "* TODO [#B] A :z:a:\r\n:PROPERTIES:\r\n:ID: a\r\n:CUSTOM: old\r\n:END:\r\n\r\nNotes.\r\n"]
   (is (= (String/replace text ":CUSTOM: old" ":CUSTOM: new")
          (org/update-object text "a" {:properties {"CUSTOM" "new"}})))))
+
+(deftest clearing-state-keeps-the-native-heading-id-and-project-role
+ (let [source "* TODO Direction :project:\n:PROPERTIES:\n:ID: direction\n:END:\n"
+       next (org/update-object source "direction" {:state ""})
+       object (first (:objects (org/read-source next)))]
+  (is (= "* Direction :project:\n:PROPERTIES:\n:ID: direction\n:END:\n" next))
+  (is (= :project (:role object)))
+  (is (nil? (:state object)))))
