@@ -38,3 +38,35 @@
   (is (= first-source (canvas/write-source (heading "first-editor") "shared-document")))
   (is (not= (id first-source) (id second-source)))
   (is (= first-source (canvas/write-source (canvas/read-source first-source "third-editor") "shared-document")))))
+
+(deftest deep-native-heading-levels-survive-title-edits
+ (doseq [level [1 6 7 12 40]]
+  (let [stars (join "" (repeat level "*")) source (str stars " A heading\r\n:PROPERTIES:\r\n:ID: deep\r\n:END:\r\n")
+        doc (canvas/read-source source "depth")]
+   (is (= source (canvas/write-source doc)))
+   (is (= (String/replace source "A heading" "A revised heading")
+          (canvas/write-source (assoc-in doc [:blocks 0 :text] "A revised heading")))))))
+(deftest retained-constructs-are-visible-exact-and-source-owned
+ (doseq [source ["#+title: Retained\n\n#+begin_custom\r\nKeep 🌿 exactly\r\n#+end_custom\r\n"
+                 "#+title: Retained\n| Name | Count |\n|------+-------|\n| A | 2 |\n"
+                 "#+name: org-profile\n#+begin_src edn\n{:format \"org.profile/1\" :id \"empty\" :types {}}\n#+end_src\n"
+                 "#+begin_unfinished\nKeep this too"]]
+  (let [doc (canvas/read-source source "retained")]
+   (is (= "org-retained" (get-in doc [:blocks 0 :type])))
+   (is (= source (canvas/write-source doc)))
+   (is (thrown? (canvas/write-source (assoc-in doc [:blocks 0 :text] "Replaced"))))
+   (is (thrown? (canvas/write-source (assoc-in doc [:blocks 0 :attrs :org/raw] "Replaced"))))
+   (is (thrown? (canvas/write-source (assoc doc :blocks [])))))))
+(deftest large-constructs-remain-admissible-with-bounded-editable-text
+ (let [source (str "#+title: Long note\n* " (apply str (repeat 100000 "x")) "\r\n:PROPERTIES:\r\n:ID: long\r\n:END:\r\nBody.\r\n")
+       doc (canvas/read-source source "long")]
+  (is (= ["org-retained" "paragraph"] (mapv :type (:blocks doc))))
+  (is (= "heading" (get-in doc [:blocks 0 :attrs :org/retained-type])))
+  (is (= "" (get-in doc [:blocks 0 :text])))
+  (is (= source (canvas/write-source doc)))
+  (is (= (String/replace source "Body." "A revised body.")
+         (canvas/write-source (assoc-in doc [:blocks 1 :text] "A revised body."))))))
+(deftest unsupported-nesting-cannot-be-acknowledged-and-disappear
+ (let [doc (canvas/read-source "First.\nSecond.\n" "nesting")]
+  (is (thrown? (canvas/write-source (assoc-in doc [:blocks 1 :parent] "org-0"))))
+  (is (thrown? (canvas/write-source (assoc-in doc [:blocks 1 :slot] "caption"))))))

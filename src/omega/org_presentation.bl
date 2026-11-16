@@ -1,0 +1,15 @@
+;; Optional pure presentation package for the canonical Enchant editor.
+;; Source reading/writing remains in omega.org-canvas, with no UI dependency.
+(ns ^:js omega.org-presentation)
+(defn retained [block _]
+ [:aside {:class "org-retained-card" :contenteditable "false" :role "note"
+          :aria-label (get-in block [:attrs :org/label] "Retained Org")
+          :data-retained-org (get-in block [:attrs :org/kind] "source")}
+  [:span {:class "org-retained-icon" :data-icon "file-code"}]
+  [:div [:strong (get-in block [:attrs :org/label] "Retained Org")]
+   [:p "Kept exactly in the Org source. Open Source to inspect or edit it."]]])
+(def package
+ {:name "omega-org-presentation"
+  :provides {:editor/blocks
+   {"org-retained" {:label "Retained Org" :icon "file-code" :description "Preserved source; edit in Source"
+                    :slots [] :render retained}}}})

@@ -2,15 +2,18 @@
 (ns omega.org-canvas (:require [clojure.re] [omega.org-inline :as inline] [omega.org-semantics :as semantics]))
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
+(declare block)
 (defn- block [id type text attrs prefix raw ending]
- (let [parsed (if (= type "code") {:text text :marks []} (inline/read-text text id))
+ (if (> (erlang/length (unicode/characters_to_list text)) 65536)
+  (block id "org-retained" "" {:org/kind type :org/label (str "Long " type) :org/retained-type type} prefix raw ending)
+ (let [parsed (if (contains? #{"code" "org-retained"} type) {:text text :marks []} (inline/read-text text id))
        callout (match "(?m)^#\\+attr_enchant: +:callout +(note|warning)\\r?$" prefix)
        wraps (if callout [{:id (str id "-callout") :function "text/callout" :version 1 :args {:tone (second callout)}}] [])]
   {:id id :type type :text (:text parsed)
    :attrs (merge attrs {:org/prefix prefix :org/raw raw :org/text (:text parsed) :org/type type
                        :org/ending ending :org/level (:level attrs) :org/checked (:checked attrs)
                        :org/language (:language attrs) :org/marks (:marks parsed) :org/wraps wraps})
-   :parent nil :slot "body" :marks (:marks parsed) :wraps wraps}))
+   :parent nil :slot "body" :marks (:marks parsed) :wraps wraps})))
 (defn- classify [line]
  (cond
   (match "^(\\*+) +(.+)$" line)
@@ -58,13 +61,21 @@
                       (when (= type "code") {:language (second source-header)})
                       (when (= type "callout") {:icon "lightbulb" :tone (if (= kind "warning") "rose" "amber")}))]
          (recur to "" (conj blocks (block (if (= type "code") (str "org-code-" row) (block-id blocks)) type text attrs prefix chunk ending)) false))
-        (recur to (str prefix chunk) blocks false)))
+        (recur to "" (conj blocks (block (block-id blocks) "org-retained" ""
+          {:org/kind kind :org/label (if configuration? "Document configuration" (str "Org " kind " block"))}
+          prefix chunk ending)) false)))
+      (starts-with? (trim line) "|")
+      (let [to (loop [at (inc row)]
+                 (if (and (< at count-lines) (starts-with? (trim (nth lines at)) "|")) (recur (inc at)) at))
+            chunk (str (join "\n" (subvec lines row to)) (when (< to count-lines) "\n"))]
+       (recur to "" (conj blocks (block (block-id blocks) "org-retained" ""
+         {:org/kind "table" :org/label "Org table"} prefix chunk ending)) false))
       (or drawer? (match "^ *:PROPERTIES: *$" line) (match "^ *:LOGBOOK: *$" line))
-      (if (= "heading" (:type (last blocks)))
+      (if (= "heading" (get-in (last blocks) [:attrs :org/retained-type] (:type (last blocks))))
        (recur (inc row) "" (update-in blocks [(dec (count blocks)) :attrs :org/suffix] #(str % prefix raw))
               (not (some? (match "^ *:END: *$" line))))
        (recur (inc row) (str prefix raw) blocks (not (some? (match "^ *:END: *$" line)))))
-      (and (= "heading" (:type (last blocks))) (match "^ *(SCHEDULED:|DEADLINE:|CLOSED:)" line))
+      (and (= "heading" (get-in (last blocks) [:attrs :org/retained-type] (:type (last blocks)))) (match "^ *(SCHEDULED:|DEADLINE:|CLOSED:)" line))
       (recur (inc row) "" (update-in blocks [(dec (count blocks)) :attrs :org/suffix] #(str % prefix raw)) false)
       (or (blank? line) (starts-with? (trim line) "#") (starts-with? (trim line) "|")
           (match "^ *(SCHEDULED:|DEADLINE:|CLOSED:)" line))
@@ -99,7 +110,10 @@
     (:org/raw attrs)
     (case type
      "paragraph" (str text newline)
-     "heading" (str (join "" (repeat (max 1 (min 6 (:level attrs 1))) "*")) " " text newline)
+     "heading" (let [level (:level attrs 1)]
+                 (when-not (and (integer? level) (<= 1 level 100000)) (fail :heading-level))
+                 (str (join "" (repeat level "*")) " " text newline))
+     "org-retained" (fail :retained-source-edit)
      "bullet" (str "- " text newline)
      "ordered" (str "1. " text newline)
      "task" (str "- [" (if (:checked attrs) "X" " ") "] " text newline)
@@ -130,7 +144,13 @@
                     (update b :attrs #(merge (into {} (filter (fn [[k _]] (starts-with? (str k) ":org/")) (:attrs old))) %)) b))
                   (:blocks document))
        current (into {} (map (fn [b] [(:id b) b]) resolved))]
+  (when (some #(or (:parent %) (not= "body" (:slot % "body"))) resolved) (fail :unsupported-nesting))
   (when original
+   (doseq [b (:blocks before) :when (= "org-retained" (:type b))]
+    (let [now (get current (:id b))]
+     (when-not (and now (= (select-keys b [:type :text :marks :wraps]) (select-keys now [:type :text :marks :wraps]))
+                    (= (get-in b [:attrs :org/raw]) (get-in now [:attrs :org/raw])))
+      (fail :retained-source-edit))))
    (doseq [b (:blocks before) key [:org/prefix :org/suffix]
            :when (and (not (blank? (get-in b [:attrs key] ""))) (or (= key :org/prefix) (contains? current (:id b))))]
     (when-not (= (get-in b [:attrs key]) (get-in current [(:id b) :attrs key])) (fail :protected-source)))
