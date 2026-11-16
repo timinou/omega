@@ -5,11 +5,13 @@
 (defn text-at [ls start end] (str/join "\n" (subvec ls start end)))
 (defn- match-value [pattern line] (second (re-find pattern (or line ""))))
 (defn properties [ls row]
-  (let [start (first (drop-while #(or (str/blank? (nth ls %)) (re-find #"(?i)^\s*(?:SCHEDULED|DEADLINE|CLOSED):" (nth ls %))) (range row (count ls))))]
-    (if (and start (= ":PROPERTIES:" (str/upper-case (str/trim (nth ls start)))))
-      (into {} (keep (fn [i] (when-let [m (re-find #"^\s*:([A-Za-z_]+):\s*(.*?)\s*$" (nth ls i))]
-                              [(str/upper-case (second m)) (nth m 2)]))
-                    (take-while #(not= ":END:" (str/upper-case (str/trim (nth ls %)))) (range (inc start) (count ls))))) {})))
+  (let [start (first (drop-while #(or (str/blank? (nth ls %)) (re-find #"(?i)^\s*(?:SCHEDULED|DEADLINE|CLOSED):" (nth ls %))) (range row (count ls))))
+        boundary (when start (or (first (filter #(re-find #"^\*+ " (nth ls %)) (range (inc start) (count ls)))) (count ls)))
+        end (when (and start (= ":PROPERTIES:" (str/upper-case (str/trim (nth ls start)))))
+              (first (filter #(= ":END:" (str/upper-case (str/trim (nth ls %)))) (range (inc start) boundary))))]
+    (if end
+      (into {} (keep (fn [i] (when-let [m (re-find #"^\s*:([A-Za-z0-9_@#%+-]+):\s*(.*?)\s*$" (nth ls i))]
+                              [(str/upper-case (second m)) (nth m 2)])) (range (inc start) end))) {})))
 (defn index [text]
   (let [ls (lines text) bs (sp/assign-ids ls (sp/spans ls :org {:headings? true}))]
     {:lines ls :blocks bs :outline (sp/outline bs (count ls))

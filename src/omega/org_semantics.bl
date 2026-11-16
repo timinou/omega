@@ -107,3 +107,34 @@
         body (if (contains? changes :deadline) (planning body "DEADLINE" (:deadline changes)) body)
         next (into (into (conj (subvec lines 0 row) (str heading cr)) body) (subvec lines own-end))]
    (join "\n" next))))
+
+(defn assign-identities
+ "Materialize missing IDs once when a host admits native work into its corpus.
+  make-id is pure and host-owned; unrelated source bytes remain untouched."
+ ([text make-id] (assign-identities text make-id default-profile))
+ ([text make-id profile]
+ (let [parsed (read-source text profile) missing (filterv #(and (:recognized? %) (blank? (:id %))) (:objects parsed))
+       used (set (keep :id (:objects parsed)))
+       assignments (mapv #(assoc (select-keys % [:row :type]) :id (make-id %)) missing)]
+  (when-not (and (every? #(and (string? (:id %)) (re-matches #"[A-Za-z0-9_.-]{1,160}" (:id %))) assignments)
+                 (= (count assignments) (count (set (map :id assignments))))
+                 (not-any? #(contains? used (:id %)) assignments))
+   (throw (ex-info "Generated Org identities must be unique and valid." {})))
+  {:assigned assignments
+   :source (reduce (fn [source assignment]
+     (let [lines (vec (String/split source "\n")) row (:row assignment)
+           cr (if (ends-with? (nth lines row) "\r") "\r" "")
+           at (loop [at (inc row)]
+                (if (and (< at (count lines)) (or (blank? (nth lines at)) (re-find #"^ *(SCHEDULED:|DEADLINE:|CLOSED:)" (nth lines at))))
+                 (recur (inc at)) at))
+           drawer? (and (< at (count lines)) (re-find #"(?i)^ *:PROPERTIES: *\r?$" (nth lines at)))
+           section-end (or (first (filter #(re-find #"^\*+ " (nth lines %)) (range (inc at) (count lines)))) (count lines))
+           end (when drawer? (first (filter #(re-find #"(?i)^ *:END: *\r?$" (nth lines %)) (range (inc at) section-end))))
+           _ (when (and drawer? (nil? end)) (throw (ex-info "Close the property drawer before assigning an Org ID." {})))
+           insert-at (if drawer? (inc at)
+                       (loop [at (inc row)] (if (and (< at (count lines)) (re-find #"^ *(SCHEDULED:|DEADLINE:|CLOSED:)" (nth lines at)))
+                                              (recur (inc at)) at)))
+           added (if drawer? [(str ":ID: " (:id assignment) cr)]
+                   [(str ":PROPERTIES:" cr) (str ":ID: " (:id assignment) cr) (str ":END:" cr)])]
+       (join "\n" (into (into (subvec lines 0 insert-at) added) (subvec lines insert-at)))))
+     text (reverse assignments))})))

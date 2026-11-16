@@ -28,3 +28,15 @@
 (deftest dates-in-code-are-not-task-planning
  (let [parsed (org/read-source "* TODO Note\n:PROPERTIES:\n:ID: note\n:END:\nText\n#+begin_src org\nSCHEDULED: <2000-01-01>\n#+end_src\n")]
   (is (nil? (:scheduled (first (:objects parsed)))))))
+(deftest admitting-natural-org-materializes-identities-without-touching-other-bytes
+ (let [text "#+TODO: READY | FINISHED\r\n* READY First\r\nSCHEDULED: <2026-11-16 Mon>\r\nBody 🌿\r\n\r\n* Second :project:\r\n:PROPERTIES:\r\n:CUSTOM: keep\r\n:END:\r\n#+begin_src org\r\n* TODO Literal\r\n#+end_src\r\n"
+       prepared (org/assign-identities text #(str "object-" (:row %)))
+       parsed (org/read-source (:source prepared))]
+  (is (= 2 (count (:assigned prepared))))
+  (is (empty? (:diagnostics parsed)))
+  (is (includes? (:source prepared) "SCHEDULED: <2026-11-16 Mon>\r\n:PROPERTIES:\r\n:ID: object-1\r\n:END:\r\nBody 🌿"))
+  (is (includes? (:source prepared) ":ID: object-5\r\n:CUSTOM: keep\r\n"))
+  (is (ends-with? (:source prepared) "#+begin_src org\r\n* TODO Literal\r\n#+end_src\r\n"))
+  (is (= (:source prepared) (:source (org/assign-identities (:source prepared) (fn [_] "never-used")))))
+  (is (thrown? (org/assign-identities text (fn [_] "same")))))
+ (is (thrown? (org/assign-identities "* TODO Broken\n:PROPERTIES:\n:CUSTOM: value\n* TODO Next\n:PROPERTIES:\n:ID: next\n:END:\n" (fn [_] "new")))))

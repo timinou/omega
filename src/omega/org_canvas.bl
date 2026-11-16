@@ -1,5 +1,5 @@
 ;; Portable Org <-> canvas projection. No database, UI, runtime or execution.
-(ns omega.org-canvas (:require [clojure.re] [omega.org-inline :as inline]))
+(ns omega.org-canvas (:require [clojure.re] [omega.org-inline :as inline] [omega.org-semantics :as semantics]))
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
 (defn- block [id type text attrs prefix raw ending]
@@ -118,15 +118,29 @@
                       (:org/close attrs (str "#+end_src" newline)))))
      (fail :unsupported-block-type))) (:org/suffix attrs ""))))
 (defn write-source
- "Serialize the projection to ordinary Org. Untouched source is byte exact;
-  unsupported rich functions fail explicitly rather than losing behavior."
- [document]
- (when-let [original (get-in document [:meta :org/source])]
-  (let [before (read-source original (:id document)) current (into {} (map (fn [b] [(:id b) b]) (:blocks document)))]
-   (doseq [b (:blocks before) key [:org/prefix :org/suffix] :when (and (not (blank? (get-in b [:attrs key] "")))
-                              (or (= key :org/prefix) (contains? current (:id b))))]
-    (when-not (= (get-in b [:attrs key]) (get-in current [(:id b) :attrs key]))
-     (fail :protected-source)))
+ "Serialize ordinary Org, restoring source metadata after presentation-only
+  type changes. A host document ID also materializes stable IDs for new work."
+ ([document] (write-source document nil))
+ ([document document-id]
+ (let [original (get-in document [:meta :org/source])
+       before (when original (read-source original (:id document)))
+       baseline (into {} (map (fn [b] [(:id b) b]) (:blocks before)))
+       resolved (mapv (fn [b]
+                   (if-let [old (get baseline (:id b))]
+                    (update b :attrs #(merge (into {} (filter (fn [[k _]] (starts-with? (str k) ":org/")) (:attrs old))) %)) b))
+                  (:blocks document))
+       current (into {} (map (fn [b] [(:id b) b]) resolved))]
+  (when original
+   (doseq [b (:blocks before) key [:org/prefix :org/suffix]
+           :when (and (not (blank? (get-in b [:attrs key] ""))) (or (= key :org/prefix) (contains? current (:id b))))]
+    (when-not (= (get-in b [:attrs key]) (get-in current [(:id b) :attrs key])) (fail :protected-source)))
    (when-not (= (get-in before [:meta :org/header]) (get-in document [:meta :org/header])) (fail :protected-source))
-   (when-not (= (get-in before [:meta :org/tail]) (get-in document [:meta :org/tail])) (fail :protected-source))))
- (str (get-in document [:meta :org/header] "") (join "" (map serialize-block (:blocks document))) (get-in document [:meta :org/tail] "")))
+   (when-not (= (get-in before [:meta :org/tail]) (get-in document [:meta :org/tail])) (fail :protected-source)))
+  (let [profile (merge semantics/default-profile (:workflow (semantics/read-source (get-in document [:meta :org/header] ""))))
+        parts (mapv (fn [b]
+                (let [text (serialize-block b)]
+                 (if (and document-id (= "heading" (:type b)))
+                  (:source (semantics/assign-identities text
+                    (fn [_] (str "org-" (subs (Base/encode16 (crypto/hash :sha256 (erlang/term_to_binary [document-id (:id b)]))
+                                                          (list (tuple :case :lower))) 0 24))) profile)) text))) resolved)]
+   (str (get-in document [:meta :org/header] "") (join "" parts) (get-in document [:meta :org/tail] ""))))))
