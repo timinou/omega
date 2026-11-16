@@ -1,0 +1,12 @@
+(ns omega.org-canvas-test (:require [omega.org-canvas :as canvas]))
+(def source "#+title: Native 🌿\r\n\r\n* TODO Review :project:\r\n:PROPERTIES:\r\n:ID: review\r\n:END:\r\nSCHEDULED: <2026-11-16 Mon>\r\nBody text.\r\n\r\n#+begin_src beam-lisp\r\n(+ 1 1)\r\n#+end_src\r\n\r\n- [ ] Check this\r\n#+begin_unknown\r\nKeep everything\r\n#+end_unknown\r\n")
+(deftest native-projection-roundtrip-and-protected-source
+ (let [doc (canvas/read-source source "native") next (assoc-in doc [:blocks 1 :text] "مرحبا")]
+  (is (= source (canvas/write-source doc)))
+  (is (= (String/replace source "Body text." "مرحبا") (canvas/write-source next)))
+  (is (= (String/replace source "[ ]" "[X]") (canvas/write-source (assoc-in doc [:blocks 2 :attrs :checked] true))))
+  (is (thrown? (canvas/write-source (assoc doc :blocks [(first (:blocks doc))]))))
+  (is (= source (canvas/write-source (canvas/read-source source "another-session"))))))
+(deftest empty-and-unterminated-source-stay-exact
+ (doseq [text ["" "#+title: Empty\n" "No trailing newline" "* Heading\nText\n\n"]]
+  (is (= text (canvas/write-source (canvas/read-source text "x"))))))
