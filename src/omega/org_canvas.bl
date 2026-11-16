@@ -1,10 +1,16 @@
 ;; Portable Org <-> canvas projection. No database, UI, runtime or execution.
-(ns omega.org-canvas (:require [clojure.re]))
+(ns omega.org-canvas (:require [clojure.re] [omega.org-inline :as inline]))
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
 (defn- block [id type text attrs prefix raw ending]
- {:id id :type type :text text :attrs (merge attrs {:org/prefix prefix :org/raw raw :org/text text :org/type type :org/ending ending :org/level (:level attrs) :org/checked (:checked attrs)})
-  :parent nil :slot "body" :marks [] :wraps []})
+ (let [parsed (if (= type "code") {:text text :marks []} (inline/read-text text id))
+       callout (match "(?m)^#\\+attr_enchant: +:callout +(note|warning)\\r?$" prefix)
+       wraps (if callout [{:id (str id "-callout") :function "text/callout" :version 1 :args {:tone (second callout)}}] [])]
+  {:id id :type type :text (:text parsed)
+   :attrs (merge attrs {:org/prefix prefix :org/raw raw :org/text (:text parsed) :org/type type
+                       :org/ending ending :org/level (:level attrs) :org/checked (:checked attrs)
+                       :org/language (:language attrs) :org/marks (:marks parsed) :org/wraps wraps})
+   :parent nil :slot "body" :marks (:marks parsed) :wraps wraps}))
 (defn- classify [line]
  (cond
   (match "^(\\*+) +(.+)$" line)
@@ -15,6 +21,11 @@
   (match "^ *[0-9]+[.)] +(.*)$" line) ["ordered" (second (match "^ *[0-9]+[.)] +(.*)$" line)) {}]
   (match "^-----+$" line) ["divider" "" {}]
   :else ["paragraph" line {}]))
+(defn- prefix-parts [prefix]
+ (let [lines (vec (String/split prefix #"(?<=\n)"))
+       at (first (keep-indexed #(when (match "^#\\+(name|caption|attr_[A-Za-z_]+):" %2) %1) lines))]
+  (if at [(join "" (subvec lines 0 at)) (join "" (subvec lines at))] [prefix ""])))
+(defn- block-id [blocks] (str "org-" (count (remove #(= "code" (:type %)) blocks))))
 (defn read-source
  "Create an ephemeral canvas projection. Metadata, drawers and unknown blocks
   are retained verbatim. Editable block IDs belong to this projection session."
@@ -22,9 +33,11 @@
  (let [lines (vec (String/split source "\n")) count-lines (count lines)]
   (loop [row 0 prefix "" blocks [] drawer? false]
    (if (>= row count-lines)
-    {:schema 2 :id id :meta {:title "Untitled" :icon "sparkles" :org/tail (if (seq blocks) prefix "")
-                            :org/header (if (seq blocks) (get-in blocks [0 :attrs :org/prefix]) source) :org/source source}
-     :blocks (if (seq blocks) (assoc-in blocks [0 :attrs :org/prefix] "") [(block "intro" "paragraph" "" {} "" "" "")])}
+    (let [[header affiliated] (if (seq blocks) (prefix-parts (get-in blocks [0 :attrs :org/prefix])) [source ""])]
+     {:schema 2 :id id :meta {:title "Untitled" :icon "sparkles" :org/tail (if (seq blocks) prefix "")
+                             :org/header header :org/source source}
+      :blocks (if (seq blocks) (assoc-in blocks [0 :attrs :org/prefix] affiliated)
+                [(block "intro" "paragraph" "" {} "" "" "")])})
     (let [raw-line (nth lines row) line (if (ends-with? raw-line "\r") (erlang/binary_part raw-line 0 (dec (erlang/byte_size raw-line))) raw-line)
           ending (if (< row (dec count-lines)) (if (ends-with? raw-line "\r") "\r\n" "\n") "")
           raw (str line ending) begin (match "^ *#\\+begin_([^ ]+)(.*)$" line)]
@@ -34,8 +47,18 @@
             stop (loop [at (inc row)]
                    (if (or (>= at count-lines) (match (str "^ *#\\+end_" kind " *\\r?$") (nth lines at))) at (recur (inc at))))
             to (min count-lines (inc stop))
-            chunk (str (join "\n" (subvec lines row to)) (when (< to count-lines) "\n"))]
-       (recur to (str prefix chunk) blocks false))
+            chunk (str (join "\n" (subvec lines row to)) (when (< to count-lines) "\n"))
+            source-header (match "^ *#\\+begin_src +([^ ]+)(.*)$" line)
+            configuration? (match "(?m)#\\+name: *machine-[^\\r\\n]+\\r?\\n$" prefix)
+            type (case kind "src" "code" "quote" "quote" "note" "callout" "warning" "callout" nil)]
+       (if (and type (< stop count-lines) (not configuration?))
+        (let [text (join "\n" (map #(if (ends-with? % "\r") (erlang/binary_part % 0 (dec (erlang/byte_size %))) %) (subvec lines (inc row) stop)))
+              close (str (nth lines stop) (when (< to count-lines) "\n"))
+              attrs (merge {:org/open raw :org/close close}
+                      (when (= type "code") {:language (second source-header)})
+                      (when (= type "callout") {:icon "lightbulb" :tone (if (= kind "warning") "rose" "amber")}))]
+         (recur to "" (conj blocks (block (if (= type "code") (str "org-code-" row) (block-id blocks)) type text attrs prefix chunk ending)) false))
+        (recur to (str prefix chunk) blocks false)))
       (or drawer? (match "^ *:PROPERTIES: *$" line) (match "^ *:LOGBOOK: *$" line))
       (if (= "heading" (:type (last blocks)))
        (recur (inc row) "" (update-in blocks [(dec (count blocks)) :attrs :org/suffix] #(str % prefix raw))
@@ -48,13 +71,13 @@
       (recur (inc row) (str prefix raw) blocks false)
       :else
       (let [[type text attrs] (classify line)]
-       (recur (inc row) "" (conj blocks (block (str "org-" (count blocks)) type text attrs prefix raw ending)) false))))))))
+       (recur (inc row) "" (conj blocks (block (block-id blocks) type text attrs prefix raw ending)) false))))))))
 (defn- marked [block]
- (when (seq (:wraps block)) (fail :unsupported-block-function))
  (let [text (:text block) points (vec (unicode/characters_to_list text)) marks (:marks block)
        token (fn [m opening?]
                (case (get-in m [:call :function])
-                "text/bold" "*" "text/italic" "/" "text/underline" "_" "text/strike" "+" "text/code" "~"
+                "text/bold" "*" "text/emphasis" "/" "text/italic" "/" "text/underline" "_" "text/strike" "+" "text/code" "~"
+                "text/highlight" (if opening? (str "[[highlight:" (get-in m [:call :args :tone]) "][") "]]")
                 "text/link" (if opening? (str "[[" (get-in m [:call :args :href]) "][") "]]")
                 (fail :unsupported-inline-function)))]
   (join "" (for [at (range (inc (count points)))]
@@ -64,10 +87,15 @@
 (defn- serialize-block [block]
  (let [attrs (:attrs block) type (:type block) text (marked block) newline (get attrs :org/ending "\n")
        newline (if (empty? newline) "\n" newline)]
-  (str (:org/prefix attrs "")
+  (when-not (and (<= (count (:wraps block)) 1)
+                (every? #(and (= "text/callout" (:function %)) (contains? #{"note" "warning"} (get-in % [:args :tone]))) (:wraps block)))
+   (fail :unsupported-block-function))
+  (str (if (= (:wraps block) (:org/wraps attrs)) (:org/prefix attrs "")
+         (str (String/replace (:org/prefix attrs "") (Regex/compile! "(?im)^#\\+attr_enchant: +:callout +(note|warning)\\r?\\n?") "")
+              (join "" (map #(str "#+attr_enchant: :callout " (get-in % [:args :tone]) newline) (:wraps block)))))
    (if (and (= (:text block) (:org/text attrs)) (= type (:org/type attrs))
-            (empty? (:marks block)) (empty? (:wraps block))
-            (= (:level attrs) (:org/level attrs)) (= (:checked attrs) (:org/checked attrs)))
+            (= (:marks block) (:org/marks attrs)) (= (:wraps block) (:org/wraps attrs))
+            (= (:level attrs) (:org/level attrs)) (= (:checked attrs) (:org/checked attrs)) (= (:language attrs) (:org/language attrs)))
     (:org/raw attrs)
     (case type
      "paragraph" (str text newline)
@@ -75,13 +103,19 @@
      "bullet" (str "- " text newline)
      "ordered" (str "1. " text newline)
      "task" (str "- [" (if (:checked attrs) "X" " ") "] " text newline)
-     "quote" (str "#+begin_quote" newline text newline "#+end_quote" newline)
-     "callout" (str "#+begin_note" newline text newline "#+end_note" newline)
+     "quote" (str (:org/open attrs (str "#+begin_quote" newline)) text newline (:org/close attrs (str "#+end_quote" newline)))
+     "callout" (str (:org/open attrs (str "#+begin_note" newline)) text newline (:org/close attrs (str "#+end_note" newline)))
      "divider" (str "-----" newline)
      "image" (str "#+caption: " text newline "[[" (:src attrs) "]]" newline)
      "embed" (str "[[" (:href attrs) "][" text "]]" newline)
      "code" (do (when (match "(^|\\n) *#\\+end_src" text) (fail :code-delimiter))
-                (str "#+begin_src " (:language attrs "beam-lisp") newline text newline "#+end_src" newline))
+                (let [language (:language attrs "beam-lisp")
+                      _ (when-not (re-matches #"[A-Za-z0-9_+.#-]+" language) (fail :code-language))
+                      header (if-let [original (:org/open attrs)]
+                               (String/replace original (Regex/compile! "(?i)^( *#\\+begin_src +)[^ \\r\\n]+") (str "\\1" language))
+                               (str "#+begin_src " language newline))]
+                 (str header (when-not (empty? text) (str (String/replace text "\n" newline) newline))
+                      (:org/close attrs (str "#+end_src" newline)))))
      (fail :unsupported-block-type))) (:org/suffix attrs ""))))
 (defn write-source
  "Serialize the projection to ordinary Org. Untouched source is byte exact;
@@ -89,7 +123,8 @@
  [document]
  (when-let [original (get-in document [:meta :org/source])]
   (let [before (read-source original (:id document)) current (into {} (map (fn [b] [(:id b) b]) (:blocks document)))]
-   (doseq [b (:blocks before) key [:org/prefix :org/suffix] :when (not (blank? (get-in b [:attrs key] "")))]
+   (doseq [b (:blocks before) key [:org/prefix :org/suffix] :when (and (not (blank? (get-in b [:attrs key] "")))
+                              (or (= key :org/prefix) (contains? current (:id b))))]
     (when-not (= (get-in b [:attrs key]) (get-in current [(:id b) :attrs key]))
      (fail :protected-source)))
    (when-not (= (get-in before [:meta :org/header]) (get-in document [:meta :org/header])) (fail :protected-source))

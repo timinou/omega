@@ -1,0 +1,27 @@
+(ns omega.org-inline-test (:require [omega.org-inline :as inline] [omega.org-canvas :as canvas]))
+(deftest native-marks-and-links-project-to-rich-data
+ (let [source "Bold *مرحبا* and /gentle/ [[https://example.org][a link]] [[highlight:mint][useful]]."
+       parsed (inline/read-text source "inline")]
+  (is (= "Bold مرحبا and gentle a link useful." (:text parsed)))
+  (is (= #{"text/bold" "text/emphasis" "text/link" "text/highlight"} (set (map #(get-in % [:call :function]) (:marks parsed)))))
+  (is (= "مرحبا" (unicode/characters_to_binary (to-list (subvec (vec (unicode/characters_to_list (:text parsed))) 5 10)))))
+  (is (= source (canvas/write-source (canvas/read-source source "doc"))))))
+(deftest unsupported-links-stay-readable-source-and-code-is-literal
+ (is (= "[[id:elsewhere][Other]]" (:text (inline/read-text "[[id:elsewhere][Other]]" "x"))))
+ (let [parsed (inline/read-text "Use ~*literal*~ here." "x")]
+  (is (= "Use *literal* here." (:text parsed)))
+  (is (= ["text/code"] (mapv #(get-in % [:call :function]) (:marks parsed))))))
+(deftest formatted-edits-serialize-native-org-and-readable-callout-annotations
+ (let [doc (canvas/read-source "#+title: Notes\n\n*Bold* text.\n" "note")
+       next (-> doc (assoc-in [:blocks 0 :text] "Changed text.") (assoc-in [:blocks 0 :marks 0 :to] 7))
+       written (canvas/write-source next)]
+  (is (= "#+title: Notes\n\n*Changed* text.\n" written))
+  (is (= "Changed text." (get-in (canvas/read-source written "again") [:blocks 0 :text]))))
+ (let [doc (canvas/read-source "#+title: Notes\n\nPay attention.\n" "note")
+       call {:id "note-callout" :function "text/callout" :version 1 :args {:tone "warning"}}
+       written (canvas/write-source (assoc-in doc [:blocks 0 :wraps] [call]))
+       read (canvas/read-source written "again")]
+  (is (includes? written "#+attr_enchant: :callout warning\nPay attention."))
+  (is (= "warning" (get-in read [:blocks 0 :wraps 0 :args :tone])))
+  (is (= written (canvas/write-source read)))
+  (is (= "#+title: Notes\n\nPay attention.\n" (canvas/write-source (assoc-in read [:blocks 0 :wraps] []))))))

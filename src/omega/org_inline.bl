@@ -1,0 +1,38 @@
+;; Native Org inline marks, projected as data for a host's rich editor.
+(ns omega.org-inline (:require [clojure.re]))
+(defn- cut [s from size] (erlang/binary_part s from size))
+(defn- points [s] (erlang/length (unicode/characters_to_list s)))
+(defn- candidate [pattern text kind]
+ (when-let [matches (Regex/run pattern text (list (tuple :return :index)))]
+  {:from (elem (first matches) 0) :size (elem (first matches) 1)
+   :groups (mapv #(if (neg? (elem % 0)) "" (cut text (elem % 0) (elem % 1))) matches) :kind kind}))
+(defn- first-match [text]
+ (let [link (candidate #"\[\[([^\]\n]+)\]\[([^\]\n]*)\]\]" text :link)
+       style (candidate #"(^|[ \t(])([*/_+~=])([^\n]+?)\2(?=$|[ \t.,;:!?)])" text :style)]
+  (cond (nil? link) style (nil? style) link (< (:from link) (:from style)) link :else style)))
+(defn- style-function [marker]
+ (get {"*" "text/bold" "/" "text/emphasis" "_" "text/underline" "+" "text/strike" "~" "text/code" "=" "text/code"} marker))
+(declare read-text)
+(defn read-text [source seed]
+ (loop [remaining source plain "" marks [] serial 0]
+  (if-let [match (first-match remaining)]
+   (let [groups (:groups match) link? (= :link (:kind match))
+         lead (if link? "" (nth groups 1))
+         href (when link? (nth groups 1))
+         tone (when (and href (starts-with? href "highlight:")) (subs href 10))
+         supported? (or (not link?) (contains? #{"amber" "mint" "rose"} tone)
+                        (some? (re-find #"^(https?://|mailto:|/|#)" href)))
+         inner (nth groups (if link? 2 3))
+         code? (and (not link?) (contains? #{"~" "="} (nth groups 2)))
+         prefix (str (cut remaining 0 (:from match)) lead)
+         parsed (if code? {:text inner :marks []} (read-text inner (str seed "-" serial)))
+         start (points (str plain prefix)) length (points (:text parsed))
+         function (if link? (if tone "text/highlight" "text/link") (style-function (nth groups 2)))
+         call {:id (str seed "-mark-" serial) :function function :version 1 :args (if link? (if tone {:tone tone} {:href href}) {})}
+         tail (cut remaining (+ (:from match) (:size match)) (- (erlang/byte_size remaining) (:from match) (:size match)))]
+    (if (or (not supported?) (zero? length))
+     (recur tail (str plain (cut remaining 0 (+ (:from match) (:size match)))) marks (inc serial))
+     (recur tail (str plain prefix (:text parsed))
+      (into (conj marks {:call call :from start :to (+ start length)})
+            (mapv #(-> % (update :from + start) (update :to + start)) (:marks parsed))) (inc serial))))
+   {:text (str plain remaining) :marks marks})))
