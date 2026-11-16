@@ -22,8 +22,9 @@
  (let [lines (vec (String/split source "\n")) count-lines (count lines)]
   (loop [row 0 prefix "" blocks [] drawer? false]
    (if (>= row count-lines)
-    {:schema 2 :id id :meta {:title "Untitled" :icon "sparkles" :org/tail prefix :org/source source}
-     :blocks (if (seq blocks) blocks [(block "intro" "paragraph" "" {} "" "" "")])}
+    {:schema 2 :id id :meta {:title "Untitled" :icon "sparkles" :org/tail (if (seq blocks) prefix "")
+                            :org/header (if (seq blocks) (get-in blocks [0 :attrs :org/prefix]) source) :org/source source}
+     :blocks (if (seq blocks) (assoc-in blocks [0 :attrs :org/prefix] "") [(block "intro" "paragraph" "" {} "" "" "")])}
     (let [raw-line (nth lines row) line (if (ends-with? raw-line "\r") (erlang/binary_part raw-line 0 (dec (erlang/byte_size raw-line))) raw-line)
           ending (if (< row (dec count-lines)) (if (ends-with? raw-line "\r") "\r\n" "\n") "")
           raw (str line ending) begin (match "^ *#\\+begin_([^ ]+)(.*)$" line)]
@@ -36,7 +37,12 @@
             chunk (str (join "\n" (subvec lines row to)) (when (< to count-lines) "\n"))]
        (recur to (str prefix chunk) blocks false))
       (or drawer? (match "^ *:PROPERTIES: *$" line) (match "^ *:LOGBOOK: *$" line))
-      (recur (inc row) (str prefix raw) blocks (not (some? (match "^ *:END: *$" line))))
+      (if (= "heading" (:type (last blocks)))
+       (recur (inc row) "" (update-in blocks [(dec (count blocks)) :attrs :org/suffix] #(str % prefix raw))
+              (not (some? (match "^ *:END: *$" line))))
+       (recur (inc row) (str prefix raw) blocks (not (some? (match "^ *:END: *$" line)))))
+      (and (= "heading" (:type (last blocks))) (match "^ *(SCHEDULED:|DEADLINE:|CLOSED:)" line))
+      (recur (inc row) "" (update-in blocks [(dec (count blocks)) :attrs :org/suffix] #(str % prefix raw)) false)
       (or (blank? line) (starts-with? (trim line) "#") (starts-with? (trim line) "|")
           (match "^ *(SCHEDULED:|DEADLINE:|CLOSED:)" line))
       (recur (inc row) (str prefix raw) blocks false)
@@ -76,15 +82,16 @@
      "embed" (str "[[" (:href attrs) "][" text "]]" newline)
      "code" (do (when (match "(^|\\n) *#\\+end_src" text) (fail :code-delimiter))
                 (str "#+begin_src " (:language attrs "beam-lisp") newline text newline "#+end_src" newline))
-     (fail :unsupported-block-type))))))
+     (fail :unsupported-block-type))) (:org/suffix attrs ""))))
 (defn write-source
  "Serialize the projection to ordinary Org. Untouched source is byte exact;
   unsupported rich functions fail explicitly rather than losing behavior."
  [document]
  (when-let [original (get-in document [:meta :org/source])]
   (let [before (read-source original (:id document)) current (into {} (map (fn [b] [(:id b) b]) (:blocks document)))]
-   (doseq [b (:blocks before) :when (not (blank? (get-in b [:attrs :org/prefix] "")))]
-    (when-not (= (get-in b [:attrs :org/prefix]) (get-in current [(:id b) :attrs :org/prefix]))
+   (doseq [b (:blocks before) key [:org/prefix :org/suffix] :when (not (blank? (get-in b [:attrs key] "")))]
+    (when-not (= (get-in b [:attrs key]) (get-in current [(:id b) :attrs key]))
      (fail :protected-source)))
+   (when-not (= (get-in before [:meta :org/header]) (get-in document [:meta :org/header])) (fail :protected-source))
    (when-not (= (get-in before [:meta :org/tail]) (get-in document [:meta :org/tail])) (fail :protected-source))))
- (str (join "" (map serialize-block (:blocks document))) (get-in document [:meta :org/tail] "")))
+ (str (get-in document [:meta :org/header] "") (join "" (map serialize-block (:blocks document))) (get-in document [:meta :org/tail] "")))

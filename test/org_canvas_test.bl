@@ -10,3 +10,11 @@
 (deftest empty-and-unterminated-source-stay-exact
  (doseq [text ["" "#+title: Empty\n" "No trailing newline" "* Heading\nText\n\n"]]
   (is (= text (canvas/write-source (canvas/read-source text "x"))))))
+(deftest metadata-stays-outside-empty-writing-and-with-its-heading
+ (let [source "#+title: New note\n\n" doc (canvas/read-source source "note")
+       next (assoc-in doc [:blocks 0 :text] "Write here.")]
+  (is (= source (canvas/write-source doc)))
+  (is (= (str source "Write here.\n") (canvas/write-source next))))
+ (let [source "* TODO First\n:PROPERTIES:\n:ID: first\n:END:\n* TODO Second\n:PROPERTIES:\n:ID: second\n:END:\n"
+       doc (canvas/read-source source "tasks") moved (update doc :blocks #(vec (reverse %)))]
+  (is (= "* TODO Second\n:PROPERTIES:\n:ID: second\n:END:\n* TODO First\n:PROPERTIES:\n:ID: first\n:END:\n" (canvas/write-source moved)))))
