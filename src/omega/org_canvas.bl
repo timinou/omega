@@ -1,5 +1,6 @@
 ;; Portable Org <-> canvas projection. No database, UI, runtime or execution.
 (ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.org-inline :as inline] [omega.org-semantics :as semantics]))
+(def codec-revision "omega.org-canvas/2")
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
 ;; Native emphasis cannot represent partial-word or crossing ranges. A bounded
@@ -73,7 +74,7 @@
    (if (>= row count-lines)
     (let [[header affiliated] (if (seq blocks) (prefix-parts (get-in blocks [0 :attrs :org/prefix])) [source ""])]
      {:schema 2 :id id :meta {:title "Untitled" :icon "sparkles" :org/tail (if (seq blocks) prefix "")
-                             :org/header header :org/source source}
+                             :org/header header :org/source source :org/codec codec-revision}
       :blocks (if (seq blocks) (assoc-in blocks [0 :attrs :org/prefix] affiliated)
                 [(block "intro" "paragraph" "" {} "" "" "")])})
     (let [raw-line (nth lines row) line (if (ends-with? raw-line "\r") (erlang/binary_part raw-line 0 (dec (erlang/byte_size raw-line))) raw-line)
