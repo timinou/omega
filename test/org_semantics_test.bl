@@ -62,3 +62,16 @@
   (is (= "* Direction :project:\n:PROPERTIES:\n:ID: direction\n:END:\n" next))
   (is (= :project (:role object)))
   (is (nil? (:state object)))))
+
+(deftest planning-stamps-retain-clock-repeater-and-original-org-row
+ (let [text "* TODO Follow up\nSCHEDULED: <2026-11-16 Mon 10:30 ++1d> DEADLINE: [2026-11-20 Fri -2d]\n:PROPERTIES:\n:ID: clock\n:END:\nNotes.\n#+begin_src org\nSCHEDULED: <2000-01-01 ++1w>\n#+end_src\n"
+       object (first (:objects (org/read-source text)))]
+  (is (= "2026-11-16" (:scheduled object)))
+  (is (= "2026-11-20" (:deadline object)))
+  (is (= "10:30" (get-in object [:planning :scheduled :time])))
+  (is (= "++1d" (get-in object [:planning :scheduled :repeater])))
+  (is (= 1 (get-in object [:planning :scheduled :row])))
+  (is (true? (get-in object [:planning :deadline :valid-date?])))
+  (is (= "[2026-11-20 Fri -2d]" (get-in object [:planning :deadline :stamp]))))
+ (let [parsed (org/read-source "* TODO Fix date\nSCHEDULED: <2026-99-99>\n:PROPERTIES:\n:ID: bad\n:END:\n")]
+  (is (some #(= :planning-date (:code %)) (:diagnostics parsed)))))

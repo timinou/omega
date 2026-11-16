@@ -142,6 +142,6 @@
                 (let [text (serialize-block b)]
                  (if (and document-id (= "heading" (:type b)))
                   (:source (semantics/assign-identities text
-                    (fn [_] (str "org-" (subs (Base/encode16 (crypto/hash :sha256 (erlang/term_to_binary [document-id (:id b)]))
+                    (fn [_] (str "org-" (subs (Base/encode16 (crypto/hash :sha256 (erlang/term_to_binary [document-id (:id document) (:id b)]))
                                                           (list (tuple :case :lower))) 0 24))) profile)) text))) resolved)]
    (str (get-in document [:meta :org/header] "") (join "" parts) (get-in document [:meta :org/tail] ""))))))

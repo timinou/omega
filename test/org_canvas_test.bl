@@ -27,3 +27,14 @@
   (is (= (String/replace source "(+ 1 1)" "(+ 2 2)") (canvas/write-source next)))
   (is (includes? (canvas/write-source (assoc-in doc [:blocks 0 :attrs :language] "python")) "#+begin_src python :results value :id sum"))
   (is (thrown? (canvas/write-source (assoc-in doc [:blocks 0 :text] "#+end_src\nInjected"))))))
+
+(deftest new-work-identities-are-stable-within-an-editor-and-fresh-after-source-reset
+ (let [heading (fn [id] (-> (canvas/read-source "" id) (assoc-in [:blocks 0 :type] "heading")
+                           (assoc-in [:blocks 0 :attrs :level] 1) (assoc-in [:blocks 0 :text] "TODO New work")))
+       first (canvas/write-source (heading "first-editor") "shared-document")
+       second (canvas/write-source (heading "second-editor") "shared-document")
+       id (fn [text] (second (re-find #":ID: ([^\n]+)" text)))]
+  (is (string? (id first)))
+  (is (= first (canvas/write-source (heading "first-editor") "shared-document")))
+  (is (not= (id first) (id second)))
+  (is (= first (canvas/write-source (canvas/read-source first "third-editor") "shared-document")))))
