@@ -120,6 +120,7 @@
       (let [[type text attrs] (classify line)]
        (recur (inc row) "" (conj blocks (block (block-id blocks) type text attrs prefix raw ending)) false))))))))
 (defn- marked [block]
+ (if (empty? (:marks block)) (:text block)
  (let [text (:text block) points (vec (unicode/characters_to_list text)) marks (:marks block)
        token (fn [m opening?]
                (case (get-in m [:call :function])
@@ -130,7 +131,7 @@
   (join "" (for [at (range (inc (count points)))]
    (str (join "" (map #(token % false) (reverse (filterv #(= at (:to %)) marks))))
         (join "" (map #(token % true) (filterv #(= at (:from %)) marks)))
-        (when (< at (count points)) (unicode/characters_to_binary (list (nth points at)))))))))
+        (when (< at (count points)) (unicode/characters_to_binary (list (nth points at))))))))))
 (defn- serialize-block [block]
  (let [attrs (:attrs block) type (:type block) text (marked block) newline (get attrs :org/ending "\n")
        newline (if (empty? newline) "\n" newline)
