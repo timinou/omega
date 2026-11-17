@@ -33,9 +33,9 @@
  ([text profile]
  (let [index (source/index text) lines (:lines index)
        header-lines (mapcat (fn [span] (when (= :prose (:kind span)) (subvec lines (:from span) (:to span)))) (:blocks index))
-       declarations (keep #(second (re-find #"(?i)^#\+(?:TODO|SEQ_TODO|TYP_TODO): +(.*)$" %)) header-lines)
+       declarations (keep #(second (re-find #"(?i)^#\+(?:TODO|SEQ_TODO|TYP_TODO):[ \t]+(.*)$" %)) header-lines)
        sequences (mapv (fn [declaration]
-                     (let [words (mapv #(String/replace % #"\(.*\)$" "") (String/split declaration #" +"))
+                     (let [words (mapv #(String/replace % #"\(.*\)$" "") (String/split declaration #"[ \t]+"))
                            divider (first (keep-indexed #(when (= "|" %2) %1) words))
                            at (or divider (max 0 (dec (count words))))]
                        {:open (vec (take at words)) :done (vec (drop (if divider (inc at) at) words))})) declarations)
@@ -82,8 +82,8 @@
   (when-not (and (string? (get changes key)) (not (re-find #"[\r\n]" (get changes key))))
    (throw (ex-info "Use single-line text for Org object fields." {}))))
  (when (and (contains? changes :priority)
-            (not (and (string? (:priority changes)) (or (empty? (:priority changes)) (re-matches #"[A-Za-z0-9]" (:priority changes))))))
-  (throw (ex-info "Use one Org priority letter or digit, or empty text to clear it." {})))
+            (not (and (string? (:priority changes)) (or (empty? (:priority changes)) (heading/priority? (:priority changes))))))
+  (throw (ex-info "Use an Org priority letter or number0–64, or empty text to clear it." {})))
  (when (contains? changes :tags) (tag-values (:tags changes)))
  (when (and (contains? changes :done?) (not (boolean? (:done? changes))))
   (throw (ex-info "done? must be a boolean." {})))

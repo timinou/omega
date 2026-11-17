@@ -139,3 +139,40 @@
   (is (thrown? (heading/rewrite "TODO Middle :literal: :work:" workflow {:tags []}))))
  (let [workflow {:open ["IDEA"] :done ["SHIPPED"]}]
   (is (= "SHIPPED  [#B] Native" (heading/rewrite "IDEA  [#B] Native" workflow {:state "SHIPPED"})))))
+
+(deftest optional-native-titles-do-not-turn-metadata-into-task-text
+ (doseq [text ["TODO :work:" "TODO [#27] :work:" "TODO\t[#27]\t:work:" "TODO [#27]"]]
+  (let [f (heading/fields text heading/default-workflow)]
+   (is (= "" (:title f)))
+   (is (= "TODO" (:state f)))
+   (is (= "" (heading/slice text (:title/from f) (:title/to f))))
+   (is (= (if (includes? text "[#27]") "27" nil) (:priority f)))
+   (let [changed (heading/rewrite text heading/default-workflow {:title "🌱 é"})
+         next (heading/fields changed heading/default-workflow)]
+    (is (= "🌱 é" (:title next)))
+    (is (= (:state f) (:state next)))
+    (is (= (:priority f) (:priority next)))
+    (is (= (:tags f) (:tags next))))))
+ (let [source "* TODO [#27] :work:\n:PROPERTIES:\n:ID: empty\n:END:\n"
+       parsed (org/read-source source)]
+  (is (some #(= :empty-title (:code %)) (:diagnostics parsed)))
+  (is (= #{"work"} (get-in parsed [:objects 0 :tags])))
+  (is (= "27" (get-in parsed [:objects 0 :priority])))
+  (is (= "* TODO [#27] Fixed :work:\n:PROPERTIES:\n:ID: empty\n:END:\n"
+         (org/update-object source "empty" {:title "Fixed"})))))
+
+(deftest numeric-priorities-and-horizontal-seams-use-the-shared-grammar
+ (doseq [value ["0" "9" "10" "27" "59" "60" "64" "A" "Z" "a"]]
+  (is (heading/priority? value))
+  (let [text (str "TODO\t[#" value "]\t🌱 title\t:work:")
+        parsed (heading/fields text heading/default-workflow)]
+   (is (= value (:priority parsed)))
+   (is (= "🌱 title" (:title parsed)))
+   (is (= (String/replace text (str "[#" value "]") "[#12]")
+          (heading/rewrite text heading/default-workflow {:priority "12"})))))
+ (doseq [value ["65" "99" "100" "AB" "-1" "1.5" "" nil]]
+  (is (not (heading/priority? value))))
+ (let [source "#+TODO:\tREADY(r)\tACTIVE(a) |\tFINISHED(f)\n* READY\t[#27]\tNative\t:work:\n:PROPERTIES:\n:ID: tabs\n:END:\n"
+       next (org/update-object source "tabs" {:priority "64" :state "FINISHED"})]
+  (is (= (-> source (String/replace "* READY" "* FINISHED") (String/replace "[#27]" "[#64]")) next))
+  (is (= "Native" (get-in (org/read-source next) [:objects 0 :title])))))

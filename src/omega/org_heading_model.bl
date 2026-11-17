@@ -6,18 +6,22 @@
 (defn length [text] (erlang/length (unicode/characters_to_list text)))
 (defn slice [text from to]
  (unicode/characters_to_binary (to-list (subvec (vec (unicode/characters_to_list text)) from to))))
+(def priority-pattern "(?:[A-Za-z]|[0-5]?[0-9]|6[0-4])")
+(def priority-value-pattern (Regex/compile! priority-pattern))
+(def priority-cookie-pattern (Regex/compile! (str "^\\[#(" priority-pattern ")\\](?:[ \\t]+|$)")))
+(defn priority? [value] (boolean (and (string? value) (re-matches priority-value-pattern value))))
 (defn fields
  "Interpret a headline body, without its leading stars. Title bounds are
   Unicode codepoints in the original body, not bytes or markup offsets."
  [text workflow]
  (let [body (trim text) leading (length (or (re-find #"^\s*" text) ""))
-       word (first (split body #" +"))
+       word (first (split body #"[ \t]+"))
        state (when (contains? (set (concat (:open workflow) (:done workflow))) word) word)
        after-state (if state (trim (slice body (length state) (length body))) body)
-       priority-match (re-find #"^\[#([A-Za-z0-9])\] +" after-state)
+       priority-match (re-find priority-cookie-pattern after-state)
        priority (second priority-match)
        after-priority (if priority (slice after-state (length (first priority-match)) (length after-state)) after-state)
-       tag-match (re-find #" +(:[A-Za-z0-9_@#%:-]+:) *$" after-priority)
+       tag-match (re-find #"(?:^|[ \t]+)(:[A-Za-z0-9_@#%:-]+:)[ \t]*$" after-priority)
        tags (if tag-match (vec (remove empty? (split (second tag-match) ":"))) [])
        before-tags (if tag-match (slice after-priority 0 (- (length after-priority) (length (first tag-match)))) after-priority)
        title (trim before-tags)
@@ -27,7 +31,7 @@
    :state/from leading :state/to (+ leading (if state (length state) 0))
    :state/next (+ leading (- (length body) (length after-state)))
    :priority/from (+ leading (- (length body) (length after-state)))
-   :priority/to (+ leading (- (length body) (length after-state)) (if priority 4 0))
+   :priority/to (+ leading (- (length body) (length after-state)) (if priority (+ 3 (length priority)) 0))
    :tags/from (when tag-match (- (+ leading (length body)) (length (second tag-match))))
    :tags/to (when tag-match (+ leading (length body)))}))
 (defn tag-values [value]
@@ -53,8 +57,8 @@
    (throw (ex-info "Choose a state declared by the document workflow." {}))))
  (when (contains? changes :priority)
   (when-not (and (string? (:priority changes))
-                (or (empty? (:priority changes)) (re-matches #"[A-Za-z0-9]" (:priority changes))))
-   (throw (ex-info "Use one Org priority letter or digit, or empty text." {}))))
+                (or (empty? (:priority changes)) (priority? (:priority changes))))
+   (throw (ex-info "Use an Org priority letter or number0–64, or empty text." {}))))
  (when (contains? changes :title)
   (when-not (and (string? (:title changes)) (not (blank? (:title changes)))
                 (not (re-find #"[\r\n]" (:title changes))))
@@ -76,7 +80,11 @@
                             (if (:tags/from f)
                              (replace-range text (if token (:tags/from f) (:title/to f)) (:tags/to f) (or token ""))
                              (if token (replace-range text (:title/to f) (:title/to f) (str " " token)) text)))
-                    :title (replace-range text (:title/from f) (:title/to f) value)))))) text [:state :priority :tags :title])
+                    :title (let [from (:title/from f) to (:title/to f) empty-title? (empty? (:title f))
+                                 before (slice text 0 from) after (slice text to (length text))
+                                 prefix (when (and empty-title? (not (empty? before)) (not (re-find #"[ \t]$" before))) " ")
+                                 suffix (when (and empty-title? (not (empty? after)) (not (re-find #"^[ \t]" after))) " ")]
+                             (replace-range text from to (str prefix value suffix)))))))) text [:state :priority :tags :title])
        actual (fields result workflow)]
   (doseq [[key value] changes]
    (when-not (= (if (= key :title) (trim value) (if (and (= key :priority) (empty? value)) nil value)) (get actual key))
