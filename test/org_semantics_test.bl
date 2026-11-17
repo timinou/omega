@@ -198,3 +198,9 @@
   (is (= "* TODO [#64] New title\n:PROPERTIES:\n:ID: repair-priority\n:END:\n" repaired))
   (is (= {:title "New title" :priority "64" :state "TODO"}
          (select-keys (first (:objects (org/read-source repaired))) [:title :priority :state])))))
+
+(deftest restoring-an-empty-title-reuses-both-native-separators
+ (let [text "TODO [#27]  :work:" f (heading/fields text heading/default-workflow)]
+  (is (= [11 11] [(:title/from f) (:title/to f)]))
+  (is (= "TODO [#27] Fixed :work:" (heading/rewrite text heading/default-workflow {:title "Fixed"})))
+  (is (= "TODO Fixed :work:" (heading/rewrite "TODO  :work:" heading/default-workflow {:title "Fixed"})))))

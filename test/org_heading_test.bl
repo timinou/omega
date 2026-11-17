@@ -7,6 +7,7 @@
 (deftest empty-heading-title-input-preserves-metadata-mark-ranges-and-source
  (doseq [[text expected at] [["TODO" "TODO 🌱" 4] ["TODO " "TODO 🌱" 5] ["TODO\t" "TODO\t🌱" 5] ["TODO [#27]" "TODO [#27] 🌱" 10]
                              ["TODO [#27] :work:" "TODO [#27] 🌱 :work:" 11]
+                             ["TODO [#27]  :work:" "TODO [#27] 🌱 :work:" 11]
                              [":work:" "🌱 :work:" 0]]]
   (let [source (str "* " text "\n:PROPERTIES:\n:ID: heading\n:END:\n")
         doc (d/prepare (canvas/read-source source "heading-field")) id (get-in doc [:blocks 0 :id])

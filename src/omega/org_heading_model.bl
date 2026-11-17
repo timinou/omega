@@ -67,6 +67,11 @@
        tags (if tag-match (vec (remove empty? (split (second tag-match) ":"))) [])
        before-tags (if tag-match (slice after-priority 0 (- (length after-priority) (length (first tag-match)))) after-priority)
        title (trim before-tags)
+       metadata-to (if priority priority-to state-to)
+       ;; Empty titles reuse an existing separator on each side. Choosing the
+       ;; tag's start would add a third separator after deleting a normal title.
+       from (if (and tag-match (empty? title) (or state priority))
+              (+ metadata-to (if (< metadata-to tag-from) 1 0)) from)
        to (+ from (length title))]
   {:title title :state state :priority priority :tags tags :title/from from :title/to to
    :state/from leading :state/to state-to :state/next priority-from
