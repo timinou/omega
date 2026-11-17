@@ -99,3 +99,36 @@
   (doseq [[from to text] [[0 4 "DONE"] [5 17 "replace"] [5 5 "Two\nlines"]]]
    (is (thrown? (input/plan ext {:document doc} {:op "text/replace" :block id :from from :to to :text text}
                   {:input true :id "outside"}))))))
+(deftest enter-splits-only-title-content-with-rich-ranges-and-one-inverse
+ (let [source "* TODO [#27] *Left 🌱 right* :work:\r\n:PROPERTIES:\r\n:ID: heading\r\n:END:\r\nBody.\r\n"
+       doc (d/prepare (canvas/read-source source "enter")) block (first (:blocks doc)) id (:id block)
+       f (heading/fields block doc) registry (:functions ext)]
+  (doseq [[from to left right before?] [[(:title/from f) (:title/from f) "Left 🌱 right" "" true]
+                                       [(+ (:title/from f) 6) (+ (:title/from f) 6) "Left 🌱" " right" false]
+                                       [(:title/to f) (:title/to f) "Left 🌱 right" "" false]
+                                       [(+ (:title/from f) 4) (+ (:title/from f) 7) "Left" "right" false]]]
+   (let [context {:document doc :seed "enter" :selection {:anchor {:block id :offset from} :head {:block id :offset to}}}
+         plan (heading/paragraph context {}) edit (d/apply-op registry doc {:op "batch" :ops (:ops plan)})
+         after (:document edit) old (d/find-block after id) new (d/find-block after "enter/paragraph")
+         after-fields (heading/fields old after) written (canvas/write-source after)]
+    (is (= left (:title after-fields)))
+    (is (= right (:text new)))
+    (is (= {:state "TODO" :priority "27" :tags ["work"]} (select-keys after-fields [:state :priority :tags])))
+    (is (= "paragraph" (:type new)))
+    (is (= (if before? 0 1) (d/block-index after (:id new))))
+    (is (= 0 (get-in plan [:selection :head :offset])))
+    (is (includes? written ":ID: heading\r\n:END:\r\n"))
+    (is (= doc (:document (d/apply-op registry after (:inverse edit)))))))))
+(deftest boundary-keys-navigate-without-joining-native-heading-metadata
+ (let [doc (d/prepare (canvas/read-source "Before.\n* TODO Heading :work:\nAfter.\n" "boundaries"))
+       heading-block (nth (:blocks doc) 1) f (heading/fields heading-block doc)
+       context (fn [block offset] {:document doc :selection {:anchor {:block block :offset offset :affinity "right"} :head {:block block :offset offset :affinity "right"}}})
+       at-start (context (:id heading-block) (:title/from f)) at-end (context (:id heading-block) (:title/to f))
+       before (first (:blocks doc)) after (nth (:blocks doc) 2)]
+  (is (heading/backward-boundary? at-start))
+  (is (heading/forward-boundary? at-end))
+  (is (not (heading/backward-boundary? (context (:id heading-block) (inc (:title/from f))))))
+  (is (= (:selection at-start) (:selection (heading/backward-boundary at-start {}))))
+  (is (= (:selection at-end) (:selection (heading/forward-boundary at-end {}))))
+  (is (= (:selection at-start) (:selection (heading/forward-boundary (context (:id before) (d/length (:text before))) {}))))
+  (is (= (:selection at-end) (:selection (heading/backward-boundary (context (:id after) 0) {}))))))
