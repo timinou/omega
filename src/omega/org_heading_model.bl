@@ -7,7 +7,7 @@
 (defn slice [text from to]
  (unicode/characters_to_binary (to-list (subvec (vec (unicode/characters_to_list text)) from to))))
 (def priority-pattern "(?:[A-Za-z]|[0-5]?[0-9]|6[0-4])")
-(def priority-value-pattern (Regex/compile! priority-pattern))
+(def priority-value-pattern (Regex/compile! (str "^" priority-pattern "$")))
 (def priority-cookie-pattern (Regex/compile! (str "^\\[#(" priority-pattern ")\\](?:[ \\t]+|$)")))
 (defn priority? [value] (boolean (and (string? value) (re-matches priority-value-pattern value))))
 (defn fields
