@@ -23,7 +23,13 @@
  [workflow]
  (let [sequences (:sequences workflow)
        ordered (fn [key] (if (seq sequences) (vec (distinct (mapcat key sequences))) (vec (sort (get workflow key)))))]
-  {:open (ordered :open) :done (ordered :done) :sequences (vec sequences)}))
+  (let [data {:open (ordered :open) :done (ordered :done) :sequences (vec sequences)}
+        words (concat (:open data) (:done data))]
+   (when-not (and (<= (count words) 128) (<= (count sequences) 64)
+                  (every? #(and (string? %) (<= 1 (erlang/byte_size %) 320)) words)
+                  (<= (erlang/byte_size (pr-str data)) 16384))
+    (throw (ex-info "Keep the visual workflow below 128 states and 16 KB; use Source for larger declarations." {:kind :omega/org-workflow})))
+   data)))
 (defn length [text] (erlang/length (unicode/characters_to_list text)))
 (defn slice [text from to]
  (unicode/characters_to_binary (to-list (subvec (vec (unicode/characters_to_list text)) from to))))

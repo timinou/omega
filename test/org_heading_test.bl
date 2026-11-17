@@ -1,6 +1,6 @@
 (ns omega.org-heading-test
  (:require [omega.org-heading :as heading] [omega.org-canvas :as canvas]
-           [live.edit.input :as input] [live.edit.document :as d]
+           [live.edit.input :as input] [live.edit.commands :as commands] [live.edit.projection :as projection] [live.edit.document :as d]
            [omega.org-presentation :as presentation] [omega.org-semantics :as semantics]
            [live.edit.extensions :as extensions] [live.edit.standard :as standard]))
 (def ext (extensions/build [standard/package presentation/package {:name "heading-typing-test" :provides {:editor/typing heading/typing}}]))
@@ -171,3 +171,27 @@
    (is (= "" (:title cut-fields)))
    (is (= (:tags fields) (:tags cut-fields)))
    (is (= after (:document (d/apply-op (:functions ext) (:document edit) (:inverse edit))))))))
+
+(deftest heading-package-uses-source-workflow-current-values-and-clipped-rich-title
+ (let [source "#+TODO: READY(r) None(n) | FINISHED(f)\r\n* READY [#27] *Rich* :work:\r\n"
+       doc (d/prepare (canvas/read-source source "surface")) id (get-in doc [:blocks 0 :id])
+       installed (extensions/build [standard/package presentation/package heading/package])
+       context {:document doc :selection {:anchor {:block id :offset 11} :head {:block id :offset 15}}}
+       items (into {} (map (fn [item] [(:id item) item]) (commands/query installed context)))
+       tree (pr-str (projection/node installed (first (:blocks doc)) {:document doc}))
+       state-item (get items "org/heading-state")
+       plan (commands/plan installed context "org/heading-state" {:value "None"} "custom-none")
+       after (:document (d/apply-op (:functions installed) doc {:op "batch" :ops (:ops plan)}))]
+  (is (= ["" "READY" "None" "FINISHED"] (get-in state-item [:params :value :values])))
+  (is (= "READY" (get-in state-item [:params :value :default])))
+  (is (= "27" (get-in items ["org/heading-priority" :params :value :default])))
+  (is (= "work" (get-in items ["org/heading-tags" :params :value :default])))
+  (is (= "None" (:state (heading/fields (first (:blocks after)) after))))
+  (is (includes? tree "Heading title"))
+  (is (includes? tree "data-edit-isolated"))
+  (is (includes? tree "data-edit-start 12"))
+  (is (includes? tree "data-edit-tail 7"))
+  (is (includes? tree "Heading fields"))
+  (is (includes? tree "Change heading state"))
+  (is (includes? tree "Rich"))
+  (is (get-in items ["org/heading-paragraph" :enabled]))))

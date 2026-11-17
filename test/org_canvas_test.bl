@@ -160,3 +160,9 @@
   (is (= "A revised paragraph.\nA deliberate break." (get-in reread [:blocks 0 :text])))
   (is (ends-with? written "\r\n* Heading\r\nA separate paragraph.\r\n"))
   (is (= written (canvas/write-source reread)))))
+
+(deftest oversized-visual-workflows-retain-the-exact-native-document
+ (let [source (str "#+TODO: " (join " " (map #(str "STATE" %) (range 129))) " | DONE\r\n* STATE1 Heading\r\n")
+       doc (canvas/read-source source "workflow-budget")]
+  (is (= ["org-retained"] (mapv :type (:blocks doc))))
+  (is (= source (canvas/write-source doc)))))

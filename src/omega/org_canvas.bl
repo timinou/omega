@@ -69,9 +69,10 @@
   are retained verbatim. Editable block IDs belong to this projection session."
  [source id]
  (let [lines (vec (String/split source "\n")) count-lines (count lines)
-       workflow (heading/workflow-data (:workflow (semantics/read-source source)))]
+       workflow (try (heading/workflow-data (:workflow (semantics/read-source source))) (catch _ nil))]
   (loop [row 0 prefix "" blocks [] drawer? false next-block 0]
    (cond
+    (nil? workflow) (retained-document source id)
     (> (count blocks) 9999) (retained-document source id)
     (>= row count-lines)
     (let [[header affiliated] (if (seq blocks) (prefix-parts (get-in blocks [0 :attrs :org/prefix])) [source ""])]
