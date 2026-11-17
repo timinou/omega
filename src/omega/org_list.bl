@@ -1,5 +1,5 @@
 ;; Native list lexical rules, shared by the portable reader and writer.
-(ns omega.org-list (:require [clojure.re] [omega.org-paragraph :as paragraph]))
+(ns omega.org-list (:require [clojure.re] [omega.org-paragraph :as paragraph] [omega.org-list-model :as model]))
 (defn indentation [prefix]
  (reduce (fn [column point] (if (= point 9) (+ column (- 8 (mod column 8))) (inc column)))
          0 (unicode/characters_to_list prefix)))
@@ -33,10 +33,7 @@
                  (or (nil? counter) (and (string? counter) (re-matches #"[0-9]+" counter)))
                  (contains? #{nil "unchecked" "checked" "mixed"} checkbox))
    (throw (ex-info "Choose a native Org list marker and indentation." {:kind :omega/org-list})))
-  (str (apply str (repeat indent " "))
-       (if ordinal (str ordinal (subs bullet (dec (count bullet)))) bullet) " "
-       (when counter (str "[@" counter "] "))
-       (when checkbox (str "[" (get {"unchecked" " " "checked" "X" "mixed" "-"} checkbox) "] ")))))
+  (str (apply str (repeat indent " ")) (model/prefix item))))
 
 (defn line-indent [line]
  (indentation (or (second (re-find #"^([ \t]*)" line)) "")))

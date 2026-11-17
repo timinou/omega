@@ -21,6 +21,11 @@
     :ordinal-value (when numeric? (or (:ordinal-value old) 1))
     :counter (if owned-counter? (when (some? counter) (str counter)) (:counter old))
     :counter-value counter :checkbox checkbox})))
+(defn prefix [item]
+ (let [marker (:marker item) ordinal (:ordinal item) counter (:counter item) checkbox (:checkbox item)]
+  (str (if ordinal (str ordinal (subs marker (dec (count marker)))) marker) " "
+       (when counter (str "[@" counter "] "))
+       (when checkbox (str "[" (get {"unchecked" " " "checked" "X" "mixed" "-"} checkbox) "] ")))))
 (defn ordered? [block] (some? (:ordinal (item block))))
 (defn numbers [siblings]
  (loop [remaining siblings value nil out {}]

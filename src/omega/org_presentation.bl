@@ -87,7 +87,10 @@
          blocks (mapv (fn [b]
                          (let [portable (update b :attrs #(into {} (remove (fn [[key _]] (starts-with? (str key) "org/")) %)))]
                           (if partial? (assoc portable :type "paragraph" :attrs {} :parent nil :slot "body" :wraps []) portable))) fragments)]
-    {:blocks blocks :text (join "\n" (map :text blocks))}))))
+    {:blocks blocks
+     :text (let [depths (reduce (fn [out b] (assoc out (:id b) (if (contains? out (:parent b)) (inc (get out (:parent b))) 0))) {} blocks)]
+             (join "\n" (map (fn [b] (str (apply str (repeat (* 2 (get depths (:id b))) " "))
+                                       (when-let [item (lists/item b)] (lists/prefix item)) (:text b))) blocks)))}))))
 (def package
  {:name "omega-org-presentation"
   :provides {:editor/clipboard {:copy clipboard-copy}

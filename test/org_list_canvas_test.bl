@@ -148,6 +148,7 @@
        partial (presentation/clipboard-copy (assoc ctx :selection {:anchor {:block (:id parent) :offset 1}
                                                                   :head {:block (:id parent) :offset 4}}) {})]
   (is (= 2 (count (:blocks copied))))
+  (is (= "5) [@8] [-] Parent\n  - Child" (:text copied)))
   (is (every? #(not (contains? (:attrs %) :org/raw)) (:blocks copied)))
   (is (= "task" (:type item)))
   (is (= "mixed" (:checkbox (lists/item item))))
