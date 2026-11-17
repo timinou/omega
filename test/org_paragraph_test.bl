@@ -23,4 +23,4 @@
 
 (deftest leading-and-trailing-visible-breaks-survive-the-native-codec
  (doseq [text ["One\n" "\nTwo" "\n" "One\n\n"]]
-  (is (= text (:text (paragraph/read-at (vec (String/split (paragraph/write-text text "\n") "\n")) 0)))))))
+  (is (= text (:text (paragraph/read-at (vec (String/split (paragraph/write-text text "\n") "\n")) 0))))))
