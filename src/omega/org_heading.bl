@@ -118,3 +118,48 @@
      (when (or envelope (seq literal))
       (cond-> {:op (if (= 1 (count (into ops literal))) (first ops) {:op "batch" :ops (into ops literal)})}
         (contains? envelope :selection) (assoc :selection (:selection envelope)))))))))
+(defn- selected-heading [context]
+ (let [selection (:selection context) a (:anchor selection) z (:head selection)
+       block (document/find-block (:document context) (:block a))]
+  (when (and block (= "heading" (:type block)) (= (:block a) (:block z)))
+   [block (min (:offset a) (:offset z)) (max (:offset a) (:offset z))])))
+(defn heading-selection? [context] (boolean (selected-heading context)))
+(defn paragraph
+ "Keep heading metadata and identity together. Enter moves only the right title
+  into a fresh ordinary paragraph; at the beginning it inserts before the heading."
+ [context _]
+ (let [[block from to] (selected-heading context) doc (:document context)
+       f (fields block doc) start (:title/from f) end (:title/to f)
+       _ (when-not (and block (<= start from to end)) (throw (ex-info "Select a heading title." {})))
+       id (str (:seed context) "/paragraph") beginning? (= start from to)
+       text (if beginning? "" (heading/slice (:text block) to end))
+       marks (if beginning? []
+               (vec (keep (fn [mark]
+                           (let [a (max to (:from mark)) z (min end (:to mark))]
+                            (when (< a z) (assoc mark :from (- a to) :to (- z to))))) (:marks block))))
+       fresh (assoc (document/block id text) :marks marks :parent (:parent block) :slot (:slot block "body"))
+       remove (when-not beginning? {:op "text/replace" :block (:id block) :from from :to end
+                                     :expected (heading/slice (:text block) from end) :text "" :styles []})
+       after (if remove (:document (document/apply-trusted {} doc remove)) doc)
+       literal (when remove (protect-metadata after (:id block) (select-keys f [:state :priority :tags]) (str (:seed context) "/enter")))
+       insert {:op "node/insert" :blocks [fresh] :parent (:parent block) :slot (:slot block "body")
+               :after (if beginning? (document/previous-sibling doc block) (:id block))}
+       point {:block id :offset 0 :affinity "right"}]
+  {:ops (vec (concat (when remove [remove]) literal [insert])) :selection {:anchor point :head point}}))
+(defn- boundary [context backward?]
+ (let [doc (:document context) selection (:selection context) a (:anchor selection) z (:head selection)
+       block (document/find-block doc (:block a)) index (when block (document/block-index doc (:id block)))
+       same? (and block (= (select-keys a [:block :offset]) (select-keys z [:block :offset])))
+       f (when (= "heading" (:type block)) (fields block doc))
+       neighbour (when (and same? (if backward? (= (:offset a) 0) (= (:offset a) (heading/length (:text block)))))
+                   (nth (:blocks doc) (+ index (if backward? -1 1)) nil))]
+  (cond
+   (and same? f (= (:offset a) (if backward? (:title/from f) (:title/to f)))) a
+   (and same? (= "heading" (:type neighbour)))
+   {:block (:id neighbour) :offset (get (fields neighbour doc) (if backward? :title/to :title/from)) :affinity "right"})))
+(defn backward-boundary? [context] (boolean (boundary context true)))
+(defn forward-boundary? [context] (boolean (boundary context false)))
+(defn backward-boundary [context _]
+ (let [point (boundary context true)] {:ops [] :selection {:anchor point :head point}}))
+(defn forward-boundary [context _]
+ (let [point (boundary context false)] {:ops [] :selection {:anchor point :head point}}))
