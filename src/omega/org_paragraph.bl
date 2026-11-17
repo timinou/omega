@@ -12,6 +12,12 @@
        hard? (ends-with? trailing "\\\\")]
   {:text (trim (if hard? (erlang/binary_part trailing 0 (- (erlang/byte_size trailing) 2)) line))
    :separator (if hard? "\n" " ")}))
+(defn logical-text
+ "Join physical prose lines, including list-item bodies, without owning syntax."
+ [physical]
+ (let [parts (mapv physical-part physical)]
+  (join "" (map-indexed (fn [index part]
+                         (str (:text part) (when (or (< index (dec (count parts))) (= "\n" (:separator part))) (:separator part)))) parts))))
 (defn read-at
  "Read contiguous physical prose as one logical paragraph. Return nil at a
   structural boundary. Raw source, mixed endings and final newline stay exact."
@@ -19,9 +25,7 @@
  (when (and (< row (count lines)) (prose-line? (nth lines row)))
   (let [to (loop [at (inc row)]
             (if (and (< at (count lines)) (prose-line? (nth lines at))) (recur (inc at)) at))
-        physical (subvec lines row to) parts (mapv physical-part physical)
-        text (join "" (map-indexed (fn [index part]
-                                    (str (:text part) (when (or (< index (dec (count parts))) (= "\n" (:separator part))) (:separator part)))) parts))
+        physical (subvec lines row to) text (logical-text physical)
         last-line (last physical)
         ending (if (< to (count lines)) (if (ends-with? last-line "\r") "\r\n" "\n") "")]
    {:to to :text text :ending ending

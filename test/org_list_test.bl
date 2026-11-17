@@ -24,3 +24,20 @@
                {:marker "-" :checkbox "unknown"}]]
   (is (thrown? (org-list/prefix item 0))))
  (is (thrown? (org-list/prefix {:marker "-"} -1))))
+
+(deftest list-reader-builds-hierarchy-continuations-and-source-owned-child-blocks
+ (let [source "- First 🌱\r\n  soft continuation\r\n  + Child\r\n\r\n  A second paragraph.\r\n\r\n  #+name: literal\r\n  #+begin_src org\r\n* A literal heading inside the cell\r\n  #+end_src\r\n  | Name | Count |\r\n  | A | 2 |\r\n- [@3] [-] Next\r\n\r\nAfter the list.\r\n"
+       lines (vec (String/split source "\n")) result (org-list/read-at lines 0 "list") blocks (:blocks result)
+       reconstructed (join "" (map #(str (:prefix %) (:raw %)) blocks))
+       expected (str (join "\n" (subvec lines 0 13)) "\n")]
+  (is (= 13 (:to result)))
+  (is (= ["bullet" "bullet" "paragraph" "org-retained" "org-retained" "task"] (mapv :type blocks)))
+  (is (= [nil "list" "list" "list" "list" nil] (mapv :parent blocks)))
+  (is (= "First 🌱 soft continuation" (:text (first blocks))))
+  (is (= "mixed" (get-in (last blocks) [:list :checkbox])))
+  (is (= "3" (get-in (last blocks) [:list :counter])))
+  (is (= "src" (:kind (nth blocks 3))))
+  (is (= "\r\n  #+name: literal\r\n" (:prefix (nth blocks 3))))
+  (is (= "table" (:kind (nth blocks 4))))
+  (is (= expected reconstructed))
+))

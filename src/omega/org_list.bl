@@ -35,3 +35,81 @@
        (if ordinal (str ordinal (subs bullet (dec (count bullet)))) bullet) " "
        (when counter (str "[@" counter "] "))
        (when checkbox (str "[" (get {"unchecked" " " "checked" "X" "mixed" "-"} checkbox) "] ")))))
+
+(defn- line-indent [line]
+ (indentation (or (second (re-find #"^([ \t]*)" line)) "")))
+(defn- begin-kind [line]
+ (second (re-find #"(?i)^ *#\+begin_([A-Za-z0-9_-]+)(?: .*|$)" (paragraph/line-text line))))
+(defn- block-to [lines row limit kind]
+ (let [pattern (Regex/compile! (str "(?i)^ *#\\+end_" kind " *\\r?$"))]
+  (loop [at (inc row)]
+   (cond (>= at limit) limit
+         (re-find pattern (nth lines at)) (inc at)
+         :else (recur (inc at))))))
+(defn- region-to [lines row base]
+ (loop [at row]
+  (if (>= at (count lines)) at
+   (let [line (nth lines at) item (marker line) indent (line-indent line)]
+    (cond
+     (blank? line)
+     (let [next (nth lines (inc at) "") next-item (marker next)]
+      (if (and (not (blank? next)) (or (and next-item (<= base (:indent next-item))) (> (line-indent next) base)))
+       (recur (inc at)) at))
+     (and item (<= base (:indent item))) (recur (inc at))
+     (and (> indent base) (begin-kind line)) (recur (block-to lines at (count lines) (begin-kind line)))
+     (> indent base) (recur (inc at))
+     :else at)))))
+(defn- raw-span [lines row to]
+ (str (join "\n" (subvec lines row to)) (when (< to (count lines)) "\n")))
+(defn- ending-at [lines to]
+ (if (< to (count lines)) (if (ends-with? (nth lines (dec to)) "\r") "\r\n" "\n") ""))
+(defn- plain-continuation? [line indent]
+ (and (> (line-indent line) indent) (not (marker line)) (paragraph/prose-line? (trim (paragraph/line-text line)))))
+(defn read-at
+ "Read a bounded list tree as source-owned descriptors. Paragraph continuations
+  and unsupported nested constructs keep their order and exact raw source."
+ [lines row seed]
+ (when-let [first-item (marker (nth lines row ""))]
+  (let [limit (region-to lines row (:indent first-item))]
+   (loop [at row stack [] out [] prefix ""]
+    (cond
+     (or (> (count out) 4096) (> (count stack) 64))
+     {:to limit :retained true :raw (raw-span lines row limit) :reason "Large Org list"}
+     (>= at limit) {:to limit :blocks out :tail prefix}
+     :else
+     (let [line (nth lines at) item (marker line)]
+      (cond
+       (blank? line) (recur (inc at) stack out (str prefix (raw-span lines at (inc at))))
+       item
+       (let [stack (vec (take-while #(< (:indent %) (:indent item)) stack))
+             parent (:id (last stack)) id (if (= at row) seed (str seed "/item/" at))
+             to (loop [end (inc at)]
+                 (if (and (< end limit) (plain-continuation? (nth lines end) (:indent item))) (recur (inc end)) end))
+             body (into [(:text item)] (mapv #(trim (paragraph/line-text %)) (subvec lines (inc at) to)))
+             descriptor {:id id :type (:type item) :text (paragraph/logical-text body) :parent parent
+                         :row at :to to :indent (:indent item) :list item
+                         :prefix prefix :raw (raw-span lines at to) :ending (ending-at lines to)}]
+        (recur to (conj stack {:id id :indent (:indent item)}) (conj out descriptor) ""))
+       ;; Affiliations/comments stay bound to their following child block.
+       (and (starts-with? (trim line) "#") (not (begin-kind line)))
+       (recur (inc at) stack out (str prefix (raw-span lines at (inc at))))
+       :else
+       (let [indent (line-indent line) stack (vec (take-while #(< (:indent %) indent) stack))
+             parent (:id (last stack)) kind (or (begin-kind line) (when (starts-with? (trim line) "|") "table"))
+             plain? (paragraph/prose-line? (trim (paragraph/line-text line)))
+             to (cond (= "table" kind) (loop [end (inc at)]
+                                         (if (and (< end limit) (starts-with? (trim (nth lines end)) "|")) (recur (inc end)) end))
+                      kind (block-to lines at limit kind)
+                      plain? (loop [end (inc at)]
+                              (if (and (< end limit) (plain-continuation? (nth lines end) (:indent (last stack))))
+                               (recur (inc end)) end))
+                      :else (loop [end (inc at)]
+                              (if (and (< end limit) (not (blank? (nth lines end)))
+                                        (not (marker (nth lines end))) (> (line-indent (nth lines end)) (:indent (last stack)))
+                                        (not (paragraph/prose-line? (trim (paragraph/line-text (nth lines end))))))
+                               (recur (inc end)) end)))
+             descriptor {:id (str seed "/body/" at) :type (if plain? "paragraph" "org-retained")
+                         :text (if plain? (paragraph/logical-text (mapv #(trim (paragraph/line-text %)) (subvec lines at to))) "")
+                         :parent parent :row at :to to :indent indent :kind (or kind "list content")
+                         :prefix prefix :raw (raw-span lines at to) :ending (ending-at lines to)}]
+        (recur to stack (conj out descriptor) "")))))))))
