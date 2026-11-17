@@ -132,3 +132,42 @@
   (is (= (:selection at-end) (:selection (heading/forward-boundary at-end {}))))
   (is (= (:selection at-start) (:selection (heading/forward-boundary (context (:id before) (d/length (:text before))) {}))))
   (is (= (:selection at-end) (:selection (heading/backward-boundary (context (:id after) 0) {}))))))
+(deftest heading-paste-keeps-metadata-on-the-first-heading-and-structure-after-it
+ (let [source "* TODO [#27] Left right :work:\r\n:PROPERTIES:\r\n:ID: heading\r\n:END:\r\nBody.\r\n"
+       doc (d/prepare (canvas/read-source source "paste")) id (get-in doc [:blocks 0 :id])
+       rich (assoc (d/block "rich" "Rich") :marks [{:from 0 :to 4 :call {:id "old-call" :function "text/bold" :version 1 :args {}}}])
+       table (:blocks (canvas/read-source "| Name | Value |\n|------+-------|\n| A | 🌱 |\n" "table"))
+       at (+ (get-in (heading/fields (first (:blocks doc)) doc) [:title/from]) 5)
+       context {:document doc :seed "pasted" :selection {:anchor {:block id :offset at} :head {:block id :offset at}}}]
+  (doseq [payload [{:text "First\nSecond"} {:blocks [rich (d/block "last" "Last")]} {:blocks table}]]
+   (let [plan (heading/paste context payload) edit (d/apply-op (:functions ext) doc {:op "batch" :ops (:ops plan)})
+         after (:document edit) f (heading/fields (d/find-block after id) after)
+         written (canvas/write-source after) object (first (:objects (semantics/read-source written)))]
+    (is (= {:state "TODO" :priority "27" :tags ["work"]} (select-keys f [:state :priority :tags])))
+    (is (= {:state "TODO" :priority "27" :tags #{"work"}} (select-keys object [:state :priority :tags])))
+    (is (includes? written ":ID: heading\r\n:END:\r\n"))
+    (is (= doc (:document (d/apply-op (:functions ext) after (:inverse edit)))))
+    (is (not-any? #(< (:to %) (:from %)) (mapcat :marks (:blocks after))))
+    (when (= table (:blocks payload))
+     (is (= ["heading" "table" "table-row" "table-cell" "table-cell" "table-row" "table-cell" "table-cell" "paragraph" "paragraph"]
+            (mapv :type (:blocks after))))
+     (is (includes? written "🌱")))
+    (when (= rich (first (:blocks payload)))
+     (is (includes? written "*Rich*"))
+     (is (not (contains? (d/call-ids after) "old-call"))))))))
+(deftest paste-repairs-empty-title-separators-and-cut-remains-one-private-operation
+ (let [source "* TODO [#27] :work:\n:PROPERTIES:\n:ID: heading\n:END:\n"
+       doc (d/prepare (canvas/read-source source "empty-paste")) id (get-in doc [:blocks 0 :id])
+       at (:title/from (heading/fields (first (:blocks doc)) doc))
+       context {:document doc :seed "empty-paste" :selection {:anchor {:block id :offset at} :head {:block id :offset at}}}
+       plan (heading/paste context {:text "Filled"})
+       after (:document (d/apply-op (:functions ext) doc {:op "batch" :ops (:ops plan)}))
+       fields (heading/fields (first (:blocks after)) after)]
+  (is (= "TODO [#27] Filled :work:" (get-in after [:blocks 0 :text])))
+  (is (= {:state "TODO" :priority "27" :tags ["work"] :title "Filled"} (select-keys fields [:state :priority :tags :title])))
+  (let [cut-context {:document after :seed "cut" :selection {:anchor {:block id :offset (:title/from fields)} :head {:block id :offset (:title/to fields)}}}
+        plan (heading/cut cut-context {}) edit (d/apply-op (:functions ext) after {:op "batch" :ops (:ops plan)})
+        cut-fields (heading/fields (first (get-in edit [:document :blocks])) (:document edit))]
+   (is (= "" (:title cut-fields)))
+   (is (= (:tags fields) (:tags cut-fields)))
+   (is (= after (:document (d/apply-op (:functions ext) (:document edit) (:inverse edit))))))))

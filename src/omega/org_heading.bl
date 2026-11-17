@@ -2,7 +2,7 @@
 ;; complete heading package and source workflow snapshot have qualified.
 (ns ^:js omega.org-heading
  (:require [omega.org-heading-model :as heading] [live.edit.document :as document]))
-(defn workflow [doc] (get-in doc [:meta :org/workflow] heading/default-workflow))
+(defn workflow [doc] (get-in doc [:meta :org/workflow] (heading/workflow-data heading/default-workflow)))
 (defn fields [block doc] (heading/fields (:text block) (workflow doc)
   (mapv #(select-keys % [:from :to]) (filter #(= "org/literal" (get-in % [:call :function])) (:marks block)))))
 (defn title-range [block context]
@@ -199,10 +199,43 @@
     (field-control block "org/heading-tags" "tag" "Change heading tags" (if (seq (:tags f)) (str "#" (join " #" (:tags f))) "Add tags"))]
    (get-in context [:slots "body"])]))
 (defn- heading-target? [context] (= "heading" (:type (target context))))
+(defn paste
+ "Apply the canonical fragment planner to the title field, then place its
+  structural blocks after the heading. Native metadata never moves to the tail."
+ [context payload]
+ (when-let [[block from to] (selected-heading context)]
+  (when (or (:cut payload) (seq (:blocks payload)) (seq (:text payload)))
+   (let [doc (:document context) f (fields block doc) start (:title/from f) end (:title/to f)
+         _ (when-not (<= start from to end) (throw (ex-info "Paste into the heading title or use Source for a whole section." {})))
+         field (first (document/fragment doc {:block (:id block) :offset start} {:block (:id block) :offset end}))
+         field (assoc field :type "paragraph" :attrs {} :wraps [] :parent nil :slot "body")
+         temporary (document/prepare (document/document "heading-paste" [field]))
+         seed (:seed context) blocks (:blocks payload)
+         textual? (fn [b] (and (nil? (:parent b)) (contains? #{"paragraph" "heading"} (:type b))))
+         blocks (when (seq blocks)
+                  (let [padded (if (textual? (first blocks)) (vec blocks) (into [(document/block (str seed "/pad-first") "")] blocks))]
+                   (if (textual? (last blocks)) padded (conj padded (document/block (str seed "/pad-last") "")))))
+         op (cond-> {:op "range/replace" :seed seed
+                     :from {:block (:id block) :offset (- from start)} :to {:block (:id block) :offset (- to start)}}
+                    blocks (assoc :fragment blocks) (not blocks) (assoc :text (:text payload "")))
+         edit (document/apply-trusted {} temporary op) pieces (get-in edit [:document :blocks]) first-piece (first pieces)
+         replace {:op "text/replace" :block (:id block) :from start :to end :expected (:text field)
+                  :text (:text first-piece) :styles [] :restore (:marks first-piece)}
+         envelope (separators context {:op replace})
+         replace-ops (if envelope (get-in envelope [:op :ops]) [replace])
+         after (reduce #(-> (document/apply-trusted {} %1 %2) :document) doc replace-ops)
+         literal (protect-metadata after (:id block) (select-keys f [:state :priority :tags]) (str seed "/paste"))
+         rest-pieces (mapv #(if (nil? (:parent %)) (assoc % :parent (:parent block) :slot (:slot block "body")) %) (vec (rest pieces)))
+         insert (when (seq rest-pieces) {:op "node/insert" :blocks rest-pieces :parent (:parent block) :slot (:slot block "body") :after (:id block)})
+         point (get-in edit [:mapping 0 :end]) point (if (= (:id block) (:block point))
+                                                                     (if envelope (get-in envelope [:selection :head]) (update point :offset + start)) point)]
+    {:ops (vec (concat replace-ops literal (when insert [insert]))) :selection {:anchor point :head point}}))))
+(defn cut [context _] (paste context {:cut true :text ""}))
 (def package
  {:name "omega-org-headings"
   :provides
-  {:editor/typing typing :editor/command-policy command-policy
+  {:editor/clipboard {:paste paste :cut cut}
+   :editor/typing typing :editor/command-policy command-policy
    :editor/blocks {"heading" {:label "Heading" :icon "heading" :description "Give your ideas a little structure"
                              :slots ["body"] :defaults {:level 2} :render-context #{:document}
                              :text-range title-range :render render}}
