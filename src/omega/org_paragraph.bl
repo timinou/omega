@@ -1,0 +1,38 @@
+;; Logical native Org paragraphs; physical wrapping remains source-owned.
+(ns omega.org-paragraph (:require [clojure.re]))
+(defn line-text [line]
+ (if (ends-with? line "\r") (erlang/binary_part line 0 (dec (erlang/byte_size line))) line))
+(defn prose-line? [line]
+ (let [line (line-text line) stripped (trim line)]
+  (and (not (empty? stripped))
+       (not (contains? #{"#" "|" ":"} (subs stripped 0 1)))
+       (not (re-find #"^(?:\*+ +| *[-+] +| +\* +| *[0-9]+[.)] +|-----+$| *(?:SCHEDULED:|DEADLINE:|CLOSED:))" line)))))
+(defn- physical-part [line]
+ (let [line (line-text line) trailing (String/replace line #"[ \t]+$" "")
+       hard? (ends-with? trailing "\\\\")]
+  {:text (trim (if hard? (erlang/binary_part trailing 0 (- (erlang/byte_size trailing) 2)) line))
+   :separator (if hard? "\n" " ")}))
+(defn read-at
+ "Read contiguous physical prose as one logical paragraph. Return nil at a
+  structural boundary. Raw source, mixed endings and final newline stay exact."
+ [lines row]
+ (when (and (< row (count lines)) (prose-line? (nth lines row)))
+  (let [to (loop [at (inc row)]
+            (if (and (< at (count lines)) (prose-line? (nth lines at))) (recur (inc at)) at))
+        physical (subvec lines row to) parts (mapv physical-part physical)
+        text (join "" (map-indexed (fn [index part]
+                                    (str (:text part) (when (< index (dec (count parts))) (:separator part)))) parts))
+        last-line (last physical)
+        ending (if (< to (count lines)) (if (ends-with? last-line "\r") "\r\n" "\n") "")]
+   {:to to :text text :ending ending
+    :raw (str (join "\n" physical) (when (< to (count lines)) "\n"))})))
+(defn write-text
+ "Emit visible intra-paragraph breaks using native Org forced line breaks.
+  A structural prefix requires an explicit block conversion instead."
+ [text ending]
+ (let [lines (vec (String/split text "\n"))]
+  (doseq [line lines]
+   (when (and (not (blank? line)) (not (prose-line? line)))
+    (throw (ex-info "Choose a heading, list or source block for structural Org syntax."
+             {:kind :omega/org-canvas :reason :paragraph-structure}))))
+  (str (join (str "\\\\" ending) lines) ending)))

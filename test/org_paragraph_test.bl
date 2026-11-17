@@ -1,0 +1,22 @@
+(ns omega.org-paragraph-test (:require [omega.org-paragraph :as paragraph]))
+(deftest physical-wraps-are-one-logical-paragraph-with-exact-source
+ (let [lines ["First 🌱\r" "soft wrap\\\\\r" "forced line\r" "" "Next"]
+       result (paragraph/read-at lines 0)]
+  (is (= "First 🌱 soft wrap\nforced line" (:text result)))
+  (is (= 3 (:to result)))
+  (is (= "\r\n" (:ending result)))
+  (is (= "First 🌱\r\nsoft wrap\\\\\r\nforced line\r\n" (:raw result)))
+  (is (nil? (paragraph/read-at lines 3)))))
+(deftest structural-boundaries-do-not-become-ordinary-prose
+ (doseq [line ["* Heading" "- List" "  * Nested" "1. Ordered" "#+begin_src org" "| Cell |"
+               ":PROPERTIES:" ": literal" "SCHEDULED: <2026-11-17>" "-----" ""]]
+  (is (false? (boolean (paragraph/prose-line? line)))))
+ (is (true? (paragraph/prose-line? "A sentence with *emphasis*."))))
+(deftest changed-paragraphs-emit-native-forced-breaks
+ (let [text "One 🌱\nTwo\n\nFour"
+       source (paragraph/write-text text "\r\n")
+       reread (paragraph/read-at (vec (String/split source "\n")) 0)]
+  (is (= "One 🌱\\\\\r\nTwo\\\\\r\n\\\\\r\nFour\r\n" source))
+  (is (= text (:text reread)))
+  (is (= "Final" (:raw (paragraph/read-at ["Final"] 0))))
+  (is (thrown? (paragraph/write-text "Text\n* Heading" "\n")))))
