@@ -75,3 +75,19 @@
   (is (= "[2026-11-20 Fri -2d]" (get-in object [:planning :deadline :stamp]))))
  (let [parsed (org/read-source "* TODO Fix date\nSCHEDULED: <2026-99-99>\n:PROPERTIES:\n:ID: bad\n:END:\n")]
   (is (some #(= :planning-date (:code %)) (:diagnostics parsed)))))
+
+(deftest priority-and-tags-are-native-heading-edits-with-source-preservation
+ (let [text "* TODO [#B] Meet 🌱 :work:client:\r\nSCHEDULED: <2026-11-16 Mon ++1w>\r\n:PROPERTIES:\r\n:ID: meet\r\n:CUSTOM: retain\r\n:END:\r\nNotes.\r\n#+begin_src org\r\n* TODO [#A] Literal :code:\r\n#+end_src\r\n"
+       next (org/update-object text "meet" {:priority "A" :tags ["client" "follow_up"]})
+       object (first (:objects (org/read-source next)))
+       cleared (org/update-object next "meet" {:priority "" :tags ""})]
+  (is (= "A" (:priority object)))
+  (is (= #{"client" "follow_up"} (:tags object)))
+  (is (= (String/replace text "* TODO [#B] Meet 🌱 :work:client:" "* TODO [#A] Meet 🌱 :client:follow_up:") next))
+  (is (starts-with? cleared "* TODO Meet 🌱\r\n"))
+  (is (= ["work" "client"] (org/tag-values ":work:client:")))
+  (is (= "B" (:priority (first (:objects (org/read-source (org/update-object text "meet" {:tags ["work"]})))))))
+  (doseq [changes [{:priority "AB"} {:priority "\n"} {:priority nil}
+                   {:tags ["bad tag"]} {:tags ["same" "same"]} {:tags ["new\n* heading"]}
+                   {:tags (vec (repeat 17 "tag"))} {:tags nil}]]
+   (is (thrown? (org/update-object text "meet" changes)))))))

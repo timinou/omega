@@ -76,15 +76,30 @@
     (for [row rows :when (contains? duplicates (:id row))]
      {:code :duplicate-id :row (:row row) :id (:id row) :message "Org IDs must be unique within a document."})))})))
 
+(defn tag-values
+ "Normalize native colon-separated tags or a vector of tag names."
+ [value]
+ (let [tags (cond (string? value) (vec (remove empty? (map trim (String/split value ":"))))
+                  (vector? value) value :else nil)]
+  (when-not (and tags (<= (count tags) 16)
+                 (every? #(and (string? %) (<= 1 (count %) 80) (re-matches #"[A-Za-z0-9_@#%-]+" %)) tags)
+                 (= (count tags) (count (set tags))))
+   (throw (ex-info "Use at most 16 distinct Org tags, separated by colons." {})))
+  tags))
+
 (defn update-object
  "Change native task fields by stable ID while retaining the rest of its section.
   Returned source still needs the host's revision and permission guarded writer."
  [text id changes]
- (when-not (and (map? changes) (every? #{:title :state :done? :assignee :scheduled :deadline :properties} (keys changes)))
+ (when-not (and (map? changes) (every? #{:title :state :done? :assignee :scheduled :deadline :priority :tags :properties} (keys changes)))
   (throw (ex-info "Choose supported Org object fields." {})))
  (doseq [key [:title :state :assignee] :when (contains? changes key)]
   (when-not (and (string? (get changes key)) (not (re-find #"[\r\n]" (get changes key))))
    (throw (ex-info "Use single-line text for Org object fields." {}))))
+ (when (and (contains? changes :priority)
+            (not (and (string? (:priority changes)) (or (empty? (:priority changes)) (re-matches #"[A-Za-z0-9]" (:priority changes))))))
+  (throw (ex-info "Use one Org priority letter or digit, or empty text to clear it." {})))
+ (when (contains? changes :tags) (tag-values (:tags changes)))
  (when (and (contains? changes :done?) (not (boolean? (:done? changes))))
   (throw (ex-info "done? must be a boolean." {})))
  (doseq [key [:scheduled :deadline] :when (contains? changes key)]
@@ -106,10 +121,13 @@
                     :else (:state object))
         _ (when (and state (not (contains? (into (:open workflow) (:done workflow)) state)))
             (throw (ex-info "Choose a state declared by the document TODO workflow." {})))
-        heading (if (some #(contains? changes %) [:title :state :done?])
+        heading (if (some #(contains? changes %) [:title :state :done? :priority :tags])
                   (str (join "" (repeat (:level object) "*")) " " (when state (str state " "))
-                       (when (:priority object) (str "[#" (:priority object) "] ")) title
-                       (when-let [tags (second (re-find #" +(:[A-Za-z0-9_@#%:-]+:) *\r?$" raw))] (str " " tags)) cr)
+                       (let [priority (get changes :priority (:priority object))]
+                        (when (and priority (not (empty? priority))) (str "[#" priority "] "))) title
+                       (if (contains? changes :tags)
+                        (let [tags (tag-values (:tags changes))] (when (seq tags) (str " :" (join ":" tags) ":")))
+                        (when-let [tags (second (re-find #" +(:[A-Za-z0-9_@#%:-]+:) *\r?$" raw))] (str " " tags))) cr)
                   raw)
         own-end (or (:row (first (filter #(> (:row %) row) (:objects parsed)))) (:end object))
         body (subvec lines (inc row) own-end)
