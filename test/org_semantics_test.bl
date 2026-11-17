@@ -1,4 +1,4 @@
-(ns omega.org-semantics-test (:require [omega.org-semantics :as org]))
+(ns omega.org-semantics-test (:require [omega.org-semantics :as org] [omega.org-heading-model :as heading]))
 (def source "#+TODO: READY ACTIVE | FINISHED\n* Launch :project:\n:PROPERTIES:\n:ID: launch\n:END:\n** ACTIVE Call client :sales:\nSCHEDULED: <2026-11-16 Mon> DEADLINE: <2026-11-20 Fri>\n:PROPERTIES:\n:ID: call\n:ASSIGNEE: alice\n:END:\n** FINISHED Done\n:PROPERTIES:\n:ID: done\n:END:\n#+begin_src org\n* TODO Not a task\n#+end_src\n")
 (deftest source-semantics-use-native-org
  (let [parsed (org/read-source source) rows (:objects parsed)]
@@ -91,3 +91,28 @@
                    {:tags ["bad tag"]} {:tags ["same" "same"]} {:tags ["new\n* heading"]}
                    {:tags (vec (repeat 17 "tag"))} {:tags nil}]]
    (is (thrown? (org/update-object text "meet" changes))))))
+
+(deftest shared-headline-fields-have-codepoint-title-bounds
+ (doseq [text ["TODO [#A] 🌱 é title :z:a:" "  TODO [#A] 🌱 é title :z:a:  "]]
+  (let [fields (heading/fields text heading/default-workflow)]
+   (is (= "🌱 é title" (:title fields)))
+   (is (= "TODO" (:state fields)))
+   (is (= "A" (:priority fields)))
+   (is (= ["z" "a"] (:tags fields)))
+   (is (= (:title fields) (heading/slice text (:title/from fields) (:title/to fields))))))
+ (let [text "IDEA é 🌱 :work: phrase :work:"
+       fields (heading/fields text {:open ["IDEA"] :done ["SHIPPED"]})]
+  (is (= "é 🌱 :work: phrase" (:title fields)))
+  (is (= (:title fields) (heading/slice text (:title/from fields) (:title/to fields))))
+ (is (= "TODO literal" (:title (heading/fields "TODO literal" {:open ["READY"] :done ["FINISHED"]}))))
+ (is (= "*TODO* literal" (:title (heading/fields "*TODO* literal" heading/default-workflow))))
+ (let [fields (heading/fields "TODO" heading/default-workflow)]
+  (is (= "" (:title fields)))
+  (is (= 4 (:title/from fields) (:title/to fields)))))
+
+(deftest metadata-edit-preserves-repeated-tag-looking-title-text
+ (let [text "* TODO 🌱 é :work: phrase :work:\r\n:PROPERTIES:\r\n:ID: repeated\r\n:END:\r\nNotes.\r\n"
+       object (first (:objects (org/read-source text)))
+       changed (org/update-object text "repeated" {:state "DONE"})]
+  (is (= "🌱 é :work: phrase" (:title object)))
+  (is (= (String/replace text "* TODO " "* DONE ") changed))))

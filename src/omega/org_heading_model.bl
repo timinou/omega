@@ -1,0 +1,34 @@
+;; One lexical headline grammar, portable between native readers and the editor.
+(ns ^:js omega.org-heading-model (:require [clojure.re]))
+(def default-workflow
+ {:open #{"TODO" "NEXT" "DOING" "WAIT" "BLOCKED" "REVIEW"}
+  :done #{"DONE" "DROP" "CANCELLED" "CANCELED"}})
+(defn length [text] (erlang/length (unicode/characters_to_list text)))
+(defn slice [text from to]
+ (unicode/characters_to_binary (to-list (subvec (vec (unicode/characters_to_list text)) from to))))
+(defn fields
+ "Interpret a headline body, without its leading stars. Title bounds are
+  Unicode codepoints in the original body, not bytes or markup offsets."
+ [text workflow]
+ (let [body (trim text) leading (length (or (re-find #"^\s*" text) ""))
+       word (first (split body #" +"))
+       state (when (contains? (set (concat (:open workflow) (:done workflow))) word) word)
+       after-state (if state (trim (slice body (length state) (length body))) body)
+       priority-match (re-find #"^\[#([A-Za-z0-9])\] +" after-state)
+       priority (second priority-match)
+       after-priority (if priority (slice after-state (length (first priority-match)) (length after-state)) after-state)
+       tag-match (re-find #" +(:[A-Za-z0-9_@#%:-]+:) *$" after-priority)
+       tags (if tag-match (vec (remove empty? (split (second tag-match) ":"))) [])
+       before-tags (if tag-match (slice after-priority 0 (- (length after-priority) (length (first tag-match)))) after-priority)
+       title (trim before-tags)
+       from (+ leading (- (length body) (length after-priority)))
+       to (+ from (length title))]
+  {:title title :state state :priority priority :tags tags :title/from from :title/to to}))
+(defn tag-values [value]
+ (let [tags (cond (string? value) (vec (remove empty? (map trim (split value ":"))))
+                  (vector? value) value :else nil)]
+  (when-not (and tags (<= (count tags) 16)
+                 (every? #(and (string? %) (<= 1 (length %) 80) (re-matches #"[A-Za-z0-9_@#%-]+" %)) tags)
+                 (= (count tags) (count (set tags))))
+   (throw (ex-info "Use at most 16 distinct Org tags, separated by colons." {})))
+  tags))

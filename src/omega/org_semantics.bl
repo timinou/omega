@@ -1,7 +1,7 @@
 ;; Data-only semantic Org reader. Profiles extend interpretation, not syntax.
-(ns omega.org-semantics (:require [omega.document-source :as source] [clojure.re] [omega.org-profile :as profile]))
+(ns omega.org-semantics (:require [omega.document-source :as source] [clojure.re] [omega.org-profile :as profile] [omega.org-heading-model :as heading]))
 (def default-profile
- {:types #{"task" "project"} :open #{"TODO" "NEXT" "DOING" "WAIT" "BLOCKED" "REVIEW"} :done #{"DONE" "DROP" "CANCELLED" "CANCELED"}})
+ (assoc heading/default-workflow :types #{"task" "project"}))
 (defn- planning-rows [lines]
  (loop [at 0 drawer? false rows []]
   (if (>= at (count lines)) rows
@@ -42,18 +42,12 @@
        open (if (seq sequences) (set (mapcat :open sequences)) (:open profile))
        done (if (seq sequences) (set (mapcat :done sequences)) (:done profile))
        headings (:outline index)
-       rows (mapv (fn [h]
+       rows (mapv (fn [heading-index] (let [h (nth headings heading-index)]
         (let [properties (source/properties lines (inc (:row h)))
-              title (trim (String/replace (nth lines (:row h)) #"^\*+ +" "")) keyword (first (String/split title #" +"))
-              state (when (contains? (into open done) keyword) keyword)
-              title (if state (trim (subs title (count state))) title)
-              priority (second (re-find #"^\[#([A-Za-z0-9])\] +" title))
-              title (if priority (String/replace title #"^\[#[A-Za-z0-9]\] +" "") title)
-              tag-match (re-find #" +(:[A-Za-z0-9_@#%:-]+:) *$" title)
-              tags (if tag-match (set (remove empty? (String/split (second tag-match) ":"))) #{})
-              title (if tag-match (trim (String/replace title (first tag-match) "")) title)
+              headline (heading/fields (String/replace (nth lines (:row h)) #"^\*+ +" "") {:open open :done done})
+              title (:title headline) state (:state headline) priority (:priority headline) tags (set (:tags headline))
               kind (or (get properties "TYPE") (get properties "KIND") (profile/rule-type profile properties tags state) (when (contains? tags "project") "project") (when state "task"))
-              next-heading (first (filter #(> (:row %) (:row h)) headings))
+              next-heading (nth headings (inc heading-index) nil)
               body-end (or (:row next-heading) (:end h))
               body (subvec lines (inc (:row h)) body-end) planning (planning-fields body (inc (:row h)))
               fields (profile/fields profile kind properties (:row h))]
@@ -62,7 +56,7 @@
           :fields (:values fields) :field-diagnostics (:diagnostics fields)
           :title title :priority priority :state state :done? (contains? done state) :tags tags :properties properties
           :planning planning :scheduled (get-in planning [:scheduled :date]) :deadline (get-in planning [:deadline :date])
-          :row (:row h) :end (:end h) :level (:level h)})) headings)
+          :row (:row h) :end (:end h) :level (:level h)}))) (range (count headings)))
        duplicates (set (for [[id n] (frequencies (keep :id rows)) :when (> n 1)] id))]
   {:objects rows :profile (select-keys profile [:id :declarations :types :rules]) :workflow {:open open :done done :sequences sequences}
    :diagnostics (vec (concat (mapcat :field-diagnostics rows)
@@ -76,16 +70,7 @@
     (for [row rows :when (contains? duplicates (:id row))]
      {:code :duplicate-id :row (:row row) :id (:id row) :message "Org IDs must be unique within a document."})))})))
 
-(defn tag-values
- "Normalize native colon-separated tags or a vector of tag names."
- [value]
- (let [tags (cond (string? value) (vec (remove empty? (map trim (String/split value ":"))))
-                  (vector? value) value :else nil)]
-  (when-not (and tags (<= (count tags) 16)
-                 (every? #(and (string? %) (<= 1 (count %) 80) (re-matches #"[A-Za-z0-9_@#%-]+" %)) tags)
-                 (= (count tags) (count (set tags))))
-   (throw (ex-info "Use at most 16 distinct Org tags, separated by colons." {})))
-  tags))
+(def tag-values heading/tag-values)
 
 (defn update-object
  "Change native task fields by stable ID while retaining the rest of its section.
