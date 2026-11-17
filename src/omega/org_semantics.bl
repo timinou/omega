@@ -107,13 +107,11 @@
         _ (when (and state (not (contains? (into (:open workflow) (:done workflow)) state)))
             (throw (ex-info "Choose a state declared by the document TODO workflow." {})))
         heading (if (some #(contains? changes %) [:title :state :done? :priority :tags])
-                  (str (join "" (repeat (:level object) "*")) " " (when state (str state " "))
-                       (let [priority (get changes :priority (:priority object))]
-                        (when (and priority (not (empty? priority))) (str "[#" priority "] "))) title
-                       (if (contains? changes :tags)
-                        (let [tags (tag-values (:tags changes))] (when (seq tags) (str " :" (join ":" tags) ":")))
-                        (when-let [tags (second (re-find #" +(:[A-Za-z0-9_@#%:-]+:) *\r?$" raw))] (str " " tags))) cr)
-                  raw)
+                  (let [prefix (re-find #"^\*+ +" raw)
+                        body (heading/slice raw (heading/length prefix) (- (heading/length raw) (heading/length cr)))
+                        fields (select-keys changes [:title :priority :tags])
+                        fields (cond-> fields (or (contains? changes :state) (contains? changes :done?)) (assoc :state state))]
+                   (str prefix (heading/rewrite body workflow fields) cr)) raw)
         own-end (or (:row (first (filter #(> (:row %) row) (:objects parsed)))) (:end object))
         body (subvec lines (inc row) own-end)
         property-update (fn [body key value]

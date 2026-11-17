@@ -23,7 +23,13 @@
        title (trim before-tags)
        from (+ leading (- (length body) (length after-priority)))
        to (+ from (length title))]
-  {:title title :state state :priority priority :tags tags :title/from from :title/to to}))
+  {:title title :state state :priority priority :tags tags :title/from from :title/to to
+   :state/from leading :state/to (+ leading (if state (length state) 0))
+   :state/next (+ leading (- (length body) (length after-state)))
+   :priority/from (+ leading (- (length body) (length after-state)))
+   :priority/to (+ leading (- (length body) (length after-state)) (if priority 4 0))
+   :tags/from (when tag-match (- (+ leading (length body)) (length (second tag-match))))
+   :tags/to (when tag-match (+ leading (length body)))}))
 (defn tag-values [value]
  (let [tags (cond (string? value) (vec (remove empty? (map trim (split value ":"))))
                   (vector? value) value :else nil)]
@@ -32,3 +38,47 @@
                  (= (count tags) (count (set tags))))
    (throw (ex-info "Use at most 16 distinct Org tags, separated by colons." {})))
   tags))
+
+(defn- replace-range [text from to value]
+ (str (slice text 0 from) value (slice text to (length text))))
+(defn rewrite
+ "Patch native headline fields without rewriting untouched lexical seams.
+  Full single-line body only; stars and line ending remain the caller's."
+ [text workflow changes]
+ (when-not (and (map? changes) (every? #{:state :priority :tags :title} (keys changes)))
+  (throw (ex-info "Choose native headline fields." {})))
+ (when (contains? changes :state)
+  (when-not (or (nil? (:state changes))
+                (contains? (set (concat (:open workflow) (:done workflow))) (:state changes)))
+   (throw (ex-info "Choose a state declared by the document workflow." {}))))
+ (when (contains? changes :priority)
+  (when-not (and (string? (:priority changes))
+                (or (empty? (:priority changes)) (re-matches #"[A-Za-z0-9]" (:priority changes))))
+   (throw (ex-info "Use one Org priority letter or digit, or empty text." {}))))
+ (when (contains? changes :title)
+  (when-not (and (string? (:title changes)) (not (blank? (:title changes)))
+                (not (re-find #"[\r\n]" (:title changes))))
+   (throw (ex-info "Use a single-line Org title." {}))))
+ (let [changes (cond-> changes (contains? changes :tags) (assoc :tags (tag-values (:tags changes))))
+       result (reduce (fn [text key]
+                (if-not (contains? changes key) text
+                 (let [f (fields text workflow) value (get changes key)]
+                  (if (= (get f key) (if (and (= key :priority) (empty? value)) nil value)) text
+                   (case key
+                    :state (if (:state f)
+                             (replace-range text (:state/from f) (if value (:state/to f) (:state/next f)) (or value ""))
+                             (replace-range text (:state/from f) (:state/from f) (str value " ")))
+                    :priority (if (:priority f)
+                                (replace-range text (:priority/from f) (if (empty? value) (:title/from f) (:priority/to f))
+                                  (if (empty? value) "" (str "[#" value "]")))
+                                (replace-range text (:priority/from f) (:priority/from f) (str "[#" value "] ")))
+                    :tags (let [token (when (seq value) (str ":" (join ":" value) ":"))]
+                            (if (:tags/from f)
+                             (replace-range text (if token (:tags/from f) (:title/to f)) (:tags/to f) (or token ""))
+                             (if token (replace-range text (:title/to f) (:title/to f) (str " " token)) text)))
+                    :title (replace-range text (:title/from f) (:title/to f) value)))))) text [:state :priority :tags :title])
+       actual (fields result workflow)]
+  (doseq [[key value] changes]
+   (when-not (= (if (= key :title) (trim value) (if (and (= key :priority) (empty? value)) nil value)) (get actual key))
+    (throw (ex-info "This field would change the meaning of native Org metadata. Use Source to express it explicitly." {}))))
+  result))

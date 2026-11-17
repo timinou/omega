@@ -116,3 +116,26 @@
        changed (org/update-object text "repeated" {:state "DONE"})]
   (is (= "🌱 é :work: phrase" (:title object)))
   (is (= (String/replace text "* TODO " "* DONE ") changed))))
+
+(deftest field-edits-preserve-unmodified-native-headline-seams
+ (let [text "***   TODO   [#B]  🌱 é :work: phrase   :z:a:  \r\n:PROPERTIES:\r\n:ID: seams\r\n:OPAQUE: unchanged\r\n:END:\r\nBody.\r\n"]
+  (is (= (String/replace text "TODO" "DONE") (org/update-object text "seams" {:state "DONE"})))
+  (is (= (String/replace text "[#B]" "[#A]") (org/update-object text "seams" {:priority "A"})))
+  (is (= (String/replace text ":z:a:" ":client:work:") (org/update-object text "seams" {:tags ["client" "work"]})))
+  (is (= (String/replace text "🌱 é :work: phrase" "Revised 🌱") (org/update-object text "seams" {:title "Revised 🌱"})))
+  (is (= text (org/update-object text "seams" {:title "🌱 é :work: phrase" :state "TODO" :priority "B" :tags ["z" "a"]})))
+  (is (= (String/replace text "TODO   " "") (org/update-object text "seams" {:state ""})))
+  (is (= (String/replace text "[#B]  " "") (org/update-object text "seams" {:priority ""})))
+  (is (= (String/replace text "   :z:a:" "") (org/update-object text "seams" {:tags []})))))
+
+(deftest shared-headline-rewrite-validates-meaning-and-safe-insertion
+ (let [workflow heading/default-workflow]
+  (is (= "  TODO [#A] 🌱 é :work:  "
+         (heading/rewrite "  🌱 é  " workflow {:state "TODO" :priority "A" :tags ["work"]})))
+  (is (= "🌱 é" (heading/rewrite "TODO [#A] 🌱 é :work:" workflow {:state nil :priority "" :tags []})))
+  (doseq [changes [{:state "UNKNOWN"} {:priority "AB"} {:title "line\n* injection"} {:tags ["bad tag"]} {:unknown "x"}]]
+   (is (thrown? (heading/rewrite "TODO Title" workflow changes))))
+  (is (thrown? (heading/rewrite "A title" workflow {:title "TODO unintended state"})))
+  (is (thrown? (heading/rewrite "TODO Middle :literal: :work:" workflow {:tags []}))))
+ (let [workflow {:open ["IDEA"] :done ["SHIPPED"]}]
+  (is (= "SHIPPED  [#B] Native" (heading/rewrite "IDEA  [#B] Native" workflow {:state "SHIPPED"})))))
