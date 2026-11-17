@@ -3,6 +3,11 @@
 (def codec-revision "omega.org-canvas/7")
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
+(defn- bounded-tree? [blocks]
+ (loop [remaining blocks depths {}]
+  (if (empty? remaining) true
+   (let [b (first remaining) depth (inc (get depths (:parent b) 0))]
+    (and (<= depth 32) (recur (rest remaining) (assoc depths (:id b) depth)))))))
 (declare block read-source)
 (defn- block [id type text attrs prefix raw ending]
  (let [indent (get attrs :org/indent (org-list/line-indent (first (String/split raw "\n"))))
@@ -131,7 +136,7 @@
                                               {:org/kind (:kind descriptor) :org/label "Retained list content"}))
                           prefix (:raw descriptor) (:ending descriptor)) :parent (:parent descriptor))])))
               (:blocks parsed))))]
-       (if (or (:retained parsed) (> (+ (count blocks) (count projected)) 9999))
+       (if (or (:retained parsed) (not (bounded-tree? projected)) (> (+ (count blocks) (count projected)) 9999))
         (recur (:to parsed) "" (conj blocks (block seed "org-retained" "" {:org/kind "list" :org/label "Large Org list"}
                                       prefix (:raw parsed (str (join "\n" (subvec lines row (:to parsed))) "\n")) ending)) false (inc next-block))
         (recur (:to parsed) (:tail parsed "") (into blocks projected) false (inc next-block))))

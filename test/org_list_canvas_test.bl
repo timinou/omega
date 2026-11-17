@@ -166,3 +166,13 @@
   (is (thrown? (presentation/clipboard-copy ctx {})))
   (is (thrown? (commands/plan registry (context doc parent) "block/duplicate" {} "retained-copy")))
   (is (= "- Parent\n  #+begin_custom\n  Keep me.\n  #+end_custom\n" (canvas/write-source doc)))))
+
+(deftest deep-list-and-table-projections-retain-exact-source-before-editor-tree-limits
+ (doseq [[depth table? retained?] [[32 false false] [33 false true] [30 true true]]]
+  (let [source (str "#+title: Deep source\r\n\r\n"
+                (join "" (map #(str (apply str (repeat (* 2 %) " ")) "- Item " % "\r\n") (range depth)))
+                (when table? (str (apply str (repeat (* 2 depth) " ")) "| A | B |\r\n")))
+        doc (canvas/read-source source "deep-source")]
+   (is (d/valid? doc))
+   (is (= source (canvas/write-source doc)))
+   (is (= retained? (= "org-retained" (:type (first (:blocks doc)))))))))
