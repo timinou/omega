@@ -1,5 +1,5 @@
 ;; Data-only semantic Org reader. Profiles extend interpretation, not syntax.
-(ns omega.org-semantics (:require [omega.document-source :as source] [clojure.re] [omega.org-profile :as profile] [omega.org-heading-model :as heading] [omega.org-inline :as inline]))
+(ns omega.org-semantics (:require [omega.document-source :as source] [clojure.re] [omega.org-profile :as profile] [omega.org-heading-model :as heading] [omega.org-inline :as inline] [omega.org-heading :as rich-heading]))
 (def default-profile
  (assoc heading/default-workflow :types #{"task" "project"}))
 (defn- planning-rows [lines]
@@ -99,8 +99,6 @@
   (let [object (first matches) lines (vec (String/split text "\n")) row (:row object)
         raw (nth lines row) cr (if (ends-with? raw "\r") "\r" "")
         changes (if (= (:title changes) (:title object)) (dissoc changes :title) changes)
-        _ (when (and (:inline-annotated? object) (some #(contains? changes %) [:state :done? :priority :tags :title]))
-            (throw (ex-info "Edit this richly annotated heading in the document until its semantic fields can retain exact inline ranges." {})))
         title (get changes :title (:title object))
         _ (when (or (blank? title) (re-find #"[\r\n]" title)) (throw (ex-info "Use a single-line Org title." {})))
         workflow (:workflow parsed) done? (:done? changes)
@@ -111,12 +109,30 @@
                     :else (:state object))
         _ (when (and state (not (contains? (into (:open workflow) (:done workflow)) state)))
             (throw (ex-info "Choose a state declared by the document TODO workflow." {})))
-        heading (if (some #(contains? changes %) [:title :state :done? :priority :tags])
-                  (let [prefix (re-find #"^\*+ +" raw)
-                        body (heading/slice raw (heading/length prefix) (- (heading/length raw) (heading/length cr)))
-                        fields (select-keys changes [:title :priority :tags])
-                        fields (cond-> fields (or (contains? changes :state) (contains? changes :done?)) (assoc :state state))]
-                   (str prefix (heading/rewrite body workflow fields) cr)) raw)
+        field-changes (cond-> (select-keys changes [:title :priority :tags])
+                        (or (contains? changes :state) (contains? changes :done?)) (assoc :state state))
+        source-prefix (heading-prefix lines row)
+        annotated-edit (when (and (:inline-annotated? object) (seq field-changes))
+                         (let [body (String/replace (String/replace raw #"\r$" "") #"^\*+ +" "")
+                               parsed (inline/read-heading source-prefix body "heading" workflow)
+                               _ (when (:retained parsed) (throw (ex-info "Review this heading's annotation in Source." {})))
+                               block (merge {:id "heading" :type "heading" :attrs {} :wraps [] :parent nil :slot "body"} parsed)
+                               doc {:schema 2 :id "semantic-fields" :meta {:org/workflow (heading/workflow-data workflow)} :blocks [block]}
+                               plan (rich-heading/plan-fields doc "heading" field-changes "semantic")]
+                          (inline/write-heading (first (get-in plan [:document :blocks])) workflow)))
+        heading (cond annotated-edit (str (re-find #"^\*+ +" raw) (:text annotated-edit) cr)
+                      (seq field-changes)
+                      (let [prefix (re-find #"^\*+ +" raw)
+                            body (heading/slice raw (heading/length prefix) (- (heading/length raw) (heading/length cr)))]
+                       (str prefix (heading/rewrite body workflow field-changes) cr))
+                      :else raw)
+        before-heading (if annotated-edit
+                          (let [prefix-lines (vec (split source-prefix "\n"))
+                                from (- row (count prefix-lines))
+                                kept (remove #(re-find #"(?i)^ *#\+attr_enchant: +:inline +" %) prefix-lines)]
+                           (vec (concat (subvec lines 0 from) kept
+                                  (when (:annotation annotated-edit) [(str "#+attr_enchant: :inline " (:annotation annotated-edit) cr)]))))
+                          (subvec lines 0 row))
         own-end (or (:row (first (filter #(> (:row %) row) (:objects parsed)))) (:end object))
         body (subvec lines (inc row) own-end)
         property-update (fn [body key value]
@@ -160,7 +176,7 @@
             (into [(str key ": <" value ">" cr)] cleaned))))
         body (if (contains? changes :scheduled) (planning body "SCHEDULED" (:scheduled changes)) body)
         body (if (contains? changes :deadline) (planning body "DEADLINE" (:deadline changes)) body)
-        next (into (into (conj (subvec lines 0 row) heading) body) (subvec lines own-end))]
+        next (into (into (conj before-heading heading) body) (subvec lines own-end))]
    (join "\n" next))))
 
 (defn assign-identities

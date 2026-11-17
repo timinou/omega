@@ -74,10 +74,7 @@
 
 (defn- replace-range [text from to value]
  (str (slice text 0 from) value (slice text to (length text))))
-(defn rewrite
- "Patch native headline fields without rewriting untouched lexical seams.
-  Full single-line body only; stars and line ending remain the caller's."
- [text workflow changes]
+(defn validate-changes [workflow changes]
  (when-not (and (map? changes) (every? #{:state :priority :tags :title} (keys changes)))
   (throw (ex-info "Choose native headline fields." {})))
  (when (contains? changes :state)
@@ -92,7 +89,12 @@
   (when-not (and (string? (:title changes)) (not (blank? (:title changes)))
                 (not (re-find #"[\r\n]" (:title changes))))
    (throw (ex-info "Use a single-line Org title." {}))))
- (let [changes (cond-> changes (contains? changes :tags) (assoc :tags (tag-values (:tags changes))))
+ (cond-> changes (contains? changes :tags) (assoc :tags (tag-values (:tags changes)))))
+(defn rewrite
+ "Patch native headline fields without rewriting untouched lexical seams.
+  Full single-line body only; stars and line ending remain the caller's."
+ [text workflow changes]
+ (let [changes (validate-changes workflow changes)
        result (reduce (fn [text key]
                 (if-not (contains? changes key) text
                  (let [f (fields text workflow) value (get changes key)]

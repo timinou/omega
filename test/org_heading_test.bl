@@ -1,6 +1,7 @@
 (ns omega.org-heading-test
  (:require [omega.org-heading :as heading] [omega.org-canvas :as canvas]
            [live.edit.input :as input] [live.edit.document :as d]
+           [omega.org-presentation :as presentation] [omega.org-semantics :as semantics]
            [live.edit.extensions :as extensions] [live.edit.standard :as standard]))
 (def ext (extensions/build [standard/package {:name "heading-typing-test" :provides {:editor/typing heading/typing}}]))
 (deftest empty-heading-title-input-preserves-metadata-mark-ranges-and-source
@@ -30,3 +31,50 @@
        op {:op "text/replace" :block id :from 5 :to 5 :text "New "}]
   (is (= op (:op (input/plan ext {:document doc} op {:input true}))))
   (is (= op (:op (input/plan ext {:document (assoc-in doc [:blocks 0 :type] "paragraph")} op {:input true}))))))
+
+(deftest mapped-heading-field-plans-preserve-native-source-and-rich-title
+ (let [source "#+TODO: TODO NEXT | DONE\r\n* TODO [#27] *Rich* :work:\r\n:PROPERTIES:\r\n:ID: heading\r\n:CUSTOM: retain\r\n:END:\r\nNotes.\r\n"
+       doc (d/prepare (canvas/read-source source "fields")) id (get-in doc [:blocks 0 :id])
+       registry (:functions (extensions/build [standard/package presentation/package]))]
+  (doseq [changes [{:state "DONE"} {:priority "64"} {:tags ["other"]}
+                   {:state nil :priority "" :tags []} {:state nil :priority "64" :title "TODO literal :label:"}
+                   {:title "TODO literal"}]]
+   (let [plan (heading/plan-fields doc id changes "fields")
+         op {:op "batch" :ops (:ops plan)} edit (d/apply-op registry doc op)
+         written (canvas/write-source (:document edit))
+         reread (canvas/read-source written "again") after-fields (heading/fields (first (:blocks reread)) reread)]
+    (is (= (:document plan) (:document edit)))
+    (is (= doc (:document (d/apply-op registry (:document edit) (:inverse edit)))))
+    (is (includes? written ":ID: heading\r\n:CUSTOM: retain\r\n:END:\r\nNotes.\r\n"))
+    (doseq [[key value] changes]
+     (is (= (if (and (= key :priority) (= "" value)) nil value) (get after-fields key))))
+    (when-not (contains? changes :title)
+     (is (includes? written "*Rich*")))))
+  (is (= [] (:ops (heading/plan-fields doc id {:state "TODO" :priority "27" :tags ["work"] :title "Rich"} "noop"))))
+  (doseq [changes [{:state "UNKNOWN"} {:priority "65"} {:tags ["same" "same"]} {:title "Two\nlines"}]]
+   (is (thrown? (heading/plan-fields doc id changes "invalid"))))))
+(deftest clearing-metadata-does-not-reclassify-title-words
+ (let [source "* TODO NEXT [#27] title :work:\n:PROPERTIES:\n:ID: fields\n:END:\n"
+       doc (d/prepare (canvas/read-source source "fields")) id (get-in doc [:blocks 0 :id])
+       plan (heading/plan-fields doc id {:state nil :priority "64"} "clear")
+       next (:document plan) fields (heading/fields (first (:blocks next)) next)
+       written (canvas/write-source next) object (first (:objects (semantics/read-source written)))]
+  (is (nil? (:state fields)))
+  (is (= "64" (:priority fields)))
+  (is (= "NEXT [#27] title" (:title fields)))
+  (is (= {:state nil :priority "64" :title "NEXT [#27] title"} (select-keys object [:state :priority :title])))))
+(deftest semantic-heading-edits-keep-exact-annotation-ranges
+ (let [source "#+TODO: READY(r) | FINISHED(f)\r\n#+caption: Keep\r\n#+attr_enchant: :inline [{:from 1 :to 4 :function \"text/bold\" :version 1 :args {}}]\r\n* READY [#27] Rich :work:\r\n:PROPERTIES:\r\n:ID: annotated\r\n:CUSTOM: retain\r\n:END:\r\nNotes.\r\n"
+       next (semantics/update-object source "annotated" {:state "FINISHED" :priority "64" :tags ["other"] :title "READY literal"})
+       object (first (:objects (semantics/read-source next)))]
+  (is (= {:state "FINISHED" :priority "64" :tags #{"other"} :title "READY literal"}
+         (select-keys object [:state :priority :tags :title])))
+  (is (includes? next "#+caption: Keep\r\n"))
+  (is (includes? next ":ID: annotated\r\n:CUSTOM: retain\r\n:END:\r\nNotes.\r\n"))
+  (is (= next (canvas/write-source (canvas/read-source next "reread")))))
+ (let [source "#+attr_enchant: :inline [{:from 0 :to 4 :function \"org/literal\" :version 1 :args {}}]\n* TODO title :project:\n:PROPERTIES:\n:ID: literal\n:END:\n"
+       next (semantics/update-object source "literal" {:priority "64" :title "NEXT literal"})
+       object (first (:objects (semantics/read-source next)))]
+  (is (nil? (:state object)))
+  (is (= "64" (:priority object)))
+  (is (= "NEXT literal" (:title object)))))

@@ -34,3 +34,64 @@
        :selection (if (and selection (= (:id block) (get-in selection [:anchor :block]) (get-in selection [:head :block])))
                     {:anchor (move (:anchor selection)) :head (move (:head selection))}
                     {:anchor point :head point})}))))))
+
+(def literal-function
+ {:label "Literal Org text" :kind "wrap" :scope "inline" :version 1 :params {}
+  :render (fn [_ content] [:span content])})
+(defn- replacement [block f key value]
+ (let [text (:text block)]
+  (case key
+   :state (if (:state f)
+            {:from (:state/from f) :to (if value (:state/to f) (:state/next f)) :text (or value "")}
+            {:from (:state/from f) :to (:state/from f) :text (str value " ")})
+   :priority (if (:priority f)
+               {:from (:priority/from f) :to (if (empty? value) (:title/from f) (:priority/to f))
+                :text (if (empty? value) "" (str "[#" value "]"))}
+               {:from (:priority/from f) :to (:priority/from f) :text (str "[#" value "] ")})
+   :tags (let [token (when (seq value) (str ":" (join ":" value) ":"))]
+           (if (:tags/from f)
+            {:from (if token (:tags/from f) (:title/to f)) :to (:tags/to f) :text (or token "")}
+            {:from (:title/to f) :to (:title/to f) :text (if token (str " " token) "")}))
+   :title (let [from (:title/from f) to (:title/to f) empty-title? (empty? (:title f))
+                before (heading/slice text 0 from) after (heading/slice text to (heading/length text))]
+            {:from from :to to :text (str (when (and empty-title? (seq before) (not (re-find #"[ \t]$" before))) " ")
+                                     value (when (and empty-title? (seq after) (not (re-find #"^[ \t]" after))) " "))}))))
+(defn protect-metadata
+ "A title edit cannot implicitly create new metadata. Literal calls carry that
+  intent through native source, rich annotations, copy and subsequent typing."
+ [doc id expected seed]
+ (let [block (document/find-block doc id) actual (fields block doc)]
+  (vec (keep (fn [key]
+               (when (and (seq (get actual key)) (not= (get expected key) (get actual key)))
+                (let [[from to] (case key :state [(:state/from actual) (:state/to actual)]
+                                      :priority [(:priority/from actual) (:priority/to actual)]
+                                      :tags [(:tags/from actual) (:tags/to actual)])]
+                 {:op "style/set" :block id :from from :to to :function "org/literal"
+                  :id (str seed "/literal-" (name key)) :args {} :enabled true}))) [:state :priority :tags]))))
+(defn plan-fields
+ "Plan only the requested native fields with standard mapped operations.
+  Untouched lexical seams and rich ranges remain source owned."
+ [doc id changes seed]
+ (let [changes (heading/validate-changes (workflow doc) changes)
+       initial (fields (document/find-block doc id) doc)
+       expected (merge (select-keys initial [:state :priority :tags]) (select-keys changes [:state :priority :tags]))
+       expected (if (= "" (:priority expected)) (assoc expected :priority nil) expected)
+       registry {"org/literal" literal-function}]
+  (loop [keys [:state :priority :tags :title] current doc ops [] intent (select-keys initial [:state :priority :tags])]
+   (if (empty? keys)
+    (let [extra (protect-metadata current id expected seed)
+          after (reduce #(-> (document/apply-trusted registry %1 %2) :document) current extra)
+          actual (fields (document/find-block after id) after)]
+     (when-not (= expected (select-keys actual [:state :priority :tags]))
+      (throw (ex-info "This change would reclassify native Org metadata." {})))
+     {:ops (into ops extra) :document after})
+    (let [key (first keys) block (document/find-block current id) f (fields block current)
+          value (get changes key) equal-value (if (and (= key :priority) (= "" value)) nil value)]
+     (if (or (not (contains? changes key)) (= (get f key) equal-value)) (recur (rest keys) current ops intent)
+      (let [edit (replacement block f key value)
+            op (merge edit {:op "text/replace" :block id :expected (heading/slice (:text block) (:from edit) (:to edit)) :styles []})
+            next (:document (document/apply-trusted registry current op))
+            intent (if (= key :title) intent (assoc intent key equal-value))
+            extra (protect-metadata next id intent (str seed "/" (name key)))
+            next (reduce #(-> (document/apply-trusted registry %1 %2) :document) next extra)]
+       (recur (rest keys) next (into (conj ops op) extra) intent))))))))

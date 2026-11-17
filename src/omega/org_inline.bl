@@ -110,3 +110,11 @@
                   {:from from :to to :call {:id (str id "-literal-" (name key)) :function "org/literal" :version 1 :args {}}})))
                [:state :priority :tags])]
    (update parsed :marks into marks))))
+
+(defn write-heading
+ "Retain native markup when a heading-aware reread preserves exact rich intent."
+ [block workflow]
+ (let [native (write-text block) reread (read-heading "" native (:id block) workflow)]
+  (if (= [(:text block) (mark-data (:marks block))] [(:text reread) (mark-data (:marks reread))])
+   {:text native}
+   {:text (:text block) :annotation (edn/write-string (mark-data (:marks block)))})))
