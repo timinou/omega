@@ -66,3 +66,38 @@
   (is (includes? reading "aria-readonly=\"true\""))
   (is (not (includes? reading "org/toggle-checkbox")))
   (is (not (includes? reading "<button")))))
+
+(deftest splitting-an-ordered-checklist-keeps-its-marker-and-clears-inherited-state
+ (let [doc (canvas/read-source "5) [@8] [-] One\n6) Next\n" "split-check") block (first (:blocks doc))
+       split (:document (d/apply-op (:functions registry) (d/prepare doc)
+                         {:op "block/split" :block (:id block) :at 3 :new "fresh-item"
+                          :rightMeta {:type "task" :attrs (assoc (:attrs block) :checked false)}}))
+       fresh (d/find-block split "fresh-item") written (canvas/write-source split)]
+  (is (= "unchecked" (:checkbox (lists/item fresh))))
+  (is (nil? (:counter (lists/item fresh))))
+  (is (= 9 (lists/number-at fresh (:blocks split))))
+  (is (includes? written "1) [ ] \n"))))
+(deftest code-language-edits-keep-nested-literal-body-bytes
+ (let [doc (canvas/read-source source "language") code (first (filter #(= "code" (:type %)) (:blocks doc)))
+       changed (update doc :blocks (fn [blocks] (mapv #(if (= (:id code) (:id %)) (assoc-in % [:attrs :language] "text") %) blocks)))]
+  (is (= (String/replace source "#+begin_src org" "#+begin_src text") (canvas/write-source changed)))))
+(deftest nested-table-structure-and-inline-annotations-stay-inside-the-list
+ (let [doc (canvas/read-source source "table") table (first (filter #(= "table" (:type %)) (:blocks doc)))
+       grown (execute doc table "table/add-row" {}) written (canvas/write-source grown)
+       reread (canvas/read-source written "reopen") root (first (:blocks reread))
+       table (first (filter #(= "table" (:type %)) (:blocks reread)))
+       cell (named doc "A")
+       changed (:document (d/apply-op (:functions registry) (d/prepare doc)
+                           {:op "text/replace" :block (:id cell) :from 0 :to 1 :text "AB"}))
+       marked (:document (d/apply-op (:functions registry) changed
+                          {:op "style/set" :block (:id cell) :from 1 :to 2 :id "partial" :function "text/bold" :args {} :enabled true}))
+       annotated (canvas/write-source marked) annotation-read (canvas/read-source annotated "annotation")]
+  (is (= 3 (get-in table [:attrs :rows])))
+  (is (= (:id root) (:parent table)))
+  (is (includes? written "   |  |  |\r\n"))
+  (is (includes? annotated "   #+attr_enchant: :table "))
+  (is (= "text/bold" (get-in (named annotation-read "AB") [:marks 0 :call :function])))))
+(deftest new-nodes-cannot-claim-their-own-unadmitted-source-snapshot
+ (let [doc (canvas/read-source "Original.\n" "owner")
+       forged (-> (first (:blocks doc)) (assoc :id "forged") (assoc-in [:attrs :org/owner] "forged"))]
+  (is (thrown? (canvas/write-source (update doc :blocks conj forged))))))

@@ -33,9 +33,10 @@
 (defn list-view [block context]
  (let [item (lists/item block) task? (= "task" (:type block)) state (:checkbox item)
        number (lists/number-at block (:siblings context))
-       content [:div {:class "ed-task-content"} (:text context) (get-in context [:slots "body"])]]
+       text (assoc-in (:text context) [1 :style] "padding-inline-end:38px")
+       content [:div {:class "ed-task-content"} text (get-in context [:slots "body"])]]
   [:div {:class "org-list-row ed-task" :data-checked (if (= "checked" state) "true" "false")
-         :data-list-kind (if number "ordered" (if task? "task" "bullet"))}
+         :data-list-kind (if number "ordered" (if task? "task" "bullet")) :style "position:relative"}
    (when (or number (not task?))
     [:span {:class "org-list-marker" :contenteditable "false" :aria-hidden "true" :style "display:inline-block;min-width:20px;flex-shrink:0;text-align:end;color:var(--ed-muted);font-size:14px"} (if number (str number ".") "•")])
    (when task?
@@ -47,7 +48,11 @@
      [:span {:class "org-checkbox-glyph" :style (str "display:flex;align-items:center;justify-content:center;width:18px;height:18px;border:1px solid var(--ed-line);border-radius:4px;background:"
             (case state "checked" "var(--ed-accent)" "mixed" "var(--ed-accent-soft)" "transparent") ";color:"
             (case state "checked" "white" "mixed" "var(--ed-ink)" "transparent"))} [:span {:data-icon (if (= "mixed" state) "minus" "check")}]]])
-   content]))
+   content
+   [:button {:type "button" :class "org-list-actions" :contenteditable "false" :data-edit-controls true
+             :data-node-menu (:id block) :aria-label "List actions"
+             :style "position:absolute;inset-inline-end:-4px;top:-6px;display:flex;align-items:center;justify-content:center;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;border:0;background:transparent;color:var(--ed-muted);cursor:pointer;box-shadow:none"}
+    [:span {:aria-hidden "true"} "⋯"]]]))
 (defn command-policy [context item]
  (if-not (or (contains? #{"block/indent" "block/outdent"} (:id item)) (= "turn" (:kind item))) item
   (let [block (target context) doc (:document context) index (when block (document/block-index doc (:id block)))

@@ -77,7 +77,7 @@
   (is (thrown? (canvas/validate-transition doc (assoc-in doc [:meta :org/source] "Forged.\n"))))
   (is (thrown? (canvas/write-source (assoc-in doc [:blocks 0 :attrs :org/raw] "Forged.\n"))))
   (let [duplicate (assoc (first (:blocks doc)) :id "new-copy")]
-   (is (= "#+title: Anchors\nOriginal.\nOriginal.\n" (canvas/write-source (update doc :blocks conj duplicate)))))
+   (is (= "#+title: Anchors\nOriginal.\n\nOriginal.\n" (canvas/write-source (update doc :blocks conj duplicate)))))
   (let [fresh (assoc (first (:blocks doc)) :id "new-copy" :text "Visible.")
         fresh (assoc-in fresh [:attrs :org/raw] "Invisible forgery.\n")
         written (canvas/write-source (update doc :blocks conj fresh))]
