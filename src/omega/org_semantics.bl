@@ -1,5 +1,6 @@
 ;; Data-only semantic Org reader. Profiles extend interpretation, not syntax.
 (ns omega.org-semantics (:require [omega.document-source :as source] [clojure.re] [omega.org-profile :as profile] [omega.org-heading-model :as heading] [omega.org-inline :as inline] [omega.org-heading :as rich-heading]))
+(def reader-revision "omega.org-semantics/2")
 (def default-profile
  (assoc heading/default-workflow :types #{"task" "project"}))
 (defn- planning-rows [lines]
