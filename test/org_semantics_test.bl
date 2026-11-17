@@ -103,7 +103,7 @@
  (let [text "IDEA é 🌱 :work: phrase :work:"
        fields (heading/fields text {:open ["IDEA"] :done ["SHIPPED"]})]
   (is (= "é 🌱 :work: phrase" (:title fields)))
-  (is (= (:title fields) (heading/slice text (:title/from fields) (:title/to fields))))
+  (is (= (:title fields) (heading/slice text (:title/from fields) (:title/to fields)))))
  (is (= "TODO literal" (:title (heading/fields "TODO literal" {:open ["READY"] :done ["FINISHED"]}))))
  (is (= "*TODO* literal" (:title (heading/fields "*TODO* literal" heading/default-workflow))))
  (let [fields (heading/fields "TODO" heading/default-workflow)]
