@@ -55,6 +55,11 @@
              :style "position:absolute;inset-inline-end:-4px;top:-6px;display:flex;align-items:center;justify-content:center;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;border:0;background:transparent;color:var(--ed-muted);cursor:pointer;box-shadow:none"}
     [:span {:aria-hidden "true"} "⋯"]]]))
 (defn command-policy [context item]
+ (let [item (if (= "org/set-counter" (:id item))
+              (let [block (target context)]
+               (if (lists/ordered? block)
+                (assoc-in item [:params :start :default]
+                 (lists/number-at block (filterv #(= (:parent block) (:parent %)) (get-in context [:document :blocks])))) item)) item)]
  (if-not (or (contains? #{"block/indent" "block/outdent" "block/duplicate"} (:id item)) (= "turn" (:kind item))) item
   (let [block (target context) doc (:document context) index (when block (document/block-index doc (:id block)))
         parent (document/find-block doc (:parent block))
@@ -75,7 +80,7 @@
                       (not (contains? lists/list-types target-type)))
                  "Move child blocks before changing this list item's type."
                  :else nil)]
-   (if reason (assoc item :enabled false :reason reason) item))))
+   (if reason (assoc item :enabled false :reason reason) item)))))
 (defn clipboard-copy [context _]
  (let [doc (:document context) selection (:selection context) [a z] (document/ordered-range doc (:anchor selection) (:head selection))]
   (when-not (and (= (:block a) (:block z)) (= (:offset a) (:offset z)) (= (:affinity a) (:affinity z)))

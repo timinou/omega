@@ -192,3 +192,15 @@
   (is (nil? (presentation/clipboard-copy (assoc ctx :selection
                               {:anchor {:block (:id block) :offset 0 :affinity "right"}
                                :head {:block (:id block) :offset 0 :affinity "right"}}) {})))))
+
+(deftest counter-parameter-defaults-follow-current-source-and-parent-scope
+ (let [doc (canvas/read-source "5. [@8] Parent\n   1. Child\n6. Following\n" "counter-fields")
+       parent (first (:blocks doc)) child (nth (:blocks doc) 1) following (nth (:blocks doc) 2)
+       default (fn [doc block] (get-in (first (filter #(= "org/set-counter" (:id %))
+                                                   (commands/query registry (context doc block)))) [:params :start :default]))
+       changed (execute doc parent "org/set-counter" {:start 12})]
+  (is (= 8 (default doc parent)))
+  (is (= 9 (default doc following)))
+  (is (= 1 (default doc child)))
+  (is (= 12 (default changed (first (:blocks changed)))))
+  (is (= 13 (default changed (nth (:blocks changed) 2))))))
