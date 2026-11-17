@@ -67,7 +67,7 @@
   (is (= (String/replace source "Body." "A revised body.")
          (canvas/write-source (assoc-in doc [:blocks 1 :text] "A revised body."))))))
 (deftest unsupported-nesting-cannot-be-acknowledged-and-disappear
- (let [doc (canvas/read-source "First.\nSecond.\n" "nesting")]
+ (let [doc (canvas/read-source "First.\n\nSecond.\n" "nesting")]
   (is (thrown? (canvas/write-source (assoc-in doc [:blocks 1 :parent] "org-0"))))
   (is (thrown? (canvas/write-source (assoc-in doc [:blocks 1 :slot] "caption"))))))
 
@@ -144,3 +144,19 @@
   (is (= 1 (get-in reread [:blocks 0 :marks 0 :from])))
   (is (= 2 (get-in reread [:blocks 0 :marks 0 :to])))
   (is (= source (canvas/write-source reread)))))
+
+(deftest logical-paragraphs-preserve-physical-wraps-and-native-forced-breaks
+ (let [source "#+title: Wrapped\r\n\r\nA *shared\r\nthought* 🌱\\\\\r\nwith a deliberate break.\r\n\r\n* Heading\r\nA separate paragraph.\r\n"
+       doc (canvas/read-source source "wrapped") first-block (first (:blocks doc))
+       changed (assoc-in doc [:blocks 0 :text] "A revised paragraph.\nA deliberate break.")
+       changed (assoc-in changed [:blocks 0 :marks] [])
+       written (canvas/write-source changed)
+       reread (canvas/read-source written "reopened")]
+  (is (= 3 (count (:blocks doc))))
+  (is (= "A shared thought 🌱\nwith a deliberate break." (:text first-block)))
+  (is (= "text/bold" (get-in first-block [:marks 0 :call :function])))
+  (is (= source (canvas/write-source doc)))
+  (is (includes? written "A revised paragraph.\\\\\r\nA deliberate break.\r\n"))
+  (is (= "A revised paragraph.\nA deliberate break." (get-in reread [:blocks 0 :text])))
+  (is (ends-with? written "\r\n* Heading\r\nA separate paragraph.\r\n"))
+  (is (= written (canvas/write-source reread)))))

@@ -1,6 +1,6 @@
 ;; Portable Org <-> canvas projection. No database, UI, runtime or execution.
-(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-table :as table] [omega.org-semantics :as semantics]))
-(def codec-revision "omega.org-canvas/4")
+(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-table :as table] [omega.org-semantics :as semantics] [omega.org-paragraph :as paragraph]))
+(def codec-revision "omega.org-canvas/5")
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
 (declare block)
@@ -102,8 +102,12 @@
           (match "^ *(SCHEDULED:|DEADLINE:|CLOSED:)" line))
       (recur (inc row) (str prefix raw) blocks false next-block)
       :else
-      (let [[type text attrs] (classify line)]
-       (recur (inc row) "" (conj blocks (block (block-id next-block) type text attrs prefix raw ending)) false (inc next-block)))))))))
+      (let [[type text attrs] (classify line)
+            logical (when (= type "paragraph") (paragraph/read-at lines row))]
+       (recur (if logical (:to logical) (inc row)) ""
+        (conj blocks (block (block-id next-block) type (if logical (:text logical) text) attrs prefix
+                       (if logical (:raw logical) raw) (if logical (:ending logical) ending)))
+        false (inc next-block)))))))))
 (defn- serialize-block [block]
  (let [attrs (:attrs block) type (:type block) text (inline/write-text block) newline (get attrs :org/ending "\n")
        newline (if (empty? newline) "\n" newline)
@@ -128,7 +132,7 @@
    (if unchanged?
     (:org/raw attrs)
     (case type
-     "paragraph" (str text newline)
+     "paragraph" (paragraph/write-text text newline)
      "heading" (let [level (:level attrs 1)]
                  (when-not (and (integer? level) (<= 1 level 100000)) (fail :heading-level))
                  (str (join "" (repeat level "*")) " " text newline))
