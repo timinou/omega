@@ -47,7 +47,7 @@
    :priority (if (:priority f)
                {:from (:priority/from f) :to (if (empty? value) (:title/from f) (:priority/to f))
                 :text (if (empty? value) "" (str "[#" value "]"))}
-               {:from (:priority/from f) :to (:priority/from f) :text (str "[#" value "] ")})
+               {:from (:priority/from f) :to (:priority/from f) :text (str (when (and (:state f) (= (:state/to f) (:priority/from f))) " ") "[#" value "] ")})
    :tags (let [token (when (seq value) (str ":" (join ":" value) ":"))]
            (if (:tags/from f)
             {:from (if token (:tags/from f) (:title/to f)) :to (:tags/to f) :text (or token "")}

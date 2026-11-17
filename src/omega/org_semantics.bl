@@ -44,7 +44,7 @@
        headings (:outline index)
        rows (mapv (fn [heading-index] (let [h (nth headings heading-index)]
         (let [properties (source/properties lines (inc (:row h)))
-              body-text (String/replace (String/replace (nth lines (:row h)) #"\r$" "") #"^\*+ +" "")
+              body-text (String/replace (String/replace (nth lines (:row h)) #"\r$" "") #"^\*+ " "")
               parsed-heading (inline/read-heading (heading-prefix lines (:row h)) body-text (str "semantic-" (:row h)) workflow)
               headline (if (:retained parsed-heading) {:title "" :tags []} (inline/heading-fields parsed-heading workflow))
               title (:title headline) state (:state headline) priority (:priority headline) tags (set (:tags headline))
@@ -114,14 +114,14 @@
                         (or (contains? changes :state) (contains? changes :done?)) (assoc :state state))
         source-prefix (heading-prefix lines row)
         annotated-edit (when (and (:inline-annotated? object) (seq field-changes))
-                         (let [body (String/replace (String/replace raw #"\r$" "") #"^\*+ +" "")
+                         (let [body (String/replace (String/replace raw #"\r$" "") #"^\*+ " "")
                                parsed (inline/read-heading source-prefix body "heading" workflow)
                                _ (when (:retained parsed) (throw (ex-info "Review this heading's annotation in Source." {})))
                                block (merge {:id "heading" :type "heading" :attrs {} :wraps [] :parent nil :slot "body"} parsed)
                                doc {:schema 2 :id "semantic-fields" :meta {:org/workflow (heading/workflow-data workflow)} :blocks [block]}
                                plan (rich-heading/plan-fields doc "heading" field-changes "semantic")]
                           (inline/write-heading (first (get-in plan [:document :blocks])) workflow)))
-        heading (cond annotated-edit (str (re-find #"^\*+ +" raw) (:text annotated-edit) cr)
+        heading (cond annotated-edit (str (re-find #"^\*+ " raw) (:text annotated-edit) cr)
                       (seq field-changes)
                       (let [prefix (re-find #"^\*+ +" raw)
                             body (heading/slice raw (heading/length prefix) (- (heading/length raw) (heading/length cr)))]

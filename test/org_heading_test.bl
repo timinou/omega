@@ -5,7 +5,7 @@
            [live.edit.extensions :as extensions] [live.edit.standard :as standard]))
 (def ext (extensions/build [standard/package presentation/package {:name "heading-typing-test" :provides {:editor/typing heading/typing}}]))
 (deftest empty-heading-title-input-preserves-metadata-mark-ranges-and-source
- (doseq [[text expected at] [["TODO" "TODO 🌱" 4] ["TODO [#27]" "TODO [#27] 🌱" 10]
+ (doseq [[text expected at] [["TODO" "TODO 🌱" 4] ["TODO " "TODO 🌱" 5] ["TODO\t" "TODO\t🌱" 5] ["TODO [#27]" "TODO [#27] 🌱" 10]
                              ["TODO [#27] :work:" "TODO [#27] 🌱 :work:" 11]
                              [":work:" "🌱 :work:" 0]]]
   (let [source (str "* " text "\n:PROPERTIES:\n:ID: heading\n:END:\n")
@@ -195,3 +195,16 @@
   (is (includes? tree "Change heading state"))
   (is (includes? tree "Rich"))
   (is (get-in items ["org/heading-paragraph" :enabled]))))
+
+(deftest heading-body-whitespace-and-annotation-positions-survive-native-reread
+ (let [source "***   TODO   [#27]  *Rich*   :work:  \r\n:PROPERTIES:\r\n:ID: spaced\r\n:END:\r\n"
+       doc (d/prepare (canvas/read-source source "spaced")) block (first (:blocks doc))
+       f (heading/fields block doc) next (assoc-in doc [:blocks 0 :marks]
+            [{:from (:title/from f) :to (+ 2 (:title/from f)) :call {:id "partial" :function "text/emphasis" :version 1 :args {}}}])
+       written (canvas/write-source next) reread (canvas/read-source written "again")]
+  (is (starts-with? (:text block) "  TODO"))
+  (is (= source (canvas/write-source doc)))
+  (is (= (:text block) (get-in reread [:blocks 0 :text])))
+  (is (= (mapv #(select-keys % [:from :to]) (get-in next [:blocks 0 :marks]))
+         (mapv #(select-keys % [:from :to]) (get-in reread [:blocks 0 :marks]))))
+  (is (= written (canvas/write-source reread)))))

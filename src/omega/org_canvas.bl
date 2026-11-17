@@ -33,8 +33,8 @@
    :parent nil :slot "body" :marks (:marks parsed) :wraps wraps}))))
 (defn- classify [line]
  (cond
-  (match "^(\\*+) +(.+)$" line)
-  (let [[_ stars text] (match "^(\\*+) +(.+)$" line)] ["heading" text {:level (count stars)}])
+  (match "^(\\*+) (.*)$" line)
+  (let [[_ stars text] (match "^(\\*+) (.*)$" line)] ["heading" text {:level (count stars)}])
   (match "^ *[-+] +\\[([ Xx-])\\] *(.*)$" line)
   (let [[_ checked text] (match "^ *[-+] +\\[([ Xx-])\\] *(.*)$" line)] ["task" text {:checked (= "x" (lower-case checked))}])
   (match "^ *[-+] +(.*)$" line) ["bullet" (second (match "^ *[-+] +(.*)$" line)) {}]
@@ -60,7 +60,7 @@
 (defn- heading-block [block workflow]
  (if-not (= "heading" (:type block)) block
   (let [raw (first (split (get-in block [:attrs :org/raw]) "\n"))
-        body (String/replace (String/replace raw #"\r$" "") #"^\*+ +" "")
+        body (String/replace (String/replace raw #"\r$" "") #"^\*+ " "")
         parsed (inline/read-heading (get-in block [:attrs :org/prefix] "") body (:id block) workflow)]
    (-> block (assoc :text (:text parsed) :marks (:marks parsed))
        (assoc-in [:attrs :org/text] (:text parsed)) (assoc-in [:attrs :org/marks] (:marks parsed))))))

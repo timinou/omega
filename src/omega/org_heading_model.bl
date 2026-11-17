@@ -12,7 +12,7 @@
                         (when (contains? #{"TODO" "SEQ_TODO" "TYP_TODO"} (upper-case (second match))) (nth match 2)))) lines)
        sequences (mapv (fn [declaration]
                     (let [tokens (vec (remove blank? (split (trim declaration) #"[ \t]+")))
-                          words (mapv #(String/replace % #"\(.*\)$" "") tokens)
+                          words (mapv #(Regex/replace #"\(.*\)$" % "") tokens)
                           divider (first (keep-indexed #(when (= "|" %2) %1) words))
                           at (or divider (max 0 (dec (count words))))]
                      {:open (vec (take at words)) :done (vec (drop (if divider (inc at) at) words))
@@ -41,6 +41,8 @@
 (defn priority? [value] (boolean (and (string? value) (re-matches priority-value-pattern value))))
 (defn- literal? [ranges from to]
  (boolean (some #(and (< (:from %) to) (> (:to %) from)) ranges)))
+(defn- gap-end [text at]
+ (+ at (length (or (re-find #"^[ \t]*" (slice text at (length text))) ""))))
 (defn fields
  "Interpret a headline body, without its leading stars. Title bounds are
   Unicode codepoints in the original body, not bytes or markup offsets."
@@ -50,25 +52,25 @@
        word (first (split body #"[ \t]+"))
        state (when (and (contains? (set (concat (:open workflow) (:done workflow))) word)
                         (not (literal? literals leading (+ leading (length word))))) word)
-       after-state (if state (trim (slice body (length state) (length body))) body)
+       state-to (+ leading (if state (length state) 0))
+       priority-from (if state (gap-end text state-to) leading)
+       after-state (trim (slice text priority-from (length text)))
        priority-match (re-find priority-cookie-pattern after-state)
-       priority-from (+ leading (- (length body) (length after-state)))
        priority (when (and priority-match (not (literal? literals priority-from (+ priority-from 3 (length (second priority-match))))))
                   (second priority-match))
-       after-priority (if priority (slice after-state (length (first priority-match)) (length after-state)) after-state)
+       priority-to (+ priority-from (if priority (+ 3 (length priority)) 0))
+       from (if priority (gap-end text priority-to) priority-from)
+       after-priority (trim (slice text from (length text)))
        tag-match (re-find #"(?:^|[ \t]+)(:[A-Za-z0-9_@#%:-]+:)[ \t]*$" after-priority)
        tag-from (when tag-match (- (+ leading (length body)) (length (second tag-match))))
        tag-match (when (and tag-match (not (literal? literals tag-from (+ leading (length body))))) tag-match)
        tags (if tag-match (vec (remove empty? (split (second tag-match) ":"))) [])
        before-tags (if tag-match (slice after-priority 0 (- (length after-priority) (length (first tag-match)))) after-priority)
        title (trim before-tags)
-       from (+ leading (- (length body) (length after-priority)))
        to (+ from (length title))]
   {:title title :state state :priority priority :tags tags :title/from from :title/to to
-   :state/from leading :state/to (+ leading (if state (length state) 0))
-   :state/next (+ leading (- (length body) (length after-state)))
-   :priority/from (+ leading (- (length body) (length after-state)))
-   :priority/to (+ leading (- (length body) (length after-state)) (if priority (+ 3 (length priority)) 0))
+   :state/from leading :state/to state-to :state/next priority-from
+   :priority/from priority-from :priority/to priority-to
    :tags/from (when tag-match (- (+ leading (length body)) (length (second tag-match))))
    :tags/to (when tag-match (+ leading (length body)))})))
 (defn tag-values [value]
@@ -114,7 +116,7 @@
                     :priority (if (:priority f)
                                 (replace-range text (:priority/from f) (if (empty? value) (:title/from f) (:priority/to f))
                                   (if (empty? value) "" (str "[#" value "]")))
-                                (replace-range text (:priority/from f) (:priority/from f) (str "[#" value "] ")))
+                                (replace-range text (:priority/from f) (:priority/from f) (str (when (and (:state f) (= (:state/to f) (:priority/from f))) " ") "[#" value "] ")))
                     :tags (let [token (when (seq value) (str ":" (join ":" value) ":"))]
                             (if (:tags/from f)
                              (replace-range text (if token (:tags/from f) (:title/to f)) (:tags/to f) (or token ""))

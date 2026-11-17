@@ -191,3 +191,10 @@
          (:workflow (org/read-source "#+TODO:   \r\n* TODO Literal\n"))))
   (is (nil? (:state (first (:objects (org/read-source "#+TODO:\r\n* TODO Literal\n"))))))
   (is (= heading/default-workflow (dissoc (:workflow (org/read-source "* TODO Default\n")) :sequences)))))
+
+(deftest optional-title-repair-can-insert-a-priority-after-an-unspaced-state
+ (let [text "* TODO\n:PROPERTIES:\n:ID: repair-priority\n:END:\n"
+       repaired (org/update-object text "repair-priority" {:title "New title" :priority "64"})]
+  (is (= "* TODO [#64] New title\n:PROPERTIES:\n:ID: repair-priority\n:END:\n" repaired))
+  (is (= {:title "New title" :priority "64" :state "TODO"}
+         (select-keys (first (:objects (org/read-source repaired))) [:title :priority :state])))))
