@@ -113,4 +113,5 @@
   (is (includes? written "1) [ ] \r\n"))
   (is (not (includes? (String/replace written "\r\n" "") "\n")))
   (is (= 3 (count (:blocks parsed))))
-  (is (= {"org-0" 8 "org-1" 9 "org-2" 10} (lists/numbers (:blocks parsed))))))
+  (is (= [8 9 10] (let [numbers (lists/numbers (:blocks parsed))]
+                    (mapv #(get numbers (:id %)) (:blocks parsed)))))))
