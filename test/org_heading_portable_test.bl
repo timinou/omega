@@ -1,9 +1,23 @@
 ;; Exercise the same finite source module in the immutable native SDK and Node.
 (ns omega.org-heading-portable-test
- (:require [bl.js :as js] [omega.org-heading-model :as heading]))
+ (:require [bl.js :as js] [omega.org-heading-model :as heading] [omega.org-heading :as rich] [live.edit.document :as document]))
 (def sample "TODO\t[#64]\t🌱 é\t:work:")
 (defn signature [fields]
  (mapv #(get fields %) [:title :state :priority :tags :title/from :title/to]))
+(defn rich-probe []
+ (let [doc (document/prepare (assoc-in (document/document "portable" [(document/block "h" "heading" "TODO [#27] Left 🌱 right :work:" {:level 1})])
+                              [:meta :org/workflow] (heading/workflow-data heading/default-workflow)))
+       plan (rich/plan-fields doc "h" {:state nil :priority "64" :title "TODO literal :title:"} "fields")
+       next (:document plan) block (first (:blocks next)) f (rich/fields block next)
+       at (+ (:title/from f) 5)
+       enter (rich/paragraph {:document next :seed "enter" :selection {:anchor {:block "h" :offset at} :head {:block "h" :offset at}}} {})
+       entered (:document (document/apply-op {"org/literal" rich/literal-function} next {:op "batch" :ops (:ops enter)}))
+       paste (rich/paste {:document doc :seed "paste" :selection {:anchor {:block "h" :offset 16} :head {:block "h" :offset 16}}} {:text "First\nSecond"})
+       pasted (:document (document/apply-op {"org/literal" rich/literal-function} doc {:op "batch" :ops (:ops paste)}))]
+  [(mapv #(get f %) [:title :state :priority :tags :title/from :title/to])
+   (mapv #(vector (:from %) (:to %) (get-in % [:call :function])) (:marks block))
+   (mapv #(vector (:type %) (:text %)) (:blocks entered))
+   (mapv #(vector (:type %) (:text %)) (:blocks pasted))]))
 (deftest native-and-javascript-headline-grammar-and-rewrite-agree
  (let [root (str (System/tmp_dir!) "/heading-portable-" (erlang/unique_integer (list :positive)))
        sources (str root "/src") out (str root "/out")
@@ -13,11 +27,13 @@
                  (heading/slice "🌱é" 1 3)
                  (signature (heading/fields "TODO [#27] 🌱 :work:" heading/default-workflow [{:from 0 :to 4} {:from 13 :to 19}] ))
                  (heading/workflow-data (heading/workflow ["#+TODO: READY(r) | FINISHED(f)\r"] heading/default-workflow))
-                 (heading/workflow-data (heading/workflow ["#+TODO:\r"] heading/default-workflow))]]
+                 (heading/workflow-data (heading/workflow ["#+TODO:\r"] heading/default-workflow))
+                 (rich-probe)]]
   (try
    (File/mkdir_p! (str sources "/qa"))
    (File/write! (str sources "/qa/heading_probe.bl")
-    (str "(ns ^:js qa.heading-probe (:require [omega.org-heading-model :as heading]))\n"
+    (str "(ns ^:js qa.heading-probe (:require [omega.org-heading-model :as heading] [omega.org-heading :as rich] [live.edit.document :as document]))\n"
+         "(defn rich-probe []\n (let [doc (document/prepare (assoc-in (document/document \"portable\" [(document/block \"h\" \"heading\" \"TODO [#27] Left 🌱 right :work:\" {:level 1})])\n                              [:meta :org/workflow] (heading/workflow-data heading/default-workflow)))\n       plan (rich/plan-fields doc \"h\" {:state nil :priority \"64\" :title \"TODO literal :title:\"} \"fields\")\n       next (:document plan) block (first (:blocks next)) f (rich/fields block next)\n       at (+ (:title/from f) 5)\n       enter (rich/paragraph {:document next :seed \"enter\" :selection {:anchor {:block \"h\" :offset at} :head {:block \"h\" :offset at}}} {})\n       entered (:document (document/apply-op {\"org/literal\" rich/literal-function} next {:op \"batch\" :ops (:ops enter)}))\n       paste (rich/paste {:document doc :seed \"paste\" :selection {:anchor {:block \"h\" :offset 16} :head {:block \"h\" :offset 16}}} {:text \"First\\nSecond\"})\n       pasted (:document (document/apply-op {\"org/literal\" rich/literal-function} doc {:op \"batch\" :ops (:ops paste)}))]\n  [(mapv #(get f %) [:title :state :priority :tags :title/from :title/to])\n   (mapv #(vector (:from %) (:to %) (get-in % [:call :function])) (:marks block))\n   (mapv #(vector (:type %) (:text %)) (:blocks entered))\n   (mapv #(vector (:type %) (:text %)) (:blocks pasted))]))\n"
          "(let [fields (heading/fields " (pr-str sample) " heading/default-workflow)]\n"
          " (println (pr-str [(mapv #(get fields %) [:title :state :priority :tags :title/from :title/to])\n"
          "  (heading/rewrite \"TODO [#27] :work:\" heading/default-workflow {:title \"🌱 é\" :priority \"64\"})\n"
@@ -25,7 +41,8 @@
          "  (heading/slice \"🌱é\" 1 3)\n"
          "  (mapv #(get (heading/fields \"TODO [#27] 🌱 :work:\" heading/default-workflow [{:from 0 :to 4} {:from 13 :to 19}]) %) [:title :state :priority :tags :title/from :title/to])\n"
          "  (heading/workflow-data (heading/workflow [\"#+TODO: READY(r) | FINISHED(f)\\r\"] heading/default-workflow))\n"
-         "  (heading/workflow-data (heading/workflow [\"#+TODO:\\r\"] heading/default-workflow))])))\n"))
+         "  (heading/workflow-data (heading/workflow [\"#+TODO:\\r\"] heading/default-workflow))\n"
+         "  (rich-probe)])))\n"))
    (js/build! "qa.heading-probe" {:paths (list sources (Path/dirname (Path/dirname (BeamLisp.Loader/source_path "omega.org-heading-model")))) :out out})
    (let [result (System/cmd "node" (list (str out "/ns/qa.heading-probe.mjs")) (list (tuple :stderr_to_stdout true)))]
     (is (= 0 (elem result 1)) (elem result 0))

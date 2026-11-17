@@ -178,7 +178,7 @@
   (is (= "Native" (get-in (org/read-source next) [:objects 0 :title])))))
 
 (deftest workflow-declarations-handle-crlf-tabs-empty-and-ordered-fast-keys
- (let [text "#+TODO:  READY(r)\tWAIT(w@/!) | FINISHED(f!)  \r\n#+SEQ_TODO:\tIDEA(i) | DROPPED(x)\r\n* FINISHED Finished\r\n"
+ (let [text "#+TODO:  READY(r)\tWAIT(w@/!) | FINISHED(f!)  \r\n#+seq_todo:\tIDEA(i) | DROPPED(x)\r\n* FINISHED Finished\r\n"
        parsed (org/read-source text) workflow (:workflow parsed)
        snapshot (heading/workflow-data workflow)]
   (is (= #{"READY" "WAIT" "IDEA"} (:open workflow)))
