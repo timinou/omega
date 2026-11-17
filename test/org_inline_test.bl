@@ -1,4 +1,4 @@
-(ns omega.org-inline-test (:require [omega.org-inline :as inline] [omega.org-canvas :as canvas]))
+(ns omega.org-inline-test (:require [omega.org-inline :as inline] [omega.org-canvas :as canvas] [omega.org-semantics :as semantics] [omega.org-heading-model :as heading]))
 (deftest native-marks-and-links-project-to-rich-data
  (let [source "Bold *مرحبا* and /gentle/ [[https://example.org][a link]] [[highlight:mint][useful]]."
        parsed (inline/read-text source "inline")]
@@ -48,3 +48,54 @@
   (let [source (str "#+attr_enchant: :inline " declaration "\nText.\n") doc (canvas/read-source source "invalid")]
    (is (= "org-retained" (get-in doc [:blocks 0 :type])))
    (is (= source (canvas/write-source doc))))))
+
+(defn heading-signature [doc]
+ (let [block (first (:blocks doc))]
+  [(:text block) (inline/mark-data (:marks block))
+   (select-keys (inline/heading-fields block (get-in doc [:meta :org/workflow])) [:title :state :priority :tags])]))
+(deftest native-rich-literals-keep-native-heading-meaning-and-bytes
+ (doseq [[body expected] [["*TODO* Literal" {:title "TODO Literal" :state nil :priority nil :tags []}]
+                         ["TODO *[#27]* Literal" {:title "[#27] Literal" :state "TODO" :priority nil :tags []}]
+                         ["TODO Literal *:work:*" {:title "Literal :work:" :state "TODO" :priority nil :tags []}]
+                         ["*TODO* [#27] Literal" {:title "TODO [#27] Literal" :state nil :priority nil :tags []}]
+                         ["TODO [#27] *Rich* :work:" {:title "Rich" :state "TODO" :priority "27" :tags ["work"]}]]]
+  (let [source (str "* " body "\r\n:PROPERTIES:\r\n:ID: heading\r\n:CUSTOM: retain\r\n:END:\r\n")
+        doc (canvas/read-source source "literal") block (first (:blocks doc))
+        expected-row (update expected :tags set)
+        parsed (first (:objects (semantics/read-source source)))
+        changed (assoc-in doc [:blocks 0 :text] (String/replace (:text block) "Literal" "Revised"))
+        written (canvas/write-source changed) reread (canvas/read-source written "again")]
+   (is (= expected (last (heading-signature doc))))
+   (is (= expected-row (select-keys parsed [:title :state :priority :tags])))
+   (is (= source (canvas/write-source doc)))
+   (is (= (heading-signature changed) (heading-signature reread)))
+   (is (ends-with? written ":ID: heading\r\n:CUSTOM: retain\r\n:END:\r\n")))))
+(deftest formatting-real-metadata-does-not-turn-it-into-a-literal
+ (doseq [[from to] [[0 4] [1 3]]]
+  (let [source "* TODO [#27] Rich :work:\n:PROPERTIES:\n:ID: heading\n:END:\n"
+        doc (canvas/read-source source "actual")
+        next (assoc-in doc [:blocks 0 :marks] [{:from from :to to :call {:id "bold" :function "text/bold" :version 1 :args {}}}])
+        written (canvas/write-source next) reread (canvas/read-source written "again")
+        object (first (:objects (semantics/read-source written)))]
+   (is (includes? written "#+attr_enchant: :inline "))
+   (is (= (heading-signature next) (heading-signature reread)))
+   (is (= {:state "TODO" :priority "27" :tags #{"work"} :title "Rich"}
+          (select-keys object [:state :priority :tags :title])))
+   (is (= written (canvas/write-source reread))))))
+(deftest explicit-literal-affiliation-and-protected-workflow
+ (let [source "#+TODO: READY(r) | FINISHED(f)\r\n* READY literal\r\n:PROPERTIES:\r\n:ID: literal\r\n:END:\r\n"
+       doc (canvas/read-source source "literal")
+       next (assoc-in doc [:blocks 0 :marks] [{:from 0 :to 5 :call {:id "literal" :function "org/literal" :version 1 :args {}}}])
+       written (canvas/write-source next) reread (canvas/read-source written "again")
+       object (first (:objects (semantics/read-source written)))]
+  (is (= ["READY"] (get-in doc [:meta :org/workflow :open])))
+  (is (= ["FINISHED"] (get-in doc [:meta :org/workflow :done])))
+  (is (= (heading-signature next) (heading-signature reread)))
+  (is (nil? (:state object)))
+  (is (= "READY literal" (:title object)))
+  (is (thrown? (canvas/write-source (assoc-in doc [:meta :org/workflow :open] ["OTHER"])))))
+ (let [source "* TODO *Rich*\n:PROPERTIES:\n:ID: rich\n:END:\n"]
+  (is (= source (semantics/update-object source "rich" {:title "Rich"})))
+  (is (= (String/replace source "TODO" "DONE") (semantics/update-object source "rich" {:done? true}))))
+ (let [source "#+attr_enchant: :inline [{:from 0 :to 999 :function \"org/literal\" :version 1 :args {}}]\n* TODO Broken\n"]
+  (is (some #(= :inline-annotation (:code %)) (:diagnostics (semantics/read-source source))))))

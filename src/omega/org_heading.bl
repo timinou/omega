@@ -3,7 +3,8 @@
 (ns ^:js omega.org-heading
  (:require [omega.org-heading-model :as heading] [live.edit.document :as document]))
 (defn workflow [doc] (get-in doc [:meta :org/workflow] heading/default-workflow))
-(defn fields [block doc] (heading/fields (:text block) (workflow doc)))
+(defn fields [block doc] (heading/fields (:text block) (workflow doc)
+  (mapv #(select-keys % [:from :to]) (filter #(= "org/literal" (get-in % [:call :function])) (:marks block)))))
 (defn title-range [block context]
  (let [f (fields block (:document context))]
   {:from (:title/from f) :to (:title/to f) :isolated true :label "Heading title"}))

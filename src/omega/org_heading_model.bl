@@ -31,18 +31,26 @@
 (def priority-value-pattern (Regex/compile! (str "^" priority-pattern "$")))
 (def priority-cookie-pattern (Regex/compile! (str "^\\[#(" priority-pattern ")\\](?:[ \\t]+|$)")))
 (defn priority? [value] (boolean (and (string? value) (re-matches priority-value-pattern value))))
+(defn- literal? [ranges from to]
+ (boolean (some #(and (< (:from %) to) (> (:to %) from)) ranges)))
 (defn fields
  "Interpret a headline body, without its leading stars. Title bounds are
   Unicode codepoints in the original body, not bytes or markup offsets."
- [text workflow]
+ ([text workflow] (fields text workflow []))
+ ([text workflow literals]
  (let [body (trim text) leading (length (or (re-find #"^\s*" text) ""))
        word (first (split body #"[ \t]+"))
-       state (when (contains? (set (concat (:open workflow) (:done workflow))) word) word)
+       state (when (and (contains? (set (concat (:open workflow) (:done workflow))) word)
+                        (not (literal? literals leading (+ leading (length word))))) word)
        after-state (if state (trim (slice body (length state) (length body))) body)
        priority-match (re-find priority-cookie-pattern after-state)
-       priority (second priority-match)
+       priority-from (+ leading (- (length body) (length after-state)))
+       priority (when (and priority-match (not (literal? literals priority-from (+ priority-from 3 (length (second priority-match))))))
+                  (second priority-match))
        after-priority (if priority (slice after-state (length (first priority-match)) (length after-state)) after-state)
        tag-match (re-find #"(?:^|[ \t]+)(:[A-Za-z0-9_@#%:-]+:)[ \t]*$" after-priority)
+       tag-from (when tag-match (- (+ leading (length body)) (length (second tag-match))))
+       tag-match (when (and tag-match (not (literal? literals tag-from (+ leading (length body))))) tag-match)
        tags (if tag-match (vec (remove empty? (split (second tag-match) ":"))) [])
        before-tags (if tag-match (slice after-priority 0 (- (length after-priority) (length (first tag-match)))) after-priority)
        title (trim before-tags)
@@ -54,7 +62,7 @@
    :priority/from (+ leading (- (length body) (length after-state)))
    :priority/to (+ leading (- (length body) (length after-state)) (if priority (+ 3 (length priority)) 0))
    :tags/from (when tag-match (- (+ leading (length body)) (length (second tag-match))))
-   :tags/to (when tag-match (+ leading (length body)))}))
+   :tags/to (when tag-match (+ leading (length body)))})))
 (defn tag-values [value]
  (let [tags (cond (string? value) (vec (remove empty? (map trim (split value ":"))))
                   (vector? value) value :else nil)]

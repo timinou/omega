@@ -98,7 +98,10 @@
                                        (when-let [item (lists/item b)] (lists/prefix item)) (:text b))) blocks)))}))))
 (def package
  {:name "omega-org-presentation"
-  :provides {:editor/clipboard {:copy clipboard-copy}
+   :provides {:editor/functions
+   {"org/literal" {:label "Literal Org text" :kind "wrap" :scope "inline" :version 1 :params {}
+                   :render (fn [_ content] [:span content])}}
+   :editor/clipboard {:copy clipboard-copy}
    :editor/sibling-context (fn [context] {:org/list-numbers (lists/numbers (:siblings context))})
    :editor/command-policy command-policy
    :editor/commands

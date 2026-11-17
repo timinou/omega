@@ -1,5 +1,5 @@
 ;; Native Org inline marks, projected as data for a host's rich editor.
-(ns omega.org-inline (:require [clojure.re] [clojure.edn :as edn]))
+(ns omega.org-inline (:require [clojure.re] [clojure.edn :as edn] [omega.org-heading-model :as heading]))
 (defn- cut [s from size] (erlang/binary_part s from size))
 (defn- points [s] (erlang/length (unicode/characters_to_list s)))
 (defn- candidate [pattern text kind]
@@ -40,7 +40,7 @@
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 ;; Native emphasis cannot represent partial-word or crossing ranges. A bounded
 ;; ordinary Org affiliation retains those exact semantic ranges without execution.
-(def inline-functions #{"text/bold" "text/emphasis" "text/italic" "text/underline" "text/strike" "text/code" "text/highlight" "text/link"})
+(def inline-functions #{"org/literal" "text/bold" "text/emphasis" "text/italic" "text/underline" "text/strike" "text/code" "text/highlight" "text/link"})
 (defn- inline-args? [function args]
  (and (map? args)
   (case function
@@ -80,6 +80,7 @@
  (let [text (:text block) points (vec (unicode/characters_to_list text)) marks (:marks block)
        token (fn [m opening?]
                (case (get-in m [:call :function])
+                "org/literal" ""
                 "text/bold" "*" "text/emphasis" "/" "text/italic" "/" "text/underline" "_" "text/strike" "+" "text/code" "~"
                 "text/highlight" (if opening? (str "[[highlight:" (get-in m [:call :args :tone]) "][") "]]")
                 "text/link" (if opening? (str "[[" (get-in m [:call :args :href]) "][") "]]")
@@ -88,3 +89,24 @@
    (str (join "" (map #(token % false) (reverse (filterv #(= at (:to %)) marks))))
         (join "" (map #(token % true) (filterv #(= at (:from %)) marks)))
         (when (< at (count points)) (unicode/characters_to_binary (list (nth points at))))))))))
+
+(defn literal-ranges [marks]
+ (mapv #(select-keys % [:from :to]) (filter #(= "org/literal" (get-in % [:call :function])) marks)))
+(defn heading-fields [parsed workflow]
+ (heading/fields (:text parsed) workflow (literal-ranges (:marks parsed))))
+(defn read-heading
+ "Decode rich native text while retaining its native metadata classification.
+  Explicit inline affiliations already contain the exact semantic intent."
+ [prefix text id workflow]
+ (or (read-annotation prefix text id)
+  (let [parsed (read-text text id) native (heading/fields text workflow)
+        decoded (heading/fields (:text parsed) workflow)
+        marks (keep (fn [key]
+                (when (and (seq (get decoded key)) (not= (get native key) (get decoded key)))
+                 (let [[from to] (case key
+                                  :state [(:state/from decoded) (:state/to decoded)]
+                                  :priority [(:priority/from decoded) (:priority/to decoded)]
+                                  :tags [(:tags/from decoded) (:tags/to decoded)])]
+                  {:from from :to to :call {:id (str id "-literal-" (name key)) :function "org/literal" :version 1 :args {}}})))
+               [:state :priority :tags])]
+   (update parsed :marks into marks))))

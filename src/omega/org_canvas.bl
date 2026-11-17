@@ -1,6 +1,6 @@
 ;; Portable Org <-> canvas projection. No database, UI, runtime or execution.
-(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-table :as table] [omega.org-semantics :as semantics] [omega.org-paragraph :as paragraph] [omega.org-list :as org-list] [omega.org-list-model :as list-model]))
-(def codec-revision "omega.org-canvas/7")
+(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-table :as table] [omega.org-semantics :as semantics] [omega.org-paragraph :as paragraph] [omega.org-list :as org-list] [omega.org-list-model :as list-model] [omega.org-heading-model :as heading]))
+(def codec-revision "omega.org-canvas/8")
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
 (defn- bounded-tree? [blocks]
@@ -57,11 +57,19 @@
                     {:previous (assoc previous parent (:id b))
                      :blocks (conj blocks (update b :attrs assoc :org/parent parent :org/previous (get previous parent)))}))
                  {:previous {} :blocks []} blocks)))
+(defn- heading-block [block workflow]
+ (if-not (= "heading" (:type block)) block
+  (let [raw (first (split (get-in block [:attrs :org/raw]) "\n"))
+        body (String/replace (String/replace raw #"\r$" "") #"^\*+ +" "")
+        parsed (inline/read-heading (get-in block [:attrs :org/prefix] "") body (:id block) workflow)]
+   (-> block (assoc :text (:text parsed) :marks (:marks parsed))
+       (assoc-in [:attrs :org/text] (:text parsed)) (assoc-in [:attrs :org/marks] (:marks parsed))))))
 (defn read-source
  "Create an ephemeral canvas projection. Metadata, drawers and unknown blocks
   are retained verbatim. Editable block IDs belong to this projection session."
  [source id]
- (let [lines (vec (String/split source "\n")) count-lines (count lines)]
+ (let [lines (vec (String/split source "\n")) count-lines (count lines)
+       workflow (heading/workflow-data (:workflow (semantics/read-source source)))]
   (loop [row 0 prefix "" blocks [] drawer? false next-block 0]
    (cond
     (> (count blocks) 9999) (retained-document source id)
@@ -69,9 +77,9 @@
     (let [[header affiliated] (if (seq blocks) (prefix-parts (get-in blocks [0 :attrs :org/prefix])) [source ""])]
      {:schema 2 :id id :meta {:title (source/keyword-value source "title" "Untitled")
                              :icon (source/keyword-value source "icon" "sparkles") :org/tail (if (seq blocks) prefix "")
-                             :org/header header :org/source source :org/codec codec-revision}
-      :blocks (source-order (if (seq blocks) (assoc-in blocks [0 :attrs :org/prefix] affiliated)
-                [(block "intro" "paragraph" "" {} "" "" "")]))})
+                             :org/header header :org/source source :org/codec codec-revision :org/workflow workflow}
+      :blocks (source-order (mapv #(heading-block % workflow) (if (seq blocks) (assoc-in blocks [0 :attrs :org/prefix] affiliated)
+                [(block "intro" "paragraph" "" {} "" "" "")])))})
     :else
     (let [raw-line (nth lines row) line (if (ends-with? raw-line "\r") (erlang/binary_part raw-line 0 (dec (erlang/byte_size raw-line))) raw-line)
           ending (if (< row (dec count-lines)) (if (ends-with? raw-line "\r") "\r\n" "\n") "")
@@ -172,7 +180,7 @@
    (if (zero? indent) (org-list/prefix (assoc item :marker "-") 0)
     (subs (org-list/prefix item 1) 1))
    (org-list/prefix item 0))))
-(defn- serialize-block [block indent preferred-ending]
+(defn- serialize-block [block indent preferred-ending workflow]
  (let [attrs (:attrs block) type (:type block) old-indent (:org/indent attrs 0)
        padding (apply str (repeat old-indent " ")) text (inline/write-text block) newline (get attrs :org/ending preferred-ending)
        newline (if (empty? newline) preferred-ending newline)
@@ -185,7 +193,7 @@
        unchanged? (and same-content? (= type (:org/type attrs)) (not root-star?)
                        (= (:level attrs) (:org/level attrs)) (= (:checked attrs) (:org/checked attrs)) (= (:language attrs) (:org/language attrs))
                        (or (not (contains? list-model/list-types type)) (= (list-model/item block) (:org/list-data attrs))))
-       reread (when-not (contains? #{"code" "org-retained"} type) (inline/read-text text (:id block)))
+       reread (when-not (contains? #{"code" "org-retained"} type) (if (= "heading" type) (inline/read-heading "" text (:id block) workflow) (inline/read-text text (:id block))))
        annotated? (and (not inline-same?) reread
                       (not= [(:text block) (inline/mark-data (:marks block))] [(:text reread) (inline/mark-data (:marks reread))]))
        annotation (when annotated? (edn/write-string (inline/mark-data (:marks block))))
@@ -280,7 +288,7 @@
          indent (if (nil? parent) (if same-parent? old-indent 0)
                   (if (and same-parent? (= parent-indent (get-in parent [:attrs :org/indent] 0))) old-indent (+ parent-indent 2)))
          table? (= "table" (:type b))
-         body (if table? (org-list/reindent (table/write-source (if (contains? attrs :org/ending) b (assoc-in b [:attrs :org/ending] preferred-ending)) grouped) old-indent indent) (serialize-block b indent preferred-ending))
+         body (if table? (org-list/reindent (table/write-source (if (contains? attrs :org/ending) b (assoc-in b [:attrs :org/ending] preferred-ending)) grouped) old-indent indent) (serialize-block b indent preferred-ending profile))
          old-neighbors? (and (= (:id previous) (:org/previous attrs)) same-parent?
                              (= "paragraph" (:org/type attrs)) (= "paragraph" (get-in previous [:attrs :org/type])))
          separate? (and (= "paragraph" (:type b))
@@ -331,6 +339,7 @@
            :when (and (not (blank? (get-in b [:attrs key] ""))) (or (= key :org/prefix) (contains? current (:id b))))]
     (when-not (= (get-in b [:attrs key]) (get-in current [(:id b) :attrs key])) (fail :protected-source)))
    (when-not (= (get-in before [:meta :org/header]) (get-in document [:meta :org/header])) (fail :protected-source))
+   (when-not (= (get-in before [:meta :org/workflow]) (get-in document [:meta :org/workflow])) (fail :protected-source))
    (when-not (= (get-in before [:meta :org/tail]) (get-in document [:meta :org/tail])) (fail :protected-source)))
   (let [reading (semantics/read-source (get-in document [:meta :org/source] (get-in document [:meta :org/header] "")))
         profile (merge semantics/default-profile (:profile reading) (:workflow reading))
