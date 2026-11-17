@@ -24,3 +24,6 @@
 (deftest leading-and-trailing-visible-breaks-survive-the-native-codec
  (doseq [text ["One\n" "\nTwo" "\n" "One\n\n"]]
   (is (= text (:text (paragraph/read-at (vec (String/split (paragraph/write-text text "\n") "\n")) 0))))))
+
+(deftest a-forced-break-at-the-end-of-a-paragraph-remains-visible
+ (is (= "Line\n" (:text (paragraph/read-at ["Line\\\\" ""] 0)))))
