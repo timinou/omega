@@ -163,3 +163,60 @@
  (let [point (boundary context true)] {:ops [] :selection {:anchor point :head point}}))
 (defn forward-boundary [context _]
  (let [point (boundary context false)] {:ops [] :selection {:anchor point :head point}}))
+(defn- target [context]
+ (document/find-block (:document context) (get-in context [:selection :head :block])))
+(defn- change-fields [context changes]
+ (let [block (target context)]
+  (when-not (= "heading" (:type block)) (throw (ex-info "Choose a heading." {})))
+  (dissoc (plan-fields (:document context) (:id block) changes (:seed context)) :document)))
+(defn set-state [context args] (change-fields context {:state (not-empty (:value args))}))
+(defn set-priority [context args] (change-fields context {:priority (:value args)}))
+(defn set-tags [context args] (change-fields context {:tags (:value args)}))
+(defn command-policy [context item]
+ (if-not (contains? #{"org/heading-state" "org/heading-priority" "org/heading-tags"} (:id item)) item
+  (let [doc (:document context) block (target context) f (when block (fields block doc))
+        workflow (workflow doc)]
+   (case (:id item)
+    "org/heading-state" (-> item (assoc-in [:params :value :default] (or (:state f) ""))
+                             (assoc-in [:params :value :values] (vec (distinct (concat [""] (:open workflow) (:done workflow))))))
+    "org/heading-priority" (assoc-in item [:params :value :default] (or (:priority f) ""))
+    "org/heading-tags" (assoc-in item [:params :value :default] (join ":" (:tags f)))))))
+(defn- field-control [block command icon label value]
+ [:button {:type "button" :class "org-heading-property" :contenteditable "false"
+           :data-edit-command command :data-edit-command-target (:id block) :aria-label label
+           :style "display:inline-flex;align-items:center;gap:7px;min-height:44px;max-width:100%;padding:7px 10px;border:1px solid var(--ed-line);border-radius:7px;background:var(--ed-soft);color:var(--ed-ink);font:inherit;font-size:12px;cursor:pointer;box-shadow:none"}
+  [:span {:data-icon icon :aria-hidden "true"}]
+  [:span {:style "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0"} value]])
+(defn render [block context]
+ (let [f (fields block (:document context)) workflow (workflow (:document context))
+       done? (contains? (set (:done workflow)) (:state f))]
+  [:section {:class "org-heading" :contenteditable "false" :data-heading-done (boolean done?)}
+   (:text context)
+   [:div {:class "org-heading-properties" :role "group" :aria-label "Heading fields"
+          :style "display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 16px;min-width:0"}
+    (field-control block "org/heading-state" (if done? "check-circle" "circle") "Change heading state" (or (:state f) "No state"))
+    (field-control block "org/heading-priority" "flag" "Change heading priority" (if (:priority f) (str "Priority " (:priority f)) "No priority"))
+    (field-control block "org/heading-tags" "tag" "Change heading tags" (if (seq (:tags f)) (str "#" (join " #" (:tags f))) "Add tags"))]
+   (get-in context [:slots "body"])]))
+(defn- heading-target? [context] (= "heading" (:type (target context))))
+(def package
+ {:name "omega-org-headings"
+  :provides
+  {:editor/typing typing :editor/command-policy command-policy
+   :editor/blocks {"heading" {:label "Heading" :icon "heading" :description "Give your ideas a little structure"
+                             :slots ["body"] :defaults {:level 2} :render-context #{:document}
+                             :text-range title-range :render render}}
+   :editor/commands
+   {"org/heading-state" {:label "Heading state" :icon "circle" :when heading-target?
+                         :description "Use the workflow declared in this document."
+                         :params {:value {:type "enum" :label "State" :values [""] :empty-label "No state" :default ""}} :run set-state}
+    "org/heading-priority" {:label "Heading priority" :icon "flag" :when heading-target?
+                            :description "Use an Org priority letter or number 0–64. Clear it for no priority."
+                            :params {:value {:type "text" :label "Priority" :default ""}} :run set-priority}
+    "org/heading-tags" {:label "Heading tags" :icon "tag" :when heading-target?
+                        :description "Separate tags with colons. Clear the field to remove tags."
+                        :params {:value {:type "text" :label "Tags" :default ""}} :run set-tags}
+    "org/heading-paragraph" {:label "New paragraph" :input-type "insertParagraph" :when heading-selection? :run paragraph}
+    "org/heading-line-break" {:label "New paragraph" :input-type "insertLineBreak" :when heading-selection? :run paragraph}
+    "org/heading-backward" {:label "Previous writing" :input-type "deleteContentBackward" :when backward-boundary? :run backward-boundary}
+    "org/heading-forward" {:label "Next writing" :input-type "deleteContentForward" :when forward-boundary? :run forward-boundary}}}})
