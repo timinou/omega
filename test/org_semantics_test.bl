@@ -90,4 +90,4 @@
   (doseq [changes [{:priority "AB"} {:priority "\n"} {:priority nil}
                    {:tags ["bad tag"]} {:tags ["same" "same"]} {:tags ["new\n* heading"]}
                    {:tags (vec (repeat 17 "tag"))} {:tags nil}]]
-   (is (thrown? (org/update-object text "meet" changes)))))))
+   (is (thrown? (org/update-object text "meet" changes))))))
