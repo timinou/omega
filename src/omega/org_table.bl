@@ -31,7 +31,7 @@
       (recur (+ at size) (conj out 124) (into boundaries (repeat size (inc (count out)))))
       (recur (inc at) (conj out (nth points at)) (conj boundaries (inc (count out))))))))))
 (defn- annotation [prefix rows columns]
- (if-let [match (Regex/run #"(?im)^#\+attr_enchant: +:table +([^\r\n]+)\r?$" prefix)]
+ (if-let [match (Regex/run #"(?im)^ *#\+attr_enchant: +:table +([^\r\n]+)\r?$" prefix)]
   (let [raw (second match) _ (when (> (erlang/byte_size raw) 65536) (fail :annotation-budget))
         forms (edn/read-string-all raw) value (first forms) cells (:cells value)]
    (when-not (and (= 1 (count forms)) (map? value) (= #{:format :cells} (set (keys value)))
@@ -49,7 +49,7 @@
  "Return an editable rectangular table, or nil for exact retained-source fallback."
  [raw prefix id]
  (try
-  (when (re-find #"(?im)^#\+attr_enchant: +:callout" prefix) (fail :table-callout))
+  (when (re-find #"(?im)^ *#\+attr_enchant: +:callout" prefix) (fail :table-callout))
   (let [lines (filterv #(not (empty? %)) (String/split raw #"(?<=\n)"))
         scanned (reduce (fn [state line]
                    (if (re-find #"^[ \t]*\|-" (body line))
@@ -142,7 +142,7 @@
                       (every? (fn [row-at] (and (= (mapv :id (nth cells row-at)) (get-in rows [row-at :attrs :org/cells]))
                                                (every? unchanged-cell? (nth cells row-at)))) (range (count rows))))]
   (if unchanged (str (:org/prefix attrs "") (:org/raw attrs))
-   (let [eol (:org/ending attrs "\n")
+   (let [eol (:org/ending attrs "\n") lead (get-in (first rows) [:attrs :org/lead] "")
          serial (mapv (fn [row-at]
                   (let [row (nth rows row-at) row-cells (nth cells row-at)
                         original-parts (into {} (mapv vector (get-in row [:attrs :org/cells] []) (get-in row [:attrs :org/parts] [])))
@@ -159,22 +159,22 @@
          declarations (vec (keep :annotation (mapcat identity serial)))
          annotation (when (seq declarations) (edn/write-string {:format "org.table/1" :cells declarations}))
          _ (when (and annotation (> (erlang/byte_size annotation) 65536)) (fail :annotation-budget))
-         prefix (String/replace (:org/prefix attrs "") #"(?im)^#\+attr_enchant: +:table +[^\r\n]*\r?\n?" "")
-         prefix (str prefix (when annotation (str "#+attr_enchant: :table " annotation eol)))
+         prefix (String/replace (:org/prefix attrs "") #"(?im)^ *#\+attr_enchant: +:table +[^\r\n]*\r?\n?" "")
+         prefix (str prefix (when annotation (str lead "#+attr_enchant: :table " annotation eol)))
          alignments (mapv #(get-in % [:attrs :align]) (first cells))
          widths (mapv #(get-in % [:attrs :org/width] "") (first cells))
          cookie-needed (or (not (empty? (:org/cookie attrs ""))) (some #(not= "left" %) alignments) (some #(not (empty? %)) widths))
          cookie-unchanged (and (= (count (first cells)) (count (get-in rows [0 :attrs :org/cells])))
                                (every? #(= (get-in % [:attrs :align]) (get-in % [:attrs :org/align])) (first cells)))
          cookie (when cookie-needed (if cookie-unchanged (:org/cookie attrs)
-                   (str "| " (join " | " (mapv (fn [alignment width] (str "<" (get {"left" "l" "center" "c" "right" "r"} alignment) width ">")) alignments widths)) " |" eol)))
+                   (str lead "| " (join " | " (mapv (fn [alignment width] (str "<" (get {"left" "l" "center" "c" "right" "r"} alignment) width ">")) alignments widths)) " |" eol)))
          anchor (when (some #(= (:id %) (:org/cookie-after attrs)) rows) (:org/cookie-after attrs))
          rule (when header (if (= columns (count (get-in rows [0 :attrs :org/cells]))) (:org/header-rule attrs)
-                             (str "|" (join "+" (repeat columns "---")) "|" eol)))
-         rule (when header (if (blank? rule) (str "|" (join "+" (repeat columns "---")) "|" eol) rule))
+                             (str lead "|" (join "+" (repeat columns "---")) "|" eol)))
+         rule (when header (if (blank? rule) (str lead "|" (join "+" (repeat columns "---")) "|" eol) rule))
          parts (mapcat (fn [row-at]
                   (let [row (nth rows row-at) row-end (get-in row [:attrs :org/ending] eol)
-                        raw (str (get-in row [:attrs :org/lead] "") "|" (join "|" (mapv :raw (nth serial row-at)))
+                        raw (str (get-in row [:attrs :org/lead] lead) "|" (join "|" (mapv :raw (nth serial row-at)))
                                  (when (get-in row [:attrs :org/closing] true) "|") (get-in row [:attrs :org/trail] ""))]
                    (vec (remove nil? [(str raw (if (empty? row-end) eol row-end)) (when (and header (zero? row-at)) rule)
                                       (when (= (:id row) anchor) cookie)])))) (range (count rows)))

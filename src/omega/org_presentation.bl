@@ -1,6 +1,6 @@
 ;; Optional pure presentation package for the canonical Enchant editor.
 ;; Source reading/writing remains in omega.org-canvas, with no UI dependency.
-(ns ^:js omega.org-presentation)
+(ns ^:js omega.org-presentation (:require [omega.org-list-model :as lists] [live.edit.document :as document]))
 (defn retained [block _]
  [:aside {:class "org-retained-card" :contenteditable "false" :role "note"
           :aria-label (get-in block [:attrs :org/label] "Retained Org")
@@ -8,8 +8,79 @@
   [:span {:class "org-retained-icon" :data-icon "code"}]
   [:div [:strong (get-in block [:attrs :org/label] "Retained Org")]
    [:p "Kept exactly in the Org source. Open Source to inspect or edit it."]]])
+(defn- target [context]
+ (document/find-block (:document context) (get-in context [:selection :head :block])))
+(defn- changed-attrs [block attrs]
+ {:ops [{:op "node/set" :block (:id block) :expected {:attrs (:attrs block)} :patch {:attrs attrs}}]})
+(defn set-checkbox [context args]
+ (let [block (target context) state (:state args)]
+  (when-not (and (= "task" (:type block)) (contains? #{"unchecked" "checked" "mixed"} state))
+   (throw (ex-info "Choose an unchecked, checked or mixed list item." {})))
+  (changed-attrs block (assoc (:attrs block) :checked (= "checked" state)
+                        :list/check-owner (:id block) :list/check-state state))))
+(defn toggle-checkbox [context _]
+ (let [state (:checkbox (lists/item (target context)))]
+  (set-checkbox context {:state (if (= "checked" state) "unchecked" "checked")})))
+(defn set-counter [context args]
+ (let [block (target context) start (:start args 1)]
+  (when-not (and (lists/ordered? block) (integer? start) (<= 0 start 999999999))
+   (throw (ex-info "Choose a list number from 0 to 999999999." {})))
+  (changed-attrs block (assoc (:attrs block) :list/counter-owner (:id block) :list/counter start))))
+(defn continue-counter [context _]
+ (let [block (target context)]
+  (when-not (lists/ordered? block) (throw (ex-info "Choose a numbered list item." {})))
+  (changed-attrs block (assoc (:attrs block) :list/counter-owner (:id block) :list/counter nil))))
+(defn list-view [block context]
+ (let [item (lists/item block) task? (= "task" (:type block)) state (:checkbox item)
+       number (lists/number-at block (:siblings context))
+       content [:div {:class "ed-task-content"} (:text context) (get-in context [:slots "body"])]]
+  [:div {:class "org-list-row ed-task" :data-checked (if (= "checked" state) "true" "false")
+         :data-list-kind (if number "ordered" (if task? "task" "bullet"))}
+   (when (or number (not task?))
+    [:span {:class "org-list-marker" :contenteditable "false" :aria-hidden "true" :style "display:inline-block;min-width:20px;flex-shrink:0;text-align:end;color:var(--ed-muted);font-size:14px"} (if number (str number ".") "•")])
+   (when task?
+    [:button {:type "button" :class "org-checkbox" :contenteditable "false" :role "checkbox"
+              :aria-checked (case state "mixed" "mixed" "checked" "true" "false")
+              :aria-label (if (= "checked" state) "Mark item unfinished" "Complete item")
+              :style "display:flex;align-items:center;justify-content:center;flex-shrink:0;width:44px;min-width:44px;height:44px;min-height:44px;margin-top:-6px;padding:0;border:0;background:transparent;color:inherit;cursor:pointer;box-shadow:none"
+              :data-edit-command "org/toggle-checkbox" :data-edit-command-target (:id block)}
+     [:span {:class "org-checkbox-glyph" :style (str "display:flex;align-items:center;justify-content:center;width:18px;height:18px;border:1px solid var(--ed-line);border-radius:4px;background:"
+            (case state "checked" "var(--ed-accent)" "mixed" "var(--ed-accent-soft)" "transparent") ";color:"
+            (case state "checked" "white" "mixed" "var(--ed-ink)" "transparent"))} [:span {:data-icon (if (= "mixed" state) "minus" "check")}]]])
+   content]))
+(defn command-policy [context item]
+ (if-not (or (contains? #{"block/indent" "block/outdent"} (:id item)) (= "turn" (:kind item))) item
+  (let [block (target context) doc (:document context) index (when block (document/block-index doc (:id block)))
+        parent (document/find-block doc (:parent block))
+        previous (when (and block (= "block/indent" (:id item))) (document/find-block doc (document/previous-sibling doc block)))
+        next-block (when (some? index) (nth (:blocks doc) (inc index) nil))
+        children? (and block (= (:id block) (:parent next-block)))
+        id (:id item) target-type (:type item)
+        reason (cond
+                 (and (= id "block/indent") (or (= "heading" (:type block)) (not (contains? lists/list-types (:type previous)))))
+                 "Indent a block beneath a list item."
+                 (and (= id "block/outdent") (not (contains? lists/list-types (:type parent))))
+                 "This block has no enclosing list item."
+                 (and (= "turn" (:kind item)) (:parent block) (= "heading" target-type))
+                 "Move the block out of the list before making it a heading."
+                 (and (= "turn" (:kind item)) children? (contains? lists/list-types (:type block))
+                      (not (contains? lists/list-types target-type)))
+                 "Move child blocks before changing this list item's type."
+                 :else nil)]
+   (if reason (assoc item :enabled false :reason reason) item))))
 (def package
  {:name "omega-org-presentation"
-  :provides {:editor/blocks
+  :provides {:editor/command-policy command-policy
+   :editor/commands
+   {"org/toggle-checkbox" {:label "Toggle check" :icon "check-square" :menu "block" :when #(= "task" (:type (target %))) :run toggle-checkbox}
+    "org/set-checkbox" {:label "Set check state" :icon "check-square" :when #(= "task" (:type (target %))) :run set-checkbox}
+    "org/set-counter" {:label "Restart numbering" :icon "list-ordered" :menu "block" :when #(lists/ordered? (target %))
+                       :description "Set the number for this item. Following items continue from here."
+                       :params {:start {:type "integer" :min 0 :max 999999999 :default 1}} :run set-counter}
+    "org/continue-counter" {:label "Continue numbering" :icon "list-ordered" :menu "block" :when #(lists/ordered? (target %)) :run continue-counter}}
+   :editor/blocks
    {"org-retained" {:label "Retained Org" :icon "code" :description "Preserved source; edit in Source"
-                    :slots [] :insertable false :render retained}}}})
+                    :slots [] :insertable false :render retained}
+    "bullet" {:label "Bulleted list" :icon "list" :slots ["body"] :render list-view}
+    "ordered" {:label "Numbered list" :icon "list-ordered" :slots ["body"] :render list-view}
+    "task" {:label "To-do" :icon "check-square" :slots ["body"] :defaults {:checked false} :render list-view}}}})

@@ -1,10 +1,12 @@
 ;; Portable Org <-> canvas projection. No database, UI, runtime or execution.
-(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-table :as table] [omega.org-semantics :as semantics] [omega.org-paragraph :as paragraph]))
-(def codec-revision "omega.org-canvas/5")
+(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-table :as table] [omega.org-semantics :as semantics] [omega.org-paragraph :as paragraph] [omega.org-list :as org-list] [omega.org-list-model :as list-model]))
+(def codec-revision "omega.org-canvas/6")
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
-(declare block)
+(declare block read-source)
 (defn- block [id type text attrs prefix raw ending]
+ (let [indent (get attrs :org/indent (org-list/line-indent (first (String/split raw "\n"))))
+       text (if (contains? #{"code" "quote" "callout"} type) (org-list/reindent text indent 0) text)]
  (if (> (erlang/length (unicode/characters_to_list text)) 65536)
   (block id "org-retained" "" {:org/kind type :org/label (str "Long " type) :org/retained-type type} prefix raw ending)
  (let [annotation (when-not (contains? #{"code" "org-retained"} type) (inline/read-annotation prefix text id))
@@ -13,13 +15,14 @@
        type (if retained? "org-retained" type)
        parsed (if (contains? #{"code" "org-retained"} type) {:text (if retained? "" text) :marks []}
                 (or annotation (inline/read-text text id)))
-       callout (match "(?m)^#\\+attr_enchant: +:callout +(note|warning)\\r?$" prefix)
+       callout (match "(?m)^ *#\\+attr_enchant: +:callout +(note|warning)\\r?$" prefix)
        wraps (if callout [{:id (str id "-callout") :function "text/callout" :version 1 :args {:tone (second callout)}}] [])]
   {:id id :type type :text (:text parsed)
    :attrs (merge attrs {:org/prefix prefix :org/raw raw :org/text (:text parsed) :org/type type
                        :org/ending ending :org/level (:level attrs) :org/checked (:checked attrs)
-                       :org/language (:language attrs) :org/marks (:marks parsed) :org/wraps wraps})
-   :parent nil :slot "body" :marks (:marks parsed) :wraps wraps})))
+                       :org/language (:language attrs) :org/indent (get attrs :org/indent (org-list/line-indent (first (String/split raw "\n"))))
+                       :org/parent (:org/parent attrs) :org/owner id :org/marks (:marks parsed) :org/wraps wraps})
+   :parent nil :slot "body" :marks (:marks parsed) :wraps wraps}))))
 (defn- classify [line]
  (cond
   (match "^(\\*+) +(.+)$" line)
@@ -32,7 +35,7 @@
   :else ["paragraph" line {}]))
 (defn- prefix-parts [prefix]
  (let [lines (vec (String/split prefix #"(?<=\n)"))
-       at (first (keep-indexed #(when (match "^#\\+(name|caption|attr_[A-Za-z_]+):" %2) %1) lines))]
+       at (first (keep-indexed #(when (match "^ *#\\+(name|caption|attr_[A-Za-z_]+):" %2) %1) lines))]
   (if at [(join "" (subvec lines 0 at)) (join "" (subvec lines at))] [prefix ""])))
 (defn- block-id [index] (str "org-" index))
 (defn- retained-document [source id]
@@ -40,6 +43,12 @@
                           :icon (source/keyword-value source "icon" "sparkles") :org/header "" :org/tail ""
                           :org/source source :org/codec codec-revision}
   :blocks [(block "org-budget" "org-retained" "" {:org/kind "document-budget" :org/label "Large Org document"} "" source "")]})
+(defn- source-order [blocks]
+ (:blocks (reduce (fn [{:keys [previous blocks]} b]
+                   (let [parent (:parent b)]
+                    {:previous (assoc previous parent (:id b))
+                     :blocks (conj blocks (update b :attrs assoc :org/parent parent :org/previous (get previous parent)))}))
+                 {:previous {} :blocks []} blocks)))
 (defn read-source
  "Create an ephemeral canvas projection. Metadata, drawers and unknown blocks
   are retained verbatim. Editable block IDs belong to this projection session."
@@ -53,8 +62,8 @@
      {:schema 2 :id id :meta {:title (source/keyword-value source "title" "Untitled")
                              :icon (source/keyword-value source "icon" "sparkles") :org/tail (if (seq blocks) prefix "")
                              :org/header header :org/source source :org/codec codec-revision}
-      :blocks (if (seq blocks) (assoc-in blocks [0 :attrs :org/prefix] affiliated)
-                [(block "intro" "paragraph" "" {} "" "" "")])})
+      :blocks (source-order (if (seq blocks) (assoc-in blocks [0 :attrs :org/prefix] affiliated)
+                [(block "intro" "paragraph" "" {} "" "" "")]))})
     :else
     (let [raw-line (nth lines row) line (if (ends-with? raw-line "\r") (erlang/binary_part raw-line 0 (dec (erlang/byte_size raw-line))) raw-line)
           ending (if (< row (dec count-lines)) (if (ends-with? raw-line "\r") "\r\n" "\n") "")
@@ -82,6 +91,47 @@
         (recur to "" (conj blocks (block (block-id next-block) "org-retained" ""
           {:org/kind kind :org/label (if configuration? "Document configuration" (str "Org " kind " block"))}
           prefix chunk ending)) false (inc next-block))))
+      (org-list/marker line)
+      (let [seed (block-id next-block) parsed (org-list/read-at lines row seed)
+            projected (when-not (:retained parsed)
+             (vec (mapcat (fn [descriptor]
+              (let [item (:list descriptor) inherited {:org/indent (:indent descriptor) :org/parent (:parent descriptor)
+                                                     :org/row (:row descriptor)}
+                    inherited (if item (merge inherited
+                                {:list/marker (:marker item) :checked (:checked item)
+                                 :org/list-prefix-bytes (:prefix-bytes item) :org/list-leading (:lead item)
+                                 :org/list-data (select-keys item [:marker :ordinal :ordinal-value :counter :counter-value :checkbox])}) inherited)
+                    prefix (str (when (= seed (:id descriptor)) prefix) (:prefix descriptor))
+                    nested (when (and (= "org-retained" (:type descriptor)) (not= "list content" (:kind descriptor)))
+                             (read-source (str prefix (:raw descriptor)) "nested-list-source"))
+                    nested-blocks (when (and nested (= 1 (count (filter #(nil? (:parent %)) (:blocks nested))))) (:blocks nested))
+                    root (first nested-blocks)
+                    ;; Reuse the same reader for nested code, quotes, tables and
+                    ;; retained constructs, keeping original global code IDs.
+                    root-id (if (= "code" (:type root)) (str "org-code-" (:row descriptor)) (:id descriptor))
+                    renames (when nested-blocks (into {} (map-indexed (fn [i b] [(:id b) (if (zero? i) root-id (str root-id "/nested/" i))]) nested-blocks)))
+                    rename-call (fn [call] (assoc call :id (str root-id "/" (:id call))))]
+               (if nested-blocks
+                (mapv (fn [b]
+                        (let [root? (= (:id root) (:id b))
+                              marks (mapv #(update % :call rename-call) (:marks b)) wraps (mapv rename-call (:wraps b))]
+                         (-> b (assoc :id (get renames (:id b)) :marks marks :wraps wraps
+                                     :parent (if root? (:parent descriptor) (get renames (:parent b))))
+                           (update :attrs (fn [attrs]
+                            (cond-> (merge attrs (when root? (assoc inherited :org/prefix prefix))
+                                     {:org/marks marks :org/wraps wraps :org/owner (get renames (:id b))})
+                             (:org/rows attrs) (update :org/rows #(mapv (fn [id] (get renames id id)) %))
+                             (:org/cells attrs) (update :org/cells #(mapv (fn [id] (get renames id id)) %))
+                             (:org/cookie-after attrs) (update :org/cookie-after #(get renames % %)))))))) nested-blocks)
+                [(assoc (block (:id descriptor) (:type descriptor) (:text descriptor)
+                          (merge inherited (when (= "org-retained" (:type descriptor))
+                                              {:org/kind (:kind descriptor) :org/label "Retained list content"}))
+                          prefix (:raw descriptor) (:ending descriptor)) :parent (:parent descriptor))])))
+              (:blocks parsed))))]
+       (if (or (:retained parsed) (> (+ (count blocks) (count projected)) 9999))
+        (recur (:to parsed) "" (conj blocks (block seed "org-retained" "" {:org/kind "list" :org/label "Large Org list"}
+                                      prefix (:raw parsed (str (join "\n" (subvec lines row (:to parsed))) "\n")) ending)) false (inc next-block))
+        (recur (:to parsed) (:tail parsed "") (into blocks projected) false (inc next-block))))
       (starts-with? (trim line) "|")
       (let [to (loop [at (inc row)]
                  (if (and (< at count-lines) (starts-with? (trim (nth lines at)) "|")) (recur (inc at)) at))
@@ -108,40 +158,63 @@
         (conj blocks (block (block-id next-block) type (if logical (:text logical) text) attrs prefix
                        (if logical (:raw logical) raw) (if logical (:ending logical) ending)))
         false (inc next-block)))))))))
-(defn- serialize-block [block]
- (let [attrs (:attrs block) type (:type block) text (inline/write-text block) newline (get attrs :org/ending "\n")
+(defn- item-prefix [block indent]
+ (let [item (list-model/item block)]
+  (if (= "*" (:marker item))
+   (if (zero? indent) (org-list/prefix (assoc item :marker "-") 0)
+    (subs (org-list/prefix item 1) 1))
+   (org-list/prefix item 0))))
+(defn- serialize-block [block indent]
+ (let [attrs (:attrs block) type (:type block) old-indent (:org/indent attrs 0)
+       padding (apply str (repeat old-indent " ")) text (inline/write-text block) newline (get attrs :org/ending "\n")
        newline (if (empty? newline) "\n" newline)
-       unchanged? (and (= (:text block) (:org/text attrs)) (= type (:org/type attrs))
-                       (= (:marks block) (:org/marks attrs)) (= (:wraps block) (:org/wraps attrs))
-                       (= (:level attrs) (:org/level attrs)) (= (:checked attrs) (:org/checked attrs)) (= (:language attrs) (:org/language attrs)))
+       same-content? (and (= (:text block) (:org/text attrs))
+                          (= (inline/mark-data (:marks block)) (inline/mark-data (:org/marks attrs [])))
+                          (= (mapv #(dissoc % :id) (:wraps block)) (mapv #(dissoc % :id) (:org/wraps attrs []))))
+       inline-same? (and same-content? (= type (:org/type attrs)))
+       wraps-same? (= (mapv #(dissoc % :id) (:wraps block)) (mapv #(dissoc % :id) (:org/wraps attrs [])))
+       root-star? (and (zero? indent) (contains? list-model/list-types type) (= "*" (:marker (list-model/item block))))
+       unchanged? (and same-content? (= type (:org/type attrs)) (not root-star?)
+                       (= (:level attrs) (:org/level attrs)) (= (:checked attrs) (:org/checked attrs)) (= (:language attrs) (:org/language attrs))
+                       (or (not (contains? list-model/list-types type)) (= (list-model/item block) (:org/list-data attrs))))
        reread (when-not (contains? #{"code" "org-retained"} type) (inline/read-text text (:id block)))
-       annotated? (and (not unchanged?) reread
+       annotated? (and (not inline-same?) reread
                       (not= [(:text block) (inline/mark-data (:marks block))] [(:text reread) (inline/mark-data (:marks reread))]))
        annotation (when annotated? (edn/write-string (inline/mark-data (:marks block))))
        text (if annotated? (:text block) text)
-       prefix (if unchanged? (:org/prefix attrs "")
-                 (String/replace (:org/prefix attrs "") (Regex/compile! "(?im)^#\\+attr_enchant: +:inline +[^\\r\\n]*\\r?\\n?") ""))
-       prefix (str prefix (when annotated? (str "#+attr_enchant: :inline " annotation newline)))]
+       prefix (if inline-same? (:org/prefix attrs "")
+                 (String/replace (:org/prefix attrs "") (Regex/compile! "(?im)^ *#\\+attr_enchant: +:inline +[^\\r\\n]*\\r?\\n?") ""))
+       prefix (str prefix (when annotated? (str padding "#+attr_enchant: :inline " annotation newline)))]
   (when (and annotated? (> (erlang/byte_size annotation) 65536)) (fail :inline-annotation-size))
   (when-not (and (<= (count (:wraps block)) 1)
                 (every? #(and (= "text/callout" (:function %)) (contains? #{"note" "warning"} (get-in % [:args :tone]))) (:wraps block)))
    (fail :unsupported-block-function))
-  (str (if (= (:wraps block) (:org/wraps attrs)) prefix
-         (str (String/replace prefix (Regex/compile! "(?im)^#\\+attr_enchant: +:callout +(note|warning)\\r?\\n?") "")
-              (join "" (map #(str "#+attr_enchant: :callout " (get-in % [:args :tone]) newline) (:wraps block)))))
-   (if unchanged?
-    (:org/raw attrs)
-    (case type
+  (str (org-list/reindent (if wraps-same? prefix
+         (str (String/replace prefix (Regex/compile! "(?im)^ *#\\+attr_enchant: +:callout +(note|warning)\\r?\\n?") "")
+              (join "" (map #(str padding "#+attr_enchant: :callout " (get-in % [:args :tone]) newline) (:wraps block))))) old-indent indent)
+   (cond
+    unchanged? (org-list/reindent (:org/raw attrs) old-indent indent)
+    (and same-content? (= type (:org/type attrs)) (contains? list-model/list-types type) (:org/list-prefix-bytes attrs))
+    (let [raw (:org/raw attrs) at (:org/list-prefix-bytes attrs)
+          tail (erlang/binary_part raw at (- (erlang/byte_size raw) at))]
+     (org-list/reindent (str (:org/list-leading attrs "") (item-prefix block indent) tail) old-indent indent))
+    (and same-content? (= "code" type) (= type (:org/type attrs)))
+    (let [language (:language attrs "beam-lisp")]
+     (when-not (re-matches #"[A-Za-z0-9_+.#-]+" language) (fail :code-language))
+     (org-list/reindent (String/replace (:org/raw attrs) #"(?i)^( *#\+begin_src +)[^ \r\n]+" (str "\\1" language)) old-indent indent))
+    :else (org-list/reindent (case type
      "paragraph" (paragraph/write-text text newline)
      "heading" (let [level (:level attrs 1)]
                  (when-not (and (integer? level) (<= 1 level 100000)) (fail :heading-level))
                  (str (join "" (repeat level "*")) " " text newline))
      "org-retained" (fail :retained-source-edit)
-     "bullet" (str "- " text newline)
-     "ordered" (str "1. " text newline)
-     "task" (str "- [" (if (:checked attrs) "X" " ") "] " text newline)
-     "quote" (str (:org/open attrs (str "#+begin_quote" newline)) text newline (:org/close attrs (str "#+end_quote" newline)))
-     "callout" (str (:org/open attrs (str "#+begin_note" newline)) text newline (:org/close attrs (str "#+end_note" newline)))
+     "bullet" (str (item-prefix block indent)
+                    (org-list/write-text text newline))
+     "ordered" (str (item-prefix block indent) (org-list/write-text text newline))
+     "task" (str (item-prefix block indent)
+                  (org-list/write-text text newline))
+     "quote" (str (org-list/reindent (:org/open attrs (str "#+begin_quote" newline)) old-indent 0) text newline (org-list/reindent (:org/close attrs (str "#+end_quote" newline)) old-indent 0))
+     "callout" (str (org-list/reindent (:org/open attrs (str "#+begin_note" newline)) old-indent 0) text newline (org-list/reindent (:org/close attrs (str "#+end_note" newline)) old-indent 0))
      "divider" (str "-----" newline)
      "image" (str "#+caption: " text newline "[[" (:src attrs) "]]" newline)
      "embed" (str "[[" (:href attrs) "][" text "]]" newline)
@@ -149,32 +222,32 @@
                 (let [language (:language attrs "beam-lisp")
                       _ (when-not (re-matches #"[A-Za-z0-9_+.#-]+" language) (fail :code-language))
                       header (if-let [original (:org/open attrs)]
-                               (String/replace original (Regex/compile! "(?i)^( *#\\+begin_src +)[^ \\r\\n]+") (str "\\1" language))
+                               (String/replace (org-list/reindent original old-indent 0) (Regex/compile! "(?i)^( *#\\+begin_src +)[^ \\r\\n]+") (str "\\1" language))
                                (str "#+begin_src " language newline))]
                  (str header (when-not (empty? text) (str (String/replace text "\n" newline) newline))
-                      (:org/close attrs (str "#+end_src" newline)))))
-     (fail :unsupported-block-type))) (:org/suffix attrs ""))))
+                      (org-list/reindent (:org/close attrs (str "#+end_src" newline)) old-indent 0))))
+     (fail :unsupported-block-type)) 0 indent))
+   (org-list/reindent (:org/suffix attrs "") old-indent indent))))
 (defn- source-key? [key] (and (keyword? key) (starts-with? (pr-str key) ":org/")))
 (defn- source-attrs [attrs]
  (into {} (filter (fn [[key _]] (source-key? key)) attrs)))
 (defn- validate-structure [blocks]
  (when-not (and (<= 1 (count blocks) 10000) (= (count blocks) (count (set (mapv :id blocks)))))
   (fail :invalid-structure))
- (loop [remaining blocks active-table nil active-row nil]
+ (loop [remaining blocks stack []]
   (when (seq remaining)
-   (let [b (first remaining) type (:type b) parent (:parent b)]
+   (let [b (first remaining) type (:type b) parent (:parent b)
+         at (when parent (first (keep-indexed #(when (= parent (:id %2)) %1) stack)))
+         stack (if parent (when (some? at) (subvec stack 0 (inc at))) [])
+         owner (last stack)]
+    (when (or (and parent (nil? stack)) (> (count stack) 128)) (fail :unsupported-nesting))
     (cond
-     (nil? parent)
-     (do (when-not (= "body" (:slot b "body")) (fail :unsupported-nesting))
-         (when (contains? #{"table-row" "table-cell"} type) (fail :unsupported-nesting))
-         (recur (rest remaining) (when (= "table" type) (:id b)) nil))
-     (= "table-row" type)
-     (do (when-not (and active-table (= active-table parent) (= "rows" (:slot b))) (fail :unsupported-nesting))
-         (recur (rest remaining) active-table (:id b)))
-     (= "table-cell" type)
-     (do (when-not (and active-row (= active-row parent) (= "cells" (:slot b))) (fail :unsupported-nesting))
-         (recur (rest remaining) active-table active-row))
-     :else (fail :unsupported-nesting))))))
+     (nil? parent) (when-not (and (= "body" (:slot b "body")) (not (contains? #{"table-row" "table-cell"} type))) (fail :unsupported-nesting))
+     (= "table-row" type) (when-not (and (= "table" (:type owner)) (= "rows" (:slot b))) (fail :unsupported-nesting))
+     (= "table-cell" type) (when-not (and (= "table-row" (:type owner)) (= "cells" (:slot b))) (fail :unsupported-nesting))
+     :else (when-not (and (contains? list-model/list-types (:type owner)) (= "body" (:slot b)) (not= "heading" type))
+             (fail :unsupported-nesting)))
+    (recur (rest remaining) (conj stack b))))))
 (defn validate-transition
  "A host checks the proposed document against its committed typed snapshot.
   Generic document metadata edits cannot replace the source anchoring itself."
@@ -191,6 +264,33 @@
                    (if (= key :title) (<= (count value) 300) (some? (re-matches #"[A-Za-z][A-Za-z0-9_-]{0,63}" value))))
       (fail :invalid-metadata))
      (source/write-keyword text (name key) value))))) text [:title :icon]))
+(defn- emit-source [grouped nodes parent parent-indent document-id authority-id profile]
+ (loop [remaining nodes previous nil parts []]
+  (if (empty? remaining) (join "" parts)
+   (let [b (first remaining) attrs (:attrs b) old-indent (:org/indent attrs 0)
+         same-parent? (= (:parent b) (:org/parent attrs))
+         indent (if (nil? parent) (if same-parent? old-indent 0)
+                  (if (and same-parent? (= parent-indent (get-in parent [:attrs :org/indent] 0))) old-indent (+ parent-indent 2)))
+         table? (= "table" (:type b))
+         body (if table? (org-list/reindent (table/write-source b grouped) old-indent indent) (serialize-block b indent))
+         old-neighbors? (and (= (:id previous) (:org/previous attrs)) same-parent?
+                             (= "paragraph" (:org/type attrs)) (= "paragraph" (get-in previous [:attrs :org/type])))
+         separate? (and (= "paragraph" (:type b))
+                        (or (and (= "paragraph" (:type previous)) (not old-neighbors?))
+                            (and parent (nil? previous)))
+                        (not (re-find #"^[ \t]*\r?\n" (:org/prefix attrs ""))))
+         separator (let [ending (:org/ending attrs "\n")] (if (empty? ending) "\n" ending))
+         body (str (when separate? separator) body)
+         body (if (and document-id (= "heading" (:type b)))
+                (:source (semantics/assign-identities body
+                  (fn [_] (str "org-" (subs (Base/encode16 (crypto/hash :sha256 (erlang/term_to_binary [document-id authority-id (:id b)]))
+                                                        (list (tuple :case :lower))) 0 24))) profile)) body)
+         child-nodes (when-not table? (get grouped (:id b) []))
+         body (if (and (seq child-nodes) (not (ends-with? body "\n"))) (str body separator) body)
+         children (when-not table? (emit-source grouped child-nodes b indent document-id authority-id profile))
+         result (str body children)
+         result (if (and (seq (rest remaining)) (not (ends-with? result "\n"))) (str result separator) result)]
+    (recur (rest remaining) b (conj parts result))))))
 (defn write-source
  "Serialize ordinary Org, restoring source metadata after presentation-only
   type changes. A host document ID also materializes stable IDs for new work."
@@ -205,9 +305,11 @@
                      (doseq [[key value] (source-attrs (:attrs b))]
                       (when-not (= value (get protected key ::absent)) (fail :protected-source)))
                      (update b :attrs #(merge protected %)))
-                    ;; Duplicating a block copies its visible content, not IDs,
-                    ;; drawers, affiliated declarations or a forged raw payload.
-                    (update b :attrs #(into {} (remove (fn [[key _]] (source-key? key)) %)))))
+                    ;; Copied source ownership keeps the old ID and cannot be
+                    ;; claimed by a new node before an admitted source read.
+                    (do (when (= (:id b) (get-in b [:attrs :org/owner])) (fail :forged-source-owner))
+                     ;; Duplicating visible content never copies raw source IDs.
+                     (update b :attrs #(into {} (remove (fn [[key _]] (source-key? key)) %))))))
                   (:blocks document))
        current (into {} (map (fn [b] [(:id b) b]) resolved))]
   (validate-structure resolved)
@@ -225,12 +327,7 @@
   (let [reading (semantics/read-source (get-in document [:meta :org/source] (get-in document [:meta :org/header] "")))
         profile (merge semantics/default-profile (:profile reading) (:workflow reading))
         grouped (group-by :parent resolved)
-        parts (mapv (fn [b]
-                (let [text (if (= "table" (:type b)) (table/write-source b grouped) (serialize-block b))]
-                 (if (and document-id (= "heading" (:type b)))
-                  (:source (semantics/assign-identities text
-                    (fn [_] (str "org-" (subs (Base/encode16 (crypto/hash :sha256 (erlang/term_to_binary [document-id (:id document) (:id b)]))
-                                                          (list (tuple :case :lower))) 0 24))) profile)) text))) (get grouped nil []))]
+        body (emit-source grouped (get grouped nil []) nil 0 document-id (:id document) profile)]
    (write-metadata
-    (str (get-in document [:meta :org/header] "") (join "" parts) (get-in document [:meta :org/tail] ""))
+    (str (get-in document [:meta :org/header] "") body (get-in document [:meta :org/tail] ""))
     (:meta before) (:meta document))))))

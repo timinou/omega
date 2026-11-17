@@ -1,8 +1,8 @@
 (ns omega.org-list-test (:require [omega.org-list :as org-list]))
 (deftest stars-belong-to-outline-or-list-according-to-native-indentation
  (is (nil? (org-list/marker "* An outline heading")))
- (is (= {:lead "  " :indent 2 :marker "*" :ordered? false :ordinal nil :counter nil
-         :checkbox nil :type "bullet" :text "A nested item" :checked false}
+ (is (= {:lead "  " :indent 2 :marker "*" :ordered? false :ordinal nil :ordinal-value nil :counter nil :counter-value nil
+         :checkbox nil :type "bullet" :prefix-bytes 4 :text "A nested item" :checked false}
         (org-list/marker "  * A nested item")))
  (is (= 8 (:indent (org-list/marker "\t- Tab-indented item")))))
 (deftest ordered-counter-and-checkbox-remain-independent-native-fields

@@ -64,7 +64,7 @@
      :call {:id (str id "-annotation-" at) :function (:function mark) :version 1 :args (:args mark)}})
     (range (count declarations)) declarations)}))
 (defn read-annotation [prefix text id]
- (when-let [found (Regex/run (Regex/compile! "(?im)^#\\+attr_enchant: +:inline +([^\\r\\n]+)\\r?$") prefix)]
+ (when-let [found (Regex/run (Regex/compile! "(?im)^ *#\\+attr_enchant: +:inline +([^\\r\\n]+)\\r?$") prefix)]
   (let [raw (second found)]
    (try
     (when (> (erlang/byte_size raw) 65536) (fail :inline-annotation-size))

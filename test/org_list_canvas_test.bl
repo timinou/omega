@@ -1,0 +1,68 @@
+(ns omega.org-list-canvas-test
+ (:require [omega.org-canvas :as canvas] [omega.org-presentation :as presentation] [omega.org-list-model :as lists]
+           [live.edit.document :as d] [live.edit.commands :as commands] [live.edit.extensions :as extensions]
+           [live.edit.standard :as standard] [live.edit.projection :as projection] [live.hiccup :as html]))
+(def registry (extensions/build [standard/package presentation/package]))
+(def source "#+title: List notebook\r\n\r\n5) [@8] [-] First 🌱\r\n   wrapped body\r\n   * Child one\r\n     + Nested two\r\n   * Child three\r\n\r\n   Another paragraph.\r\n\r\n   #+name: literal\r\n   #+begin_src org\r\n* A literal heading inside the cell\r\n   #+end_src\r\n   | Item | Value |\r\n   |------+-------|\r\n   | A | 2 |\r\n   #+begin_custom\r\n   Retain me.\r\n   #+end_custom\r\n6) Follow up\r\n\r\nAfter the list.\r\n")
+(defn named [document text] (first (filter #(= text (:text %)) (:blocks document))))
+(defn context [document block]
+ {:document (d/prepare document) :functions (:functions registry)
+  :selection {:anchor {:block (:id block) :offset 0} :head {:block (:id block) :offset 0}}})
+(defn execute [document block command args]
+ (let [plan (commands/plan registry (context document block) command args "list-test")]
+  (reduce (fn [doc op] (:document (d/apply-op (:functions registry) doc op))) document (:ops plan))))
+(deftest nested-lists-share-the-canonical-code-and-table-reader-with-exact-source
+ (let [doc (canvas/read-source source "lists") first-item (first (:blocks doc))
+       code (first (filter #(= "code" (:type %)) (:blocks doc)))
+       table (first (filter #(= "table" (:type %)) (:blocks doc)))
+       child (named doc "Child one") nested (named doc "Nested two")
+       siblings (filterv #(nil? (:parent %)) (:blocks doc))]
+  (is (d/valid? doc))
+  (is (= source (canvas/write-source doc)))
+  (is (= "First 🌱 wrapped body" (:text first-item)))
+  (is (= "mixed" (:checkbox (lists/item first-item))))
+  (is (= (:id first-item) (:parent child)))
+  (is (= (:id child) (:parent nested)))
+  (is (= (:id first-item) (:parent code)))
+  (is (= "org-code-11" (:id code)))
+  (is (= "* A literal heading inside the cell" (:text code)))
+  (is (= (:id first-item) (:parent table)))
+  (is (= 8 (lists/number-at first-item siblings)))
+  (is (= 9 (lists/number-at (named doc "Follow up") siblings)))))
+(deftest a-checkbox-change-retains-physical-wrapping-and-all-other-source
+ (let [doc (canvas/read-source source "checks") changed (execute doc (first (:blocks doc)) "org/toggle-checkbox" {})
+       written (canvas/write-source changed)]
+  (is (= (String/replace source "[@8] [-]" "[@8] [X]") written))
+  (is (= "checked" (:checkbox (lists/item (first (:blocks (canvas/read-source written "reopened")))))))))
+(deftest list-text-edits-and-number-controls-use-native-grammar
+ (let [doc (canvas/read-source source "edits") child (named doc "Child one")
+       edited (update doc :blocks (fn [blocks] (mapv #(if (= (:id child) (:id %)) (assoc % :text "Revised child") %) blocks)))
+       counter (execute doc (first (:blocks doc)) "org/set-counter" {:start 20})
+       continued (execute counter (first (:blocks counter)) "org/continue-counter" {})]
+  (is (= (String/replace source "Child one" "Revised child") (canvas/write-source edited)))
+  (is (= (String/replace source "[@8]" "[@20]") (canvas/write-source counter)))
+  (is (= (String/replace source "[@8] " "") (canvas/write-source continued)))
+  (is (thrown? (execute doc (first (:blocks doc)) "org/set-counter" {:start -1})))))
+(deftest outdenting-a-star-bullet-keeps-it-a-list-item-and-retains-its-children
+ (let [doc (canvas/read-source "- Parent\n  * Child\n    + Nested\n" "outdent") child (named doc "Child")
+       moved (execute doc child "block/outdent" {}) written (canvas/write-source moved)
+       reread (canvas/read-source written "reopened")]
+  (is (= "- Parent\n- Child\n  + Nested\n" written))
+  (is (= "bullet" (:type (named reread "Child"))))
+  (is (= (:id (named reread "Child")) (:parent (named reread "Nested"))))))
+(deftest paragraph-splits-remain-paragraphs-in-native-org
+ (let [doc (canvas/read-source "First second" "split")
+       next (:document (d/apply-op (:functions registry) (d/prepare doc)
+                         {:op "block/split" :block "org-0" :at 6 :new "new-paragraph" :rightMeta {:type "paragraph" :attrs {}}}))
+       written (canvas/write-source next) reread (canvas/read-source written "again")]
+  (is (= 2 (count (:blocks reread))))
+  (is (= ["First " "second"] (mapv :text (:blocks next))))
+  (is (= ["First" "second"] (mapv :text (:blocks reread))))))
+(deftest package-list-controls-are-inert-in-readers-and-expose-mixed-status
+ (let [doc (canvas/read-source source "read") reading (html/hiccup->html (projection/reader registry doc {}))
+       editing (html/hiccup->html (into [:div] (projection/body registry doc)))]
+  (is (includes? editing "aria-checked=\"mixed\""))
+  (is (includes? editing "org/toggle-checkbox"))
+  (is (includes? reading "aria-readonly=\"true\""))
+  (is (not (includes? reading "org/toggle-checkbox")))
+  (is (not (includes? reading "<button")))))

@@ -15,8 +15,10 @@
          body (if checkbox (or (nth checkbox 2 nil) "") body)
          check (when checkbox (get {" " "unchecked" "X" "checked" "x" "checked" "-" "mixed"} (second checkbox)))]
     {:lead lead :indent (indentation lead) :marker bullet :ordered? ordered?
-     :ordinal ordinal :counter (when cookie (second cookie)) :checkbox check
+     :ordinal ordinal :ordinal-value (when (and ordinal (<= (count ordinal) 9)) (String/to_integer ordinal))
+     :counter (when cookie (second cookie)) :counter-value (when (and cookie (<= (count (second cookie)) 9)) (String/to_integer (second cookie))) :checkbox check
      :type (cond checkbox "task" ordered? "ordered" :else "bullet")
+     :prefix-bytes (- (erlang/byte_size (paragraph/line-text line)) (erlang/byte_size body))
      :text body :checked (= check "checked")}))))
 (defn prefix
  "Render a supported native marker; source-owning callers retain unchanged raw.
@@ -36,7 +38,7 @@
        (when counter (str "[@" counter "] "))
        (when checkbox (str "[" (get {"unchecked" " " "checked" "X" "mixed" "-"} checkbox) "] ")))))
 
-(defn- line-indent [line]
+(defn line-indent [line]
  (indentation (or (second (re-find #"^([ \t]*)" line)) "")))
 (defn- begin-kind [line]
  (second (re-find #"(?i)^ *#\+begin_([A-Za-z0-9_-]+)(?: .*|$)" (paragraph/line-text line))))
@@ -75,11 +77,13 @@
     (cond
      (or (> (count out) 4096) (> (count stack) 64))
      {:to limit :retained true :raw (raw-span lines row limit) :reason "Large Org list"}
-     (>= at limit) {:to limit :blocks out :tail prefix}
+     (>= at limit) {:to limit :blocks out :tail prefix :raw (raw-span lines row limit)}
      :else
      (let [line (nth lines at) item (marker line)]
       (cond
        (blank? line) (recur (inc at) stack out (str prefix (raw-span lines at (inc at))))
+       (and item (or (> (count (:ordinal item "")) 9) (> (count (:counter item "")) 9)))
+       {:to limit :retained true :raw (raw-span lines row limit) :reason "Large Org list counter"}
        item
        (let [stack (vec (take-while #(< (:indent %) (:indent item)) stack))
              parent (:id (last stack)) id (if (= at row) seed (str seed "/item/" at))
@@ -113,3 +117,25 @@
                          :parent parent :row at :to to :indent indent :kind (or kind "list content")
                          :prefix prefix :raw (raw-span lines at to) :ending (ending-at lines to)}]
         (recur to stack (conj out descriptor) "")))))))))
+
+(defn reindent
+ "Rebase source indentation after a structural move, preserving every other byte.
+  Unmoved source is returned verbatim, including tabs and mixed line endings."
+ [text before after]
+ (let [before (or before 0) after (or after 0)]
+  (if (= before after) text
+   (join "" (map (fn [line]
+                    (if (blank? line) line
+                     (let [lead (or (second (re-find #"^([ \t]*)" line)) "")
+                           width (indentation lead)
+                           body (erlang/binary_part line (erlang/byte_size lead) (- (erlang/byte_size line) (erlang/byte_size lead)))]
+                      (str (apply str (repeat (+ after (max 0 (- width before))) " ")) body))))
+               (String/split text #"(?<=\n)"))))))
+
+(defn write-text [text ending]
+ (let [lines (vec (String/split text "\n"))]
+  (doseq [line (rest lines)]
+   (when (and (not (blank? line)) (not (paragraph/prose-line? line)))
+    (throw (ex-info "Use a child block for structural Org syntax in a list item."
+             {:kind :omega/org-canvas :reason :list-content-structure}))))
+  (str (join (str "\\\\" ending) (map-indexed (fn [index line] (str (when (pos? index) "  ") line)) lines)) ending)))

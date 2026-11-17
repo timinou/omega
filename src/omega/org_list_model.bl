@@ -1,0 +1,29 @@
+;; Shared pure list presentation/command data. No reader, database or DOM.
+(ns ^:js omega.org-list-model)
+(def list-types #{"bullet" "ordered" "task"})
+(defn snapshot [block]
+ (when (= (:id block) (get-in block [:attrs :org/owner])) (get-in block [:attrs :org/list-data])))
+(defn item [block]
+ (when (contains? list-types (:type block))
+  (let [attrs (:attrs block) old (snapshot block) type (:type block)
+        marker (or (:list/marker attrs) (:marker old) (if (= "ordered" type) "1." "-"))
+        numeric? (and (not (empty? marker)) (contains? #{"0" "1" "2" "3" "4" "5" "6" "7" "8" "9"} (subs marker 0 1)))
+        marker (case type "ordered" (if numeric? marker "1.") "bullet" (if numeric? "-" marker) marker)
+        numeric? (or (= "ordered" type) (and (= "task" type) numeric?))
+        owned-counter? (= (:id block) (:list/counter-owner attrs))
+        counter (if owned-counter? (:list/counter attrs) (:counter-value old))
+        checkbox (when (= "task" type)
+                   (cond (:checked attrs) "checked"
+                         (= (:id block) (:list/check-owner attrs)) (:list/check-state attrs "unchecked")
+                         (= "mixed" (:checkbox old)) "mixed" :else "unchecked"))]
+   {:marker marker :ordinal (when numeric? (or (:ordinal old) "1"))
+    :ordinal-value (when numeric? (or (:ordinal-value old) 1))
+    :counter (if owned-counter? (when (some? counter) (str counter)) (:counter old))
+    :counter-value counter :checkbox checkbox})))
+(defn ordered? [block] (some? (:ordinal (item block))))
+(defn number-at [block siblings]
+ (loop [remaining (or siblings [block]) value nil]
+  (when (seq remaining)
+   (let [row (first remaining) item (item row)
+         value (if (:ordinal item) (or (:counter-value item) (when (some? value) (inc value)) (:ordinal-value item) 1) nil)]
+    (if (= (:id row) (:id block)) value (recur (rest remaining) value))))))
