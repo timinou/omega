@@ -177,3 +177,8 @@
    (is (d/valid? doc))
    (is (= source (canvas/write-source doc)))
    (is (= retained? (= "org-retained" (:type (first (:blocks doc)))))))))
+
+(deftest turning-a-numbered-checkbox-into-a-bullet-removes-its-numbering-cookie
+ (let [doc (canvas/read-source "005) [@008] [-] Parent\n" "turn-list")
+       turned (execute doc (first (:blocks doc)) "turn/bullet" {})]
+  (is (= "- Parent\n" (canvas/write-source turned)))))

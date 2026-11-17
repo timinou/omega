@@ -12,14 +12,15 @@
         marker (case type "ordered" (if numeric? marker "1.") "bullet" (if numeric? "-" marker) marker)
         numeric? (or (= "ordered" type) (and (= "task" type) numeric?))
         owned-counter? (= (:id block) (:list/counter-owner attrs))
-        counter (if owned-counter? (:list/counter attrs) (:counter-value old))
+        counter-allowed? (or numeric? (nil? (:ordinal old)))
+        counter (when counter-allowed? (if owned-counter? (:list/counter attrs) (:counter-value old)))
         checkbox (when (= "task" type)
                    (cond (:checked attrs) "checked"
                          (= (:id block) (:list/check-owner attrs)) (:list/check-state attrs "unchecked")
                          (= "mixed" (:checkbox old)) "mixed" :else "unchecked"))]
    {:marker marker :ordinal (when numeric? (or (:ordinal old) "1"))
     :ordinal-value (when numeric? (or (:ordinal-value old) 1))
-    :counter (if owned-counter? (when (some? counter) (str counter)) (:counter old))
+    :counter (when counter-allowed? (if owned-counter? (when (some? counter) (str counter)) (:counter old)))
     :counter-value counter :checkbox checkbox})))
 (defn prefix [item]
  (let [marker (:marker item) ordinal (:ordinal item) counter (:counter item) checkbox (:checkbox item)]
