@@ -10,7 +10,10 @@
        expected [(signature (heading/fields sample heading/default-workflow))
                  (heading/rewrite "TODO [#27] :work:" heading/default-workflow {:title "🌱 é" :priority "64"})
                  (mapv heading/priority? ["0" "27" "60" "64" "65" "AB" nil])
-                 (heading/slice "🌱é" 1 3)]]
+                 (heading/slice "🌱é" 1 3)
+                 (signature (heading/fields "TODO [#27] 🌱 :work:" heading/default-workflow [{:from 0 :to 4} {:from 13 :to 19}] ))
+                 (heading/workflow-data (heading/workflow ["#+TODO: READY(r) | FINISHED(f)\r"] heading/default-workflow))
+                 (heading/workflow-data (heading/workflow ["#+TODO:\r"] heading/default-workflow))]]
   (try
    (File/mkdir_p! (str sources "/qa"))
    (File/write! (str sources "/qa/heading_probe.bl")
@@ -19,7 +22,10 @@
          " (println (pr-str [(mapv #(get fields %) [:title :state :priority :tags :title/from :title/to])\n"
          "  (heading/rewrite \"TODO [#27] :work:\" heading/default-workflow {:title \"🌱 é\" :priority \"64\"})\n"
          "  (mapv heading/priority? [\"0\" \"27\" \"60\" \"64\" \"65\" \"AB\" nil])\n"
-         "  (heading/slice \"🌱é\" 1 3)])))\n"))
+         "  (heading/slice \"🌱é\" 1 3)\n"
+         "  (mapv #(get (heading/fields \"TODO [#27] 🌱 :work:\" heading/default-workflow [{:from 0 :to 4} {:from 13 :to 19}]) %) [:title :state :priority :tags :title/from :title/to])\n"
+         "  (heading/workflow-data (heading/workflow [\"#+TODO: READY(r) | FINISHED(f)\\r\"] heading/default-workflow))\n"
+         "  (heading/workflow-data (heading/workflow [\"#+TODO:\\r\"] heading/default-workflow))])))\n"))
    (js/build! "qa.heading-probe" {:paths (list sources (Path/dirname (Path/dirname (BeamLisp.Loader/source_path "omega.org-heading-model")))) :out out})
    (let [result (System/cmd "node" (list (str out "/ns/qa.heading-probe.mjs")) (list (tuple :stderr_to_stdout true)))]
     (is (= 0 (elem result 1)) (elem result 0))
