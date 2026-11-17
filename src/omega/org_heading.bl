@@ -184,9 +184,9 @@
                              (assoc-in [:params :value :values] (vec (distinct (concat [""] (:open workflow) (:done workflow))))))
     "org/heading-priority" (assoc-in item [:params :value :default] (or (:priority f) ""))
     "org/heading-tags" (assoc-in item [:params :value :default] (join ":" (:tags f)))))))
-(defn- field-control [block command icon label value]
+(defn- field-control [block command icon label value empty?]
  [:button {:type "button" :class "org-heading-property" :contenteditable "false"
-           :data-edit-command command :data-edit-command-target (:id block) :aria-label label
+           :data-edit-command command :data-edit-command-target (:id block) :aria-label label :data-edit-controls (when empty? true)
            :style "display:inline-flex;align-items:center;gap:7px;min-height:44px;max-width:100%;padding:7px 10px;border:1px solid var(--ed-line);border-radius:7px;background:var(--ed-soft);color:var(--ed-ink);font:inherit;font-size:12px;cursor:pointer;box-shadow:none"}
   [:span {:data-icon icon :aria-hidden "true"}]
   [:span {:style "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0"} value]])
@@ -197,9 +197,9 @@
    (:text context)
    [:div {:class "org-heading-properties" :role "group" :aria-label "Heading fields"
           :style "display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 16px;min-width:0"}
-    (field-control block "org/heading-state" (if done? "check-circle" "circle") "Change heading state" (or (:state f) "No state"))
-    (field-control block "org/heading-priority" "flag" "Change heading priority" (if (:priority f) (str "Priority " (:priority f)) "No priority"))
-    (field-control block "org/heading-tags" "tag" "Change heading tags" (if (seq (:tags f)) (str "#" (join " #" (:tags f))) "Add tags"))]
+    (field-control block "org/heading-state" (if done? "check-circle" "circle") "Change heading state" (or (:state f) "No state") (nil? (:state f)))
+    (field-control block "org/heading-priority" "flag" "Change heading priority" (if (:priority f) (str "Priority " (:priority f)) "No priority") (nil? (:priority f)))
+    (field-control block "org/heading-tags" "tag" "Change heading tags" (if (seq (:tags f)) (str "#" (join " #" (:tags f))) "Add tags") (empty? (:tags f)))]
    (get-in context [:slots "body"])]))
 (defn- heading-target? [context] (= "heading" (:type (target context))))
 (defn paste
