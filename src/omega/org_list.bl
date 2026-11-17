@@ -1,0 +1,36 @@
+;; Native list lexical rules, shared by the portable reader and writer.
+(ns omega.org-list (:require [clojure.re] [omega.org-paragraph :as paragraph]))
+(defn indentation [prefix]
+ (reduce (fn [column point] (if (= point 9) (+ column (- 8 (mod column 8))) (inc column)))
+         0 (unicode/characters_to_list prefix)))
+(defn marker [line]
+ (when-let [[_ lead bullet body] (re-find #"^([ \t]*)([-+*]|[0-9]+[.)]) +(.*)$" (paragraph/line-text line))]
+  ;; A star in column zero is an outline heading, never a plain-list bullet.
+  (when-not (and (empty? lead) (= "*" bullet))
+   (let [ordered? (boolean (re-matches #"[0-9]+[.)]" bullet))
+         ordinal (when ordered? (String/replace bullet #"[.)]$" ""))
+         cookie (re-find #"^\[@([0-9]+)\] +(.*)$" body)
+         body (if cookie (nth cookie 2) body)
+         checkbox (re-find #"^\[([ Xx-])\](?: +(.*)|$)" body)
+         body (if checkbox (or (nth checkbox 2 nil) "") body)
+         check (when checkbox (get {" " "unchecked" "X" "checked" "x" "checked" "-" "mixed"} (second checkbox)))]
+    {:lead lead :indent (indentation lead) :marker bullet :ordered? ordered?
+     :ordinal ordinal :counter (when cookie (second cookie)) :checkbox check
+     :type (cond checkbox "task" ordered? "ordered" :else "bullet")
+     :text body :checked (= check "checked")}))))
+(defn prefix
+ "Render a supported native marker; source-owning callers retain unchanged raw.
+  Indentation is a column count, never content supplied as a prefix string."
+ [item indent]
+ (let [bullet (:marker item) ordinal (:ordinal item) counter (:counter item)
+       checkbox (:checkbox item)]
+  (when-not (and (integer? indent) (<= 0 indent 256)
+                 (string? bullet) (re-matches #"(?:[-+*]|[0-9]+[.)])" bullet)
+                 (not (and (zero? indent) (= "*" bullet)))
+                 (or (nil? ordinal) (and (string? ordinal) (re-matches #"[0-9]+" ordinal)))
+                 (or (nil? counter) (and (string? counter) (re-matches #"[0-9]+" counter)))
+                 (contains? #{nil "unchecked" "checked" "mixed"} checkbox))
+   (throw (ex-info "Choose a native Org list marker and indentation." {:kind :omega/org-list})))
+  (str (apply str (repeat indent " ")) bullet " "
+       (when counter (str "[@" counter "] "))
+       (when checkbox (str "[" (get {"unchecked" " " "checked" "X" "mixed" "-"} checkbox) "] ")))))

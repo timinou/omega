@@ -1,0 +1,25 @@
+(ns omega.org-list-test (:require [omega.org-list :as org-list]))
+(deftest stars-belong-to-outline-or-list-according-to-native-indentation
+ (is (nil? (org-list/marker "* An outline heading")))
+ (is (= {:lead "  " :indent 2 :marker "*" :ordered? false :ordinal nil :counter nil
+         :checkbox nil :type "bullet" :text "A nested item" :checked false}
+        (org-list/marker "  * A nested item")))
+ (is (= 8 (:indent (org-list/marker "\t- Tab-indented item")))))
+(deftest ordered-counter-and-checkbox-remain-independent-native-fields
+ (let [item (org-list/marker "12) [@20] [-] A mixed item\r")]
+  (is (= "12)" (:marker item)))
+  (is (= "12" (:ordinal item)))
+  (is (= "20" (:counter item)))
+  (is (= "mixed" (:checkbox item)))
+  (is (= "task" (:type item)))
+  (is (false? (:checked item)))
+  (is (= "  12) [@20] [-] " (org-list/prefix item 2)))
+  (is (= "A mixed item" (:text item)))))
+(deftest list-text-keeps-description-separators-and-inline-syntax
+ (is (= "Person :: A *rich* description." (:text (org-list/marker "+ Person :: A *rich* description."))))
+ (is (= "" (:text (org-list/marker "- [ ]")))))
+(deftest marker-rendering-refuses-structural-prefix-injection
+ (doseq [item [{:marker "*"} {:marker "-\n*"} {:marker "-" :counter "2]\n*"}
+               {:marker "-" :checkbox "unknown"}]]
+  (is (thrown? (org-list/prefix item 0))))
+ (is (thrown? (org-list/prefix {:marker "-"} -1))))
