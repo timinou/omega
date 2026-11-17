@@ -8,7 +8,7 @@
   empty declarations disable the default workflow; CRLF and fast keys are native."
  [lines fallback]
  (let [declarations (keep (fn [line]
-                       (when-let [match (re-find #"^#\+([^:]+):[ \t]*(.*)$" line)]
+                       (when-let [match (re-find #"^#\+([^:]+):[ \t]*([^\r\n]*)\r?$" line)]
                         (when (contains? #{"TODO" "SEQ_TODO" "TYP_TODO"} (upper-case (second match))) (nth match 2)))) lines)
        sequences (mapv (fn [declaration]
                     (let [tokens (vec (remove blank? (split (trim declaration) #"[ \t]+")))

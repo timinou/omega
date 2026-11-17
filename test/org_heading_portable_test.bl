@@ -1,6 +1,6 @@
 ;; Exercise the same finite source module in the immutable native SDK and Node.
 (ns omega.org-heading-portable-test
- (:require [bl.js :as js] [omega.org-heading-model :as heading] [omega.org-heading :as rich] [live.edit.document :as document]))
+ (:require [bl.js :as js] [clojure.edn :as edn] [omega.org-heading-model :as heading] [omega.org-heading :as rich] [live.edit.document :as document]))
 (def sample "TODO\t[#64]\t🌱 é\t:work:")
 (defn signature [fields]
  (mapv #(get fields %) [:title :state :priority :tags :title/from :title/to]))
@@ -46,5 +46,5 @@
    (js/build! "qa.heading-probe" {:paths (list sources (Path/dirname (Path/dirname (BeamLisp.Loader/source_path "omega.org-heading-model")))) :out out})
    (let [result (System/cmd "node" (list (str out "/ns/qa.heading-probe.mjs")) (list (tuple :stderr_to_stdout true)))]
     (is (= 0 (elem result 1)) (elem result 0))
-    (is (= (str (pr-str expected) "\n") (elem result 0))))
+    (is (= expected (when (= 0 (elem result 1)) (edn/read-string (elem result 0))))))
    (finally (File/rm_rf! root)))))
