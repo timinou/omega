@@ -104,7 +104,7 @@
        doc (d/prepare (canvas/read-source source "enter")) block (first (:blocks doc)) id (:id block)
        f (heading/fields block doc) registry (:functions ext)]
   (doseq [[from to left right before?] [[(:title/from f) (:title/from f) "Left 🌱 right" "" true]
-                                       [(+ (:title/from f) 6) (+ (:title/from f) 6) "Left 🌱" " right" false]
+                                       [(+ (:title/from f) 6) (+ (:title/from f) 6) "Left 🌱" "right" false]
                                        [(:title/to f) (:title/to f) "Left 🌱 right" "" false]
                                        [(+ (:title/from f) 4) (+ (:title/from f) 7) "Left" "right" false]]]
    (let [context {:document doc :seed "enter" :selection {:anchor {:block id :offset from} :head {:block id :offset to}}}

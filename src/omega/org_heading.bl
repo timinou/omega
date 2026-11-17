@@ -132,11 +132,14 @@
        f (fields block doc) start (:title/from f) end (:title/to f)
        _ (when-not (and block (<= start from to end)) (throw (ex-info "Select a heading title." {})))
        id (str (:seed context) "/paragraph") beginning? (= start from to)
-       text (if beginning? "" (heading/slice (:text block) to end))
+       right (if beginning? "" (heading/slice (:text block) to end))
+       leading (heading/length (or (re-find #"^[ \t]*" right) ""))
+       text (heading/slice right leading (heading/length right))
+       content-from (+ to leading)
        marks (if beginning? []
                (vec (keep (fn [mark]
-                           (let [a (max to (:from mark)) z (min end (:to mark))]
-                            (when (< a z) (assoc mark :from (- a to) :to (- z to))))) (:marks block))))
+                           (let [a (max content-from (:from mark)) z (min end (:to mark))]
+                            (when (< a z) (assoc mark :from (- a content-from) :to (- z content-from))))) (:marks block))))
        fresh (assoc (document/block id text) :marks marks :parent (:parent block) :slot (:slot block "body"))
        remove (when-not beginning? {:op "text/replace" :block (:id block) :from from :to end
                                      :expected (heading/slice (:text block) from end) :text "" :styles []})
@@ -226,10 +229,15 @@
          after (reduce #(-> (document/apply-trusted {} %1 %2) :document) doc replace-ops)
          literal (protect-metadata after (:id block) (select-keys f [:state :priority :tags]) (str seed "/paste"))
          rest-pieces (mapv #(if (nil? (:parent %)) (assoc % :parent (:parent block) :slot (:slot block "body")) %) (vec (rest pieces)))
-         insert (when (seq rest-pieces) {:op "node/insert" :blocks rest-pieces :parent (:parent block) :slot (:slot block "body") :after (:id block)})
+         roots (filter #(= (:parent block) (:parent %)) rest-pieces)
+         inserts (:ops (reduce (fn [state root]
+                                 {:after (:id root) :ops (conj (:ops state)
+                                   {:op "node/insert" :blocks (document/subtree {:blocks rest-pieces} (:id root))
+                                    :parent (:parent block) :slot (:slot block "body") :after (:after state)})})
+                               {:after (:id block) :ops []} roots))
          point (get-in edit [:mapping 0 :end]) point (if (= (:id block) (:block point))
                                                                      (if envelope (get-in envelope [:selection :head]) (update point :offset + start)) point)]
-    {:ops (vec (concat replace-ops literal (when insert [insert]))) :selection {:anchor point :head point}}))))
+    {:ops (vec (concat replace-ops literal inserts)) :selection {:anchor point :head point}}))))
 (defn cut [context _] (paste context {:cut true :text ""}))
 (def package
  {:name "omega-org-headings"
