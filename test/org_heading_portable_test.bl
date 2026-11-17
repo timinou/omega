@@ -1,0 +1,27 @@
+;; Exercise the same finite source module in the immutable native SDK and Node.
+(ns omega.org-heading-portable-test
+ (:require [bl.js :as js] [omega.org-heading-model :as heading]))
+(def sample "TODO\t[#64]\t🌱 é\t:work:")
+(defn signature [fields]
+ (mapv #(get fields %) [:title :state :priority :tags :title/from :title/to]))
+(deftest native-and-javascript-headline-grammar-and-rewrite-agree
+ (let [root (str (System/tmp_dir!) "/heading-portable-" (erlang/unique_integer (list :positive)))
+       sources (str root "/src") out (str root "/out")
+       expected [(signature (heading/fields sample heading/default-workflow))
+                 (heading/rewrite "TODO [#27] :work:" heading/default-workflow {:title "🌱 é" :priority "64"})
+                 (mapv heading/priority? ["0" "27" "60" "64" "65" "AB" nil])
+                 (heading/slice "🌱é" 1 3)]]
+  (try
+   (File/mkdir_p! (str sources "/qa"))
+   (File/write! (str sources "/qa/heading_probe.bl")
+    (str "(ns ^:js qa.heading-probe (:require [omega.org-heading-model :as heading]))\n"
+         "(let [fields (heading/fields " (pr-str sample) " heading/default-workflow)]\n"
+         " (println (pr-str [(mapv #(get fields %) [:title :state :priority :tags :title/from :title/to])\n"
+         "  (heading/rewrite \"TODO [#27] :work:\" heading/default-workflow {:title \"🌱 é\" :priority \"64\"})\n"
+         "  (mapv heading/priority? [\"0\" \"27\" \"60\" \"64\" \"65\" \"AB\" nil])\n"
+         "  (heading/slice \"🌱é\" 1 3)])))\n"))
+   (js/build! "qa.heading-probe" {:paths (list sources (Path/dirname (Path/dirname (BeamLisp.Loader/source_path "omega.org-heading-model")))) :out out})
+   (let [result (System/cmd "node" (list (str out "/ns/qa.heading-probe.mjs")) (list (tuple :stderr_to_stdout true)))]
+    (is (= 0 (elem result 1)) (elem result 0))
+    (is (= (str (pr-str expected) "\n") (elem result 0))))
+   (finally (File/rm_rf! root)))))
