@@ -21,9 +21,10 @@
     :counter (if owned-counter? (when (some? counter) (str counter)) (:counter old))
     :counter-value counter :checkbox checkbox})))
 (defn ordered? [block] (some? (:ordinal (item block))))
-(defn number-at [block siblings]
- (loop [remaining (or siblings [block]) value nil]
-  (when (seq remaining)
+(defn numbers [siblings]
+ (loop [remaining siblings value nil out {}]
+  (if (empty? remaining) out
    (let [row (first remaining) item (item row)
-         value (if (:ordinal item) (or (:counter-value item) (when (some? value) (inc value)) (:ordinal-value item) 1) nil)]
-    (if (= (:id row) (:id block)) value (recur (rest remaining) value))))))
+         value (when (:ordinal item) (or (:counter-value item) (when (some? value) (inc value)) (:ordinal-value item) 1))]
+    (recur (rest remaining) value (cond-> out (some? value) (assoc (:id row) value)))))))
+(defn number-at [block siblings] (get (numbers (or siblings [block])) (:id block)))

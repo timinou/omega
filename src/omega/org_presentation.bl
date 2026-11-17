@@ -32,7 +32,8 @@
   (changed-attrs block (assoc (:attrs block) :list/counter-owner (:id block) :list/counter nil))))
 (defn list-view [block context]
  (let [item (lists/item block) task? (= "task" (:type block)) state (:checkbox item)
-       number (lists/number-at block (:siblings context))
+       number (if (contains? context :org/list-numbers) (get (:org/list-numbers context) (:id block))
+                (lists/number-at block (:siblings context)))
        text (assoc-in (:text context) [1 :style] "padding-inline-end:38px")
        content [:div {:class "ed-task-content"} text (get-in context [:slots "body"])]]
   [:div {:class "org-list-row ed-task" :data-checked (if (= "checked" state) "true" "false")
@@ -75,7 +76,8 @@
    (if reason (assoc item :enabled false :reason reason) item))))
 (def package
  {:name "omega-org-presentation"
-  :provides {:editor/command-policy command-policy
+  :provides {:editor/sibling-context (fn [context] {:org/list-numbers (lists/numbers (:siblings context))})
+   :editor/command-policy command-policy
    :editor/commands
    {"org/toggle-checkbox" {:label "Toggle check" :icon "check-square" :menu "block" :when #(= "task" (:type (target %))) :run toggle-checkbox}
     "org/set-checkbox" {:label "Set check state" :icon "check-square" :when #(= "task" (:type (target %))) :run set-checkbox}
@@ -86,6 +88,6 @@
    :editor/blocks
    {"org-retained" {:label "Retained Org" :icon "code" :description "Preserved source; edit in Source"
                     :slots [] :insertable false :render retained}
-    "bullet" {:label "Bulleted list" :icon "list" :slots ["body"] :render list-view}
-    "ordered" {:label "Numbered list" :icon "list-ordered" :slots ["body"] :render list-view}
+    "bullet" {:label "Bulleted list" :icon "list" :slots ["body"] :render-context #{:siblings} :render list-view}
+    "ordered" {:label "Numbered list" :icon "list-ordered" :slots ["body"] :render-context #{:siblings} :render list-view}
     "task" {:label "To-do" :icon "check-square" :slots ["body"] :defaults {:checked false} :render list-view}}}})

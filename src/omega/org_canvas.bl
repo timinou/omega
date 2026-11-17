@@ -164,10 +164,10 @@
    (if (zero? indent) (org-list/prefix (assoc item :marker "-") 0)
     (subs (org-list/prefix item 1) 1))
    (org-list/prefix item 0))))
-(defn- serialize-block [block indent]
+(defn- serialize-block [block indent preferred-ending]
  (let [attrs (:attrs block) type (:type block) old-indent (:org/indent attrs 0)
-       padding (apply str (repeat old-indent " ")) text (inline/write-text block) newline (get attrs :org/ending "\n")
-       newline (if (empty? newline) "\n" newline)
+       padding (apply str (repeat old-indent " ")) text (inline/write-text block) newline (get attrs :org/ending preferred-ending)
+       newline (if (empty? newline) preferred-ending newline)
        same-content? (and (= (:text block) (:org/text attrs))
                           (= (inline/mark-data (:marks block)) (inline/mark-data (:org/marks attrs [])))
                           (= (mapv #(dissoc % :id) (:wraps block)) (mapv #(dissoc % :id) (:org/wraps attrs []))))
@@ -264,7 +264,7 @@
                    (if (= key :title) (<= (count value) 300) (some? (re-matches #"[A-Za-z][A-Za-z0-9_-]{0,63}" value))))
       (fail :invalid-metadata))
      (source/write-keyword text (name key) value))))) text [:title :icon]))
-(defn- emit-source [grouped nodes parent parent-indent document-id authority-id profile]
+(defn- emit-source [grouped nodes parent parent-indent document-id authority-id profile preferred-ending]
  (loop [remaining nodes previous nil parts []]
   (if (empty? remaining) (join "" parts)
    (let [b (first remaining) attrs (:attrs b) old-indent (:org/indent attrs 0)
@@ -272,14 +272,14 @@
          indent (if (nil? parent) (if same-parent? old-indent 0)
                   (if (and same-parent? (= parent-indent (get-in parent [:attrs :org/indent] 0))) old-indent (+ parent-indent 2)))
          table? (= "table" (:type b))
-         body (if table? (org-list/reindent (table/write-source b grouped) old-indent indent) (serialize-block b indent))
+         body (if table? (org-list/reindent (table/write-source (if (contains? attrs :org/ending) b (assoc-in b [:attrs :org/ending] preferred-ending)) grouped) old-indent indent) (serialize-block b indent preferred-ending))
          old-neighbors? (and (= (:id previous) (:org/previous attrs)) same-parent?
                              (= "paragraph" (:org/type attrs)) (= "paragraph" (get-in previous [:attrs :org/type])))
          separate? (and (= "paragraph" (:type b))
                         (or (and (= "paragraph" (:type previous)) (not old-neighbors?))
                             (and parent (nil? previous)))
                         (not (re-find #"^[ \t]*\r?\n" (:org/prefix attrs ""))))
-         separator (let [ending (:org/ending attrs "\n")] (if (empty? ending) "\n" ending))
+         separator (let [ending (:org/ending attrs preferred-ending)] (if (empty? ending) preferred-ending ending))
          body (str (when separate? separator) body)
          body (if (and document-id (= "heading" (:type b)))
                 (:source (semantics/assign-identities body
@@ -287,7 +287,7 @@
                                                         (list (tuple :case :lower))) 0 24))) profile)) body)
          child-nodes (when-not table? (get grouped (:id b) []))
          body (if (and (seq child-nodes) (not (ends-with? body "\n"))) (str body separator) body)
-         children (when-not table? (emit-source grouped child-nodes b indent document-id authority-id profile))
+         children (when-not table? (emit-source grouped child-nodes b indent document-id authority-id profile separator))
          result (str body children)
          result (if (and (seq (rest remaining)) (not (ends-with? result "\n"))) (str result separator) result)]
     (recur (rest remaining) b (conj parts result))))))
@@ -327,7 +327,8 @@
   (let [reading (semantics/read-source (get-in document [:meta :org/source] (get-in document [:meta :org/header] "")))
         profile (merge semantics/default-profile (:profile reading) (:workflow reading))
         grouped (group-by :parent resolved)
-        body (emit-source grouped (get grouped nil []) nil 0 document-id (:id document) profile)]
+        body (emit-source grouped (get grouped nil []) nil 0 document-id (:id document) profile
+                          (or (re-find #"\r\n|\n" (or original "")) "\n"))]
    (write-metadata
     (str (get-in document [:meta :org/header] "") body (get-in document [:meta :org/tail] ""))
     (:meta before) (:meta document))))))

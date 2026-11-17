@@ -101,3 +101,16 @@
  (let [doc (canvas/read-source "Original.\n" "owner")
        forged (-> (first (:blocks doc)) (assoc :id "forged") (assoc-in [:attrs :org/owner] "forged"))]
   (is (thrown? (canvas/write-source (update doc :blocks conj forged))))))
+
+(deftest fresh-list-items-inherit-the-surrounding-native-line-ending
+ (let [source "3) [@8] [-] One\r\n4) Next\r\n"
+       doc (canvas/read-source source "crlf-split") block (first (:blocks doc))
+       split (:document (d/apply-op (:functions registry) (d/prepare doc)
+                        {:op "block/split" :block (:id block) :at 3 :new "fresh-crlf"
+                         :rightMeta {:type "task" :attrs (assoc (:attrs block) :checked false)}}))
+       written (canvas/write-source split)
+       parsed (canvas/read-source written "crlf-split")]
+  (is (includes? written "1) [ ] \r\n"))
+  (is (not (includes? (String/replace written "\r\n" "") "\n")))
+  (is (= 3 (count (:blocks parsed))))
+  (is (= {"org-0" 8 "org-1" 9 "org-2" 10} (lists/numbers (:blocks parsed))))))
