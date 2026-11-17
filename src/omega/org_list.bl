@@ -27,10 +27,11 @@
   (when-not (and (integer? indent) (<= 0 indent 256)
                  (string? bullet) (re-matches #"(?:[-+*]|[0-9]+[.)])" bullet)
                  (not (and (zero? indent) (= "*" bullet)))
-                 (or (nil? ordinal) (and (string? ordinal) (re-matches #"[0-9]+" ordinal)))
+                 (or (nil? ordinal) (and (string? ordinal) (re-matches #"[0-9]+" ordinal) (re-matches #"[0-9]+[.)]" bullet)))
                  (or (nil? counter) (and (string? counter) (re-matches #"[0-9]+" counter)))
                  (contains? #{nil "unchecked" "checked" "mixed"} checkbox))
    (throw (ex-info "Choose a native Org list marker and indentation." {:kind :omega/org-list})))
-  (str (apply str (repeat indent " ")) bullet " "
+  (str (apply str (repeat indent " "))
+       (if ordinal (str ordinal (subs bullet (dec (count bullet)))) bullet) " "
        (when counter (str "[@" counter "] "))
        (when checkbox (str "[" (get {"unchecked" " " "checked" "X" "mixed" "-"} checkbox) "] ")))))
