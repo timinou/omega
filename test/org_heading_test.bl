@@ -1,0 +1,32 @@
+(ns omega.org-heading-test
+ (:require [omega.org-heading :as heading] [omega.org-canvas :as canvas]
+           [live.edit.input :as input] [live.edit.document :as d]
+           [live.edit.extensions :as extensions] [live.edit.standard :as standard]))
+(def ext (extensions/build [standard/package {:name "heading-typing-test" :provides {:editor/typing heading/typing}}]))
+(deftest empty-heading-title-input-preserves-metadata-mark-ranges-and-source
+ (doseq [[text expected at] [["TODO" "TODO 🌱" 4] ["TODO [#27]" "TODO [#27] 🌱" 10]
+                             ["TODO [#27] :work:" "TODO [#27] 🌱 :work:" 11]
+                             [":work:" "🌱 :work:" 0]]]
+  (let [source (str "* " text "\n:PROPERTIES:\n:ID: heading\n:END:\n")
+        doc (d/prepare (canvas/read-source source "heading-field")) id (get-in doc [:blocks 0 :id])
+        op {:op "text/replace" :block id :from at :to at :text "🌱" :expected ""
+            :styles [{:id "typed" :function "text/bold" :version 1 :args {}}]}
+        selection {:anchor {:block id :offset (inc at)} :head {:block id :offset (inc at)}}
+        plan (input/plan ext {:document doc} op {:input true :id "typing" :selection selection})
+        edit (d/apply-op (:functions ext) doc (:op plan)) after (:document edit)
+        fields (heading/fields (first (:blocks after)) after) mark (first (get-in after [:blocks 0 :marks]))
+        undo (:document (d/apply-op (:functions ext) after (:inverse edit)))
+        exported (canvas/write-source after)]
+   (is (= expected (get-in after [:blocks 0 :text])))
+   (is (= "🌱" (:title fields)))
+   (is (= (inc (:from mark)) (:to mark)))
+   (is (= (:title/from fields) (:from mark)))
+   (is (= (:title/to fields) (get-in plan [:options :selection :head :offset])))
+   (is (= doc undo))
+   (is (includes? exported ":ID: heading\n:END:\n"))
+   (is (= expected (get-in (canvas/read-source exported "reloaded") [:blocks 0 :text]))))))
+(deftest existing-title-and-nonheading-input-do-not-inject-separators
+ (let [doc (d/prepare (canvas/read-source "* TODO Valid :work:\n" "ordinary")) id (get-in doc [:blocks 0 :id])
+       op {:op "text/replace" :block id :from 5 :to 5 :text "New "}]
+  (is (= op (:op (input/plan ext {:document doc} op {:input true}))))
+  (is (= op (:op (input/plan ext {:document (assoc-in doc [:blocks 0 :type] "paragraph")} op {:input true}))))))

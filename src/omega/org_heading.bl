@@ -1,0 +1,35 @@
+;; Pure source-backed heading plans. Presentation is installed only once the
+;; complete heading package and source workflow snapshot have qualified.
+(ns ^:js omega.org-heading
+ (:require [omega.org-heading-model :as heading] [live.edit.document :as document]))
+(defn workflow [doc] (get-in doc [:meta :org/workflow] heading/default-workflow))
+(defn fields [block doc] (heading/fields (:text block) (workflow doc)))
+(defn title-range [block context]
+ (let [f (fields block (:document context))]
+  {:from (:title/from f) :to (:title/to f) :isolated true :label "Heading title"}))
+(defn- plain-insert [id at text]
+ {:op "text/replace" :block id :from at :to at :text text :expected "" :styles []})
+(defn typing
+ "Keep source separators outside an initially empty title. The inserted content
+  retains its own marks; native IME and inline replacement use this same plan."
+ [context input]
+ (let [op (:op input) doc (:document context) block (document/find-block doc (:block op))]
+  (when (and (= "heading" (:type block)) (= "text/replace" (:op op))
+             (string? (:text op)) (not (empty? (:text op))))
+   (let [f (fields block doc) at (:title/from f) to (:title/to f)
+         text (:text block) before (heading/slice text 0 at) after (heading/slice text to (heading/length text))
+         prefix (when (and (not (empty? before)) (not (re-find #"[ \t]$" before))) " ")
+         suffix (when (and (not (empty? after)) (not (re-find #"^[ \t]" after))) " ")]
+    (when (and (= at to (:from op) (:to op)) (or prefix suffix))
+     (let [start (+ at (heading/length (or prefix ""))) end (+ start (heading/length (:text op)))
+           point {:block (:id block) :offset end :affinity "right"}
+           selection (:selection input)
+           move (fn [point]
+                  (if (= (:id block) (:block point)) (update point :offset + (- start at)) point))]
+      {:op {:op "batch" :ops (vec (concat
+              (when prefix [(plain-insert (:id block) at prefix)])
+              [(assoc op :from start :to start :expected "")]
+              (when suffix [(plain-insert (:id block) end suffix)])))}
+       :selection (if (and selection (= (:id block) (get-in selection [:anchor :block]) (get-in selection [:head :block])))
+                    {:anchor (move (:anchor selection)) :head (move (:head selection))}
+                    {:anchor point :head point})}))))))
