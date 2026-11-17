@@ -3,6 +3,27 @@
 (def default-workflow
  {:open #{"TODO" "NEXT" "DOING" "WAIT" "BLOCKED" "REVIEW"}
   :done #{"DONE" "DROP" "CANCELLED" "CANCELED"}})
+(defn workflow
+ "Read ordered TODO declarations from reader-approved header lines. Explicit
+  empty declarations disable the default workflow; CRLF and fast keys are native."
+ [lines fallback]
+ (let [declarations (keep #(second (re-find #"(?i)^#\+(?:TODO|SEQ_TODO|TYP_TODO):[ \t]*(.*)$" %)) lines)
+       sequences (mapv (fn [declaration]
+                    (let [tokens (vec (remove blank? (split (trim declaration) #"[ \t]+")))
+                          words (mapv #(String/replace % #"\(.*\)$" "") tokens)
+                          divider (first (keep-indexed #(when (= "|" %2) %1) words))
+                          at (or divider (max 0 (dec (count words))))]
+                     {:open (vec (take at words)) :done (vec (drop (if divider (inc at) at) words))
+                      :tokens tokens})) declarations)]
+  (if (seq declarations)
+   {:open (set (mapcat :open sequences)) :done (set (mapcat :done sequences)) :sequences sequences}
+   (assoc (select-keys fallback [:open :done]) :sequences []))))
+(defn workflow-data
+ "JSON-safe ordered snapshot for a protected document projection."
+ [workflow]
+ (let [sequences (:sequences workflow)
+       ordered (fn [key] (if (seq sequences) (vec (distinct (mapcat key sequences))) (vec (sort (get workflow key)))))]
+  {:open (ordered :open) :done (ordered :done) :sequences (vec sequences)}))
 (defn length [text] (erlang/length (unicode/characters_to_list text)))
 (defn slice [text from to]
  (unicode/characters_to_binary (to-list (subvec (vec (unicode/characters_to_list text)) from to))))

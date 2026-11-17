@@ -33,14 +33,8 @@
  ([text profile]
  (let [index (source/index text) lines (:lines index)
        header-lines (mapcat (fn [span] (when (= :prose (:kind span)) (subvec lines (:from span) (:to span)))) (:blocks index))
-       declarations (keep #(second (re-find #"(?i)^#\+(?:TODO|SEQ_TODO|TYP_TODO):[ \t]+(.*)$" %)) header-lines)
-       sequences (mapv (fn [declaration]
-                     (let [words (mapv #(String/replace % #"\(.*\)$" "") (String/split declaration #"[ \t]+"))
-                           divider (first (keep-indexed #(when (= "|" %2) %1) words))
-                           at (or divider (max 0 (dec (count words))))]
-                       {:open (vec (take at words)) :done (vec (drop (if divider (inc at) at) words))})) declarations)
-       open (if (seq sequences) (set (mapcat :open sequences)) (:open profile))
-       done (if (seq sequences) (set (mapcat :done sequences)) (:done profile))
+       workflow (heading/workflow header-lines profile)
+       open (:open workflow) done (:done workflow) sequences (:sequences workflow)
        headings (:outline index)
        rows (mapv (fn [heading-index] (let [h (nth headings heading-index)]
         (let [properties (source/properties lines (inc (:row h)))
