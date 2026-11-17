@@ -115,3 +115,54 @@
   (is (= 3 (count (:blocks parsed))))
   (is (= [8 9 10] (let [numbers (lists/numbers (:blocks parsed))]
                     (mapv #(get numbers (:id %)) (:blocks parsed)))))))
+
+(deftest deliberate-duplicates-preserve-mixed-checks-and-explicit-counter-spelling
+ (let [source "005) [@008] [-] Parent\r\n   - Child\r\n006) Next\r\n"
+       doc (canvas/read-source source "duplicate") parent (first (:blocks doc))
+       copied (execute doc parent "block/duplicate" {})
+       clone (d/find-block copied "list-test/0") child (d/find-block copied "list-test/1")
+       written (canvas/write-source copied)]
+  (is (= source (canvas/write-source doc)))
+  (is (= "mixed" (:checkbox (lists/item clone))))
+  (is (= "008" (:counter (lists/item clone))))
+  (is (= "005" (:ordinal (lists/item clone))))
+  (is (= "list-test/0" (:parent child)))
+  (is (= 2 (count (filter #(includes? % "005) [@008] [-] Parent") (String/split written "\n")))))
+  (is (not (includes? (String/replace written "\r\n" "") "\n")))))
+
+(deftest portable-list-clipboard-pastes-into-another-source-without-foreign-snapshots
+ (let [doc (canvas/read-source "5) [@8] [-] Parent\r\n   - Child\r\n" "copy-source")
+       parent (first (:blocks doc)) child (second (:blocks doc))
+       ctx (assoc (context doc parent) :selection {:anchor {:block (:id parent) :offset 0}
+                                                    :head {:block (:id child) :offset (d/length (:text child))}})
+       copied (presentation/clipboard-copy ctx {})
+       target (canvas/read-source "#+title: Target\r\n\r\nAn intro.\r\n\r\nPlaceholder.\r\n" "paste-target")
+       placeholder (last (:blocks target))
+       result (d/apply-op (:functions registry) (d/prepare target)
+                {:op "range/replace" :from {:block (:id placeholder) :offset 0}
+                 :to {:block (:id placeholder) :offset (d/length (:text placeholder))}
+                 :seed "paste-list" :fragment (:blocks copied)})
+       pasted (:document result) written (canvas/write-source pasted)
+       reloaded (canvas/read-source written "paste-target")
+       item (named reloaded "Parent")
+       partial (presentation/clipboard-copy (assoc ctx :selection {:anchor {:block (:id parent) :offset 1}
+                                                                  :head {:block (:id parent) :offset 4}}) {})]
+  (is (= 2 (count (:blocks copied))))
+  (is (every? #(not (contains? (:attrs %) :org/raw)) (:blocks copied)))
+  (is (= "task" (:type item)))
+  (is (= "mixed" (:checkbox (lists/item item))))
+  (is (= "8" (:counter (lists/item item))))
+  (is (includes? written "An intro.\r\n\r\n5) [@8] [-] Parent\r\n  - Child\r\n"))
+  (is (not (includes? (String/replace written "\r\n" "") "\n")))
+  (is (= "paragraph" (get-in partial [:blocks 0 :type])))
+  (is (= {} (get-in partial [:blocks 0 :attrs])))
+  (is (= "are" (get-in partial [:blocks 0 :text])))))
+
+(deftest retained-children-refuse-clipboard-and-duplicate-before-a-proposal
+ (let [doc (canvas/read-source "- Parent\n  #+begin_custom\n  Keep me.\n  #+end_custom\n" "retained-copy")
+       parent (first (:blocks doc)) retained (last (:blocks doc))
+       ctx (assoc (context doc parent) :selection {:anchor {:block (:id parent) :offset 0}
+                                                  :head {:block (:id retained) :offset 0}})]
+  (is (thrown? (presentation/clipboard-copy ctx {})))
+  (is (thrown? (commands/plan registry (context doc parent) "block/duplicate" {} "retained-copy")))
+  (is (= "- Parent\n  #+begin_custom\n  Keep me.\n  #+end_custom\n" (canvas/write-source doc)))))

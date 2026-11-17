@@ -1,6 +1,6 @@
 ;; Portable Org <-> canvas projection. No database, UI, runtime or execution.
 (ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-table :as table] [omega.org-semantics :as semantics] [omega.org-paragraph :as paragraph] [omega.org-list :as org-list] [omega.org-list-model :as list-model]))
-(def codec-revision "omega.org-canvas/6")
+(def codec-revision "omega.org-canvas/7")
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
 (declare block read-source)
@@ -11,6 +11,9 @@
   (block id "org-retained" "" {:org/kind type :org/label (str "Long " type) :org/retained-type type} prefix raw ending)
  (let [annotation (when-not (contains? #{"code" "org-retained"} type) (inline/read-annotation prefix text id))
        retained? (:retained annotation)
+       attrs (if (contains? list-model/list-types type)
+               (assoc attrs :identity/self ["list/portable-owner" "list/counter-owner" "list/check-owner"]
+                 :list/portable-owner id :list/portable (:org/list-data attrs)) attrs)
        attrs (if retained? (merge attrs {:org/kind "inline-annotation" :org/label "Inline annotation needing review"}) attrs)
        type (if retained? "org-retained" type)
        parsed (if (contains? #{"code" "org-retained"} type) {:text (if retained? "" text) :marks []}

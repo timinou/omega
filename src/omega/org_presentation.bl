@@ -55,7 +55,7 @@
              :style "position:absolute;inset-inline-end:-4px;top:-6px;display:flex;align-items:center;justify-content:center;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;border:0;background:transparent;color:var(--ed-muted);cursor:pointer;box-shadow:none"}
     [:span {:aria-hidden "true"} "⋯"]]]))
 (defn command-policy [context item]
- (if-not (or (contains? #{"block/indent" "block/outdent"} (:id item)) (= "turn" (:kind item))) item
+ (if-not (or (contains? #{"block/indent" "block/outdent" "block/duplicate"} (:id item)) (= "turn" (:kind item))) item
   (let [block (target context) doc (:document context) index (when block (document/block-index doc (:id block)))
         parent (document/find-block doc (:parent block))
         previous (when (and block (= "block/indent" (:id item))) (document/find-block doc (document/previous-sibling doc block)))
@@ -63,6 +63,8 @@
         children? (and block (= (:id block) (:parent next-block)))
         id (:id item) target-type (:type item)
         reason (cond
+                 (and block (= id "block/duplicate") (some #(= "org-retained" (:type %)) (document/subtree doc (:id block))))
+                 "Copy retained constructs through their exact Org source."
                  (and (= id "block/indent") (or (= "heading" (:type block)) (not (contains? lists/list-types (:type previous)))))
                  "Indent a block beneath a list item."
                  (and (= id "block/outdent") (not (contains? lists/list-types (:type parent))))
@@ -74,9 +76,22 @@
                  "Move child blocks before changing this list item's type."
                  :else nil)]
    (if reason (assoc item :enabled false :reason reason) item))))
+(defn clipboard-copy [context _]
+ (let [doc (:document context) selection (:selection context) [a z] (document/ordered-range doc (:anchor selection) (:head selection))]
+  (when-not (and (= (:block a) (:block z)) (= (:offset a) (:offset z)))
+   (let [fragments (document/fragment doc a z)
+         _ (when (some #(= "org-retained" (:type %)) fragments)
+             (throw (ex-info "Copy retained constructs through their exact Org source." {})))
+         partial? (and (= (:block a) (:block z))
+                       (or (pos? (:offset a)) (< (:offset z) (document/length (:text (document/find-block doc (:block a)))))))
+         blocks (mapv (fn [b]
+                         (let [portable (update b :attrs #(into {} (remove (fn [[key _]] (starts-with? (str key) "org/")) %)))]
+                          (if partial? (assoc portable :type "paragraph" :attrs {} :parent nil :slot "body" :wraps []) portable))) fragments)]
+    {:blocks blocks :text (join "\n" (map :text blocks))}))))
 (def package
  {:name "omega-org-presentation"
-  :provides {:editor/sibling-context (fn [context] {:org/list-numbers (lists/numbers (:siblings context))})
+  :provides {:editor/clipboard {:copy clipboard-copy}
+   :editor/sibling-context (fn [context] {:org/list-numbers (lists/numbers (:siblings context))})
    :editor/command-policy command-policy
    :editor/commands
    {"org/toggle-checkbox" {:label "Toggle check" :icon "check-square" :menu "block" :when #(= "task" (:type (target %))) :run toggle-checkbox}
@@ -90,4 +105,4 @@
                     :slots [] :insertable false :render retained}
     "bullet" {:label "Bulleted list" :icon "list" :slots ["body"] :render-context #{:siblings} :render list-view}
     "ordered" {:label "Numbered list" :icon "list-ordered" :slots ["body"] :render-context #{:siblings} :render list-view}
-    "task" {:label "To-do" :icon "check-square" :slots ["body"] :defaults {:checked false} :render list-view}}}})
+    "task" {:label "To-do" :icon "check-square" :slots ["body"] :defaults {:checked false} :render-context #{:siblings} :render list-view}}}})

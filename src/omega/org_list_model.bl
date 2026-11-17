@@ -5,7 +5,8 @@
  (when (= (:id block) (get-in block [:attrs :org/owner])) (get-in block [:attrs :org/list-data])))
 (defn item [block]
  (when (contains? list-types (:type block))
-  (let [attrs (:attrs block) old (snapshot block) type (:type block)
+  (let [attrs (:attrs block)
+        old (or (snapshot block) (when (= (:id block) (:list/portable-owner attrs)) (:list/portable attrs))) type (:type block)
         marker (or (:list/marker attrs) (:marker old) (if (= "ordered" type) "1." "-"))
         numeric? (and (not (empty? marker)) (contains? #{"0" "1" "2" "3" "4" "5" "6" "7" "8" "9"} (subs marker 0 1)))
         marker (case type "ordered" (if numeric? marker "1.") "bullet" (if numeric? "-" marker) marker)
