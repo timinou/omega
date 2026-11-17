@@ -78,7 +78,7 @@
    (if reason (assoc item :enabled false :reason reason) item))))
 (defn clipboard-copy [context _]
  (let [doc (:document context) selection (:selection context) [a z] (document/ordered-range doc (:anchor selection) (:head selection))]
-  (when-not (and (= (:block a) (:block z)) (= (:offset a) (:offset z)))
+  (when-not (and (= (:block a) (:block z)) (= (:offset a) (:offset z)) (= (:affinity a) (:affinity z)))
    (let [fragments (document/fragment doc a z)
          _ (when (some #(= "org-retained" (:type %)) fragments)
              (throw (ex-info "Copy retained constructs through their exact Org source." {})))
