@@ -35,4 +35,6 @@
    (when (and (not (blank? line)) (not (prose-line? line)))
     (throw (ex-info "Choose a heading, list or source block for structural Org syntax."
              {:kind :omega/org-canvas :reason :paragraph-structure}))))
-  (str (join (str "\\\\" ending) lines) ending)))
+  (let [lines (if (and (not (empty? text)) (empty? (last lines)))
+                (assoc lines (dec (count lines)) "\\\\") lines)]
+   (str (join (str "\\\\" ending) lines) ending))))
