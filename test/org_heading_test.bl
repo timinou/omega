@@ -3,7 +3,7 @@
            [live.edit.input :as input] [live.edit.document :as d]
            [omega.org-presentation :as presentation] [omega.org-semantics :as semantics]
            [live.edit.extensions :as extensions] [live.edit.standard :as standard]))
-(def ext (extensions/build [standard/package {:name "heading-typing-test" :provides {:editor/typing heading/typing}}]))
+(def ext (extensions/build [standard/package presentation/package {:name "heading-typing-test" :provides {:editor/typing heading/typing}}]))
 (deftest empty-heading-title-input-preserves-metadata-mark-ranges-and-source
  (doseq [[text expected at] [["TODO" "TODO 🌱" 4] ["TODO [#27]" "TODO [#27] 🌱" 10]
                              ["TODO [#27] :work:" "TODO [#27] 🌱 :work:" 11]
@@ -78,3 +78,24 @@
   (is (nil? (:state object)))
   (is (= "64" (:priority object)))
   (is (= "NEXT literal" (:title object)))))
+
+(deftest title-input-preserves-meaning-with-literal-keywords-cookies-tags-and-ime-text
+ (doseq [text ["TODO literal" "[#27] title" "Literal :work:" "TODO [#27] 🌱 :work:"]]
+  (let [doc (d/prepare (canvas/read-source "* Heading\n" "title-input")) id (get-in doc [:blocks 0 :id])
+        op {:op "text/replace" :block id :from 0 :to 7 :expected "Heading" :text text :styles []}
+        plan (input/plan ext {:document doc} op {:input true :id "native"})
+        edit (d/apply-op (:functions ext) doc (:op plan)) after (:document edit)
+        f (heading/fields (first (:blocks after)) after)
+        written (canvas/write-source after) parsed (first (:objects (semantics/read-source written)))]
+   (is (= text (:title f)))
+   (is (nil? (:state f)))
+   (is (nil? (:priority f)))
+   (is (= [] (:tags f)))
+   (is (= text (:title parsed)))
+   (is (nil? (:state parsed)))
+   (is (= doc (:document (d/apply-op (:functions ext) after (:inverse edit))))))))
+(deftest native-title-input-does-not-cross-field-boundaries-or-admit-newlines
+ (let [doc (d/prepare (canvas/read-source "* TODO Title :work:\n" "field-bounds")) id (get-in doc [:blocks 0 :id])]
+  (doseq [[from to text] [[0 4 "DONE"] [5 17 "replace"] [5 5 "Two\nlines"]]]
+   (is (thrown? (input/plan ext {:document doc} {:op "text/replace" :block id :from from :to to :text text}
+                  {:input true :id "outside"}))))))

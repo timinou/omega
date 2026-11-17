@@ -10,7 +10,7 @@
   {:from (:title/from f) :to (:title/to f) :isolated true :label "Heading title"}))
 (defn- plain-insert [id at text]
  {:op "text/replace" :block id :from at :to at :text text :expected "" :styles []})
-(defn typing
+(defn- separators
  "Keep source separators outside an initially empty title. The inserted content
   retains its own marks; native IME and inline replacement use this same plan."
  [context input]
@@ -95,3 +95,26 @@
             extra (protect-metadata next id intent (str seed "/" (name key)))
             next (reduce #(-> (document/apply-trusted registry %1 %2) :document) next extra)]
        (recur (rest keys) next (into (conj ops op) extra) intent))))))))
+
+(defn- simulate-input [doc op]
+ (let [op (if (contains? op :styles)
+             (-> op (assoc :styles [] :restore (mapv (fn [call] {:from 0 :to (heading/length (:text op)) :call call}) (:styles op)))) op)]
+  (:document (document/apply-trusted {} doc op))))
+(defn typing
+ "Plan title input, including required native separators and literal-looking
+  words. The declared field never edits metadata through a text-input event."
+ [context input]
+ (let [op (:op input) doc (:document context) block (document/find-block doc (:block op))]
+  (when (and (= "heading" (:type block)) (= "text/replace" (:op op)))
+   (let [f (fields block doc)]
+    (when-not (and (<= (:title/from f) (:from op) (:to op) (:title/to f))
+                  (not (re-find #"[\r\n]" (:text op))))
+     (throw (ex-info "Edit the heading title here; use its fields for metadata and Enter for a new paragraph." {})))
+    (let [envelope (separators context input)
+          planned-op (or (:op envelope) op)
+          ops (if (= "batch" (:op planned-op)) (:ops planned-op) [planned-op])
+          after (reduce simulate-input doc ops)
+          literal (protect-metadata after (:id block) (select-keys f [:state :priority :tags]) (:seed input))]
+     (when (or envelope (seq literal))
+      (cond-> {:op (if (= 1 (count (into ops literal))) (first ops) {:op "batch" :ops (into ops literal)})}
+        (contains? envelope :selection) (assoc :selection (:selection envelope)))))))))
