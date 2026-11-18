@@ -13,13 +13,13 @@
        attrs (:attrs block) url (get attrs (if image? :src :href) "")
        available? (media/valid-url? url)
        change-label (if image? "Image address" "Bookmark address")
-       change [:button {:type "button" :class "ed-media-placeholder" :contenteditable "false"
+       change [:button {:type "button" :class (if available? "org-media-address" "ed-media-placeholder") :contenteditable "false"
                         :data-edit-controls true :data-node-media (:id block)
                         :aria-label change-label}
                 [:span {:data-icon (if image? "image" "link")}]
                 (if available? "Change address" (if image? "Add an image" "Add a bookmark"))]
        caption (update (:text context) 1 merge
-                 {:contenteditable "true" :data-edit-isolated true :tabindex 0
+                 {:contenteditable "true" :data-edit-isolated true :tabindex 0 :data-placeholder "Add a caption"
                   :aria-label (if image? "Image caption" "Bookmark caption")})]
   (if image?
    [:figure {:class "ed-image" :contenteditable "false"}
