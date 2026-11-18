@@ -101,6 +101,36 @@
 (defn block-row [text id]
   (let [rows (anchor-rows (index text) {:kind "block" :value id})]
     (when (= 1 (count rows)) (first rows))))
+(defn reference-target
+  "Classify a native Org link destination. A file path is a name for the host
+   to admit. Reading an Org link never opens a filesystem path."
+  [target]
+  (when (and (string? target) (<= 1 (count target) 2048)
+             (not (re-find #"[\[\]\x00-\x1f]" target)))
+    (cond
+      (and (starts-with? target "id:") (> (count target) 3))
+      {:anchor {:kind "id" :value (subs target 3)}}
+      (and (starts-with? target "#") (> (count target) 1))
+      {:anchor {:kind "custom-id" :value (subs target 1)}}
+      (starts-with? target "file:")
+      (when-let [[_ path suffix] (re-matches #"([^:]+)(?:::(.+))?" (subs target 5))]
+        (cond
+          (nil? suffix) {:path path}
+          (and (starts-with? suffix "#") (> (count suffix) 1))
+          {:path path :anchor {:kind "custom-id" :value (subs suffix 1)}}
+          (and (starts-with? suffix "*") (> (count suffix) 1))
+          {:path path :anchor {:kind "heading" :value (subs suffix 1)}})))))
+(defn reference-ranges
+  "Find native Org sections or the document itself by admitted anchor. Return
+   all exact matches so a host can report ambiguity. Rows are end-exclusive."
+  [idx anchor]
+  (let [ranges (if anchor
+                 (let [rows (set (anchor-rows idx anchor))]
+                   (mapv #(select-keys % [:row :end]) (filter #(contains? rows (:row %)) (:outline idx))))
+                 [])]
+    (if (or (nil? anchor) (and (= "id" (:kind anchor)) (= (:value anchor) (:org-id idx))))
+      (into [{:row 0 :end (count (:lines idx))}] ranges)
+      ranges)))
 (defn reveal
   "Resolve against current source; preserve the original snapshot separately. Ambiguity is explicit."
   [text origin]

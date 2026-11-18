@@ -1,4 +1,4 @@
-(ns omega.editor-library-test (:require [omega.editor :as editor]))
+(ns omega.editor-library-test (:require [omega.editor :as editor] [omega.document-source :as source]))
 (def original "#+title: Shared\r\n\r\n* A\r\nSame 🌿\r\n\r\n* B\r\nSame 🌿\r\n\r\n#+begin_unknown\r\nKeep exactly.\r\n#+end_unknown\r\n")
 (deftest targeted-source-changes-preserve-repeated-text-and-unknown-source
  (let [origin (editor/capture original {:scope "passage" :start 6 :end 7})
@@ -12,3 +12,20 @@
 (deftest a-draft-uses-the-existing-conservative-omega-merge
  (is (= {:ok "FIRST middle LAST"} (editor/merge-draft "first middle last" "FIRST middle last" "first middle LAST")))
  (is (:error (editor/merge-draft "ab" "aXb" "aYb"))))
+
+(deftest native-org-link-targets-keep-the-full-section-range
+ (let [text (str ":PROPERTIES:\r\n:ID: whole\r\n:END:\r\n#+title: Native\r\n"
+                 "* First 🌿\r\n:PROPERTIES:\r\n:ID: first\r\n:CUSTOM_ID: main\r\n:END:\r\n"
+                 "** Child\r\n\r\n#+begin_example\r\n* Faux\r\n:ID: fake\r\n#+end_example\r\n* Other\r\n")
+       idx (source/index text)
+       ranges #(source/reference-ranges idx (:anchor (source/reference-target %)))]
+  (is (= [{:row 0 :end 16}] (ranges "id:whole")))
+  (is (= [{:row 4 :end 15}] (ranges "id:first")))
+  (is (= (ranges "id:first") (ranges "#main")))
+  (is (= (ranges "id:first") (ranges "file:../Native.bl.org::*First 🌿")))
+  (is (= [] (ranges "id:fake")))
+  (is (= {:path "A note.bl.org" :anchor {:kind "custom-id" :value "appendix"}}
+         (source/reference-target "file:A note.bl.org::#appendix")))
+  (is (nil? (source/reference-target "file:a.org::")))
+  (is (nil? (source/reference-target "id:one\ntwo")))
+  (is (nil? (source/reference-target "https://example.test")))))
