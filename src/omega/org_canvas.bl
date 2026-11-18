@@ -1,6 +1,6 @@
 ;; Portable Org <-> canvas projection. No database, UI, runtime or execution.
 (ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-table :as table] [omega.org-semantics :as semantics] [omega.org-paragraph :as paragraph] [omega.org-list :as org-list] [omega.org-list-model :as list-model] [omega.org-heading-model :as heading] [omega.org-media :as media]))
-(def codec-revision "omega.org-canvas/8")
+(def codec-revision "omega.org-canvas/9")
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
 (defn- bounded-tree? [blocks]
