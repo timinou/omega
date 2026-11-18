@@ -1,4 +1,4 @@
-(ns omega.org-inline-test (:require [omega.org-inline :as inline] [omega.org-canvas :as canvas] [omega.org-semantics :as semantics] [omega.org-heading-model :as heading]))
+(ns omega.org-inline-test (:require [omega.org-inline :as inline] [omega.org-canvas :as canvas] [omega.org-semantics :as semantics] [omega.org-heading-model :as heading] [omega.org-presentation :as presentation] [live.edit.registry :as registry]))
 (deftest native-marks-and-links-project-to-rich-data
  (let [source "Bold *مرحبا* and /gentle/ [[https://example.org][a link]] [[highlight:mint][useful]]."
        parsed (inline/read-text source "inline")]
@@ -7,10 +7,25 @@
   (is (= "مرحبا" (unicode/characters_to_binary (to-list (subvec (vec (unicode/characters_to_list (:text parsed))) 5 10)))))
   (is (= source (canvas/write-source (canvas/read-source source "doc"))))))
 (deftest unsupported-links-stay-readable-source-and-code-is-literal
- (is (= "[[id:elsewhere][Other]]" (:text (inline/read-text "[[id:elsewhere][Other]]" "x"))))
+ (is (= "[[retired:elsewhere][Other]]" (:text (inline/read-text "[[retired:elsewhere][Other]]" "x"))))
  (let [parsed (inline/read-text "Use ~*literal*~ here." "x")]
   (is (= "Use *literal* here." (:text parsed)))
   (is (= ["text/code"] (mapv #(get-in % [:call :function]) (:marks parsed))))))
+(deftest native-references-keep-labels-and-exact-source-with-portable-navigation
+ (let [text "[[id:method]] and [[file:Café & plans.bl.org::#first][The *plan*]]."
+       projected (inline/read-text text "rich")
+       [bare labeled] (:marks projected)
+       target (get-in labeled [:call :args :target])
+       [tag attrs display] (registry/present (registry/functions [presentation/package]) (:call labeled) "inline" "The plan")]
+  (is (= "id:method and The plan." (:text projected)))
+  (is (= {:target "id:method"} (get-in bare [:call :args])))
+  (is (= "org/reference" (get-in labeled [:call :function])))
+  (is (= text (inline/write-text projected)))
+  (is (= text (canvas/write-source (canvas/read-source text "doc"))))
+  (is (= target (:data-org-reference attrs)))
+  (is (= :a tag))
+  (is (= "The plan" display))
+  (is (includes? (:href attrs) "%C3%A9%20%26"))))
 (deftest formatted-edits-serialize-native-org-and-readable-callout-annotations
  (let [doc (canvas/read-source "#+title: Notes\n\n*Bold* text.\n" "note")
        next (-> doc (assoc-in [:blocks 0 :text] "Changed text.") (assoc-in [:blocks 0 :marks 0 :to] 7))

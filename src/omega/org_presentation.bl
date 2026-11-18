@@ -1,6 +1,18 @@
 ;; Optional pure presentation package for the canonical Enchant editor.
 ;; Source reading/writing remains in omega.org-canvas, with no UI dependency.
-(ns ^:js omega.org-presentation (:require [omega.org-list-model :as lists] [live.edit.document :as document] [omega.org-heading :as heading] [omega.org-canvas :as canvas] [omega.org-media :as media]))
+(ns ^:js omega.org-presentation (:require [omega.org-list-model :as lists] [live.edit.document :as document] [omega.org-heading :as heading] [omega.org-canvas :as canvas] [omega.org-media :as media] [omega.document-source :as source]))
+(defn- query-token [value]
+ (let [hex "0123456789ABCDEF"]
+  (join "" (map (fn [byte]
+                 (let [upper (quot byte 16) lower (mod byte 16)]
+                  (str "%" (subs hex upper (inc upper)) (subs hex lower (inc lower)))))
+                (erlang/binary_to_list value)))))
+(defn reference [args body]
+ (let [target (:target args)]
+  (when-not (source/reference-target target)
+   (throw (ex-info "Use an Org ID, a local anchor or a relative file destination." {})))
+  [:a {:href (str "?org-link=" (query-token target)) :class "org-reference" :data-org-reference target
+       :contenteditable "false" :tabindex 0} body]))
 (defn retained [block _]
  [:aside {:class "org-retained-card" :contenteditable "false" :role "note"
           :aria-label (get-in block [:attrs :org/label] "Retained Org")
@@ -123,7 +135,10 @@
                                      :extension ".bl.org" :mime "text/plain;charset=utf-8"
                                      :write (fn [draft] (canvas/write-source draft))}}
    :editor/functions
-   {"org/literal" heading/literal-function}
+   {"org/literal" heading/literal-function
+    "org/reference" {:label "Org reference" :kind "wrap" :scope "inline" :render reference
+                     :params {:target {:type "text" :label "Org destination"}}
+                     :ui {:icon "link" :group "basic"}}}
    :editor/clipboard {:copy clipboard-copy}
    :editor/sibling-context (fn [context] {:org/list-numbers (lists/numbers (:siblings context))})
    :editor/command-policy command-policy

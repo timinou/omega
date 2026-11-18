@@ -1,5 +1,6 @@
 ;; Native Org inline marks, projected as data for a host's rich editor.
-(ns omega.org-inline (:require [clojure.re] [clojure.edn :as edn] [omega.org-heading-model :as heading]))
+(ns omega.org-inline (:require [clojure.re] [clojure.edn :as edn] [omega.org-heading-model :as heading]
+                               [omega.document-source :as source]))
 (defn- cut [s from size] (erlang/binary_part s from size))
 (defn- points [s] (erlang/length (unicode/characters_to_list s)))
 (defn- candidate [pattern text kind]
@@ -8,27 +9,31 @@
    :groups (mapv #(if (neg? (elem % 0)) "" (cut text (elem % 0) (elem % 1))) matches) :kind kind}))
 (defn- first-match [text]
  (let [link (candidate #"\[\[([^\]\n]+)\]\[([^\]\n]*)\]\]" text :link)
+       bare (candidate #"\[\[([^\]\n]+)\]\]" text :bare-link)
        style (candidate #"(^|[ \t(])([*/_+~=])([^\n]+?)\2(?=$|[ \t.,;:!?)])" text :style)]
-  (cond (nil? link) style (nil? style) link (< (:from link) (:from style)) link :else style)))
+  (first (sort-by :from (keep identity [style link bare])))))
 (defn- style-function [marker]
  (get {"*" "text/bold" "/" "text/emphasis" "_" "text/underline" "+" "text/strike" "~" "text/code" "=" "text/code"} marker))
 (declare read-text)
 (defn read-text [source seed]
  (loop [remaining source plain "" marks [] serial 0]
   (if-let [match (first-match remaining)]
-   (let [groups (:groups match) link? (= :link (:kind match))
+   (let [groups (:groups match) bare? (= :bare-link (:kind match)) link? (not= :style (:kind match))
          lead (if link? "" (nth groups 1))
          href (when link? (nth groups 1))
+         native (when (and href (<= (count href) 1024)) (source/reference-target href))
          tone (when (and href (starts-with? href "highlight:")) (subs href 10))
-         supported? (or (not link?) (contains? #{"amber" "mint" "rose"} tone)
-                        (some? (re-find #"^(https?://|mailto:|/|#)" href)))
-         inner (nth groups (if link? 2 3))
+         supported? (or (not link?) native
+                        (and (not bare?) (or (contains? #{"amber" "mint" "rose"} tone)
+                                             (some? (re-find #"^(https?://|mailto:|/|#)" href)))))
+         inner (if bare? href (nth groups (if link? 2 3)))
          code? (and (not link?) (contains? #{"~" "="} (nth groups 2)))
          prefix (str (cut remaining 0 (:from match)) lead)
          parsed (if code? {:text inner :marks []} (read-text inner (str seed "-" serial)))
          start (points (str plain prefix)) length (points (:text parsed))
-         function (if link? (if tone "text/highlight" "text/link") (style-function (nth groups 2)))
-         call {:id (str seed "-mark-" serial) :function function :version 1 :args (if link? (if tone {:tone tone} {:href href}) {})}
+         function (cond native "org/reference" tone "text/highlight" link? "text/link" :else (style-function (nth groups 2)))
+         args (cond native {:target href} tone {:tone tone} link? {:href href} :else {})
+         call {:id (str seed "-mark-" serial) :function function :version 1 :args args}
          tail (cut remaining (+ (:from match) (:size match)) (- (erlang/byte_size remaining) (:from match) (:size match)))]
     (if (or (not supported?) (zero? length))
      (recur tail (str plain (cut remaining 0 (+ (:from match) (:size match)))) marks (inc serial))
@@ -40,10 +45,12 @@
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 ;; Native emphasis cannot represent partial-word or crossing ranges. A bounded
 ;; ordinary Org affiliation retains those exact semantic ranges without execution.
-(def inline-functions #{"org/literal" "text/bold" "text/emphasis" "text/italic" "text/underline" "text/strike" "text/code" "text/highlight" "text/link"})
+(def inline-functions #{"org/literal" "org/reference" "text/bold" "text/emphasis" "text/italic" "text/underline" "text/strike" "text/code" "text/highlight" "text/link"})
 (defn- inline-args? [function args]
  (and (map? args)
   (case function
+   "org/reference" (and (= #{:target} (set (keys args))) (string? (:target args)) (<= (count (:target args)) 1024)
+                         (source/reference-target (:target args)))
    "text/link" (and (= #{:href} (set (keys args))) (string? (:href args))
                     (some? (re-find #"^(https?://|mailto:|/|#)" (:href args))))
    "text/highlight" (and (= #{:tone} (set (keys args))) (contains? #{"amber" "mint" "rose"} (:tone args)))
@@ -84,6 +91,13 @@
                 "text/bold" "*" "text/emphasis" "/" "text/italic" "/" "text/underline" "_" "text/strike" "+" "text/code" "~"
                 "text/highlight" (if opening? (str "[[highlight:" (get-in m [:call :args :tone]) "][") "]]")
                 "text/link" (if opening? (str "[[" (get-in m [:call :args :href]) "][") "]]")
+                "org/reference"
+                (if opening?
+                 (let [args (get-in m [:call :args]) target (:target args)]
+                  (when-not (inline-args? "org/reference" args) (fail :invalid-reference))
+                  (if (= target (unicode/characters_to_binary (to-list (subvec points (:from m) (:to m)))))
+                   "[[" (str "[[" target "][")))
+                 "]]")
                 (fail :unsupported-inline-function)))]
   (join "" (for [at (range (inc (count points)))]
    (str (join "" (map #(token % false) (reverse (filterv #(= at (:to %)) marks))))
