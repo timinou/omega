@@ -25,9 +25,10 @@
    [:figure {:class "ed-image" :contenteditable "false"}
     (when available? [:img {:src url :alt (:text block) :loading "lazy"}])
     [:figcaption caption] change]
-   [:div {:class "ed-bookmark" :contenteditable "false"}
-    (when available? [:a {:href url :target "_blank" :rel "noopener noreferrer"} url])
-    caption change])))
+   [:div {:class "ed-bookmark org-bookmark" :contenteditable "false"}
+    caption
+    (when available? [:a {:class "org-bookmark-link" :href url :target "_blank" :rel "noopener noreferrer"} url])
+    change])))
 (defn- target [context]
  (document/find-block (:document context) (get-in context [:selection :head :block])))
 (defn- changed-attrs [block attrs]
