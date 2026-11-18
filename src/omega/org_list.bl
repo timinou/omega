@@ -3,6 +3,8 @@
 (defn indentation [prefix]
  (reduce (fn [column point] (if (= point 9) (+ column (- 8 (mod column 8))) (inc column)))
          0 (unicode/characters_to_list prefix)))
+(defn- marker-integer [digits]
+ (elem (string/to_integer (String/to_charlist digits)) 0))
 (defn marker [line]
  (when-let [[_ lead bullet body] (re-find #"^([ \t]*)([-+*]|[0-9]+[.)]) +(.*)$" (paragraph/line-text line))]
   ;; A star in column zero is an outline heading, never a plain-list bullet.
@@ -15,8 +17,8 @@
          body (if checkbox (or (nth checkbox 2 nil) "") body)
          check (when checkbox (get {" " "unchecked" "X" "checked" "x" "checked" "-" "mixed"} (second checkbox)))]
     {:lead lead :indent (indentation lead) :marker bullet :ordered? ordered?
-     :ordinal ordinal :ordinal-value (when (and ordinal (<= (count ordinal) 9)) (parse-long ordinal))
-     :counter (when cookie (second cookie)) :counter-value (when (and cookie (<= (count (second cookie)) 9)) (parse-long (second cookie))) :checkbox check
+     :ordinal ordinal :ordinal-value (when (and ordinal (<= (count ordinal) 9)) (marker-integer ordinal))
+     :counter (when cookie (second cookie)) :counter-value (when (and cookie (<= (count (second cookie)) 9)) (marker-integer (second cookie))) :checkbox check
      :type (cond checkbox "task" ordered? "ordered" :else "bullet")
      :prefix-bytes (- (erlang/byte_size (paragraph/line-text line)) (erlang/byte_size body))
      :text body :checked (= check "checked")}))))
