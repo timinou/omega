@@ -22,7 +22,7 @@
      :else
      (let [start (inc at)]
       (assoc found :prefix (if (pos? start) (str (join "\n" (take start lines)) "\n") "")
-                   :affix (join "\n" (drop start lines))))))))
+                   :affix (join "\n" (drop start lines)))))))))
 
 (defn read-source [line prefix]
  (when-let [[_ url label] (re-find #"^[ \t]*\[\[([^\[\]\r\n]*)\](?:\[([^\]\r\n]*)\])?\][ \t]*$" line)]
