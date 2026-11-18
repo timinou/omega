@@ -1,5 +1,5 @@
 ;; Declarative Org object profiles. Data only: no loading/evaluating cells.
-(ns omega.org-profile (:require [clojure.edn :as edn] [clojure.re] [bl.doc.spans :as spans]))
+(ns omega.org-profile (:require [clojure.edn :as edn] [clojure.re] [bl.doc.spans :as spans] [omega.document-source :as source]))
 (def builtins {"task" {:role :task :fields {}} "project" {:role :project :fields {}}})
 (def field-types #{:text :number :date :boolean :ref :enum :tags})
 (defn- need! [ok message] (when-not ok (throw (ex-info message {:kind :omega/org-profile}))))
@@ -64,7 +64,7 @@
  (case (:type spec)
   :text value
   :number (let [forms (edn/read-string-all value)] (need! (and (= 1 (count forms)) (number? (first forms))) "Use a number.") (first forms))
-  :date (do (need! (= :ok (first (Date/from_iso8601 value))) "Use an ISO date.") value)
+  :date (do (need! (source/iso-date? value) "Use an ISO date.") value)
   :boolean (do (need! (contains? #{"true" "false" "t" "nil" "yes" "no"} (lower-case value)) "Use true or false.") (contains? #{"true" "t" "yes"} (lower-case value)))
   :enum (do (need! (some #{value} (:values spec)) "Choose a declared enum value.") value)
   :ref (or (second (re-find #"^\[\[id:([^\]]+)\](?:\[[^\]]*\])?\]$" value)) value)

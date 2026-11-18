@@ -15,8 +15,8 @@
          body (if checkbox (or (nth checkbox 2 nil) "") body)
          check (when checkbox (get {" " "unchecked" "X" "checked" "x" "checked" "-" "mixed"} (second checkbox)))]
     {:lead lead :indent (indentation lead) :marker bullet :ordered? ordered?
-     :ordinal ordinal :ordinal-value (when (and ordinal (<= (count ordinal) 9)) (String/to_integer ordinal))
-     :counter (when cookie (second cookie)) :counter-value (when (and cookie (<= (count (second cookie)) 9)) (String/to_integer (second cookie))) :checkbox check
+     :ordinal ordinal :ordinal-value (when (and ordinal (<= (count ordinal) 9)) (parse-long ordinal))
+     :counter (when cookie (second cookie)) :counter-value (when (and cookie (<= (count (second cookie)) 9)) (parse-long (second cookie))) :checkbox check
      :type (cond checkbox "task" ordered? "ordered" :else "bullet")
      :prefix-bytes (- (erlang/byte_size (paragraph/line-text line)) (erlang/byte_size body))
      :text body :checked (= check "checked")}))))
