@@ -3,7 +3,7 @@
 
 (defn valid-url? [url]
  (and (string? url) (<= (erlang/byte_size url) 4096)
-      (some? (re-matches #"(?:https?://[^/\s\[\]<>\\]+|/(?!/))[^ \t\r\n\[\]<>\\\x00]*" url))))
+      (some? (re-matches #"(?i)(?:https?://[^/\s\[\]<>\\]+|/(?!/))[^ \t\r\n\[\]<>\\\x00]*" url))))
 
 (defn- image-link? [url]
  (some? (re-find #"(?i)\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$" url)))
