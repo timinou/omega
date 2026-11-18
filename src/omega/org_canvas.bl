@@ -1,5 +1,5 @@
 ;; Portable Org <-> canvas projection. No database, UI, runtime or execution.
-(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-table :as table] [omega.org-semantics :as semantics] [omega.org-paragraph :as paragraph] [omega.org-list :as org-list] [omega.org-list-model :as list-model] [omega.org-heading-model :as heading]))
+(ns omega.org-canvas (:require [clojure.re] [clojure.edn :as edn] [omega.document-source :as source] [omega.org-inline :as inline] [omega.org-table :as table] [omega.org-semantics :as semantics] [omega.org-paragraph :as paragraph] [omega.org-list :as org-list] [omega.org-list-model :as list-model] [omega.org-heading-model :as heading] [omega.org-media :as media]))
 (def codec-revision "omega.org-canvas/8")
 (defn- fail [reason] (throw (ex-info "Org canvas cannot serialize this edit." {:kind :omega/org-canvas :reason reason})))
 (defn- match [pattern value] (Regex/run (Regex/compile! pattern "i") value))
@@ -169,12 +169,17 @@
           (match "^ *(SCHEDULED:|DEADLINE:|CLOSED:)" line))
       (recur (inc row) (str prefix raw) blocks false next-block)
       :else
-      (let [[type text attrs] (classify line)
-            logical (when (= type "paragraph") (paragraph/read-at lines row))]
-       (recur (if logical (:to logical) (inc row)) ""
-        (conj blocks (block (block-id next-block) type (if logical (:text logical) text) attrs prefix
-                       (if logical (:raw logical) raw) (if logical (:ending logical) ending)))
-        false (inc next-block)))))))))
+      (if-let [reference (media/read-source line prefix)]
+       (recur (inc row) ""
+        (conj blocks (block (block-id next-block) (:type reference) (:text reference) (:attrs reference)
+                            (:prefix reference) (str (:affix reference) raw) ending))
+        false (inc next-block))
+       (let [[type text attrs] (classify line)
+             logical (when (= type "paragraph") (paragraph/read-at lines row))]
+        (recur (if logical (:to logical) (inc row)) ""
+         (conj blocks (block (block-id next-block) type (if logical (:text logical) text) attrs prefix
+                        (if logical (:raw logical) raw) (if logical (:ending logical) ending)))
+         false (inc next-block))))))))))
 (defn- item-prefix [block indent]
  (let [item (list-model/item block)]
   (if (= "*" (:marker item))
@@ -193,7 +198,9 @@
        root-star? (and (zero? indent) (contains? list-model/list-types type) (= "*" (:marker (list-model/item block))))
        unchanged? (and same-content? (= type (:org/type attrs)) (not root-star?)
                        (= (:level attrs) (:org/level attrs)) (= (:checked attrs) (:org/checked attrs)) (= (:language attrs) (:org/language attrs))
-                       (or (not (contains? list-model/list-types type)) (= (list-model/item block) (:org/list-data attrs))))
+                       (or (not (contains? list-model/list-types type)) (= (list-model/item block) (:org/list-data attrs)))
+                       (or (not (contains? #{"image" "embed"} type))
+                           (= (get attrs (if (= type "image") :src :href) "") (:org/media-url attrs))))
        reread (when-not (contains? #{"code" "org-retained"} type) (if (= "heading" type) (inline/read-heading "" text (:id block) workflow) (inline/read-text text (:id block))))
        annotated? (and (not inline-same?) reread
                       (not= [(:text block) (inline/mark-data (:marks block))] [(:text reread) (inline/mark-data (:marks reread))]))
@@ -233,8 +240,8 @@
      "quote" (str (org-list/reindent (:org/open attrs (str "#+begin_quote" newline)) old-indent 0) text newline (org-list/reindent (:org/close attrs (str "#+end_quote" newline)) old-indent 0))
      "callout" (str (org-list/reindent (:org/open attrs (str "#+begin_note" newline)) old-indent 0) text newline (org-list/reindent (:org/close attrs (str "#+end_note" newline)) old-indent 0))
      "divider" (str "-----" newline)
-     "image" (str "#+caption: " text newline "[[" (:src attrs) "]]" newline)
-     "embed" (str "[[" (:href attrs) "][" text "]]" newline)
+     "image" (media/write-source type attrs text newline)
+     "embed" (media/write-source type attrs text newline)
      "code" (do (when (match "(^|\\n) *#\\+end_src" text) (fail :code-delimiter))
                 (let [language (:language attrs "beam-lisp")
                       _ (when-not (re-matches #"[A-Za-z0-9_+.#-]+" language) (fail :code-language))

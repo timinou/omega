@@ -1,0 +1,46 @@
+;; Native Org links and affiliations for the shared canvas.
+(ns omega.org-media (:require [clojure.re]))
+
+(defn valid-url? [url]
+ (and (string? url) (<= (erlang/byte_size url) 4096)
+      (some? (re-matches #"(?:https?://[^/\s\[\]<>\\]+|/(?!/))[^ \t\r\n\[\]<>\\\x00]*" url))))
+
+(defn- image-link? [url]
+ (some? (re-find #"(?i)\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$" url)))
+
+(defn- affiliations [prefix]
+ (let [lines (vec (String/split prefix "\n"))]
+  (loop [at (- (count lines) 2) found {}]
+   (let [line (get lines at "")
+         marker (second (re-find #"(?i)^[ \t]*#\+attr_enchant:[ \t]+:media[ \t]+(image|bookmark)[ \t]*\r?$" line))
+         caption (second (re-find #"(?i)^[ \t]*#\+caption:[ \t]*([^\r\n]*)\r?$" line))]
+    (cond
+     (and marker (not (contains? found :media)))
+     (recur (dec at) (assoc found :media (lower-case marker)))
+     (and (some? caption) (not (contains? found :caption)))
+     (recur (dec at) (assoc found :caption caption))
+     :else
+     (let [start (inc at)]
+      (assoc found :prefix (if (pos? start) (str (join "\n" (take start lines)) "\n") "")
+                   :affix (join "\n" (drop start lines))))))))
+
+(defn read-source [line prefix]
+ (when-let [[_ url label] (re-find #"^[ \t]*\[\[([^\[\]\r\n]*)\](?:\[([^\]\r\n]*)\])?\][ \t]*$" line)]
+  (let [{:keys [media caption] :as affix} (affiliations prefix)
+        kind (or media (when (and (nil? label) (image-link? url)) "image"))
+        address? (or (valid-url? url) (and media (empty? url)))]
+   (when (and kind address? (or (= kind "bookmark") (nil? label)))
+    (let [image? (= kind "image") attr (if image? :src :href)]
+     {:type (if image? "image" "embed") :text (or caption label "")
+      :attrs {attr url :org/media-url url}
+      :prefix (:prefix affix) :affix (:affix affix)})))))
+
+(defn write-source [type attrs text ending]
+ (let [image? (= "image" type) url (get attrs (if image? :src :href) "")]
+  (when-not (and (or (= "" url) (valid-url? url))
+                 (not (re-find #"[\r\n\x00]" text)))
+   (throw (ex-info "Use a web address or managed file link and a single-line caption."
+                   {:kind :omega/org-media})))
+  (str "#+attr_enchant: :media " (if image? "image" "bookmark") ending
+       (when-not (empty? text) (str "#+caption: " text ending))
+       "[[" url "]]" ending)))
