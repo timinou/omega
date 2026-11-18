@@ -1,6 +1,6 @@
 ;; Optional pure presentation package for the canonical Enchant editor.
 ;; Source reading/writing remains in omega.org-canvas, with no UI dependency.
-(ns ^:js omega.org-presentation (:require [omega.org-list-model :as lists] [live.edit.document :as document] [omega.org-heading :as heading] [omega.org-canvas :as canvas]))
+(ns ^:js omega.org-presentation (:require [omega.org-list-model :as lists] [live.edit.document :as document] [omega.org-heading :as heading] [omega.org-canvas :as canvas] [omega.org-media :as media]))
 (defn retained [block _]
  [:aside {:class "org-retained-card" :contenteditable "false" :role "note"
           :aria-label (get-in block [:attrs :org/label] "Retained Org")
@@ -8,6 +8,26 @@
   [:span {:class "org-retained-icon" :data-icon "code"}]
   [:div [:strong (get-in block [:attrs :org/label] "Retained Org")]
    [:p "Kept exactly in the Org source. Open Source to inspect or edit it."]]])
+(defn media-view [block context]
+ (let [image? (= "image" (:type block))
+       attrs (:attrs block) url (get attrs (if image? :src :href) "")
+       available? (media/valid-url? url)
+       change-label (if image? "Image address" "Bookmark address")
+       change [:button {:type "button" :class "ed-media-placeholder" :contenteditable "false"
+                        :data-edit-controls true :data-node-media (:id block)
+                        :aria-label change-label}
+                [:span {:data-icon (if image? "image" "link")}]
+                (if available? "Change address" (if image? "Add an image" "Add a bookmark"))]
+       caption (update (:text context) 1 merge
+                 {:contenteditable "true" :data-edit-isolated true :tabindex 0
+                  :aria-label (if image? "Image caption" "Bookmark caption")})]
+  (if image?
+   [:figure {:class "ed-image" :contenteditable "false"}
+    (when available? [:img {:src url :alt (:text block) :loading "lazy"}])
+    [:figcaption caption] change]
+   [:div {:class "ed-bookmark" :contenteditable "false"}
+    (when available? [:a {:href url :target "_blank" :rel "noopener noreferrer"} url])
+    caption change])))
 (defn- target [context]
  (document/find-block (:document context) (get-in context [:selection :head :block])))
 (defn- changed-attrs [block attrs]
@@ -116,6 +136,10 @@
    :editor/blocks
    {"org-retained" {:label "Retained Org" :icon "code" :description "Preserved source; edit in Source"
                     :slots [] :insertable false :render retained}
+    "image" {:label "Image" :icon "image" :description "A picture with an Org caption"
+             :slots [] :defaults {:src ""} :render media-view}
+    "embed" {:label "Bookmark" :icon "link" :description "A useful link with an Org caption"
+             :slots [] :defaults {:href ""} :render media-view}
     "bullet" {:label "Bulleted list" :icon "list" :slots ["body"] :render-context #{:siblings} :render list-view}
     "ordered" {:label "Numbered list" :icon "list-ordered" :slots ["body"] :render-context #{:siblings} :render list-view}
     "task" {:label "To-do" :icon "check-square" :slots ["body"] :defaults {:checked false} :render-context #{:siblings} :render list-view}}}})

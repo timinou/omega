@@ -166,3 +166,21 @@
        doc (canvas/read-source source "workflow-budget")]
   (is (= ["org-retained"] (mapv :type (:blocks doc))))
   (is (= source (canvas/write-source doc)))))
+
+(deftest org-canvas-keeps-native-images-and-edited-bookmarks
+ (let [source (str "#+title: Media\r\n\r\n#+caption: A *bright* leaf\r\n"
+                   "[[https://example.test/leaf.png]]\r\n\r\n"
+                   "#+attr_enchant: :media bookmark\r\n[[https://example.test/spec][Design note]]\r\n")
+       doc (canvas/read-source source "media")
+       changed (assoc-in doc [:blocks 0 :attrs :src] "/api/files/leaf")
+       output (canvas/write-source changed)
+       rebuilt (canvas/read-source output "media")]
+  (is (= ["image" "embed"] (mapv :type (:blocks doc))))
+  (is (= ["A bright leaf" "Design note"] (mapv :text (:blocks doc))))
+  (is (= source (canvas/write-source doc)))
+  (is (includes? output "[[/api/files/leaf]]\r\n"))
+  (is (= (:text (first (:blocks doc))) (:text (first (:blocks rebuilt)))))
+  (is (= "image" (get-in rebuilt [:blocks 0 :type])))
+  (is (= "/api/files/leaf" (get-in rebuilt [:blocks 0 :attrs :src])))
+  (is (= output (canvas/write-source rebuilt)))
+  (is (thrown? (canvas/write-source (assoc-in doc [:blocks 0 :attrs :src] "not a URL"))))))
