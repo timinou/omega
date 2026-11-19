@@ -141,7 +141,7 @@
     (when (or (starts-with? text "- ") (starts-with? text "+ "))
      (let [point {:block id :offset (max 0 (- (+ (:from op) (document/length (:text op))) 2))}]
       {:op {:op "batch" :ops [op {:op "text/replace" :block id :from 0 :to 2 :text ""}
-                              {:op "node/set" :block id :expected {:type "paragraph"}
+                              {:op "node/set" :block id :expected (select-keys block [:type :attrs])
                                :patch {:type "bullet" :attrs (assoc (:attrs block) :list/marker (subs text 0 1))}}]}
        :selection {:anchor point :head point}}))))))
 
