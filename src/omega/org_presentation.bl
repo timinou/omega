@@ -129,6 +129,22 @@
      :text (let [depths (reduce (fn [out b] (assoc out (:id b) (if (contains? out (:parent b)) (inc (get out (:parent b))) 0))) {} blocks)]
              (join "\n" (map (fn [b] (str (apply str (repeat (* 2 (get depths (:id b))) " "))
                                        (when-let [item (lists/item b)] (lists/prefix item)) (:text b))) blocks)))}))))
+(defn list-typing [context input]
+ ;; A paragraph cannot serialize a list prefix. Admit the native text edit
+ ;; and the structural conversion together, including during composition.
+ (let [op (:op input) id (:block op) block (document/find-block (:document context) id)]
+  (when (and (= "text/replace" (:op op)) (= "paragraph" (:type block))
+             (<= (:from op) 2))
+   (let [old (:text block)
+         text (str (document/slice old 0 (:from op)) (:text op)
+                   (document/slice old (:to op) (document/length old)))]
+    (when (or (starts-with? text "- ") (starts-with? text "+ "))
+     (let [point {:block id :offset (max 0 (- (+ (:from op) (document/length (:text op))) 2))}]
+      {:op {:op "batch" :ops [op {:op "text/replace" :block id :from 0 :to 2 :text ""}
+                              {:op "node/set" :block id :expected {:type "paragraph"}
+                               :patch {:type "bullet" :attrs (assoc (:attrs block) :list/marker (subs text 0 1))}}]}
+       :selection {:anchor point :head point}}))))))
+
 (def package
  {:name "omega-org-presentation"
    :provides {:editor/exports {"org" {:label "Download Org draft"
@@ -139,6 +155,7 @@
     "org/reference" {:label "Org reference" :kind "wrap" :scope "inline" :render reference
                      :params {:target {:type "text" :label "Org destination"}}
                      :ui {:icon "link" :group "basic"}}}
+   :editor/typing list-typing
    :editor/clipboard {:copy clipboard-copy}
    :editor/sibling-context (fn [context] {:org/list-numbers (lists/numbers (:siblings context))})
    :editor/command-policy command-policy
