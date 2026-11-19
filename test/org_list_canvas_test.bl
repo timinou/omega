@@ -204,3 +204,16 @@
   (is (= 1 (default doc child)))
   (is (= 12 (default changed (first (:blocks changed)))))
   (is (= 13 (default changed (nth (:blocks changed) 2))))))
+
+(deftest typing-a-bullet-transacts-text-type-and-caret-together
+ (let [doc (canvas/read-source "#+title: Shopping\n\n-\n" "shopping")
+       block (first (:blocks doc))
+       plan (presentation/list-typing (context doc block)
+             {:op {:op "text/replace" :block (:id block) :from 1 :to 1 :text " Buy 🍎"}})
+       applied (d/apply-op (:functions registry) doc (:op plan))]
+  (is (= "bullet" (get-in applied [:document :blocks 0 :type])))
+  (is (= "Buy 🍎" (get-in applied [:document :blocks 0 :text])))
+  (is (= 5 (get-in plan [:selection :head :offset])))
+  (is (= "#+title: Shopping\n\n- Buy 🍎\n" (canvas/write-source (:document applied))))
+  (is (= (canvas/write-source doc)
+         (canvas/write-source (:document (d/apply-op (:functions registry) (:document applied) (:inverse applied))))))))
