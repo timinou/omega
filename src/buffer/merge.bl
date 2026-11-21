@@ -1,11 +1,19 @@
 ; Conservative three-way text merge. Accepted disjoint edits commute; overlap
 ; is refused rather than using the non-convergent positional rebase prototype.
 (ns buffer.merge)
-(defn change [old new]
-  (let [na (count old) nb (count new) lim (min na nb)
-        pre (loop [i 0] (if (and (< i lim) (= (subs old i (inc i)) (subs new i (inc i)))) (recur (inc i)) i))
-        suf (loop [i 0] (if (and (< i (- lim pre)) (= (subs old (- na i 1) (- na i)) (subs new (- nb i 1) (- nb i)))) (recur (inc i)) i))]
-    {:from pre :to (- na suf) :old (subs old pre (- na suf)) :new (subs new pre (- nb suf))}))
+(defn change
+  "The single span where `old` and `new` differ, in graphemes (the units of
+   `count` and `subs`). One linear pass: `subs` indexes from the start, so a
+   per-character scan was quadratic and took seconds on a 40 KB document."
+  [old new]
+  (let [ga (String/graphemes old) gb (String/graphemes new) na (count ga) nb (count gb)
+        pre (loop [a ga b gb i 0] (if (and (seq a) (seq b) (= (first a) (first b))) (recur (rest a) (rest b) (inc i)) i))
+        lim (- (min na nb) pre)
+        suf (loop [a (reverse ga) b (reverse gb) i 0]
+              (if (and (< i lim) (= (first a) (first b))) (recur (rest a) (rest b) (inc i)) i))]
+    {:from pre :to (- na suf)
+     :old (join "" (take (- na suf pre) (drop pre ga)))
+     :new (join "" (take (- nb suf pre) (drop pre gb)))}))
 (defn apply-change [s c]
   (str (subs s 0 (:from c)) (:new c) (subs s (:to c))))
 (defn merge-text [base local remote]

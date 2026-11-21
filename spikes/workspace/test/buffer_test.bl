@@ -13,6 +13,17 @@
     (is (= (:ok (m/merge-text base a c)) (:ok (m/merge-text base c a))))
     (is (:error (m/merge-text base "ALPHA beta gamma" "Alpha beta gamma")))
     (is (:error (m/merge-text "ab" "aXb" "aYb")))) )
+(deftest change-is-linear-and-counts-graphemes
+  (let [accent (str "e" (List/to_string (list 769)))
+        big (join "\n" (repeat 1200 (str "Une ligne de dossier r" accent "dig" accent "e, assez longue pour peser.")))
+        t0 (erlang/monotonic_time :millisecond)
+        c (m/change big (str big "\nFin."))
+        ms (- (erlang/monotonic_time :millisecond) t0)]
+    (is (= (count big) (:from c) (:to c)) "an append at the end")
+    (is (= "\nFin." (:new c)))
+    (is (< ms 2000) (str "a 60 KB diff took " ms " ms"))
+    (is (= {:from 1 :to 2 :old accent :new "a"} (m/change (str "x" accent "y") "xay")) "a combining accent is one grapheme")
+    (is (= (str "x" accent "Y") (m/apply-change (str "x" accent "y") (m/change (str "x" accent "y") (str "x" accent "Y")))))))
 (deftest drafts-are-visible-to-agents-and-do-not-leak-to-disk
   (let [{:keys [path env server] :as f} (fixture)
         original (:text (b/request! server [:read path {}])) base (:rev (b/request! server [:read path {}]))
