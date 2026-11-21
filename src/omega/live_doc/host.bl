@@ -37,14 +37,20 @@
     (web/json conn result)))
 
 (defn page-config
-  "The JSON a page puts in data-live-doc. `rev` is the buffer revision the page
-   was rendered from; `editable` only shows edit controls, the routes recheck."
-  [st file conn opts]
-  (json/encode {:rev (:rev (store/current st file)) :editable (boolean ((:editor? opts) conn))
-                :prefix (or (:client-prefix opts) "_live")}))
+  "The JSON a page puts in data-live-doc: the buffer revision the page is
+   rendered from and the routes' prefix. It is the same for every reader, so a
+   host may cache the page; the client asks GET config whether its reader
+   edits. With a conn it also inlines `editable` (pages rendered per reader).
+   `editable` only shows edit controls; the routes recheck."
+  ([st file opts]
+   (json/encode {:rev (:rev (store/current st file)) :prefix (or (:client-prefix opts) "_live")}))
+  ([st file conn opts]
+   (json/encode {:rev (:rev (store/current st file)) :editable (boolean ((:editor? opts) conn))
+                 :prefix (or (:client-prefix opts) "_live")})))
 
 (defn handler
   "Routes under (:prefix opts) (default \"/_live\") for one real file:
+     GET  config            {:rev :editable} for this reader
      GET  wait?since=REV    {:rev} once the file's revision differs (≤25 s)
      GET  block?from=&to=   {:rev :from :to :text}             editors
      POST block             {from before text} → {:rev :from :to}  editors
@@ -65,6 +71,8 @@
                 (web/bytes (web/resp-header conn "cache-control" "no-cache") "application/javascript; charset=utf-8" assets/client-js)
                 (and (= m "get") (= op "client.css"))
                 (web/bytes (web/resp-header conn "cache-control" "no-cache") "text/css; charset=utf-8" assets/client-css)
+                (and (= m "get") (= op "config"))
+                (web/json conn {:rev (:rev (store/current st file)) :editable (boolean (editor? conn))})
                 (and (= m "get") (= op "wait"))
                 (web/json conn {:rev (:rev (store/wait st file (or (param conn "since") "") wait-ms))})
                 (not (editor? conn))

@@ -10,7 +10,10 @@
 // long-poll; the host page refreshes itself on `live-doc:changed`.
 //
 // Host contract (all optional except data-src):
-//   <body data-live-doc='{\"rev\":\"3\",\"editable\":true}'>   configuration
+//   <body data-live-doc='{\"rev\":\"3\",\"prefix\":\"_live\"}'>  the revision the page
+//       was rendered from; the same for every reader, so pages cache. Whether
+//       this reader edits comes from GET {prefix}/config (or an inline
+//       \"editable\", for hosts that render per reader).
 //   window.dossierRefresh(force) -> Promise   re-render the page body
 //   window.liveDoc.holding()                  true while an editor is open
 (() => {
@@ -320,8 +323,10 @@
     close: () => close(),
     install() { toggleButton(); }
   };
-  toggleButton();
-  if (!html.hasAttribute('data-published')) waitLoop();
+  if ('editable' in config) toggleButton();
+  else fetch(`${base}/config`, { cache: 'no-store' }).then(r => r.ok ? r.json() : {})
+    .then(c => { config.editable = !!c.editable; toggleButton(); }, () => {});
+  waitLoop();
 })();
 ")
 (def client-css "/* omega.live-doc client — an open block keeps the place, size and type of its
