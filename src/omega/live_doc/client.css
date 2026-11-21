@@ -1,0 +1,63 @@
+/* omega.live-doc client — an open block keeps the place, size and type of its
+   rendering. Only a quiet rule in the margin says it is open. Colours come from
+   the host page (--live-doc-*), else the dossier palette, else neutral values. */
+:root{
+  --ld-accent:var(--live-doc-accent,var(--clay,#b0654a));
+  --ld-line:var(--live-doc-line,var(--line,#e2ddd6));
+  --ld-ink:var(--live-doc-ink,var(--ink,#2b2622));
+  --ld-muted:var(--live-doc-muted,var(--muted,#6d625a));
+  --ld-card:var(--live-doc-card,var(--card,#fbf8f4));
+  --ld-mono:var(--live-doc-mono,var(--mono,ui-monospace,"SF Mono",Menlo,monospace));
+  --ld-ui:var(--live-doc-ui,var(--font-ui,system-ui,-apple-system,"Segoe UI",sans-serif));
+}
+.ld-hidden{display:none!important}
+
+/* Edit mode: every source block shows it can open, without moving anything. */
+html[data-live-edit] [data-src]:not(.ld-editor){cursor:text;border-radius:4px;transition:box-shadow .16s ease,background-color .16s ease}
+html[data-live-edit] [data-src]:not(.ld-editor):hover{box-shadow:-10px 0 0 -8px color-mix(in srgb,var(--ld-accent) 55%,transparent);background:color-mix(in srgb,var(--ld-accent) 4%,transparent)}
+html[data-live-edit] [data-src] a[href],html[data-live-edit] [data-src] button{cursor:pointer}
+
+.ld-editor{position:relative;display:block;box-sizing:border-box;margin:0;animation:ld-in .14s ease-out}
+.ld-editor::before{content:"";position:absolute;left:-12px;top:2px;bottom:2px;width:2px;border-radius:2px;background:var(--ld-accent);opacity:.75}
+@keyframes ld-in{from{opacity:.55}to{opacity:1}}
+.ld-area{display:block;box-sizing:border-box;width:100%;max-width:inherit;margin:0;padding:0;border:0;outline:0;resize:none;overflow:hidden;
+  background:transparent;color:inherit;caret-color:var(--ld-accent);field-sizing:content;min-height:1lh;-webkit-appearance:none;appearance:none;border-radius:0}
+.ld-editor[data-kind="prose"]{max-width:var(--measure,70ch)}
+/* Wide screens: status and Done sit in the margin, so nothing below the passage moves. */
+@media (min-width:900px){
+  .ld-editor[data-kind="prose"] .ld-status{position:absolute;top:2px;left:calc(100% + 22px);margin:0;min-height:0;
+    flex-direction:column;align-items:flex-start;gap:6px;width:max-content;max-width:min(18ch,calc(100vw - 100% - 60px))}
+  .ld-editor[data-kind="prose"] .ld-status span:empty::before{content:"Esc to close"}
+}
+.ld-area::selection{background:color-mix(in srgb,var(--ld-accent) 22%,transparent)}
+/* Blocks that render as figures, cards or tables open as their exact source. */
+.ld-editor[data-kind="source"]{margin:14px 0;padding:12px 14px 10px;border:1px solid var(--ld-line);border-radius:10px;background:var(--ld-card)}
+.ld-editor[data-kind="source"]::before{left:-1px;top:10px;bottom:10px}
+.ld-editor[data-kind="source"] .ld-area{font:13px/1.55 var(--ld-mono);color:var(--ld-ink);tab-size:2;white-space:pre;overflow-x:auto}
+.ld-editor[data-state="loading"] .ld-area{opacity:.6}
+.ld-editor[data-state="settling"]{opacity:.8;transition:opacity .2s}
+
+.ld-status{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-height:22px;margin-top:2px;font:12px var(--ld-ui);color:var(--ld-muted)}
+.ld-status[data-tone="error"]{color:var(--ld-accent)}
+.ld-status span:empty::before{content:"Esc or Done to close · ↑↓ to move";opacity:.0;transition:opacity .2s}
+.ld-editor:focus-within .ld-status span:empty::before{opacity:.7}
+.ld-done{font:12px var(--ld-ui);border:1px solid var(--ld-line);background:transparent;color:var(--ld-muted);border-radius:6px;padding:2px 10px;cursor:pointer}
+.ld-done:hover,.ld-done:focus-visible{color:var(--ld-ink);border-color:var(--ld-muted)}
+
+.ld-conflict{margin:8px 0 0;padding:10px;border:1px solid color-mix(in srgb,var(--ld-accent) 40%,var(--ld-line));border-radius:8px;font:12px var(--ld-ui);color:var(--ld-ink)}
+.ld-conflict::before{content:"Current version";display:block;margin-bottom:4px;color:var(--ld-muted)}
+.ld-theirs{margin:0 0 8px;max-height:12em;overflow:auto;white-space:pre-wrap;font:12px/1.5 var(--ld-mono)}
+.ld-conflict button{font:12px var(--ld-ui);margin-right:6px;border:1px solid var(--ld-line);background:var(--ld-card);color:var(--ld-ink);border-radius:6px;padding:3px 10px;cursor:pointer}
+
+.ld-toggle[aria-pressed="true"]{background:var(--ld-ink);border-color:var(--ld-ink);color:var(--ld-card)}
+.ld-floating{position:fixed;right:16px;bottom:16px;z-index:20;font:13px var(--ld-ui);padding:8px 14px;border-radius:999px;border:1px solid var(--ld-line);background:var(--ld-card);color:var(--ld-ink);box-shadow:0 6px 20px rgb(0 0 0 / .12)}
+
+@media (max-width:720px){
+  .ld-editor::before{left:-8px}
+  .ld-editor[data-kind="source"] .ld-area{font-size:12.5px}
+  /* The keyboard covers the bottom of the screen: keep the close control reachable. */
+  .ld-status{position:sticky;bottom:0;background:linear-gradient(transparent,var(--bg,#fff) 40%);padding-top:6px}
+}
+/* Touch screens have no Esc or arrow keys: Done is the whole affordance. */
+@media (pointer:coarse){.ld-status span:empty::before{content:none}}
+@media (prefers-reduced-motion:reduce){.ld-editor{animation:none}html[data-live-edit] [data-src]{transition:none}}

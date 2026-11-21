@@ -1,0 +1,67 @@
+;; Line-range source blocks: the unit a rendered page edits in place.
+;; A surface marks each rendered element with the source lines it came from
+;; (`data-src="from:to"`, end exclusive). An edit names those lines and the
+;; exact text it started from, so it lands on the same block even after other
+;; writers moved it, and is refused when someone else changed that block.
+(ns omega.live-doc.blocks (:require [clojure.string :as str]))
+
+(def max-block-bytes 262144)
+
+(defn lines [text] (vec (String/split text "\n")))
+(defn- join-lines [ls] (str/join "\n" ls))
+
+(defn block-text
+  "The exact source of lines [from, to)."
+  [text from to]
+  (let [ls (lines text) n (count ls) from (max 0 (min from n)) to (max from (min to n))]
+    (join-lines (subvec ls from to))))
+
+(defn locate
+  "Where the block that read `before` at line `from` now starts, or nil.
+   Prefer its recorded place; otherwise the nearest identical occurrence."
+  [ls from before]
+  (let [want (lines before) n (count want) total (count ls)
+        at? (fn [i] (and (<= 0 i) (<= (+ i n) total) (= want (subvec ls i (+ i n)))))]
+    (if (at? from) from
+      (let [hits (filterv at? (range 0 (inc (- total n))))]
+        (when (seq hits) (first (sort-by #(let [d (- % from)] (if (neg? d) (- d) d)) hits)))))))
+
+(defn- normalize [replacement]
+  ;; A textarea never owns the line break that separates this block from the next.
+  (String/replace (String/replace (str replacement) "\r\n" "\n") (Regex/compile! "\\n+\\z") ""))
+
+(defn- blank-line? [l] (blank? l))
+
+(defn replace-block
+  "Replace the block `before` (read at `from`) by `replacement` in `text`.
+   Returns {:text :from :to} — the replacement's own lines — or
+   {:error :status 409 :current} when the block changed elsewhere.
+   An empty replacement removes the block and one now-doubled blank line."
+  [text from before replacement]
+  (let [ls (lines text) at (locate ls from before) n (count (lines before))]
+    (cond
+      (nil? at)
+      {:error "This passage changed elsewhere. Your text is kept; compare it with the current version."
+       :status 409 :reason "target-changed"}
+      (> (erlang/byte_size (str replacement)) max-block-bytes)
+      {:error "Keep one block below 256 KB; split it into several blocks." :status 413 :reason "too-large"}
+      :else
+      (let [value (normalize replacement)
+            head (subvec ls 0 at) tail (subvec ls (+ at n))]
+        (if (blank? value)
+          (let [tail (if (and (seq tail) (blank-line? (first tail)) (or (empty? head) (blank-line? (last head))))
+                       (subvec tail 1) tail)]
+            {:text (join-lines (into head tail)) :from at :to at :removed true})
+          (let [new (lines value)]
+            {:text (join-lines (into (into head new) tail)) :from at :to (+ at (count new))}))))))
+
+(defn insert-after
+  "Insert a new block after lines ending at `to` (exclusive), separated by blank
+   lines as Org paragraphs are. Returns {:text :from :to} of the new block."
+  [text to value]
+  (let [ls (lines text) to (max 0 (min to (count ls))) value (normalize value)
+        head (subvec ls 0 to) tail (subvec ls to)
+        gap-before (if (or (empty? head) (blank-line? (last head))) [] [""])
+        gap-after (if (or (empty? tail) (blank-line? (first tail))) [] [""])
+        new (lines value) from (+ to (count gap-before))]
+    {:text (join-lines (concat head gap-before new gap-after tail)) :from from :to (+ from (count new))}))

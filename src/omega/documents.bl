@@ -20,7 +20,7 @@
     (env/q (:env sys) '[:find ?id ?entry :where [?d :document/id ?id] [?d :document/entry ?entry]]))))
 (defn registry [sys server opts]
   {:sys sys :server server :admitted (atom (remembered sys)) :cache (atom {}) :assets (atom {})
-   :owner (:document-owner opts) :handle (or (:document-handle opts) (System/get_env "USER") "owner")
+   :owner (some #(when-not (str/blank? (str %)) %) [(:document-owner opts) (System/get_env "OMEGA_DOCUMENT_OWNER") (System/get_env "OMEGA_OWNER_LOGIN")]) :handle (or (:document-handle opts) (System/get_env "USER") "owner")
    :home (Path/expand "../.." (Path/dirname (BeamLisp.Loader/source_path "omega.documents")))})
 (defn- digest [value] (str/lower-case (Base/encode16 (crypto/hash :sha256 (str value)))))
 (defn- remember! [r entry]
@@ -226,6 +226,10 @@
         (cond
           (and owner (not= owner (web/req-header conn "tailscale-user-login")))
           (web/json conn 403 {:ok false :message "This document host belongs to another account."})
+          ;; Without a configured owner the host only reads: anyone on the
+          ;; tailnet (or a local user on loopback) could otherwise write.
+          (and (nil? owner) (str/starts-with? (web/path conn) "/documents/") (not= "get" (str/lower-case (str (web/method conn)))))
+          (web/json conn 403 {:ok false :message "Set OMEGA_DOCUMENT_OWNER to answer from this host."})
           (and origin (not (contains? #{(str "http://" host) (str "https://" host)} origin)))
           (web/json conn 403 {:ok false :message "Cross-origin request refused."})
           (str/starts-with? (web/path conn) "/documents/") (route r conn)

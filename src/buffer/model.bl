@@ -51,6 +51,12 @@
         text (if fact (:buf/text fact) (if (File/regular? path) (File/read! path) ""))]
     (when-not id (env/tx! e [{:db/id -1 :buf/path path :buf/text text :buf/rev 0}]))
     {:text text :rev (or (:buf/rev fact) 0) :publish-pending (:buf/publish-pending fact) :drafts {} :sequences {}}))
+(defn- stat-key [path]
+  (try (let [s (File/stat! path (list (tuple :time :posix)))] [(:mtime s) (:size s) (:inode s)])
+    (catch _ nil)))
+(defn- arm [st]
+  (if (or (:ticking st) (empty? (:watchers st))) st
+    (do (erlang/send_after (:watch-ms st 200) (erlang/self) :buffer/tick) (assoc st :ticking true))))
 (declare rebase-drafts)
 (defn- ensure-buffer [st path]
   (let [st (if (get-in st [:bufs path]) st (assoc-in st [:bufs path] (loaded (:env st) path)))
@@ -88,7 +94,7 @@
             [(if (:publication-error next) {:error (:publication-error next)} {:ok (:text next)}) (assoc-in st [:bufs path] next)]))))))
 (defn- dispatch [st request]
   (let [[kind path args] request
-        _ (when (and (contains? #{:read :agent-read} kind) (not (File/regular? path)) (nil? (env/eid (:env st) :buf/path path)))
+        _ (when (and (contains? #{:read :agent-read :watch} kind) (not (File/regular? path)) (nil? (env/eid (:env st) :buf/path path)))
             (throw (ex-info (str "no such file: " path) {})))
         st (if (= kind :close)
              (if (get-in st [:bufs path]) st (assoc-in st [:bufs path] (loaded (:env st) path)))
@@ -144,13 +150,79 @@
                             (if (:error drafts) [drafts st]
                               (let [next (assoc (commit! e path b (:ok r) {:actor (:actor args) :kind :undo :reverts (:id args)}) :drafts (:ok drafts))]
                                 [(if (:publication-error next) {:error (:publication-error next)} {:result (str "reverted " (:id args))}) (assoc-in st [:bufs path] next)])))))))
+      (= kind :sync) [(response b) st]
+      (= kind :watch)
+        (let [pid (:pid args)]
+          [(response b) (-> st (update-in [:watchers path] (fn [pids] (vec (distinct (conj (or pids []) pid)))))
+                           (assoc-in [:stats path] (stat-key path)) arm)])
+      (= kind :unwatch)
+        (let [pids (vec (remove #(= % (:pid args)) (get-in st [:watchers path])))]
+          [{:result "unwatched"} (if (seq pids) (assoc-in st [:watchers path] pids)
+                                   (-> st (update :watchers dissoc path) (update :stats dissoc path)))])
       :else [{:error "Unknown buffer request."} st])))
+(defn- notify [st path message]
+  (doseq [pid (get-in st [:watchers path])] (erlang/send pid message)))
+(defn- changed [st path]
+  [:buffer/changed path (str (get-in st [:bufs path :rev]))])
+(defn- poll
+  "Adopt an external write of one watched file. Second-resolution mtimes miss a
+   same-size rewrite within one second, so recently modified files compare text."
+  [st path]
+  (let [pids (filterv #(erlang/is_process_alive %) (get-in st [:watchers path]))]
+    (if (empty? pids) (-> st (update :watchers dissoc path) (update :stats dissoc path))
+      (let [st (assoc-in st [:watchers path] pids) k (stat-key path)
+            recent? (and k (<= (- (erlang/system_time :second) (first k)) 2))]
+        (if (and (= k (get-in st [:stats path])) (not recent?)) st
+          (let [before (get-in st [:bufs path :rev])
+                next (try (ensure-buffer st path)
+                       (catch err
+                         (when-not (= k (get-in st [:stats path]))
+                           (notify st path [:buffer/conflict path (ex-message err)]))
+                         st))
+                next (assoc-in next [:stats path] k)]
+            (when (and before (not= before (get-in next [:bufs path :rev]))) (notify next path (changed next path)))
+            next))))))
+(defn- initial [arg]
+  ;; `arg` is the world itself (older callers) or {:buffer/env world :watch-ms n}.
+  {:env (if (contains? arg :buffer/env) (:buffer/env arg) arg) :bufs {} :watchers {} :stats {}
+   :watch-ms (or (:watch-ms arg) 200)})
 (proc/defserver manager
-  (init [e] (ok {:env e :bufs {}}))
+  (init [arg] (ok (initial arg)))
   (handle-call request [_from st]
-    (let [[r next] (try (dispatch st request) (catch err [{:error (ex-message err)} st]))] (reply r next))))
-(defn start! [e] (start manager e {}))
+    (let [path (second request) before (get-in st [:bufs path :rev])
+          [r next] (try (dispatch st request) (catch err [{:error (ex-message err)} st]))]
+      ;; A first load is not a change: the caller already holds that revision.
+      (when (and before (not= before (get-in next [:bufs path :rev]))) (notify next path (changed next path)))
+      (reply r next)))
+  (handle-info :buffer/tick [st]
+    (noreply (arm (reduce poll (assoc st :ticking false) (keys (:watchers st)))))))
+(defn start!
+  "Own every shared buffer of `e`. Opts :watch-ms sets the external-write poll."
+  ([e] (start manager e {}))
+  ([e opts] (start manager (assoc opts :buffer/env e) {})))
 (defn request! [server request] (call server request 30000))
+(defn- flush-changes! [path]
+  (receive [:buffer/changed p _] :when (= p path) (flush-changes! path)
+           [:buffer/conflict p _] :when (= p path) (flush-changes! path)
+           (after 0 nil)))
+(defn watch!
+  "Subscribe the calling process: every new revision of `path`, including an
+   adopted external write, arrives as [:buffer/changed path rev]; an external
+   write that overlaps unpublished drafts arrives as [:buffer/conflict path why]."
+  [server path] (request! server [:watch path {:pid (erlang/self)}]))
+(defn unwatch! [server path]
+  (let [r (request! server [:unwatch path {:pid (erlang/self)}])] (flush-changes! path) r))
+(defn wait!
+  "The buffer once its revision differs from `since`, or the current one after
+   `timeout-ms`. External writes count: the watcher adopts them while waiting."
+  [server path since timeout-ms]
+  (let [r (watch! server path)]
+    (try
+      (if (or (:error r) (not= (str since) (:rev r))) r
+        (receive [:buffer/changed p _] :when (= p path) (request! server [:read path {}])
+                 [:buffer/conflict p why] :when (= p path) (assoc r :conflict why)
+                 (after timeout-ms r)))
+      (finally (unwatch! server path)))))
 (defn port [server]
   {:read (fn [c p] (let [r (request! server [:agent-read (Path/expand p (:root c)) {}])]
                      (when (:error r) (throw (ex-info (:error r) {}))) (:ok r)))

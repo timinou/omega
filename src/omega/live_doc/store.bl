@@ -1,0 +1,78 @@
+;; The file-backed live store: Omega's shared buffer server, watched.
+;; Every surface (dossier pages, Omega's editor, agents) reads and writes a
+;; real file through one buffer. External writers (Emacs, an agent's shell,
+;; git) are adopted by the buffer's watcher and pushed to waiting readers.
+(ns omega.live-doc.store
+  (:require [omega.env :as env] [buffer.model :as buffer] [omega.live-doc.blocks :as blocks]))
+
+(defn open!
+  "A store over an existing Omega world (:env and optionally :server), or its
+   own in-memory one. Opts: :path (durable world directory), :watch-ms."
+  ([] (open! {}))
+  ([opts]
+   (let [e (or (:env opts) (env/open (cond-> {:schema buffer/schema} (:path opts) (assoc :path (:path opts)))))]
+     {:env e :owned? (nil? (:env opts))
+      :server (or (:server opts) (buffer/start! e {:watch-ms (get opts :watch-ms 200)}))})))
+
+(defn close! [store]
+  (when (:owned? store) (GenServer/stop (:server store)) (env/close! (:env store))))
+
+(defn- ok! [r]
+  (when (:error r) (throw (ex-info (:error r) {:kind :live-doc/buffer}))) r)
+
+(defn current
+  "{:text :rev} of one real file, adopting any external write first."
+  [store path] (ok! (buffer/request! (:server store) [:read path {}])))
+
+(defn wait
+  "The file once its revision differs from `since`, or after `timeout-ms`."
+  [store path since timeout-ms] (ok! (buffer/wait! (:server store) path since timeout-ms)))
+
+(defn update!
+  "Apply `transform` to the current text under the buffer's revision guard.
+   transform returns {:text :value} or {:error …}. A write that lands in
+   between is retried from fresh source; refusals keep the caller's draft.
+   Returns (:value result), or the {:error …} map."
+  [store path transform client]
+  (loop [attempt 0]
+    (let [{:keys [text rev]} (current store path) result (transform text)]
+      (cond
+        (:error result) result
+        (= text (:text result)) (:value result)
+        :else
+        (let [r (buffer/request! (:server store)
+                  [:save path {:text (:text result) :base rev :resolution? true :client (str client)
+                               :sequence (System/os_time :microsecond)}])]
+          (cond
+            (and (:conflict r) (< attempt 4)) (recur (inc attempt))
+            (:conflict r) {:error "Document changed while saving. Your draft is kept; retry." :status 409}
+            (:error r) {:error (:error r) :status 500}
+            :else (:value result)))))))
+
+(defn block
+  "The exact source of lines [from, to) with the revision it was read at."
+  [store path from to]
+  (let [{:keys [text rev]} (current store path)]
+    {:rev rev :from from :to to :text (blocks/block-text text from to)}))
+
+(defn replace-block!
+  "Write one in-place block edit. Returns {:rev :from :to} of its new lines,
+   or {:error :status :reason :current} when it cannot land."
+  [store path {:keys [from before text client]}]
+  (let [result (update! store path
+                 (fn [source]
+                   (let [r (blocks/replace-block source from before text)]
+                     (if (:error r)
+                       (assoc r :current (blocks/block-text source from (+ from (count (blocks/lines before)))))
+                       (assoc r :value (select-keys r [:from :to :removed])))))
+                 (or client "live-doc"))]
+    (if (:error result) result
+      (assoc result :rev (:rev (current store path))))))
+
+(defn insert-block!
+  "Insert a new block after line `after` (exclusive end of a rendered block)."
+  [store path {:keys [after text client]}]
+  (let [result (update! store path
+                 (fn [source] (let [r (blocks/insert-after source after text)] (assoc r :value (select-keys r [:from :to]))))
+                 (or client "live-doc"))]
+    (if (:error result) result (assoc result :rev (:rev (current store path))))))

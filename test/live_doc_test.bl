@@ -1,0 +1,65 @@
+(ns live-doc-test
+  (:require [omega.live-doc.blocks :as blocks] [omega.live-doc.store :as store]
+            [omega.live-doc.assets :as assets] [buffer.model :as buffer]))
+
+(def doc "#+title: T\n\n* One\n\nFirst para\nwraps here.\n\nSecond para.\n\n* Two\n\nTail.\n")
+
+(deftest block-text-and-locate
+  (is (= "First para\nwraps here." (blocks/block-text doc 4 6)))
+  (let [ls (blocks/lines doc)]
+    (is (= 4 (blocks/locate ls 4 "First para\nwraps here.")))
+    ;; Moved down by an edit above: found by its exact text, nearest first.
+    (is (= 6 (blocks/locate (blocks/lines (str "x\ny\n" doc)) 4 "First para\nwraps here.")))
+    (is (nil? (blocks/locate ls 4 "Gone")))))
+
+(deftest replace-insert-and-remove
+  (let [r (blocks/replace-block doc 4 "First para\nwraps here." "First, *rewritten*.\n\nAnd split.\n")]
+    (is (= {:from 4 :to 7} (select-keys r [:from :to])))
+    (is (= "#+title: T\n\n* One\n\nFirst, *rewritten*.\n\nAnd split.\n\nSecond para.\n\n* Two\n\nTail.\n" (:text r))))
+  (is (= 409 (:status (blocks/replace-block doc 4 "Changed by someone" "x"))))
+  (let [r (blocks/replace-block doc 7 "Second para." "")]
+    (is (:removed r))
+    (is (= "#+title: T\n\n* One\n\nFirst para\nwraps here.\n\n* Two\n\nTail.\n" (:text r))))
+  (let [r (blocks/insert-after doc 6 "New para.")]
+    (is (= {:from 7 :to 8} (select-keys r [:from :to])))
+    (is (= "New para." (blocks/block-text (:text r) 7 8)))))
+
+(defn- fixture []
+  (let [root (str "/tmp/live-doc-test-" (erlang/unique_integer (to-list [:positive])))
+        path (str root "/d.bl.org")]
+    (File/mkdir_p! root) (File/write! path doc)
+    {:path path :store (store/open! {:watch-ms 50})}))
+
+(deftest store-edits-land-on-disk-and-survive-external-writes
+  (let [{:keys [path store] :as f} (fixture)]
+    (is (= "Second para." (:text (store/block store path 7 8))))
+    ;; Someone edits the file outside while the block is open.
+    (File/write! path (String/replace doc "Tail." "Tail, from Emacs."))
+    (let [r (store/replace-block! store path {:from 7 :before "Second para." :text "Second, edited in place."})]
+      (is (= [7 8] [(:from r) (:to r)]))
+      (is (= (String/replace (String/replace doc "Tail." "Tail, from Emacs.") "Second para." "Second, edited in place.")
+             (File/read! path))))
+    ;; The block changed elsewhere: refused with the current text, nothing written.
+    (let [before (File/read! path)
+          r (store/replace-block! store path {:from 7 :before "Second para." :text "mine"})]
+      (is (= "target-changed" (:reason r)))
+      (is (= "Second, edited in place." (:current r)))
+      (is (= before (File/read! path))))
+    ;; The kit's writer contract: transform returns {:text :value} or {:error}.
+    (is (= :answered (store/update! store path (fn [t] {:text (str t "- answer\n") :value :answered}) "answers")))
+    (is (= {:error "no"} (store/update! store path (fn [_] {:error "no"}) "answers")))
+    (store/close! store)))
+
+(deftest waiting-readers-see-external-writes
+  (let [{:keys [path store]} (fixture) rev (:rev (store/current store path))]
+    (spawn (fn [] (Process/sleep 100) (File/write! path (str doc "* Three\n"))))
+    (let [r (store/wait store path rev 3000)]
+      (is (not= rev (:rev r)))
+      (is (clojure.string/ends-with? (:text r) "* Three\n")))
+    (store/close! store)))
+
+(deftest generated-assets-match-their-sources
+  (let [dir (Path/dirname (BeamLisp.Loader/source_path "omega.live-doc.assets"))]
+    (when (File/regular? (str dir "/client.js"))
+      (is (= (File/read! (str dir "/client.js")) assets/client-js) "run scripts/live-doc-assets.py")
+      (is (= (File/read! (str dir "/client.css")) assets/client-css) "run scripts/live-doc-assets.py"))))

@@ -1,0 +1,93 @@
+;; HTTP routes that let a rendered page edit its own source in place.
+;; Mount `handler` in front of a page host; it answers only under its prefix.
+;; Reading the change stream is open to the page's readers. Reading or writing
+;; source needs the host's `:editor?` check, and every write is same-origin.
+(ns omega.live-doc.host
+  (:require [web] [bl.json :as json] [clojure.string :as str]
+            [omega.live-doc.store :as store] [omega.live-doc.assets :as assets]))
+
+(def wait-ms 25000)
+
+(defn- param [conn k]
+  (some (fn [pair] (let [kv (String/split pair "=")]
+                     (when (= k (web/url-decode (first kv))) (web/url-decode (or (second kv) "")))))
+        (String/split (or (web/query conn) "") "&")))
+(defn- int-param [conn k]
+  (let [v (param conn k)] (when (and v (re-matches #"[0-9]{1,7}" v)) (erlang/binary_to_integer v))))
+
+(defn owner-editor
+  "An :editor? check: only the configured Tailscale identity edits. With no
+   owner configured nobody edits; reading and answering are unaffected."
+  [owner]
+  (fn [conn] (and (not (blank? owner)) (= owner (web/req-header conn "tailscale-user-login")))))
+
+(defn- same-origin? [conn]
+  (let [origin (web/req-header conn "origin") host (web/req-header conn "host")]
+    (or (blank? origin) (contains? #{(str "http://" host) (str "https://" host)} origin))))
+
+(defn- body [conn]
+  (let [[raw conn] (web/read-body* conn)]
+    (if (> (erlang/byte_size raw) 400000)
+      [nil conn]
+      [(try (json/decode raw {:keys :keyword}) (catch _ nil)) conn])))
+
+(defn- answer [conn result]
+  (if (:error result)
+    (web/json conn (or (:status result) 409) (select-keys result [:error :reason :current]))
+    (web/json conn result)))
+
+(defn page-config
+  "The JSON a page puts in data-live-doc. `rev` is the buffer revision the page
+   was rendered from; `editable` only shows edit controls, the routes recheck."
+  [st file conn opts]
+  (json/encode {:rev (:rev (store/current st file)) :editable (boolean ((:editor? opts) conn))
+                :prefix (or (:client-prefix opts) "_live")}))
+
+(defn handler
+  "Routes under (:prefix opts) (default \"/_live\") for one real file:
+     GET  wait?since=REV    {:rev} once the file's revision differs (≤25 s)
+     GET  block?from=&to=   {:rev :from :to :text}             editors
+     POST block             {from before text} → {:rev :from :to}  editors
+     POST insert            {after text} → {:rev :from :to}        editors
+     GET  client.js · client.css
+   Returns nil for any other path, so hosts chain it with `or`."
+  [st opts]
+  (let [prefix (or (:prefix opts) "/_live") file (:file opts) editor? (:editor? opts)
+        client (or (:client opts) (fn [conn] (or (web/req-header conn "tailscale-user-login") "editor")))]
+    (fn [conn]
+      (let [p (web/path conn)]
+        (when (str/starts-with? p (str prefix "/"))
+          (let [op (subs p (inc (count prefix))) m (web/method conn)
+                conn (web/resp-header conn "cache-control" "no-store")]
+            (try
+              (cond
+                (and (= m "get") (= op "client.js"))
+                (web/bytes (web/resp-header conn "cache-control" "no-cache") "application/javascript; charset=utf-8" assets/client-js)
+                (and (= m "get") (= op "client.css"))
+                (web/bytes (web/resp-header conn "cache-control" "no-cache") "text/css; charset=utf-8" assets/client-css)
+                (and (= m "get") (= op "wait"))
+                (web/json conn {:rev (:rev (store/wait st file (or (param conn "since") "") wait-ms))})
+                (not (editor? conn))
+                (web/json conn 403 {:error "Only this document's owner edits it here." :reason "not-editor"})
+                (and (= m "get") (= op "block"))
+                (let [from (int-param conn "from") to (int-param conn "to")]
+                  (if (and from to (<= from to))
+                    (web/json conn (store/block st file from to))
+                    (web/json conn 400 {:error "Name the block's source lines." :reason "range"})))
+                (not (same-origin? conn))
+                (web/json conn 403 {:error "Cross-origin edit refused." :reason "origin"})
+                (and (= m "post") (contains? #{"block" "insert"} op))
+                (let [[b conn] (body conn) who (str "live:" (client conn))]
+                  (cond
+                    (nil? b) (web/json conn 400 {:error "Send one JSON edit below 400 KB." :reason "body"})
+                    (= op "block")
+                    (if (and (integer? (:from b)) (string? (:before b)) (string? (:text b)))
+                      (answer conn (store/replace-block! st file (assoc b :client who)))
+                      (web/json conn 400 {:error "An edit names from, before and text." :reason "body"}))
+                    :else
+                    (if (and (integer? (:after b)) (string? (:text b)))
+                      (answer conn (store/insert-block! st file (assoc b :client who)))
+                      (web/json conn 400 {:error "An insertion names after and text." :reason "body"}))))
+                :else (web/json conn 404 {:error "not found"}))
+              (catch error
+                (web/json conn 500 {:error (str "Live editing is unavailable: " (ex-message error)) :reason "unavailable"})))))))))

@@ -116,3 +116,32 @@
       (is (= [1 2] (mapv :op/rev (b/operations e path))))
       (is (= "accepted" (:op/after (first (b/operations e path)))))
       (GenServer/stop server) (env/close! e))))
+(deftest external-writes-reach-watchers-without-any-request
+  (let [root (str "/tmp/omega-buffer-watch-" (erlang/unique_integer (to-list [:positive])))
+        path (str root "/dossier.bl.org") e (env/open {:schema b/schema}) server (b/start! e {:watch-ms 50})]
+    (File/mkdir_p! root) (File/write! path "* One\nfirst\n")
+    (let [r (b/watch! server path)]
+      (is (= "0" (:rev r)))
+      ;; Another editor (Emacs, an agent shell) writes the file directly.
+      (File/write! path "* One\nfirst, edited outside\n")
+      (is (= "1" (receive [:buffer/changed p rev] :when (= p path) rev (after 3000 :timeout))))
+      (is (= "* One\nfirst, edited outside\n" (:text (b/request! server [:read path {}]))))
+      (is (= "disk" (:op/actor (last (b/operations e path)))))
+      ;; Saves through the buffer notify the same subscribers.
+      (b/request! server [:save path {:client "c" :sequence 1 :base "1" :text "* One\nsaved\n"}])
+      (is (= "2" (receive [:buffer/changed p rev] :when (= p path) rev (after 3000 :timeout))))
+      (b/unwatch! server path)
+      (File/write! path "* One\nunwatched\n")
+      (is (= :quiet (receive [:buffer/changed p _] :when (= p path) :changed (after 400 :quiet)))))
+    (GenServer/stop server) (env/close! e)))
+(deftest wait-returns-on-external-write-and-times-out-quietly
+  (let [root (str "/tmp/omega-buffer-wait-" (erlang/unique_integer (to-list [:positive])))
+        path (str root "/a.bl.org") e (env/open {:schema b/schema}) server (b/start! e {:watch-ms 50})]
+    (File/mkdir_p! root) (File/write! path "alpha\n")
+    (is (= "0" (:rev (b/wait! server path "0" 150))))
+    (spawn (fn [] (Process/sleep 120) (File/write! path "beta\n")))
+    (let [r (b/wait! server path "0" 3000)]
+      (is (= "1" (:rev r)))
+      (is (= "beta\n" (:text r))))
+    (is (= "1" (:rev (b/wait! server path "0" 100))))
+    (GenServer/stop server) (env/close! e)))

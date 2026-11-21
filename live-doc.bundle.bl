@@ -1,0 +1,12 @@
+;; Live editing of real files for any host: Omega's watched shared buffers, an
+;; in-place block editor and its routes. Importers do not adopt Omega's world.
+{:format "enchant.source-bundle/1"
+ :sources {"omega.live-doc.store" "src/omega/live_doc/store.bl"
+           "omega.live-doc.blocks" "src/omega/live_doc/blocks.bl"
+           "omega.live-doc.host" "src/omega/live_doc/host.bl"
+           "omega.live-doc.assets" "src/omega/live_doc/assets.bl"
+           "buffer.model" "src/buffer/model.bl"
+           "buffer.merge" "src/buffer/merge.bl"
+           "omega.env" "src/omega/env.bl"
+           "omega.schema" "src/omega/schema.bl"
+           "omega.edit" "src/omega/edit.bl"}}

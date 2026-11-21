@@ -1,6 +1,6 @@
 # Shared buffer slice
 
-One bl-ed package (`buffer/main.bl`, name `buffers`). `buffer/model.bl` supplies
+One bl-ed package (`buffer/main.bl`, name `buffers`). `src/buffer/model.bl` (namespace `buffer.model`, also exported by `live-doc.bundle.bl`) supplies
 a serialized BEAM buffer authority and the task file port; `buffer/server.bl`
 supplies writable work documents, change documents and intents. See
 [schema and limitations](../schema.bl.md).

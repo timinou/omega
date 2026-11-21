@@ -96,7 +96,7 @@ entity family and no second task-specific reference family.
 
 ## Buffer package — buffers and accepted operations
 
-Declared in `buffer/model.bl`, alongside tasks in the same env:
+Declared in `src/buffer/model.bl`, alongside tasks in the same env:
 
 - `:buf/path`: unique string identity, absolute expanded file path.
 - `:buf/text`: current accepted text, string.
