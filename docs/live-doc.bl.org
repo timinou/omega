@@ -54,7 +54,10 @@ reload in browser storage until confirmed.
 
 * Consumers
 
-- =enchanted-skills/bl-org-dossier/kit=: every served dossier. Its =env.bl=
+- =enchanted-skills/bl-org-dossier/kit=: every served dossier, through the
+  kit's =dossier.live= (one store per VM, any number of files), which project
+  hosts with their own pages call too (e.g. the Co Company map, report and
+  application hosts). Its =env.bl=
   adds =~/projects/omega/src= to =:paths=, because the released =bl= that runs
   the dossier services (v2026.9–v2026.11) predates =:source/imports=. Switch it
   to the pinned bundle once a release ships source imports.
