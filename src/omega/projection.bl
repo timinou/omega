@@ -1,0 +1,129 @@
+; omega/projection.bl — edit what a page shows, write only the bytes behind it.
+;
+; A document is source text; a renderer draws a node of it as hiccup. This
+; namespace knows neither the format nor the renderer: the caller passes
+;   :render   (fn [node] hiccup)            the function the page drew with
+;   :reparse  (fn [src line] node | nil)    the node `src` reads as, placed at `line`
+;   :escape   (fn [src from to text] text)  optional: how `text` must be spelled
+;                                           to sit at bytes [from,to) of `src`
+;                                           (a quoted attribute, an escaped cell)
+;
+; The text the page shows is a sequence of RUNS (the hiccup's strings, in
+; order). Each run that occurs verbatim in the node's source, after the
+; previous one, owns that byte range (`align`). Editing a run replaces exactly
+; its range; every other byte, markup included, is untouched. The edit is then
+; VERIFIED by drawing the reparsed node again: the edited run must read the new
+; text and every other run must be as before, except mirrors (a run showing the
+; same text elsewhere, a title repeated in a label), which must have changed
+; the same way. Anything else is refused, so the editor works for renderers it
+; has never seen: it either writes exactly what was asked or nothing.
+;
+; Portable: the BEAM (server checks, tests) and the browser (compiled by
+; `bl js build`) run the same functions. Offsets are UTF-8 bytes on both.
+(ns omega.projection)
+
+(defn- tag? [x] (and (vector? x) (keyword? (first x))))
+
+(def ^:private undrawn
+  "Elements whose strings are not read as text: drawn shapes, styles, code."
+  #{"svg" "style" "script"})
+
+(defn- tag-name [t] (first (split (name t) ".")))
+
+(defn text-runs
+  "Ordered [{:path [i …] :text s}] for the non-blank strings of hiccup `h`,
+   outside <svg>, <style> and <script>, in document order."
+  [h]
+  (let [out (atom [])]
+    (letfn [(walk [x path]
+              (cond
+                (string? x) (when-not (blank? x) (swap! out conj {:path path :text x}))
+                (tag? x) (when-not (contains? undrawn (tag-name (first x)))
+                           (let [a (when (map? (second x)) (second x)) kids (if a (drop 2 x) (rest x))]
+                             (doseq [[i c] (map-indexed (fn [i c] [i c]) kids)] (walk c (conj path i)))))
+                (or (seq? x) (vector? x)) (doseq [[i c] (map-indexed (fn [i c] [i c]) x)] (walk c (conj path i)))
+                :else nil))]
+      (walk h []))
+    @out))
+
+(defn align
+  "Each run → its byte range [from to] in `src`, searching after the previous
+   aligned run, or nil when it does not occur verbatim (computed text)."
+  [src runs]
+  (loop [rs runs at 0 out []]
+    (if-let [r (first rs)]
+      (let [tail (erlang/binary_part src at (- (erlang/byte_size src) at))
+            hit (binary/match tail (:text r))]
+        (if (= :nomatch hit)
+          (recur (rest rs) at (conj out (assoc r :src nil)))
+          (let [from (+ at (erlang/element 1 hit)) to (+ from (erlang/element 2 hit))]
+            (recur (rest rs) to (conj out (assoc r :src [from to]))))))
+      out)))
+
+(defn source-of
+  "The source text of `node` ({:line :to}, 0-based end-exclusive) in `lines`."
+  [lines node]
+  (join "\n" (subvec lines (:line node) (:to node))))
+
+(defn runs
+  "The aligned runs of `node` as `render` draws it."
+  [lines node {:keys [render]}]
+  (align (source-of lines node) (text-runs (render node))))
+
+(defn- replace-all [s old new]
+  (if (= "" old) s (String/replace s old new)))
+
+(defn- verified?
+  "Does `after` (the runs of the edited node) read as `before` with run i now
+   `new-text`, every mirror of run i changed likewise, and nothing else?"
+  [before after i new-text]
+  (let [old (:text (nth before i))
+        want (vec (for [[k r] (map-indexed (fn [k r] [k r]) before)]
+                    (if (= k i) new-text (:text r))))
+        texts (mapv :text after)]
+    (and (= (count want) (count texts))
+         (every? true?
+                 (map (fn [k w got]
+                        (or (= w got)
+                            (and (not= k i) (= got (replace-all w old new-text)))))
+                      (range) want texts)))))
+
+(defn edit-run
+  "Replace run `i` of `node` (from file `lines`) with `new-text`.
+   {:ok true :from :to :before :text} — replace source lines [from,to), whose
+   current text is `before`, by `text` — or {:ok false :why kw}."
+  [lines node i new-text {:keys [render reparse escape] :as fns}]
+  (let [src (source-of lines node)
+        before (align src (text-runs (render node)))
+        r (nth before i nil)]
+    (cond
+      (nil? r) {:ok false :why :no-run}
+      (nil? (:src r)) {:ok false :why :computed-text}
+      (= new-text (:text r)) {:ok false :why :unchanged}
+      :else
+      (let [[from to] (:src r)
+            spelled (if escape (escape src from to new-text) new-text)
+            src' (str (erlang/binary_part src 0 from) spelled
+                      (erlang/binary_part src to (- (erlang/byte_size src) to)))
+            node' (reparse src' (:line node))]
+        (cond
+          (nil? node') {:ok false :why :structure-changed}
+          (not (verified? before (text-runs (render node')) i new-text)) {:ok false :why :render-mismatch}
+          :else {:ok true :from (:line node) :to (:to node) :before src :text src'})))))
+
+(defn edit-text
+  "The run edit for a change of the node's flat page text (the runs' texts
+   concatenated, as the DOM shows them) from `was` to `now`: the changed span
+   must fall inside one aligned run. Offsets are the caller's string units, the
+   same for `was`, `now` and run lengths (`len`). → {:run i :text t} or nil."
+  [aligned was now len slice]
+  (let [cl (len was) nl (len now) n (min cl nl)
+        at (fn [s k] (slice s k (inc k)))
+        p (loop [k 0] (if (and (< k n) (= (at was k) (at now k))) (recur (inc k)) k))
+        s (loop [k 0] (if (and (< k (- n p)) (= (at was (- cl 1 k)) (at now (- nl 1 k)))) (recur (inc k)) k))
+        oe (- cl s) ne (- nl s)
+        starts (reduce (fn [acc r] (conj acc (+ (peek acc) (len (:text r))))) [0] aligned)]
+    (first (for [i (range (count aligned))
+                 :let [a (nth starts i) b (nth starts (inc i)) r (nth aligned i)]
+                 :when (and (:src r) (<= a p) (<= oe b))]
+             {:run i :text (str (slice (:text r) 0 (- p a)) (slice now p ne) (slice (:text r) (- oe a) (len (:text r))))}))))

@@ -1,0 +1,85 @@
+(ns projection-test
+  (:require [omega.projection :as p]))
+
+;; A toy format, so the engine is checked without any kit:
+;;   a paragraph line, where *x* is bold;
+;;   "#+card :title T" then body lines; the title is drawn twice (a mirror).
+(defn- inline [s]
+  (vec (for [piece (Regex/split (Regex/compile! "(\\*[^*]+\\*)") s (list (tuple :include_captures true)))
+             :when (not= "" piece)]
+         (if (and (starts-with? piece "*") (ends-with? piece "*") (> (count piece) 2))
+           [:strong (subs piece 1 (dec (count piece)))]
+           piece))))
+
+(defn- parse-node [src line]
+  (let [ls (split src "\n")]
+    (if (starts-with? (first ls) "#+card")
+      (let [m (Regex/run (Regex/compile! ":title (\"[^\"]*\"|\\S+)") (first ls))
+            t (when m (let [v (second m)] (if (starts-with? v "\"") (subs v 1 (dec (count v))) v)))]
+        {:t :card :title t :body (vec (rest ls)) :line line :to (+ line (count ls))})
+      (when (= 1 (count ls)) {:t :para :text (first ls) :line line :to (inc line)}))))
+
+(defn- render [node]
+  (case (:t node)
+    :para (into [:p] (inline (:text node)))
+    :card [:section [:h3 (:title node)] (into [:ul] (map (fn [l] [:li l]) (:body node))) [:footer "About " (:title node)]]))
+
+(defn- quote-attr
+  "The escape hook: a value spliced into an unquoted header attribute gains
+   quotes when it needs them."
+  [src from to text]
+  (let [before (subs src 0 from)]
+    (if (and (starts-with? src "#+card") (includes? (first (split src "\n")) before)
+             (not (ends-with? before "\"")) (includes? text " "))
+      (str "\"" text "\"")
+      text)))
+
+(def fns {:render render :reparse parse-node :escape quote-attr})
+
+(def lines ["Intro line." "Plain and *bold* words." "#+card :title \"Two words\"" "first item" "second item" "#+card :title Single" "only"])
+
+(defn- node-at [i to] (parse-node (join "\n" (subvec lines i to)) i))
+
+(deftest runs-align-to-their-source-bytes
+  (let [rs (p/runs lines (node-at 1 2) fns)]
+    (is (= ["Plain and " "bold" " words."] (mapv :text rs)))
+    (is (= [[0 10] [11 15] [16 23]] (mapv :src rs)) "bold sits inside its stars")))
+
+(deftest an-edit-writes-only-the-bytes-behind-the-text
+  (let [r (p/edit-run lines (node-at 1 2) 1 "very bold" fns)]
+    (is (:ok r))
+    (is (= "Plain and *very bold* words." (:text r)) "the stars are untouched")
+    (is (= [1 2] [(:from r) (:to r)]))
+    (is (= "Plain and *bold* words." (:before r)))))
+
+(deftest a-mirror-changes-with-its-source
+  (let [card (node-at 2 5)
+        rs (p/runs lines card fns)]
+    (is (= ["Two words" "first item" "second item" "About " "Two words"] (mapv :text rs)))
+    (let [r (p/edit-run lines card 0 "Three small words" fns)]
+      (is (:ok r) (pr-str r))
+      (is (= "#+card :title \"Three small words\"\nfirst item\nsecond item" (:text r))))
+    (is (:ok (p/edit-run lines card 2 "second, edited" fns)))))
+
+(deftest the-escape-hook-keeps-the-structure
+  (let [r (p/edit-run lines (node-at 5 7) 0 "Now two" fns)]
+    (is (:ok r) (pr-str r))
+    (is (= "#+card :title \"Now two\"\nonly" (:text r)))))
+
+(deftest an-edit-that-changes-structure-is-refused
+  (let [no-escape (dissoc fns :escape)
+        r (p/edit-run lines (node-at 5 7) 0 "Now two" no-escape)]
+    (is (= {:ok false :why :render-mismatch} r) "unquoted, the title would read 'Now'"))
+  (is (= :structure-changed (:why (p/edit-run lines (node-at 1 2) 0 "Plain\nsplit " fns)))))
+
+(deftest computed-text-and-no-op-are-refused
+  (is (= :unchanged (:why (p/edit-run lines (node-at 1 2) 0 "Plain and " fns))))
+  (is (= :no-run (:why (p/edit-run lines (node-at 1 2) 9 "x" fns)))))
+
+(deftest a-flat-text-change-maps-to-one-run
+  (let [rs (p/runs lines (node-at 1 2) fns)
+        len count sl (fn [s a b] (subs s a b))]
+    (is (= {:run 1 :text "bolder"} (p/edit-text rs "Plain and bold words." "Plain and bolder words." len sl)))
+    (is (= {:run 0 :text "Plain, and "} (p/edit-text rs "Plain and bold words." "Plain, and bold words." len sl)))
+    (is (= {:run 1 :text "Xld"} (p/edit-text rs "Plain and bold words." "Plain and Xld words." len sl)))
+    (is (nil? (p/edit-text rs "Plain and bold words." "Plain anXold words." len sl)) "a change across runs maps to none")))

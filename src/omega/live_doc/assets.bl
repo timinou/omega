@@ -26,6 +26,7 @@
   const html = document.documentElement;
   let rev = config.rev == null ? null : String(config.rev);
   let editing = null;          // the open editor session
+  const holds = [];            // other editors' \"my session is open\" predicates
   let mode = false;            // edit mode: blocks open on a click or tap
   let stale = false;           // a save landed; the rendering is behind its source
   const seq = () => Date.now() * 1000 + Math.floor(Math.random() * 1000);
@@ -293,6 +294,7 @@
     // conflict bar's buttons) still counts as inside it.
     if (editing && !e.composedPath().includes(editing.box) && !e.target.closest?.('#live-doc-edit')) { close(); }
     if (!mode || document.body.hasAttribute('data-review-mode')) return;   // commenting takes the click
+    if (e.target.isContentEditable || holds.some(h => h())) return;    // another editor owns this click
     const el = e.target.closest('[data-src]');
     if (!el || !el.isConnected || el.closest('.ld-editor') || interactive(e.target)) return;
     if (getSelection()?.toString()) return;   // selecting text to copy or comment
@@ -310,13 +312,18 @@
   document.addEventListener('keydown', e => {
     if (!config.editable || editing) return;
     const t = e.target;
-    if (t.closest?.('input,textarea,select,[contenteditable=\"true\"]') || e.metaKey || e.ctrlKey || e.altKey) return;
+    // Any editable target types its own keys (contenteditable=\"plaintext-only\"
+    // included, which a [contenteditable=\"true\"] selector misses).
+    if (t.isContentEditable || t.closest?.('input,textarea,select') || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'e' || e.key === 'E') { e.preventDefault(); setMode(!mode); }
   });
   window.addEventListener('beforeunload', e => { if (editing && normalize(editing.area.value) !== editing.before) { e.preventDefault(); e.returnValue = ''; } });
 
   window.liveDoc = {
-    holding: () => !!editing,
+    // A page refresh waits while any editor holds the page: this one's open
+    // block, or one registered with hold() (an in-place editor's session).
+    holding: () => !!editing || holds.some(h => h()),
+    hold: (predicate) => { holds.push(predicate); },
     get rev() { return rev; },
     edit: setMode,
     open: (el, point) => open(el, point),
