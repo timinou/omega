@@ -29,9 +29,9 @@ refused as before and reported to waiters as =[:buffer/conflict path why]=.
    and put =(host/page-config …)= in a =data-live-doc= attribute.
 3. Chain =(host/handler store {:file path :editor? (host/owner-editor owner)})=
    in front of the page's routes; it answers only under its prefix.
-4. Load =_live/client.js= and =_live/client.css=. Expose
-   =window.dossierRefresh(force)= to re-render on =live-doc:changed=, and defer
-   it while =window.liveDoc.holding()=.
+4. Load =_live/client.js= and =_live/client.css=. Re-render on
+   =live-doc:changed=, and defer it while =window.liveDoc.holding()= — checked
+   again just before swapping the new body in.
 5. Route the host's other writers through =store/update!= (transform returns
    ={:text :value}= or ={:error}=) so every write shares one revision stream.
 
@@ -51,6 +51,46 @@ locates that text again (nearest identical occurrence if lines moved) and
 refuses when it changed, returning the current text; the client offers *Use
 theirs* or *Keep mine* and never overwrites silently. Unsaved text survives a
 reload in browser storage until confirmed.
+
+* In place: edit the rendering itself
+
+=omega.live-doc.inplace= is the editor most owners use. It is Beam Lisp,
+compiled to ES modules together with the consumer's PLUG, which hands it the
+very functions the server drew the page with:
+
+| key        | value                                      |
+|------------+--------------------------------------------|
+| :read      | =(fn [text] {:nodes [{:line :to …}]})=     |
+| :prepare   | =(fn [doc] _)= page-wide render context    |
+| :render    | =(fn [node] hiccup)= one node              |
+| :reparse   | =(fn [src line] node)= one node, alone     |
+| :escape    | =(fn [src from to text] text)= optional    |
+| :settings  | =(fn [node catalogue] [field …])=          |
+| :set       | =(fn [lines node key value] {:from :before :text})= |
+| :refreshed | the DOM event the host fires after a redraw |
+
+In edit mode a click on any text makes that passage editable where it stands,
+in its own typography; no source is shown. =omega.projection= aligns the
+node's rendered text runs with its source bytes, splices what was typed into
+exactly those bytes (markup around it untouched) and VERIFIES the edit by
+drawing the reparsed node again: the edited run must read the new text,
+mirrors of it (a title repeated in a label) must change alike, nothing else
+may move. A refused edit is reported and nothing is written. So any renderer,
+including ones nobody annotated, is edited exactly or not at all.
+
+A gutter beside the hovered block offers =+= (insert any block of the
+catalogue the host serves at =GET <prefix>/catalogue=, below) and =⋮⋮= (move
+up / down, duplicate, delete with undo, settings, edit source). Settings is a
+form generated from the block's parameters: enum chips, toggles, numbers,
+text with suggestions. Passages it cannot map (computed text) fall through to
+the source editor. Saves go through the same routes (=POST block= with the
+text it replaces, =POST insert=); after a structural edit the long-poll sees
+the new revision and the host redraws; the engine rereads the source on
+=:refreshed=, so its line ranges and the page always describe the same text.
+
+The host names the compiled module in =page-config= (=:inplace=, relative to
+the routes); the client imports it for editors only. An open passage holds
+page refreshes through =window.liveDoc.hold(predicate)=.
 
 * Consumers
 

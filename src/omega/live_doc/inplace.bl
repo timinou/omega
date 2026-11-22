@@ -1,0 +1,452 @@
+; omega/live_doc/inplace.bl — edit a live-doc page in place, in the browser.
+;
+; Compiled to JavaScript (`bl js build`) together with a consumer's PLUG: the
+; functions that read its format and draw its nodes, the very ones its server
+; draws the page with. So for every passage on screen this knows which source
+; bytes it came from (omega.projection), and in edit mode:
+;
+;   click any text      it becomes editable where it stands; what you type is
+;                       spliced into exactly its source bytes, verified by
+;                       drawing the node again, and saved (POST block, guarded
+;                       by the text it replaces). No source is shown.
+;   + (block gutter)    insert any block the catalogue offers, below
+;   ⋮⋮                  move up / down, duplicate, delete (undo), settings
+;                       (a form from the block's parameters), edit source
+;
+; Passages it cannot map (computed text) fall through to the live-doc
+; client's source editor, unchanged. The plug (a map):
+;   :read     (fn [text] {:nodes [{:line :to …}]})   parse a whole file
+;   :prepare  (fn [doc] _)                           page-wide render context
+;   :render   (fn [node] hiccup)                     draw one node
+;   :reparse  (fn [src line] node|nil)               one node's source, alone
+;   :escape   (fn [src from to text] text)           optional
+;   :settings (fn [node catalogue] [{:key :label :kind :values :value
+;                                   :suggest :placeholder} …])  kind: enum,
+;                                   boolean, number, text
+;   :set      (fn [lines node key value] {:from :before :text})
+;   :refreshed the DOM event the host fires after redrawing the page
+(ns ^:js omega.live-doc.inplace
+  (:require [omega.projection :as p] [live.hiccup :as h]))
+
+(def ^:private st (atom {}))
+
+(defn- log! [& xs] (.log js/console (bl->js (apply str "[inplace] " xs))))
+
+; ─── the page and the server ─────────────────────────────────────────────────
+
+(defn- base []
+  (let [cfg (.parse js/JSON (or (.-liveDoc (.-dataset (.-body js/document))) "{}"))]
+    (.-href (js/URL. (str (or (.-prefix cfg) "_live") "/") (.-href js/location)))))
+
+(defn- fetch-json [url opts]
+  (.then (js/fetch url opts)
+         (fn [r] (.then (.catch (.json r) (fn [_] #js {}))
+                        (fn [j] #js {:ok (.-ok r) :status (.-status r) :body j})))))
+
+(defn- post! [op body]
+  (fetch-json (str (base) op) #js {:method "POST" :headers #js {"content-type" "application/json"}
+                                   :body (.stringify js/JSON (bl->js body))}))
+
+(defn- editing? [] (.hasAttribute (.-documentElement js/document) "data-live-edit"))
+
+(defn- changed!
+  "Tell the page its source moved (the host's refresh listens), once no
+   session holds it."
+  []
+  (.dispatchEvent js/window (js/CustomEvent. "live-doc:changed")))
+
+; ─── the document, as this page's renderer reads it ──────────────────────────
+
+(defn- fns [] (select-keys (:plug @st) [:render :reparse :escape]))
+
+(defn- node-at [line] (first (filter #(= line (:line %)) (:nodes (:doc @st)))))
+
+(defn- adopt! [text]
+  (let [plug (:plug @st) doc ((:read plug) text)]
+    ((:prepare plug) doc)
+    (swap! st assoc :lines (vec (split text "\n")) :doc doc)))
+
+(defn- load! []
+  (.then (fetch-json (str (base) "block?from=0&to=1000000") #js {})
+    (fn [r]
+      (if (.-ok r)
+        (do (adopt! (js->bl (.-text (.-body r))))
+            (.setAttribute (.-documentElement js/document) "data-inplace" "ready"))
+        (log! "source unavailable: " (.-status r)))
+      nil)))
+
+(defn- load-catalogue! []
+  (.then (fetch-json (str (base) "catalogue") #js {})
+    (fn [r] (when (.-ok r) (swap! st assoc :catalogue (js->bl (.-body r)))) nil)))
+
+; ─── page text ↔ runs ────────────────────────────────────────────────────────
+
+(defn- skipped? [node root]
+  (loop [p (.-parentNode node)]
+    (cond (or (nil? p) (identical? p root)) false
+          (contains? #{"svg" "style" "script" "SVG" "STYLE" "SCRIPT"} (.-nodeName p)) true
+          :else (recur (.-parentNode p)))))
+
+(defn- flat [el]
+  (let [w (.createTreeWalker js/document el 4)]
+    (loop [out ""]
+      (if-let [n (.nextNode w)]
+        (recur (if (or (blank? (.-data n)) (skipped? n el)) out (str out (.-data n))))
+        out))))
+
+(defn- range-of [el]
+  (when-let [s (.getAttribute el "data-src")]
+    (let [[a b] (split s ":")] [(js/parseInt a 10) (js/parseInt b 10)])))
+
+(defn- mapping
+  "{:nd :runs} when the element shows exactly what this page's renderer draws
+   for its node (so every run is located), else nil."
+  [el]
+  (when-let [[a _] (range-of el)]
+    (when-let [nd (node-at a)]
+      (let [runs (try (p/runs (:lines @st) nd (fns)) (catch e nil))]
+        (when (and runs (= (apply str (map :text runs)) (flat el)))
+          {:nd nd :runs runs})))))
+
+(defn- shift-dom!
+  "After lines [from,old-to) became [from,new-to), move every later block's
+   data-src by the difference (the page is not redrawn mid-session)."
+  [old-to delta]
+  (when-not (= 0 delta)
+    (let [els (.querySelectorAll js/document "[data-src]")]
+      (dotimes [i (.-length els)]
+        (let [el (.item els i)]
+          (when-let [[a b] (range-of el)]
+            (when (>= a old-to) (.setAttribute el "data-src" (str (+ a delta) ":" (+ b delta))))))))))
+
+(defn- landed!
+  "Adopt a saved replacement of lines [from,to) by `text` without reparsing
+   the file: the node is reread alone, later nodes shift."
+  [from to text]
+  (let [new-lines (split text "\n") delta (- (count new-lines) (- to from))
+        lines (:lines @st)
+        lines' (vec (concat (subvec lines 0 from) new-lines (subvec lines to)))
+        node' ((:reparse (:plug @st)) text from)
+        nodes (vec (for [n (:nodes (:doc @st))]
+                     (cond (= from (:line n)) (or node' n)
+                           (>= (:line n) to) (-> n (update :line + delta) (update :to + delta))
+                           :else n)))]
+    (swap! st assoc :lines lines' :doc (assoc (:doc @st) :nodes nodes))
+    (shift-dom! to delta)
+    node'))
+
+; ─── an edit session on one passage ──────────────────────────────────────────
+
+(defn- say! [el tone why]
+  (.setAttribute el "data-inplace" tone)
+  (if (blank? why) (.removeAttribute el "title") (.setAttribute el "title" why)))
+
+(def ^:private reasons
+  {:computed-text "This text is computed; edit its source."
+   :render-mismatch "That change would alter the block's structure; edit its source (⋮⋮ → Edit source)."
+   :structure-changed "That change would split the block; edit its source."
+   :cross "This change spans formatting; edit its source."})
+
+(declare commit!)
+
+(defn- after-save [el edit r now]
+  (if (.-ok r)
+    (let [node' (landed! (:from edit) (:to edit) (:text edit))]
+      (swap! st update :session #(when % (assoc % :committed now :nd node' :saved true
+                                                :runs (try (p/runs (:lines @st) node' (fns)) (catch e (:runs %))))))
+      (say! el "saved" nil)
+      ; the session closed while this save was in flight: the page may refresh now
+      (when (nil? (:session @st)) (changed!)))
+    (say! el "refused" (str "Not saved: " (or (.-error (.-body r)) (.-status r)))))
+  (let [again (:again (:session @st))]
+    (swap! st update :session #(when % (assoc % :busy false :again false)))
+    (when (and again (:session @st)) (commit! el))))
+
+(defn- commit!
+  [el]
+  (let [{:keys [nd runs committed busy]} (:session @st) now (flat el)]
+    (cond
+      busy (swap! st assoc-in [:session :again] true)
+      (= now committed) nil
+      :else
+      (let [m (p/edit-text runs committed now (fn [s] (.-length s)) (fn [s a b] (.slice s a b)))]
+        (if (nil? m)
+          (say! el "refused" (:cross reasons))
+          (let [edit (p/edit-run (:lines @st) nd (:run m) (:text m) (fns))]
+            (if-not (:ok edit)
+              (say! el "refused" (get reasons (:why edit) (str "Not saved: " (name (:why edit)))))
+              (do (say! el "saving" nil)
+                  (swap! st update :session assoc :busy true)
+                  (.then (post! "block" {:from (:from edit) :before (:before edit) :text (:text edit)})
+                         (fn [r] (after-save el edit r now) nil))))))))))
+
+(defn- close! []
+  (when-let [{:keys [el timer]} (:session @st)]
+    (js/clearTimeout timer)
+    (commit! el)
+    (.removeAttribute el "contenteditable")
+    (let [saved (:saved (:session @st))]
+      (swap! st dissoc :session)
+      (when saved (changed!)))))
+
+(defn- open! [el m]
+  (when-let [s (:session @st)] (when-not (identical? (:el s) el) (close!)))
+  (when-not (:session @st)
+    (.setAttribute el "contenteditable" "plaintext-only")
+    (say! el "editing" nil)
+    (swap! st assoc :session {:el el :nd (:nd m) :runs (:runs m) :committed (flat el)})
+    (.addEventListener el "input"
+      (fn [_] (when-let [t (:timer (:session @st))] (js/clearTimeout t))
+        (swap! st assoc-in [:session :timer] (js/setTimeout (fn [] (commit! el) nil) 350)) nil))
+    (.addEventListener el "keydown"
+      (fn [e]
+        ; the page's own shortcuts (E toggles edit mode) must not eat typing
+        (.stopPropagation e)
+        (cond (= "Escape" (.-key e)) (do (.preventDefault e) (.blur el))
+              (= "Enter" (.-key e)) (.preventDefault e))
+        nil))
+    (.addEventListener el "blur"
+      ; close when focus leaves the passage, unless it moved into one of our
+      ; popovers (a menu or the settings form opened from the gutter)
+      (fn [_] (js/setTimeout (fn [] (let [pop (:pop @st)]
+                                     (when-not (and pop (.contains pop (.-activeElement js/document)))
+                                       (when (identical? el (:el (:session @st))) (close!))))
+                               nil) 0) nil))))
+
+; ─── the block gutter and its menus ──────────────────────────────────────────
+
+(defn- el-of [html]
+  (let [t (.createElement js/document "template")] (set! (.-innerHTML t) html) (.-firstElementChild (.-content t))))
+
+(defn- place! [node at-el dx dy]
+  (let [r (.getBoundingClientRect at-el)]
+    (set! (.-left (.-style node)) (str (+ (.-scrollX js/window) (.-left r) dx) "px"))
+    (set! (.-top (.-style node)) (str (+ (.-scrollY js/window) (.-top r) dy) "px"))))
+
+(defn- close-pop! []
+  (when-let [p (:pop @st)] (.remove p))
+  (swap! st dissoc :pop))
+
+(defn- pop! [at-el hiccup on-click]
+  (close-pop!)
+  (let [p (el-of (h/hiccup->html hiccup))]
+    (.append (.-body js/document) p)
+    (place! p at-el 0 (+ 4 (.-height (.getBoundingClientRect at-el))))
+    (.addEventListener p "click" (fn [e] (on-click e) nil))
+    (.addEventListener p "keydown" (fn [e] (.stopPropagation e) (when (= "Escape" (.-key e)) (close-pop!)) nil))
+    (swap! st assoc :pop p)
+    p))
+
+(defn- source-of [nd] (p/source-of (:lines @st) nd))
+
+(declare toast!)
+
+(defn- after-structure!
+  "A structural edit landed. The live-doc client's long-poll sees the new
+   revision at once and the host redraws; the source is reread when that
+   redraw arrives (:refreshed), so the page's line ranges and this copy of
+   the source always describe the same text."
+  [r]
+  (if (.-ok r)
+    nil
+    (do (log! "refused: " (.-status r))
+        (toast! (str "Not saved: " (or (.-error (.-body r)) (.-status r))) nil nil))))
+
+(defn- toast! [text action label]
+  (when-let [old (.getElementById js/document "ip-toast")] (.remove old))
+  (let [t (el-of (h/hiccup->html [:div#ip-toast {:role "status"} text (when action [:button {:type "button"} label])]))]
+    (.append (.-body js/document) t)
+    (when action (.addEventListener (.querySelector t "button") "click" (fn [_] (action) (.remove t) nil)))
+    (js/setTimeout (fn [] (.remove t) nil) 6000)))
+
+(defn- neighbour [nd dir]
+  (let [ns (vec (remove #(= :props (:t %)) (:nodes (:doc @st))))
+        i (first (keep-indexed (fn [i n] (when (= (:line n) (:line nd)) i)) ns))]
+    (when i (get ns (+ i dir)))))
+
+(declare checked-node)
+
+(defn- fresh!
+  "Run (f node) on the node the gutter's block shows, from freshly read
+   source; refuse (and redraw) when the page is out of date. Every structural
+   edit goes through here, so none acts on a stale line range."
+  [f]
+  (let [el (:gutter-el @st)]
+    (.then (load!)
+      (fn [_]
+        (if-let [nd (when el (checked-node el))]
+          (f nd)
+          (do (toast! "The page was out of date; it is refreshing. Try again." nil nil) (changed!)))
+        nil))))
+
+(defn- swap-with! [nd other]
+  (let [[a b] (if (< (:line other) (:line nd)) [other nd] [nd other])
+        lines (:lines @st)
+        gap (join "\n" (subvec lines (:to a) (:line b)))
+        before (join "\n" (subvec lines (:line a) (:to b)))
+        text (str (source-of b) (if (blank? gap) "\n\n" (str "\n" gap "\n")) (source-of a))]
+    (.then (post! "block" {:from (:line a) :before before :text text}) after-structure!)))
+
+(defn- delete! [nd]
+  (let [src (source-of nd) prev (neighbour nd -1)]
+    (.then (post! "block" {:from (:line nd) :before src :text ""})
+      (fn [r] (after-structure! r)
+        (when (.-ok r)
+          (toast! "Block deleted." (fn [] (.then (post! "insert" {:after (if prev (:to prev) 0) :text src}) after-structure!)) "Undo"))
+        nil))))
+
+(defn- settings! [el nd]
+  (let [plug (:plug @st) fields ((:settings plug) nd (:catalogue @st))]
+    (if (empty? fields)
+      (toast! "This block has no settings." nil nil)
+      (pop! el
+        [:form.ip-pop.ip-settings {:aria-label "Block settings"}
+         (for [{:keys [key label kind values value suggest placeholder]} fields]
+           [:label.ip-field [:span label]
+            (case kind
+              "enum" [:span.ip-chips (for [v values] [:button {:type "button" :data-key key :data-value v :aria-pressed (str (= v value))} v])]
+              "boolean" [:input {:type "checkbox" :data-key key :checked (= "true" value)}]
+              "number" [:input {:type "number" :data-key key :value (or value "") :placeholder (or placeholder "")}]
+              (list [:input {:type "text" :data-key key :value (or value "") :placeholder (or placeholder "")
+                             :list (when (seq suggest) (str "ip-s-" key))}]
+                    (when (seq suggest) [:datalist {:id (str "ip-s-" key)} (for [v suggest] [:option {:value v}])])))])]
+        (fn [e]
+          (let [t (.-target e) k (.getAttribute t "data-key")]
+            (when (and k (= "BUTTON" (.-nodeName t)))
+              (let [v (.getAttribute t "data-value")]
+                (fresh! (fn [nd] (.then (post! "block" ((:set plug) (:lines @st) nd k v)) after-structure!)))
+                (close-pop!)))))))
+    (when-let [p (:pop @st)]
+      (.addEventListener p "change"
+        (fn [e] (let [t (.-target e) k (.getAttribute t "data-key")
+                      v (if (= "checkbox" (.-type t)) (if (.-checked t) "true" nil) (.-value t))]
+                  (when k (fresh! (fn [nd] (.then (post! "block" ((:set plug) (:lines @st) nd k v)) after-structure!)))))
+          nil)))))
+
+(defn- block-menu! [el nd]
+  (pop! el
+    [:div.ip-pop.ip-menu {:role "menu"}
+     [:button {:type "button" :data-cmd "up" :role "menuitem"} "Move up"]
+     [:button {:type "button" :data-cmd "down" :role "menuitem"} "Move down"]
+     [:button {:type "button" :data-cmd "dup" :role "menuitem"} "Duplicate"]
+     (when (seq ((:settings (:plug @st)) nd (:catalogue @st)))
+       [:button {:type "button" :data-cmd "settings" :role "menuitem"} "Settings…"])
+     [:button {:type "button" :data-cmd "source" :role "menuitem"} "Edit source"]
+     [:button.ip-danger {:type "button" :data-cmd "delete" :role "menuitem"} "Delete"]]
+    (fn [e]
+      (let [cmd (.getAttribute (.-target e) "data-cmd")]
+        (close-pop!)
+        (case cmd
+          "up" (fresh! (fn [nd] (when-let [o (neighbour nd -1)] (swap-with! nd o))))
+          "down" (fresh! (fn [nd] (when-let [o (neighbour nd 1)] (swap-with! nd o))))
+          "dup" (fresh! (fn [nd] (.then (post! "insert" {:after (:to nd) :text (source-of nd)}) after-structure!)))
+          "settings" (settings! el nd)
+          "source" (when-let [ld (.-liveDoc js/window)] (.open ld (:gutter-el @st) nil))
+          "delete" (fresh! delete!)
+          nil)))))
+
+(defn- entries []
+  (vec (get (:catalogue @st) "blocks" [])))
+
+(defn- insert-menu! [el nd]
+  (let [p (pop! el
+            [:div.ip-pop.ip-insert
+             [:input {:type "search" :placeholder "Insert a block…" :aria-label "Insert a block"}]
+             [:div.ip-list {:role "listbox"}
+              (for [[i e] (map-indexed (fn [i e] [i e]) (entries))]
+                [:button {:type "button" :role "option" :data-i i :data-search (lower-case (str (get e "label") " " (get e "lang")))}
+                 [:b (get e "label")] (when (get e "hint") [:small (get e "hint")])])]]
+            (fn [e]
+              (when-let [b (.closest (.-target e) "[data-i]")]
+                (let [entry (nth (entries) (js/parseInt (.getAttribute b "data-i") 10))]
+                  (close-pop!)
+                  (fresh! (fn [nd] (.then (post! "insert" {:after (:to nd) :text (get entry "template")}) after-structure!)))))))
+        input (.querySelector p "input")]
+    (.addEventListener input "input"
+      (fn [_] (let [q (lower-case (.-value input)) items (.querySelectorAll p "[data-i]")]
+                (dotimes [i (.-length items)]
+                  (let [it (.item items i)] (set! (.-hidden it) (not (includes? (.getAttribute it "data-search") q))))))
+        nil))
+    (.addEventListener input "keydown"
+      (fn [e] (when (= "Enter" (.-key e))
+                (.preventDefault e)
+                (when-let [first-shown (.querySelector p "[data-i]:not([hidden])")] (.click first-shown)))
+        nil))
+    (.focus input)))
+
+(defn- checked-node
+  "The node element `el` shows, from the current source: its range must be
+   the element's exact data-src, and when its text maps, the text the page
+   shows must be what the node draws. nil when the page is out of date."
+  [el]
+  (when-let [[a b] (range-of el)]
+    (when-let [nd (node-at a)]
+      (when (= b (:to nd))
+        (let [runs (try (p/runs (:lines @st) nd (fns)) (catch e nil))
+              drawn (when runs (apply str (map :text runs)))]
+          (when (or (nil? drawn) (every? (fn [r] (nil? (:src r))) runs) (= drawn (flat el)))
+            nd))))))
+
+(defn- gutter []
+  (or (:gutter @st)
+      (let [g (el-of (h/hiccup->html [:div#ip-gutter {:hidden true}
+                                      [:button {:type "button" :data-g "insert" :title "Insert below" :aria-label "Insert a block below"} "+"]
+                                      [:button {:type "button" :data-g "menu" :title "Move, duplicate, delete, settings" :aria-label "Block actions"} "⋮⋮"]]))]
+        (.append (.-body js/document) g)
+        (.addEventListener g "mousedown" (fn [e] (.preventDefault e) nil))
+        (.addEventListener g "click"
+          (fn [e]
+            (let [which (.getAttribute (.closest (.-target e) "[data-g]") "data-g") el (:gutter-el @st)
+                  nd (when el (when-let [[a _] (range-of el)] (node-at a)))]
+              (when nd
+                (if (= "insert" which) (insert-menu! g nd) (block-menu! g nd))))
+            nil))
+        (swap! st assoc :gutter g)
+        g)))
+
+(defn- show-gutter! [el]
+  (let [g (gutter)]
+    (swap! st assoc :gutter-el el)
+    (set! (.-hidden g) false)
+    (place! g el -52 0)))
+
+; ─── wiring ──────────────────────────────────────────────────────────────────
+
+(defn- block-el [target]
+  (when-let [el (.closest target "[data-src]")]
+    (when-not (.closest target "a,button,input,textarea,select,summary,svg,.ld-editor,#ip-gutter,.ip-pop") el)))
+
+(defn- on-down [e]
+  (when (and (editing?) (:doc @st))
+    (when-let [s (:session @st)] (when-not (.-isConnected (:el s)) (swap! st dissoc :session)))
+    (when-let [el (block-el (.-target e))]
+      (show-gutter! el)
+      (if-let [s (:session @st)]
+        (when (identical? (:el s) el) (.stopPropagation e))
+        (when-let [m (mapping el)]
+          (.stopPropagation e)
+          (open! el m))))))
+
+(defn start!
+  "Run the in-place editor on this page with `plug`."
+  [plug]
+  (swap! st assoc :plug plug)
+  (when-let [ld (.-liveDoc js/window)] (.hold ld (fn [] (some? (:session @st)))))
+  (.addEventListener js/document "mousedown" (fn [e] (on-down e) nil) true)
+  (.addEventListener js/document "click"
+    (fn [e]
+      (when (:session @st) (when (.closest (.-target e) "[contenteditable]") (.stopPropagation e)))
+      (when (and (:pop @st) (not (.closest (.-target e) ".ip-pop,#ip-gutter"))) (close-pop!))
+      nil) true)
+  ; Esc closes an open menu or form wherever focus is
+  (.addEventListener js/document "keydown"
+    (fn [e] (when (and (:pop @st) (= "Escape" (.-key e))) (.preventDefault e) (.stopPropagation e) (close-pop!)) nil) true)
+  (.addEventListener js/document "mouseover"
+    (fn [e] (when (and (editing?) (not (:session @st)) (not (:pop @st)))
+              (when-let [el (block-el (.-target e))] (show-gutter! el)))
+      nil))
+  ; the host redrew the page from the server: reread the source it drew
+  (.addEventListener js/document (or (:refreshed plug) "live-doc:refreshed") (fn [_] (when-not (:session @st) (load!)) nil))
+  (load!)
+  (load-catalogue!)
+  nil)

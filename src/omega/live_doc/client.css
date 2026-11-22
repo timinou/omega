@@ -61,3 +61,30 @@ html[data-live-edit] [data-src] a[href],html[data-live-edit] [data-src] button{c
 /* Touch screens have no Esc or arrow keys: Done is the whole affordance. */
 @media (pointer:coarse){.ld-status span:empty::before{content:none}}
 @media (prefers-reduced-motion:reduce){.ld-editor{animation:none}html[data-live-edit] [data-src]{transition:none}}
+
+/* ── in place (omega.live-doc.inplace) ─────────────────────────────────── */
+[data-inplace="editing"],[data-inplace="saving"],[data-inplace="saved"],[data-inplace="refused"]{outline:none;border-radius:4px;box-shadow:0 0 0 2px color-mix(in srgb,var(--ld-accent) 30%,transparent);caret-color:var(--ld-accent)}
+[data-inplace="saving"]{box-shadow:0 0 0 2px color-mix(in srgb,var(--ld-accent) 45%,transparent)}
+[data-inplace="refused"]{box-shadow:0 0 0 2px color-mix(in srgb,#c0392b 55%,transparent)}
+#ip-gutter{position:absolute;z-index:40;display:flex;gap:2px;opacity:.55;transition:opacity .12s ease}
+#ip-gutter:hover{opacity:1}
+#ip-gutter[hidden]{display:none}
+html:not([data-live-edit]) #ip-gutter{display:none}
+#ip-gutter button{width:22px;height:22px;border:0;border-radius:5px;background:transparent;color:var(--ld-muted);font:600 14px/1 var(--ld-ui);cursor:pointer;padding:0}
+#ip-gutter button:hover{background:color-mix(in srgb,var(--ld-ink) 8%,transparent);color:var(--ld-ink)}
+.ip-pop{position:absolute;z-index:41;min-width:220px;max-width:min(360px,calc(100vw - 32px));max-height:min(420px,60vh);overflow:auto;background:var(--ld-card);color:var(--ld-ink);border:1px solid var(--ld-line);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.14);padding:6px;font:14px/1.4 var(--ld-ui)}
+.ip-pop button{display:flex;flex-direction:column;align-items:flex-start;width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;padding:6px 8px;border-radius:6px;cursor:pointer}
+.ip-pop button:hover,.ip-pop button:focus-visible{background:color-mix(in srgb,var(--ld-accent) 10%,transparent);outline:none}
+.ip-pop button small{color:var(--ld-muted);font-size:12px}
+.ip-pop .ip-danger{color:#b03a2e}
+.ip-insert input{width:100%;box-sizing:border-box;border:1px solid var(--ld-line);border-radius:6px;padding:6px 8px;font:inherit;background:transparent;color:inherit;margin-bottom:4px}
+.ip-settings{display:grid;gap:10px;padding:10px}
+.ip-field{display:grid;gap:4px;font-size:13px}
+.ip-field>span{color:var(--ld-muted)}
+.ip-field input[type=text],.ip-field input[type=number]{border:1px solid var(--ld-line);border-radius:6px;padding:5px 8px;font:inherit;background:transparent;color:inherit}
+.ip-chips{display:flex;flex-wrap:wrap;gap:4px}
+.ip-chips button{display:inline-block;width:auto;border:1px solid var(--ld-line);border-radius:999px;padding:3px 10px}
+.ip-chips button[aria-pressed="true"]{background:var(--ld-ink);border-color:var(--ld-ink);color:var(--ld-card)}
+#ip-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:42;display:flex;gap:12px;align-items:center;background:var(--ld-ink);color:var(--ld-card);border-radius:8px;padding:8px 14px;font:14px/1.3 var(--ld-ui)}
+#ip-toast button{border:0;background:none;color:inherit;font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
+@media (hover:none){#ip-gutter{opacity:1}}

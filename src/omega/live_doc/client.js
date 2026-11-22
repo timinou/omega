@@ -328,8 +328,17 @@
     close: () => close(),
     install() { toggleButton(); }
   };
-  if ('editable' in config) toggleButton();
+  // An in-place editor module (config.inplace, relative to the routes) loads
+  // only for a reader who edits: it is large, and nobody else needs it.
+  let inplaceLoaded = false;
+  function loadInplace() {
+    if (!config.editable || !config.inplace || inplaceLoaded) return;
+    inplaceLoaded = true;
+    import(new URL(config.inplace, new URL(base + '/', location.href)).href)
+      .catch(e => console.warn('live-doc: in-place editor unavailable', e));
+  }
+  if ('editable' in config) { toggleButton(); loadInplace(); }
   else fetch(`${base}/config`, { cache: 'no-store' }).then(r => r.ok ? r.json() : {})
-    .then(c => { config.editable = !!c.editable; toggleButton(); }, () => {});
+    .then(c => { config.editable = !!c.editable; toggleButton(); loadInplace(); }, () => {});
   waitLoop();
 })();

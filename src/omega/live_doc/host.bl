@@ -38,15 +38,19 @@
 
 (defn page-config
   "The JSON a page puts in data-live-doc: the buffer revision the page is
-   rendered from and the routes' prefix. It is the same for every reader, so a
+   rendered from, the routes' prefix and, when the host has one, the in-place
+   editor module (:inplace, relative to the routes; loaded for editors only).
+   It is the same for every reader, so a
    host may cache the page; the client asks GET config whether its reader
    edits. With a conn it also inlines `editable` (pages rendered per reader).
    `editable` only shows edit controls; the routes recheck."
   ([st file opts]
-   (json/encode {:rev (:rev (store/current st file)) :prefix (or (:client-prefix opts) "_live")}))
+   (json/encode (cond-> {:rev (:rev (store/current st file)) :prefix (or (:client-prefix opts) "_live")}
+                  (:inplace opts) (assoc :inplace (:inplace opts)))))
   ([st file conn opts]
-   (json/encode {:rev (:rev (store/current st file)) :editable (boolean ((:editor? opts) conn))
-                 :prefix (or (:client-prefix opts) "_live")})))
+   (json/encode (cond-> {:rev (:rev (store/current st file)) :editable (boolean ((:editor? opts) conn))
+                         :prefix (or (:client-prefix opts) "_live")}
+                  (:inplace opts) (assoc :inplace (:inplace opts))))))
 
 (defn handler
   "Routes under (:prefix opts) (default \"/_live\") for one real file:
