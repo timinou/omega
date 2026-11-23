@@ -414,7 +414,7 @@
 
 (defn- block-el [target]
   (when-let [el (.closest target "[data-src]")]
-    (when-not (.closest target "a,button,input,textarea,select,summary,svg,.ld-editor,#ip-gutter,.ip-pop") el)))
+    (when-not (.closest target "a,button,input,textarea,select,summary,.ld-editor,#ip-gutter,.ip-pop") el)))
 
 (defn- on-down
   "A press on a block, in edit mode: its text opens where it stands; a block

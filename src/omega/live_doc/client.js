@@ -296,6 +296,7 @@
     if (editing && !e.composedPath().includes(editing.box) && !e.target.closest?.('#live-doc-edit')) { close(); }
     if (!mode || document.body.hasAttribute('data-review-mode')) return;   // commenting takes the click
     if (e.target.isContentEditable || holds.some(h => h())) return;    // another editor owns this click
+    if (html.dataset.inplace === 'ready') return;   // the in-place editor owns edit-mode clicks; source is in its block menu
     const el = e.target.closest('[data-src]');
     if (!el || !el.isConnected || el.closest('.ld-editor') || interactive(e.target)) return;
     if (getSelection()?.toString()) return;   // selecting text to copy or comment
