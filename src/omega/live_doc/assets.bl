@@ -417,11 +417,11 @@ html[data-live-edit] [data-src] a[href],html[data-live-edit] [data-src] button{c
 [data-inplace=\"editing\"],[data-inplace=\"saving\"],[data-inplace=\"saved\"],[data-inplace=\"refused\"]{outline:none;border-radius:4px;box-shadow:0 0 0 2px color-mix(in srgb,var(--ld-accent) 30%,transparent);caret-color:var(--ld-accent)}
 [data-inplace=\"saving\"]{box-shadow:0 0 0 2px color-mix(in srgb,var(--ld-accent) 45%,transparent)}
 [data-inplace=\"refused\"]{box-shadow:0 0 0 2px color-mix(in srgb,#c0392b 55%,transparent)}
-#ip-gutter{position:absolute;z-index:40;display:flex;gap:2px;opacity:.55;transition:opacity .12s ease}
+#ip-gutter{position:absolute;z-index:40;display:flex;gap:1px;padding:2px;border-radius:7px;background:color-mix(in srgb,var(--ld-card) 88%,transparent);opacity:.8;transition:opacity .12s ease}
 #ip-gutter:hover{opacity:1}
 #ip-gutter[hidden]{display:none}
 html:not([data-live-edit]) #ip-gutter{display:none}
-#ip-gutter button{width:22px;height:22px;border:0;border-radius:5px;background:transparent;color:var(--ld-muted);font:600 14px/1 var(--ld-ui);cursor:pointer;padding:0}
+#ip-gutter button{width:26px;height:26px;border:0;border-radius:5px;background:transparent;color:var(--ld-muted);font:600 16px/1 var(--ld-ui);cursor:pointer;padding:0}
 #ip-gutter button:hover{background:color-mix(in srgb,var(--ld-ink) 8%,transparent);color:var(--ld-ink)}
 .ip-pop{position:absolute;z-index:41;min-width:220px;max-width:min(360px,calc(100vw - 32px));max-height:min(420px,60vh);overflow:auto;background:var(--ld-card);color:var(--ld-ink);border:1px solid var(--ld-line);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.14);padding:6px;font:14px/1.4 var(--ld-ui)}
 .ip-pop button{display:flex;flex-direction:column;align-items:flex-start;width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;padding:6px 8px;border-radius:6px;cursor:pointer}
@@ -439,4 +439,46 @@ html:not([data-live-edit]) #ip-gutter{display:none}
 #ip-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:42;display:flex;gap:12px;align-items:center;background:var(--ld-ink);color:var(--ld-card);border-radius:8px;padding:8px 14px;font:14px/1.3 var(--ld-ui)}
 #ip-toast button{border:0;background:none;color:inherit;font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
 @media (hover:none){#ip-gutter{opacity:1}}
+#ip-gutter [data-g=menu]{cursor:grab;letter-spacing:-3px}
+html.ip-dragging,html.ip-dragging *{cursor:grabbing!important;user-select:none}
+#ip-drop{position:absolute;z-index:43;height:3px;border-radius:2px;background:var(--ld-accent);pointer-events:none}
+#ip-drop[hidden]{display:none}
+.ip-new{animation:ip-new .9s ease}
+@keyframes ip-new{from{background:color-mix(in srgb,var(--ld-accent) 14%,transparent)}to{background:transparent}}
+[contenteditable][data-inplace]{white-space:pre-wrap}
+.ip-draft{min-height:1.6em;margin:.6em 0;outline:none;border-radius:4px;caret-color:var(--ld-accent);white-space:pre-wrap}
+.ip-draft:empty::before{content:attr(data-placeholder);color:var(--ld-muted);opacity:.75;pointer-events:none}
+.ip-draft[data-kind=heading]{font-size:1.6em;font-weight:700;line-height:1.25}
+.ip-draft[data-kind=subheading]{font-size:1.25em;font-weight:650;line-height:1.3}
+.ip-draft[data-kind=bullet],.ip-draft[data-kind=number],.ip-draft[data-kind=todo]{position:relative;padding-left:1.6em}
+.ip-draft[data-kind=bullet]::after{content:\"•\";position:absolute;left:.45em;top:0}
+.ip-draft[data-kind=number]::after{content:\"1.\";position:absolute;left:.2em;top:0}
+.ip-draft[data-kind=todo]::after{content:\"☐\";position:absolute;left:.2em;top:0}
+.ip-draft[data-kind=quote]{border-left:3px solid var(--ld-line);padding-left:.9em;font-style:italic}
+#ip-format{position:absolute;z-index:44;display:flex;gap:2px;align-items:center;padding:3px;border-radius:8px;background:var(--ld-ink);color:var(--ld-card);box-shadow:0 8px 24px rgba(0,0,0,.2);font:13px/1 var(--ld-ui)}
+#ip-format[hidden]{display:none}
+#ip-format button{min-width:30px;height:28px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;cursor:pointer;padding:0 8px}
+#ip-format button:hover{background:color-mix(in srgb,var(--ld-card) 16%,transparent)}
+#ip-format button[aria-pressed=true]{background:color-mix(in srgb,var(--ld-card) 26%,transparent)}
+#ip-format code{font:12px/1 ui-monospace,monospace;background:none;color:inherit}
+#ip-format .ip-link input{width:min(300px,60vw);border:0;border-radius:6px;padding:6px 8px;font:inherit}
+#ip-format .ip-link[hidden]{display:none}
+.ip-pop.ip-insert{width:min(680px,calc(100vw - 16px));max-width:none;max-height:min(460px,70vh);display:flex;flex-direction:column;overflow:hidden;padding:8px}
+.ip-ins-body{display:grid;grid-template-columns:minmax(200px,250px) 1fr;gap:10px;min-height:0;flex:1}
+.ip-list{overflow:auto;min-height:0;max-height:calc(min(460px,70vh) - 60px)}
+.ip-slash .ip-list{max-height:calc(min(460px,70vh) - 20px)}
+.ip-group-name{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ld-muted);padding:8px 8px 2px}
+.ip-group[hidden]{display:none}
+.ip-pop .ip-list button[hidden]{display:none}
+.ip-pop .ip-list button.on{background:color-mix(in srgb,var(--ld-accent) 13%,transparent)}
+.ip-pop .ip-list button small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ip-preview{overflow:hidden;border-left:1px solid var(--ld-line);padding:4px 4px 4px 12px;min-height:0}
+.ip-pv-head{display:flex;gap:8px;align-items:baseline;justify-content:space-between}
+.ip-pv-head span{font-size:11px;color:var(--ld-muted);text-transform:uppercase;letter-spacing:.06em}
+.ip-pv-hint{margin:4px 0 10px;color:var(--ld-muted);font-size:13px}
+.ip-pv-none{color:var(--ld-muted);font-size:13px;font-style:italic}
+.ip-thumb{position:relative;height:300px;overflow:hidden;border:1px solid var(--ld-line);border-radius:8px;background:var(--ld-page,var(--ld-card))}
+.ip-thumb::after{content:\"\";position:absolute;left:0;right:0;bottom:0;height:40px;background:linear-gradient(transparent,var(--ld-page,var(--ld-card)))}
+.ip-thumb-in{width:640px;zoom:.62;padding:16px;pointer-events:none;font-size:16px}
+@media (max-width:720px){.ip-ins-body{grid-template-columns:1fr}.ip-preview{display:none}}
 ")

@@ -83,3 +83,34 @@
     (is (= {:run 0 :text "Plain, and "} (p/edit-text rs "Plain and bold words." "Plain, and bold words." len sl)))
     (is (= {:run 1 :text "Xld"} (p/edit-text rs "Plain and bold words." "Plain and Xld words." len sl)))
     (is (nil? (p/edit-text rs "Plain and bold words." "Plain anXold words." len sl)) "a change across runs maps to none")))
+
+(deftest the-caret-crosses-between-page-text-and-source
+  (let [rs (p/runs lines (node-at 1 2) fns) len count sl (fn [s a b] (subs s a b))]
+    ; "Plain and " | "bold" | " words."  ←→  "Plain and *bold* words."
+    (is (= 4 (p/byte-at rs 4 len sl)))
+    (is (= 10 (p/byte-at rs 10 len sl)) "at a seam, the end of the earlier run")
+    (is (= 11 (p/byte-at rs 10 len sl true)) "…or the start of the later one")
+    (is (= 13 (p/byte-at rs 12 len sl)) "inside the bold: past its star")
+    (is (= 23 (p/byte-at rs 21 len sl)))
+    (is (= 12 (p/flat-at rs 13 len sl)))
+    (is (= 10 (p/flat-at rs 10 len sl)))
+    (is (= 10 (p/flat-at rs 11 len sl)) "the star's byte: where the bold begins")
+    (is (= 21 (p/flat-at rs 23 len sl)))
+    (is (= "Plain and bold words." (p/flat-text (render (node-at 1 2)))))))
+
+(deftest the-caret-counts-bytes-not-letters
+  (let [rs (p/align "Été *là* ici" [{:text "Été "} {:text "là"} {:text " ici"}]) len count sl (fn [s a b] (subs s a b))]
+    (is (= 2 (count "Ét")))
+    (is (= 3 (p/byte-at rs 2 len sl)) "É is two bytes")
+    (is (= 2 (p/flat-at rs 3 len sl)))
+    (is (= 6 (p/flat-at rs 10 len sl)) "after the à")))
+
+(deftest text-at-a-seam-goes-where-the-caret-was
+  (let [rs (p/runs lines (node-at 1 2) fns) len count sl (fn [s a b] (subs s a b))]
+    (is (= {:run 0 :text "Plain and X"} (p/edit-text rs "Plain and bold words." "Plain and Xbold words." len sl)))
+    (is (= {:run 1 :text "Xbold"} (p/edit-text rs "Plain and bold words." "Plain and Xbold words." len sl true)))))
+
+(deftest a-run-drawn-out-of-source-order-is-found-when-unique
+  (let [rs (p/align "#+card :title \"Launch\" :status open" [{:text "open"} {:text "Launch"}])]
+    (is (= [[31 35] [15 21]] (mapv :src rs))))
+  (is (nil? (:src (second (p/align "a a b" [{:text "b"} {:text "a"}])))) "twice before it: ambiguous, not guessed"))

@@ -3,12 +3,14 @@
 ;; (`data-src="from:to"`, end exclusive). An edit names those lines and the
 ;; exact text it started from, so it lands on the same block even after other
 ;; writers moved it, and is refused when someone else changed that block.
-(ns omega.live-doc.blocks (:require [clojure.string :as str]))
+;; Portable: the in-place editor applies the same functions in the browser,
+;; so the page it draws is the text the server will hold.
+(ns omega.live-doc.blocks)
 
 (def max-block-bytes 262144)
 
 (defn lines [text] (vec (String/split text "\n")))
-(defn- join-lines [ls] (str/join "\n" ls))
+(defn- join-lines [ls] (join "\n" ls))
 
 (defn block-text
   "The exact source of lines [from, to)."
@@ -28,7 +30,7 @@
 
 (defn- normalize [replacement]
   ;; A textarea never owns the line break that separates this block from the next.
-  (String/replace (String/replace (str replacement) "\r\n" "\n") (Regex/compile! "\\n+\\z") ""))
+  (String/replace (String/replace (str replacement) "\r\n" "\n") (Regex/compile! "\\n+$") ""))
 
 (defn- blank-line? [l] (blank? l))
 

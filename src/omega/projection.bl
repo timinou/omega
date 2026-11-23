@@ -46,16 +46,29 @@
       (walk h []))
     @out))
 
+(defn- once
+  "[from to] of `text`'s only occurrence in `src`, or nil."
+  [src text]
+  (let [hit (binary/match src text)]
+    (when-not (= :nomatch hit)
+      (let [from (erlang/element 1 hit) to (+ from (erlang/element 2 hit))
+            again (binary/match (erlang/binary_part src to (- (erlang/byte_size src) to)) text)]
+        (when (= :nomatch again) [from to])))))
+
 (defn align
   "Each run → its byte range [from to] in `src`, searching after the previous
-   aligned run, or nil when it does not occur verbatim (computed text)."
+   aligned run; a run drawn out of source order (a title shown after a chip
+   its attribute follows) is located when it occurs exactly once and no run
+   claimed those bytes; else nil (computed text)."
   [src runs]
   (loop [rs runs at 0 out []]
     (if-let [r (first rs)]
       (let [tail (erlang/binary_part src at (- (erlang/byte_size src) at))
             hit (binary/match tail (:text r))]
         (if (= :nomatch hit)
-          (recur (rest rs) at (conj out (assoc r :src nil)))
+          (let [[f t :as only] (once src (:text r))
+                free? (and only (not (some (fn [o] (when-let [[a z] (:src o)] (and (< f z) (< a t)))) out)))]
+            (recur (rest rs) at (conj out (assoc r :src (when free? only)))))
           (let [from (+ at (erlang/element 1 hit)) to (+ from (erlang/element 2 hit))]
             (recur (rest rs) to (conj out (assoc r :src [from to]))))))
       out)))
@@ -115,15 +128,63 @@
   "The run edit for a change of the node's flat page text (the runs' texts
    concatenated, as the DOM shows them) from `was` to `now`: the changed span
    must fall inside one aligned run. Offsets are the caller's string units, the
-   same for `was`, `now` and run lengths (`len`). → {:run i :text t} or nil."
-  [aligned was now len slice]
+   same for `was`, `now` and run lengths (`len`). Text put at the seam of two
+   runs goes to the earlier one, or with `later?` to the later one (the caret
+   stood after a line break). → {:run i :text t} or nil."
+  ([aligned was now len slice] (edit-text aligned was now len slice false))
+  ([aligned was now len slice later?]
   (let [cl (len was) nl (len now) n (min cl nl)
         at (fn [s k] (slice s k (inc k)))
         p (loop [k 0] (if (and (< k n) (= (at was k) (at now k))) (recur (inc k)) k))
         s (loop [k 0] (if (and (< k (- n p)) (= (at was (- cl 1 k)) (at now (- nl 1 k)))) (recur (inc k)) k))
         oe (- cl s) ne (- nl s)
         starts (reduce (fn [acc r] (conj acc (+ (peek acc) (len (:text r))))) [0] aligned)]
-    (first (for [i (range (count aligned))
-                 :let [a (nth starts i) b (nth starts (inc i)) r (nth aligned i)]
-                 :when (and (:src r) (<= a p) (<= oe b))]
-             {:run i :text (str (slice (:text r) 0 (- p a)) (slice now p ne) (slice (:text r) (- oe a) (len (:text r))))}))))
+    ((if later? last first)
+     (vec (for [i (range (count aligned))
+                :let [a (nth starts i) b (nth starts (inc i)) r (nth aligned i)]
+                :when (and (:src r) (<= a p) (<= oe b))]
+            {:run i :text (str (slice (:text r) 0 (- p a)) (slice now p ne) (slice (:text r) (- oe a) (len (:text r))))}))))))
+
+; ─── the caret: a place in the page text ↔ a byte of the source ─────────────
+;
+; A structural edit (split a paragraph, join two, wrap a word in markup) is
+; computed on source bytes and then drawn again; these carry the caret across.
+
+(defn- units-in
+  "How many of `text`'s units (the caller's) make up its first `bytes` UTF-8 bytes."
+  [text bytes len slice]
+  (let [n (len text)]
+    (loop [k 0] (if (and (< k n) (< (erlang/byte_size (slice text 0 k)) bytes)) (recur (inc k)) k))))
+
+(defn byte-at
+  "The source byte offset of page-text offset `k` (caller's units), from the
+   aligned runs; nil when it falls inside computed text. At the seam of two
+   runs the earlier one wins, unless it is computed or `later?` (the caret
+   stands after a line break)."
+  ([aligned k len slice] (byte-at aligned k len slice false))
+  ([aligned k len slice later?]
+  (loop [rs aligned at 0]
+    (when-let [r (first rs)]
+      (let [n (len (:text r)) end (+ at n)]
+        (cond
+          (or (< k end) (and (= k end) (:src r) (not (and later? (:src (second rs))))))
+          (when-let [[from _] (:src r)] (+ from (erlang/byte_size (slice (:text r) 0 (- k at)))))
+          :else (recur (rest rs) end)))))))
+
+(defn flat-at
+  "The page-text offset (caller's units) that shows source byte `b`: inside or
+   at either end of an aligned run; else the start of the first run after it,
+   else the end of the text."
+  [aligned b len slice]
+  (loop [rs aligned at 0 after nil]
+    (if-let [r (first rs)]
+      (let [n (len (:text r)) [from to] (:src r)]
+        (if (and from (<= from b) (<= b to))
+          (+ at (units-in (:text r) (- b from) len slice))
+          (recur (rest rs) (+ at n) (or after (when (and from (> from b)) at)))))
+      (or after at))))
+
+(defn flat-text
+  "The page text hiccup `h` shows: its runs, concatenated."
+  [h]
+  (apply str (map :text (text-runs h))))
