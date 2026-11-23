@@ -416,16 +416,25 @@
   (when-let [el (.closest target "[data-src]")]
     (when-not (.closest target "a,button,input,textarea,select,summary,svg,.ld-editor,#ip-gutter,.ip-pop") el)))
 
-(defn- on-down [e]
-  (when (and (editing?) (:doc @st))
+(defn- on-down
+  "A press on a block, in edit mode: its text opens where it stands; a block
+   with no text to edit (a diagram, a composed section) opens its actions —
+   settings, source, move — and the click that follows is this editor's."
+  [e]
+  (swap! st dissoc :claim)
+  (when (and (editing?) (:doc @st) (not (.hasAttribute (.-body js/document) "data-review-mode")))
     (when-let [s (:session @st)] (when-not (.-isConnected (:el s)) (swap! st dissoc :session)))
     (when-let [el (block-el (.-target e))]
       (show-gutter! el)
       (if-let [s (:session @st)]
         (when (identical? (:el s) el) (.stopPropagation e))
-        (when-let [m (mapping el)]
-          (.stopPropagation e)
-          (open! el m))))))
+        (if-let [m (mapping el)]
+          (do (.stopPropagation e) (open! el m))
+          (when-let [[a _] (range-of el)]
+            (when-let [nd (node-at a)]
+              (when (blank? (.toString (.getSelection js/window)))
+                (swap! st assoc :claim true)
+                (block-menu! (gutter) nd)))))))))
 
 (defn start!
   "Run the in-place editor on this page with `plug`."
@@ -435,8 +444,10 @@
   (.addEventListener js/document "mousedown" (fn [e] (on-down e) nil) true)
   (.addEventListener js/document "click"
     (fn [e]
-      (when (:session @st) (when (.closest (.-target e) "[contenteditable]") (.stopPropagation e)))
-      (when (and (:pop @st) (not (.closest (.-target e) ".ip-pop,#ip-gutter"))) (close-pop!))
+      (if (:claim @st)
+        (do (swap! st dissoc :claim) (.stopPropagation e))
+        (do (when (:session @st) (when (.closest (.-target e) "[contenteditable]") (.stopPropagation e)))
+            (when (and (:pop @st) (not (.closest (.-target e) ".ip-pop,#ip-gutter"))) (close-pop!))))
       nil) true)
   ; Esc closes an open menu or form wherever focus is
   (.addEventListener js/document "keydown"

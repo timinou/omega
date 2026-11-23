@@ -1,5 +1,5 @@
 (ns live-doc-test
-  (:require [omega.live-doc.blocks :as blocks] [omega.live-doc.store :as store]
+  (:require [omega.live-doc.blocks :as blocks] [omega.live-doc.store :as store] [omega.live-doc.host]
             [omega.live-doc.assets :as assets] [buffer.model :as buffer]))
 
 (def doc "#+title: T\n\n* One\n\nFirst para\nwraps here.\n\nSecond para.\n\n* Two\n\nTail.\n")
@@ -63,3 +63,17 @@
     (when (File/regular? (str dir "/client.js"))
       (is (= (File/read! (str dir "/client.js")) assets/client-js) "run scripts/live-doc-assets.py")
       (is (= (File/read! (str dir "/client.css")) assets/client-css) "run scripts/live-doc-assets.py"))))
+
+;; ── who edits ─────────────────────────────────────────────────────────────
+
+(deftest owner-editor-admits-every-configured-login
+  (let [conn (fn [who] (maps/put :req_headers (if who (list (tuple "tailscale-user-login" who)) (list)) (Plug.Test/conn :get "/")))
+        ok? (fn [cfg who] ((omega.live-doc.host/owner-editor cfg) (conn who)))]
+    (is (ok? "a@x" "a@x"))
+    (is (ok? "a@x, b@x" "b@x") "a comma-separated list")
+    (is (ok? "a@x,," "a@x") "blank entries are ignored")
+    (is (ok? ["a@x" "b@x"] "b@x") "a collection")
+    (is (not (ok? "a@x,b@x" "c@x")))
+    (is (not (ok? "" "a@x")) "nobody edits when none is configured")
+    (is (not (ok? "a@x," nil)) "no login, no editing")
+    (is (not (ok? nil "")))))

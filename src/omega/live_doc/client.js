@@ -272,7 +272,7 @@
     if (mode) html.dataset.liveEdit = ''; else delete html.dataset.liveEdit;
     const b = document.getElementById('live-doc-edit');
     if (b) { b.setAttribute('aria-pressed', String(mode)); b.textContent = mode ? 'Done' : 'Edit'; }
-    try { sessionStorage.setItem('live-doc:mode', mode ? '1' : ''); } catch {}
+    try { sessionStorage.setItem('live-doc:mode', mode ? '1' : '0'); } catch {}
     if (!mode && editing) close();
   }
   function toggleButton() {
@@ -283,7 +283,10 @@
     b.title = 'Edit this document in place (E)';
     b.addEventListener('click', () => setMode(!mode));
     if (bar) bar.append(b); else { b.classList.add('ld-floating'); document.body.append(b); }
-    setMode((() => { try { return sessionStorage.getItem('live-doc:mode') === '1'; } catch { return false; } })());
+    // With an in-place editor the page is edited where it stands, so editing
+    // is on until the editor says Done in this tab; the source-only editor
+    // waits to be asked.
+    setMode((() => { try { const v = sessionStorage.getItem('live-doc:mode'); return v === '1' || (v !== '0' && !!config.inplace); } catch { return !!config.inplace; } })());
   }
 
   document.addEventListener('click', e => {

@@ -15,11 +15,20 @@
 (defn- int-param [conn k]
   (let [v (param conn k)] (when (and v (re-matches #"[0-9]{1,7}" v)) (erlang/binary_to_integer v))))
 
+(defn- logins
+  "Tailscale logins from a string (separated by commas or spaces) or a
+   collection of them."
+  [x]
+  (set (remove blank? (map trim (if (string? x) (String/split x (Regex/compile! "[,\\s]+")) (or x []))))))
+
 (defn owner-editor
-  "An :editor? check: only the configured Tailscale identity edits. With no
-   owner configured nobody edits; reading and answering are unaffected."
-  [owner]
-  (fn [conn] (and (not (blank? owner)) (= owner (web/req-header conn "tailscale-user-login")))))
+  "An :editor? check: only the configured Tailscale identities edit — one
+   login, several separated by commas or spaces, or a collection. With none
+   configured nobody edits; reading and answering are unaffected."
+  [owners]
+  (let [allowed (logins owners)]
+    (fn [conn] (let [who (web/req-header conn "tailscale-user-login")]
+                 (and (not (blank? who)) (contains? allowed who))))))
 
 (defn- same-origin? [conn]
   (let [origin (web/req-header conn "origin") host (web/req-header conn "host")]
